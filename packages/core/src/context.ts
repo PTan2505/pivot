@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import { absoluteAssetPath, getAsset, listResourceAssets } from "./assets";
+import { getAsset, listResourceAssets, materializeAsset, readAssetBytes } from "./assets";
 import { expandHome, skillsDir } from "./config";
 import { getResourcesByIds } from "./resources";
 import type { SkillMeta } from "./skills";
@@ -21,8 +21,6 @@ export interface TokenEstimate {
 
 interface PlannedAsset {
   asset: AssetDTO;
-  /** Absolute path of the stored original. */
-  source: string;
   /** Path written into context.md (absolute for clipboard, relative for exports). */
   ref: string;
 }
@@ -138,8 +136,10 @@ export async function buildClipboardContext(resourceIds: string[], opts: Context
     for (const a of assets) {
       const row = await getAsset(a.id);
       if (!row) continue;
-      const source = absoluteAssetPath(row.storagePath);
-      planned.push({ asset: a, source, ref: source });
+      // R2 files are downloaded to a local cache so Claude Code can open them by path.
+      const local = await materializeAsset(row);
+      if (!local) continue;
+      planned.push({ asset: a, ref: local });
     }
     allPlanned.push(...planned);
     sections.push(sectionFor(r, i + 1, planned, null));
@@ -162,14 +162,14 @@ async function pathExists(p: string) {
     .catch(() => false);
 }
 
-async function copyAsset(source: string, dest: string, asset: AssetDTO, resize: boolean) {
+async function writeAsset(data: Buffer, dest: string, asset: AssetDTO, resize: boolean) {
   const resizable = asset.kind === "image" && asset.mimeType !== "image/gif";
   if (resize && resizable && asset.width && asset.height && Math.max(asset.width, asset.height) > CLAUDE_MAX_IMAGE_EDGE) {
     const s = scaledImageSize(asset.width, asset.height);
-    await sharp(source).resize({ width: s.width, height: s.height }).toFile(dest);
+    await sharp(data).resize({ width: s.width, height: s.height }).toFile(dest);
     return { ...asset, width: s.width, height: s.height };
   }
-  await fs.copyFile(source, dest);
+  await fs.writeFile(dest, data);
   return asset;
 }
 
@@ -212,15 +212,15 @@ export async function exportBundle(opts: ExportOptions) {
     const planned: PlannedAsset[] = [];
     for (const a of relevantAssets(await listResourceAssets(r.id), opts)) {
       const row = await getAsset(a.id);
-      if (!row) continue;
-      const source = absoluteAssetPath(row.storagePath);
+      const data = row && (await readAssetBytes(row));
+      if (!row || !data) continue;
       const ext = path.extname(row.storagePath);
       const suffix = a.role === "screenshot-full" ? "-full" : "";
       const name = uniqueName(`${slug}${suffix}`, ext, usedAssetNames);
       await fs.mkdir(path.join(root, "assets"), { recursive: true });
-      const written = await copyAsset(source, path.join(root, "assets", name), a, !!opts.resizeImages);
+      const written = await writeAsset(data, path.join(root, "assets", name), a, !!opts.resizeImages);
       fileCount++;
-      planned.push({ asset: written, source, ref: `assets/${name}` });
+      planned.push({ asset: written, ref: `assets/${name}` });
     }
     allPlanned.push(...planned);
 

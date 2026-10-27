@@ -9,13 +9,13 @@
 | # | Chủ đề | Quyết định |
 |---|---|---|
 | 1 | Cách chạy | `npm start` ở root → build (nếu code thay đổi) và chạy server production tại `http://127.0.0.1:4321`. `npm run dev` cho phát triển. |
-| 2 | Dữ liệu | Thư mục dữ liệu nằm **ngoài repo**: mặc định `~/.stan-bag` (đổi bằng `STAN_BAG_DATA_DIR`). Database chạy **hai chế độ**: không có `DATABASE_URL` → Postgres nhúng (PGlite) lưu trong `~/.stan-bag/db`, chạy offline; có `DATABASE_URL` → Neon (Postgres cloud). Cùng một schema và migration. Asset luôn lưu local. |
+| 2 | Dữ liệu | Database: không có `DATABASE_URL` → PGlite trong `~/.stan-bag/db` (offline); có → Neon. File: có đủ khoá `R2_*` → **Cloudflare R2** (bucket private, app tự phục vụ file; bổ sung 2026-10-27), không có → lưu trong `~/.stan-bag`. Mỗi asset ghi lại nơi lưu (`assets.storage`), nên chuyển đổi an toàn; Settings có nút chuyển file local lên R2. |
 | 3 | Quy mô | Vài trăm resource → tìm kiếm `ILIKE` trên Postgres là đủ, chưa cần full-text index. |
 | 4 | Loại tài nguyên | Làm đủ **12 loại** ngay trong MVP (xem §2). |
 | 5 | Metadata | Kết hợp: `type` cố định; facet (`pageType`, `domain`, `visualStyle`, `uiPattern`, `technology`) là tag có phân loại, có danh sách gợi ý sẵn nhưng thêm mới được; `tags` tự do. |
 | 6 | Projects | Là dự án code thật. **Để sau (P1)**, không có trong MVP. |
 | 7 | Screenshot | Tự chụp bằng Playwright khi thêm URL (viewport 1440×900 + full page). Có nút chụp lại và upload thủ công. |
-| 8 | Asset | Kết hợp: resource lưu URL nguồn; file luôn được copy vào thư mục do app quản lý. |
+| 8 | Asset | Kết hợp: resource lưu URL nguồn; file luôn được copy vào kho do app quản lý (R2 hoặc thư mục dữ liệu). |
 | 9 | Skills | Chỉ quản lý **skill global** trong `~/.claude/skills`. Đồng bộ (scan) vào app, chỉnh sửa, ghi ngược ra `SKILL.md` khi bấm Save to disk. Mỗi skill có thêm trường **When to use** (ứng dụng của skill). |
 | 10 | Prompt variables | Có. Cú pháp `{{variable}}`; khi copy sẽ hiện form điền biến. |
 | 11 | Lịch sử phiên bản | Không làm. |
