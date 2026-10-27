@@ -106,6 +106,11 @@ export interface Settings {
   skillsDir: string;
   exportsDir: string;
   playwright: { installed: boolean; path?: string };
+  storage: {
+    mode: "local" | "r2";
+    target: string;
+    files: Partial<Record<"local" | "r2", { count: number; bytes: number }>>;
+  };
 }
 
 export function useSettings() {
