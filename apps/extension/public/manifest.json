@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "Stan Bag",
+  "short_name": "Stan Bag",
+  "description": "Save pages, screenshots, images and snippets to your local Stan Bag library.",
+  "version": "0.1.0",
+  "minimum_chrome_version": "116",
+  "action": {
+    "default_title": "Save to Stan Bag",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "permissions": ["activeTab", "scripting", "contextMenus", "storage", "notifications"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": { "default": "Alt+Shift+S" },
+      "description": "Open the Save to Stan Bag popup"
+    },
+    "quick-save": {
+      "suggested_key": { "default": "Alt+Shift+D" },
+      "description": "Save the current page with a screenshot, no questions asked"
+    }
+  }
+}

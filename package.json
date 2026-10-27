@@ -1,0 +1,21 @@
+{
+  "name": "stan-bag",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.9.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node scripts/start.mjs",
+    "dev": "node scripts/start.mjs --dev",
+    "build": "pnpm --filter web build",
+    "test": "pnpm --filter @stan-bag/core test",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm --filter web lint",
+    "db:generate": "pnpm --filter @stan-bag/core db:generate",
+    "setup:browser": "pnpm --filter @stan-bag/core exec playwright install chromium",
+    "ext:build": "pnpm --filter extension build",
+    "ext:dev": "pnpm --filter extension dev"
+  }
+}
