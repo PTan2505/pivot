@@ -16,6 +16,15 @@
     "db:generate": "pnpm --filter @stan-bag/core db:generate",
     "setup:browser": "pnpm --filter @stan-bag/core exec playwright install chromium",
     "ext:build": "pnpm --filter extension build",
-    "ext:dev": "pnpm --filter extension dev"
+    "ext:dev": "pnpm --filter extension dev",
+    "prepare": "lefthook install",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "lefthook": "^2.2.2",
+    "prettier": "^3.9.10",
+    "prettier-plugin-tailwindcss": "^0.8.1"
   }
 }
