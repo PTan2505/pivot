@@ -49,7 +49,7 @@ function FacetPicker({
 
   return (
     <div className="space-y-1">
-      <div className="text-[11px] font-medium text-muted-foreground">{TAG_KIND_LABELS[kind]}</div>
+      <div className="text-xs text-ink-subtle">{TAG_KIND_LABELS[kind]}</div>
       <div className="flex flex-wrap gap-1">
         {[...shown.map((o) => o.name), ...extra.map((e) => e.name)].map((name) => {
           const on = mine.includes(name.toLowerCase());
@@ -60,8 +60,8 @@ function FacetPicker({
               aria-pressed={on}
               onClick={() => toggle(name)}
               className={cx(
-                "h-6 cursor-pointer rounded-[5px] border px-2 text-xs transition-colors",
-                on ? "border-primary bg-primary/15 text-foreground" : "border-border text-muted-foreground hover:border-input hover:text-foreground",
+                "h-7 cursor-pointer rounded-full px-3 text-xs font-medium transition-colors duration-150",
+                on ? "bg-inverse text-on-inverse" : "bg-surface text-ink-secondary hover:bg-surface-raised hover:text-ink",
               )}
             >
               {name}
@@ -69,7 +69,7 @@ function FacetPicker({
           );
         })}
         {options.length > 8 && (
-          <button type="button" onClick={() => setExpanded((v) => !v)} className="h-6 cursor-pointer px-1.5 text-xs text-muted-foreground hover:text-foreground">
+          <button type="button" onClick={() => setExpanded((v) => !v)} className="h-6 cursor-pointer px-1.5 text-xs text-ink-muted hover:text-foreground">
             {expanded ? "less" : `+${options.length - 8}`}
           </button>
         )}
@@ -85,7 +85,7 @@ function FacetPicker({
           }}
           placeholder="+ new"
           aria-label={`Add ${TAG_KIND_LABELS[kind]}`}
-          className="h-6 w-20 rounded-[5px] border border-dashed border-border bg-transparent px-2 text-xs placeholder:text-muted-foreground focus:w-32 focus:border-primary focus:outline-none"
+          className="h-7 w-24 rounded-full bg-surface px-3 text-xs text-ink placeholder:text-ink-muted transition-[width] focus:w-36 focus:bg-surface-raised"
         />
       </div>
     </div>
@@ -173,13 +173,13 @@ export function Popup() {
   const facets: TagKind[] = mode === "page" ? [...TYPE_DEFS[type].facets, "tag"] : ["technology", "tag"];
 
   const header = (
-    <header className="flex h-11 items-center gap-2 border-b border-border px-3">
+    <header className="flex h-14 items-center gap-2.5 px-4">
       <Logo />
-      <span className="text-[13px] font-semibold">Save to Stan Bag</span>
+      <span className="text-[15px] font-medium tracking-[-0.01em]">Save to Stan Bag</span>
       <button
         type="button"
         onClick={() => chrome.runtime.openOptionsPage()}
-        className="ml-auto grid size-7 cursor-pointer place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+        className="ml-auto grid size-8 cursor-pointer place-items-center rounded-full bg-surface text-ink-secondary hover:bg-surface-raised hover:text-ink"
         aria-label="Extension settings"
       >
         <Settings className="size-3.5" />
@@ -191,7 +191,7 @@ export function Popup() {
     return (
       <div className="w-[400px]">
         {header}
-        <div className="grid h-60 place-items-center text-muted-foreground">
+        <div className="grid h-60 place-items-center text-ink-muted">
           <Loader2 className="size-4 animate-spin" aria-label="Loading" />
         </div>
       </div>
@@ -202,11 +202,11 @@ export function Popup() {
     const body =
       saved ? (
         <>
-          <span className="grid size-9 place-items-center rounded-full bg-primary/15 text-primary">
+          <span className="grid size-10 place-items-center rounded-full bg-surface text-success">
             <Check className="size-4" />
           </span>
           <p className="font-medium">Saved</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-ink-muted">
             {mode === "page" && serverCapture && TYPE_DEFS[type].visual ? "A full-page screenshot is being captured in the background." : "It’s in your library."}
           </p>
           <div className="flex gap-2 pt-1">
@@ -219,18 +219,18 @@ export function Popup() {
           </div>
         </>
       ) : status === "unsupported" ? (
-        <p className="text-muted-foreground">This page can’t be saved. Open a regular http(s) page and try again.</p>
+        <p className="text-ink-muted">This page can’t be saved. Open a regular http(s) page and try again.</p>
       ) : status === "offline" ? (
         <>
           <p className="font-medium">Stan Bag isn’t running</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-ink-muted">
             Start it with <code className="font-mono">npm start</code> in the stan-bag folder, then reopen this popup.
           </p>
         </>
       ) : (
         <>
           <p className="font-medium">Connect the extension</p>
-          <p className="text-xs text-muted-foreground">{error ?? "Paste the API token from Stan Bag › Settings."}</p>
+          <p className="text-xs text-ink-muted">{error ?? "Paste the API token from Stan Bag › Settings."}</p>
           <Button onClick={() => chrome.runtime.openOptionsPage()}>Open extension settings</Button>
         </>
       );
@@ -257,9 +257,9 @@ export function Popup() {
       }}
     >
       {header}
-      <div className="flex-1 space-y-3 overflow-y-auto p-3">
+      <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-2">
         {page?.selection && (
-          <div role="tablist" className="grid grid-cols-2 rounded-md bg-muted p-0.5 text-xs">
+          <div role="tablist" className="grid grid-cols-2 gap-1 rounded-full bg-surface p-1 text-xs">
             {(["page", "selection"] as const).map((m) => (
               <button
                 key={m}
@@ -267,7 +267,7 @@ export function Popup() {
                 role="tab"
                 aria-selected={mode === m}
                 onClick={() => setMode(m)}
-                className={cx("h-7 cursor-pointer rounded-[5px] transition-colors", mode === m ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground")}
+                className={cx("h-8 cursor-pointer rounded-full font-medium transition-colors", mode === m ? "bg-inverse text-on-inverse" : "text-ink-secondary hover:text-ink")}
               >
                 {m === "page" ? "Page" : "Selected text"}
               </button>
@@ -278,16 +278,16 @@ export function Popup() {
         {mode === "page" ? (
           <>
             {shotUrl && (
-              <div className="relative overflow-hidden rounded-lg border border-border">
+              <div className="relative overflow-hidden rounded-[14px] bg-surface">
                 <img src={shotUrl} alt="Screenshot of the current tab" className={cx("aspect-[16/10] w-full object-cover object-top", !attachShot && "opacity-30")} />
-                <label className="absolute right-2 bottom-2 flex cursor-pointer items-center gap-1.5 rounded-md bg-black/70 px-2 py-1 text-[11px] text-white backdrop-blur">
-                  <input type="checkbox" checked={attachShot} onChange={(e) => setAttachShot(e.target.checked)} className="accent-[var(--primary)]" />
+                <label className="absolute right-2.5 bottom-2.5 flex cursor-pointer items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-[11px] font-medium text-white backdrop-blur">
+                  <input type="checkbox" checked={attachShot} onChange={(e) => setAttachShot(e.target.checked)} className="accent-[var(--accent-fill)]" />
                   Attach this view
                 </label>
               </div>
             )}
             {duplicates.length > 0 && (
-              <p className="flex items-center gap-1.5 text-xs text-amber-500">
+              <p className="flex items-center gap-1.5 text-xs text-warning">
                 <AlertTriangle className="size-3.5 shrink-0" /> Already saved as
                 <button type="button" onClick={() => openInApp(`/r/${duplicates[0].id}`)} className="cursor-pointer truncate underline">
                   {duplicates[0].title}
@@ -305,7 +305,7 @@ export function Popup() {
                 id="type"
                 value={type}
                 onChange={(e) => setType(e.target.value as ResourceType)}
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-[13px] focus:border-primary focus:outline-none"
+                className="h-9 w-full rounded-full border-0 bg-surface px-4 text-[13px] text-ink hover:bg-surface-raised"
               >
                 {PAGE_TYPES.map((t) => (
                   <option key={t} value={t}>
@@ -326,8 +326,8 @@ export function Popup() {
                     aria-pressed={textType === t}
                     onClick={() => setTextType(t)}
                     className={cx(
-                      "h-7 cursor-pointer rounded-md border text-xs transition-colors",
-                      textType === t ? "border-primary bg-primary/15" : "border-border text-muted-foreground hover:text-foreground",
+                      "h-8 cursor-pointer rounded-full text-xs font-medium transition-colors duration-150",
+                      textType === t ? "bg-inverse text-on-inverse" : "bg-surface text-ink-secondary hover:bg-surface-raised hover:text-ink",
                     )}
                   >
                     {TYPE_DEFS[t].label}
@@ -344,7 +344,7 @@ export function Popup() {
           </>
         )}
 
-        <div className="space-y-2.5 border-t border-border pt-3">
+        <div className="space-y-3 pt-1">
           {facets.map((k) => (
             <FacetPicker key={k} kind={k} tags={tags} value={chosen} onChange={setChosen} />
           ))}
@@ -360,7 +360,7 @@ export function Popup() {
               id="collection"
               value={collectionId}
               onChange={(e) => setCollectionId(e.target.value)}
-              className="h-8 w-full rounded-md border border-input bg-background px-2 text-[13px] focus:border-primary focus:outline-none"
+              className="h-9 w-full rounded-full border-0 bg-surface px-4 text-[13px] text-ink hover:bg-surface-raised"
             >
               <option value="">None</option>
               {collections.map((c) => (
@@ -374,22 +374,22 @@ export function Popup() {
 
         {mode === "page" && TYPE_DEFS[type].visual && (
           <label className="flex cursor-pointer items-start gap-2 text-xs">
-            <input type="checkbox" checked={serverCapture} onChange={(e) => setServerCapture(e.target.checked)} className="mt-0.5 accent-[var(--primary)]" />
+            <input type="checkbox" checked={serverCapture} onChange={(e) => setServerCapture(e.target.checked)} className="mt-0.5 accent-[var(--accent-fill)]" />
             <span>
               Also capture a full-page screenshot
-              <span className="block text-muted-foreground">Taken by Stan Bag, so logged-in pages show their logged-out version.</span>
+              <span className="block text-ink-subtle">Taken by Stan Bag, so logged-in pages show their logged-out version.</span>
             </span>
           </label>
         )}
 
         {error && (
-          <p role="alert" className="flex items-start gap-1.5 text-xs text-primary">
+          <p role="alert" className="flex items-start gap-1.5 text-xs text-danger">
             <X className="mt-px size-3.5 shrink-0" /> {error}
           </p>
         )}
       </div>
-      <footer className="flex items-center gap-2 border-t border-border px-3 py-2.5">
-        <span className="truncate text-[11px] text-muted-foreground" title={page?.url}>
+      <footer className="flex items-center gap-2 px-4 py-3">
+        <span className="truncate text-xs text-ink-subtle" title={page?.url}>
           {page ? new URL(page.url).hostname.replace(/^www\./, "") : tab?.url}
         </span>
         <Button type="submit" className="ml-auto" disabled={saving || (mode === "selection" && !text.trim())}>

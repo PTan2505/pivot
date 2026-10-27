@@ -143,12 +143,12 @@ function SaveIndicator({ state }: { state: SaveState }) {
   return (
     <span
       role="status"
-      className={cn("flex items-center gap-1.5 text-xs text-muted-foreground", state === "error" && "text-primary")}
+      className={cn("flex items-center gap-1.5 px-2 text-xs text-ink-subtle", state === "error" && "text-danger")}
     >
       {state === "saving" ? (
         <Loader2 className="size-3 animate-spin" aria-hidden />
       ) : (
-        <span className={cn("size-1.5 rounded-full", state === "saved" ? "bg-emerald-500" : state === "error" ? "bg-primary" : "bg-amber-500")} aria-hidden />
+        <span className={cn("size-1.5 rounded-full", state === "saved" ? "bg-success" : state === "error" ? "bg-danger" : "bg-warning")} aria-hidden />
       )}
       {label}
     </span>
@@ -158,11 +158,11 @@ function SaveIndicator({ state }: { state: SaveState }) {
 function Field({ label, htmlFor, children, hint }: { label: string; htmlFor?: string; children: React.ReactNode; hint?: string }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={htmlFor} className="text-xs text-muted-foreground">
+      <Label htmlFor={htmlFor} className="text-xs font-normal text-ink-subtle">
         {label}
       </Label>
       {children}
-      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+      {hint && <p className="text-xs text-ink-subtle">{hint}</p>}
     </div>
   );
 }
@@ -182,7 +182,7 @@ function ColorsEditor({ value, onChange }: { value: string[]; onChange: (v: stri
       {value.length > 0 && (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-2">
           {value.map((c, i) => (
-            <div key={`${c}-${i}`} className="group overflow-hidden rounded-lg border border-border">
+            <div key={`${c}-${i}`} className="group overflow-hidden rounded-[14px] bg-surface">
               <button
                 type="button"
                 className="block h-14 w-full"
@@ -195,7 +195,7 @@ function ColorsEditor({ value, onChange }: { value: string[]; onChange: (v: stri
                 <button
                   type="button"
                   onClick={() => onChange(value.filter((_, j) => j !== i))}
-                  className="text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100"
+                  className="text-ink-muted opacity-0 group-hover:opacity-100 hover:text-ink focus-visible:opacity-100"
                   aria-label={`Remove ${c}`}
                 >
                   <X className="size-3" />
@@ -212,7 +212,7 @@ function ColorsEditor({ value, onChange }: { value: string[]; onChange: (v: stri
           add();
         }}
       >
-        <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder="#08090a, #ff6363 …" className="h-8 font-mono text-xs" aria-label="Add colors" />
+        <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder="#08090a, #ff6363 …" className="font-mono text-xs" aria-label="Add colors" />
         <Button type="submit" size="sm" variant="outline">
           Add
         </Button>
@@ -242,7 +242,7 @@ function MetaFieldInput({ field, draft, change }: { field: MetaField; draft: Dra
                 .filter(Boolean),
             )
           }
-          className="h-8 text-[13px]"
+
         />
       </Field>
     );
@@ -256,7 +256,7 @@ function MetaFieldInput({ field, draft, change }: { field: MetaField; draft: Dra
   }
   return (
     <Field label={field.label} htmlFor={id}>
-      <Input id={id} value={String(v ?? "")} onChange={(e) => set(e.target.value)} placeholder={field.placeholder} className="h-8 text-[13px]" />
+      <Input id={id} value={String(v ?? "")} onChange={(e) => set(e.target.value)} placeholder={field.placeholder} />
     </Field>
   );
 }
@@ -292,7 +292,7 @@ function ContentEditor({ draft, change }: { draft: Draft; change: (p: Partial<Dr
       spellCheck={def.content === "markdown"}
       aria-label="Content"
       placeholder={draft.type === "prompt" ? "Write the prompt. Use {{variable}} or {{variable|default}} for blanks." : "Content…"}
-      className="min-h-[55vh] resize-y bg-surface-sunken font-mono text-[12.5px] leading-relaxed"
+      className="min-h-[55vh] resize-y font-mono text-[12.5px] leading-relaxed"
     />
   );
 
@@ -306,11 +306,11 @@ function ContentEditor({ draft, change }: { draft: Draft; change: (p: Partial<Dr
           </TabsList>
           <TabsContent value="write">{editor}</TabsContent>
           <TabsContent value="preview">
-            <div className="min-h-[55vh] rounded-lg border border-border bg-card px-5 py-4">
+            <div className="min-h-[55vh] rounded-[14px] bg-surface px-6 py-5">
               {draft.content.trim() ? (
                 <Markdown interactiveChecks={draft.type === "checklist"}>{draft.content}</Markdown>
               ) : (
-                <p className="text-sm text-muted-foreground">Nothing to preview.</p>
+                <p className="text-sm text-ink-muted">Nothing to preview.</p>
               )}
             </div>
           </TabsContent>
@@ -318,14 +318,14 @@ function ContentEditor({ draft, change }: { draft: Draft; change: (p: Partial<Dr
       ) : (
         editor
       )}
-      {jsonError && <p className="font-mono text-xs text-primary">JSON: {jsonError}</p>}
+      {jsonError && <p className="font-mono text-xs text-danger">JSON: {jsonError}</p>}
       {vars.length > 0 && (
-        <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        <p className="flex flex-wrap items-center gap-1.5 text-xs text-ink-subtle">
           Variables:
           {vars.map((v) => (
-            <code key={v.name} className="rounded bg-muted px-1.5 py-px font-mono text-[11px] text-foreground">
+            <code key={v.name} className="rounded-full bg-surface px-2.5 py-0.5 font-mono text-[11px] text-ink">
               {v.name}
-              {v.defaultValue && <span className="text-muted-foreground"> = {v.defaultValue}</span>}
+              {v.defaultValue && <span className="text-ink-subtle"> = {v.defaultValue}</span>}
             </code>
           ))}
         </p>
@@ -371,13 +371,13 @@ function SkillBar({ resource, flush }: { resource: ResourceDetailDTO; flush: () 
 
   const state = status?.state ?? "missing";
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs">
-      <span className="font-mono text-muted-foreground">{status?.dirPath ?? "Not on disk yet"}</span>
-      {status?.isSymlink && <span className="rounded bg-muted px-1.5 py-px text-[11px] text-muted-foreground">symlink</span>}
+    <div className="flex flex-wrap items-center gap-2 rounded-[14px] bg-surface px-4 py-3 text-xs">
+      <span className="font-mono text-ink-subtle">{status?.dirPath ?? "Not on disk yet"}</span>
+      {status?.isSymlink && <span className="rounded-full bg-surface-raised px-2 py-0.5 text-[11px] text-ink-secondary">symlink</span>}
       <span className={cn("font-medium", SKILL_STATE_TONE[state])}>{status ? SKILL_STATE_LABEL[state] : "Not saved to disk"}</span>
       <div className="ml-auto flex gap-1.5">
         {(state === "disk-changed" || state === "conflict") && (
-          <Button size="xs" variant="outline" onClick={pull} disabled={busy}>
+          <Button size="sm" variant="secondary" className="bg-surface-raised" onClick={pull} disabled={busy}>
             <HardDriveDownload /> Use disk version
           </Button>
         )}
@@ -388,14 +388,14 @@ function SkillBar({ resource, flush }: { resource: ResourceDetailDTO; flush: () 
             confirmLabel="Overwrite disk"
             onConfirm={() => write(true)}
           >
-            <Button size="xs" disabled={busy}>
+            <Button size="sm" disabled={busy}>
               <HardDriveUpload /> Overwrite disk
             </Button>
           </ConfirmButton>
         ) : (
           state !== "synced" &&
           state !== "disk-changed" && (
-            <Button size="xs" onClick={() => write(false)} disabled={busy}>
+            <Button size="sm" onClick={() => write(false)} disabled={busy}>
               {busy ? <Loader2 className="animate-spin" /> : <HardDriveUpload />} Save to disk
             </Button>
           )
@@ -451,14 +451,39 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
 
   return (
     <div className="flex min-h-full flex-col">
-      <header className="sticky top-0 z-30 flex h-12 items-center gap-2 border-b border-border bg-background/85 px-4 backdrop-blur">
-        <Button variant="ghost" size="icon-sm" aria-label="Back" onClick={() => (history.length > 1 ? router.back() : router.push("/"))}>
-          <ArrowLeft />
-        </Button>
-        <Link href={`/?type=${draft.type}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-          <TypeIcon type={draft.type} className="size-3.5" /> {def.plural}
-        </Link>
-        <span className="text-muted-foreground">/</span>
+      <header className="flex flex-col gap-5 px-4 pt-6 md:px-10 md:pt-8">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="secondary" size="icon" aria-label="Back" onClick={() => (history.length > 1 ? router.back() : router.push("/"))}>
+            <ArrowLeft />
+          </Button>
+          <Button variant="secondary" asChild>
+            <Link href={`/?type=${draft.type}`}>
+              <TypeIcon type={draft.type} /> {def.plural}
+            </Link>
+          </Button>
+          <SaveIndicator state={state} />
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {draft.sourceUrl && (
+              <Button variant="secondary" asChild>
+                <a href={draft.sourceUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink /> Open
+                </a>
+              </Button>
+            )}
+            <Button variant="secondary" onClick={() => flush().then(() => copy({ ...resource, content: draft.content, type: draft.type }))}>
+              <Copy /> Copy
+            </Button>
+            <Button variant="secondary" onClick={() => flush().then(() => copyContext([resource.id]))}>
+              <ClipboardCopy /> Context
+            </Button>
+            <Button onClick={() => flush().then(() => openExport({ ids: [resource.id], name: draft.title }))}>
+              <PackageOpen /> Export
+            </Button>
+            <Button variant="destructive" size="icon" aria-label="Move to trash" onClick={trash}>
+              <Trash2 />
+            </Button>
+          </div>
+        </div>
         <input
           ref={titleRef}
           value={draft.title}
@@ -466,43 +491,21 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
           readOnly={draft.type === "skill"}
           title={draft.type === "skill" ? "Skill names come from the frontmatter `name`" : undefined}
           aria-label="Title"
-          className="min-w-0 flex-1 truncate bg-transparent text-sm font-semibold outline-none placeholder:text-muted-foreground"
+          className="w-full min-w-0 bg-transparent text-[clamp(32px,4.5vw,56px)] leading-[1] font-medium tracking-[-0.04em] text-ink outline-none placeholder:text-ink-subtle focus-visible:outline-none"
           placeholder="Untitled"
         />
-        <SaveIndicator state={state} />
-        <div className="flex items-center gap-0.5">
-          {draft.sourceUrl && (
-            <Button variant="ghost" size="sm" asChild>
-              <a href={draft.sourceUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink /> Open
-              </a>
-            </Button>
-          )}
-          <Button variant="ghost" size="sm" onClick={() => flush().then(() => copy({ ...resource, content: draft.content, type: draft.type }))}>
-            <Copy /> Copy
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => flush().then(() => copyContext([resource.id]))}>
-            <ClipboardCopy /> Context
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => flush().then(() => openExport({ ids: [resource.id], name: draft.title }))}>
-            <PackageOpen /> Export
-          </Button>
-          <Button variant="ghost" size="icon-sm" aria-label="Move to trash" onClick={trash} className="hover:text-destructive">
-            <Trash2 />
-          </Button>
-        </div>
       </header>
 
-      <div className="grid flex-1 gap-6 px-6 py-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid flex-1 gap-10 px-4 pt-6 pb-16 md:px-10 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-5">
           {draft.type === "skill" && <SkillBar resource={resource} flush={flush} />}
           {draft.type === "typography" && (
             <section className="space-y-3" aria-label="Palette">
-              <h2 className="text-xs font-medium text-muted-foreground">Colors</h2>
+              <h2 className="text-xs text-ink-subtle">Colors</h2>
               <ColorsEditor value={colors} onChange={(v) => change({ meta: { ...draft.meta, colors: v } })} />
               {Array.isArray(draft.meta.fonts) && (draft.meta.fonts as string[]).length > 0 && (
                 <div className="space-y-2 pt-2">
-                  <h2 className="text-xs font-medium text-muted-foreground">Fonts</h2>
+                  <h2 className="text-xs text-ink-subtle">Fonts</h2>
                   {(draft.meta.fonts as string[]).map((f) => (
                     <p key={f} className="truncate text-2xl" style={{ fontFamily: `"${f}", var(--font-sans)` }}>
                       {f} — The quick brown fox
@@ -515,14 +518,14 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
           {showGallery && <AssetGallery resource={resource} compact={!def.visual} />}
           {def.content !== "none" && <ContentEditor draft={draft} change={change} />}
           {!def.visual && resource.assets.length === 0 && (
-            <p className="text-xs text-muted-foreground">Paste or drop files on this page to attach them.</p>
+            <p className="text-xs text-ink-subtle">Paste or drop files on this page to attach them.</p>
           )}
         </div>
 
-        <aside className="space-y-5 xl:sticky xl:top-17 xl:self-start" aria-label="Details">
+        <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start" aria-label="Details">
           {draft.type !== "skill" && (
             <Field label="Description" htmlFor="desc">
-              <Textarea id="desc" value={draft.description} onChange={(e) => change({ description: e.target.value })} rows={3} className="text-[13px]" placeholder="One or two lines to recognise it later" />
+              <Textarea id="desc" value={draft.description} onChange={(e) => change({ description: e.target.value })} rows={3} placeholder="One or two lines to recognise it later" />
             </Field>
           )}
           <Field label="Source URL" htmlFor="url">
@@ -531,31 +534,31 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
               value={draft.sourceUrl}
               onChange={(e) => change({ sourceUrl: e.target.value })}
               placeholder="https://"
-              className="h-8 font-mono text-xs"
+              className="font-mono text-xs"
             />
           </Field>
           {def.fields.map((f) => (
             <MetaFieldInput key={f.key} field={f} draft={draft} change={change} />
           ))}
           <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Classification</Label>
+            <Label className="text-xs font-normal text-ink-subtle">Classification</Label>
             <TagsEditor kinds={[...def.facets, "tag"]} value={draft.tags} onChange={(tags) => change({ tags })} />
           </div>
           <Field label="Notes" htmlFor="notes">
-            <Textarea id="notes" value={draft.notes} onChange={(e) => change({ notes: e.target.value })} rows={5} className="text-[13px]" placeholder="What’s good about it, how to use it…" />
+            <Textarea id="notes" value={draft.notes} onChange={(e) => change({ notes: e.target.value })} rows={5} placeholder="What’s good about it, how to use it…" />
           </Field>
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Collections</Label>
+            <Label className="text-xs font-normal text-ink-subtle">Collections</Label>
             <div className="flex flex-wrap items-center gap-1">
               {resource.collections.map((c) => (
-                <span key={c.id} className="flex h-6 items-center gap-1 rounded-[5px] bg-muted pr-1 pl-2 text-xs">
+                <span key={c.id} className="flex h-7 items-center gap-1 rounded-full bg-surface pr-1.5 pl-3 text-xs font-medium text-ink-secondary">
                   <Link href={`/collections/${c.id}`} className="hover:underline">
                     {c.name}
                   </Link>
                   <button
                     type="button"
                     onClick={() => removeFromCollection(c.id)}
-                    className="grid size-4 place-items-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+                    className="grid size-4 place-items-center rounded-full text-ink-muted hover:bg-surface-raised hover:text-ink"
                     aria-label={`Remove from ${c.name}`}
                   >
                     <X className="size-3" />
@@ -563,7 +566,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
                 </span>
               ))}
               <AddToCollection ids={[resource.id]}>
-                <Button variant="ghost" size="xs" className="h-6 text-xs text-muted-foreground">
+                <Button variant="secondary" size="xs" className="h-7 text-ink-muted">
                   <FolderInput /> Add
                 </Button>
               </AddToCollection>
@@ -583,7 +586,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
               </SelectContent>
             </Select>
           </Field>
-          <dl className="grid grid-cols-[72px_1fr] gap-y-1 border-t border-border pt-4 text-[11px] text-muted-foreground">
+          <dl className="grid grid-cols-[72px_1fr] gap-y-1 border-t border-divider pt-5 text-xs text-ink-subtle">
             <dt>Added</dt>
             <dd className="font-mono">{new Date(resource.createdAt).toLocaleString()}</dd>
             <dt>Edited</dt>

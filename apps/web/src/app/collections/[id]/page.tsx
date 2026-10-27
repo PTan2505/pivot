@@ -28,17 +28,26 @@ function NameInput({ id, initial }: { id: string; initial: string }) {
       onBlur={rename}
       onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
       aria-label="Collection name"
-      className="min-w-0 bg-transparent text-sm font-semibold outline-none"
-      size={Math.max(8, name.length)}
+      className="w-full min-w-0 bg-transparent text-[clamp(44px,6vw,72px)] leading-[0.96] font-medium tracking-[-0.045em] text-ink outline-none"
+      size={Math.max(6, name.length)}
     />
   );
 }
 
-function CollectionHeader({ id }: { id: string }) {
+function useCollection(id: string) {
+  return useQuery({ queryKey: ["collection", id], queryFn: () => api<CollectionDTO>(`/api/collections/${id}`) });
+}
+
+function CollectionTitle({ id }: { id: string }) {
+  const { data } = useCollection(id);
+  return data ? <NameInput key={data.name} id={id} initial={data.name} /> : <span className="opacity-0">Collection</span>;
+}
+
+function CollectionActions({ id }: { id: string }) {
   const router = useRouter();
   const invalidate = useInvalidate();
   const { openExport } = useUi();
-  const { data } = useQuery({ queryKey: ["collection", id], queryFn: () => api<CollectionDTO>(`/api/collections/${id}`) });
+  const { data } = useCollection(id);
   const ids = useQuery({
     queryKey: ["resources", { collection: id, ids: true }],
     queryFn: () => api<{ id: string }[]>(`/api/resources?collection=${id}`),
@@ -47,11 +56,10 @@ function CollectionHeader({ id }: { id: string }) {
 
   return (
     <>
-      {data && <NameInput key={data.name} id={id} initial={data.name} />}
-      <Button variant="ghost" size="sm" disabled={!all.length} onClick={() => copyContext(all)}>
+      <Button variant="secondary" disabled={!all.length} onClick={() => copyContext(all)}>
         <ClipboardCopy /> Copy context
       </Button>
-      <Button variant="ghost" size="sm" disabled={!all.length} onClick={() => openExport({ ids: all, name: data?.name ?? "collection" })}>
+      <Button variant="secondary" disabled={!all.length} onClick={() => openExport({ ids: all, name: data?.name ?? "collection" })}>
         <PackageOpen /> Export
       </Button>
       <ConfirmButton
@@ -65,7 +73,7 @@ function CollectionHeader({ id }: { id: string }) {
           toast.success("Collection deleted");
         }}
       >
-        <Button variant="ghost" size="icon-sm" aria-label="Delete collection" className="hover:text-destructive">
+        <Button variant="destructive" size="icon" aria-label="Delete collection">
           <Trash2 />
         </Button>
       </ConfirmButton>
@@ -79,8 +87,8 @@ function CollectionFromParams() {
     <LibraryView
       key={id}
       collectionId={id}
-      title={<span className="sr-only">Collection</span>}
-      headerExtra={<CollectionHeader id={id} />}
+      title={<CollectionTitle id={id} />}
+      actions={<CollectionActions id={id} />}
       emptyState={
         <div className="max-w-sm space-y-2">
           <p className="text-sm font-medium">This collection is empty</p>

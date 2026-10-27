@@ -10,10 +10,10 @@ export function Button({ variant = "primary", className, ...props }: ButtonHTMLA
       type="button"
       {...props}
       className={cx(
-        "inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:size-3.5",
-        variant === "primary" && "bg-primary text-primary-foreground hover:bg-primary/85",
-        variant === "ghost" && "text-muted-foreground hover:bg-accent hover:text-foreground",
-        variant === "outline" && "border border-border hover:bg-accent",
+        "inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-full px-4 text-[13px] font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 [&_svg]:size-3.5",
+        variant === "primary" && "bg-primary text-primary-foreground hover:bg-primary/90",
+        variant === "ghost" && "text-ink-secondary hover:bg-surface hover:text-ink",
+        variant === "outline" && "bg-surface text-ink-secondary hover:bg-surface-raised hover:text-ink",
         className,
       )}
     />
@@ -25,7 +25,7 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       className={cx(
-        "h-8 w-full rounded-md border border-input bg-transparent px-2.5 text-[13px] placeholder:text-muted-foreground focus:border-primary focus:outline-none",
+        "h-9 w-full rounded-full border-0 bg-surface px-4 text-[13px] text-ink placeholder:text-ink-muted hover:bg-surface-raised focus:bg-surface-raised",
         props.className,
       )}
     />
@@ -37,7 +37,7 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
     <textarea
       {...props}
       className={cx(
-        "w-full resize-none rounded-md border border-input bg-transparent px-2.5 py-1.5 text-[13px] leading-relaxed placeholder:text-muted-foreground focus:border-primary focus:outline-none",
+        "w-full resize-none rounded-[14px] border-0 bg-surface px-4 py-2.5 text-[13px] leading-relaxed text-ink placeholder:text-ink-muted hover:bg-surface-raised focus:bg-surface-raised",
         props.className,
       )}
     />
@@ -47,7 +47,7 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
 export function Field({ label, htmlFor, children }: { label: string; htmlFor?: string; children: ReactNode }) {
   return (
     <div className="space-y-1">
-      <label htmlFor={htmlFor} className="block text-[11px] font-medium text-muted-foreground">
+      <label htmlFor={htmlFor} className="block text-xs text-ink-subtle">
         {label}
       </label>
       {children}
@@ -57,8 +57,8 @@ export function Field({ label, htmlFor, children }: { label: string; htmlFor?: s
 
 export function Logo() {
   return (
-    <span className="grid size-5 place-items-center rounded-[5px] bg-primary text-primary-foreground">
-      <svg viewBox="0 0 24 24" className="size-3" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <span className="grid size-6 place-items-center rounded-full bg-ink text-canvas">
+      <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <rect width="20" height="5" x="2" y="3" rx="1" />
         <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
         <path d="M10 12h4" />

@@ -22,9 +22,7 @@ function EmptyTrash() {
         toast.success(`Deleted ${r.deleted} permanently`);
       }}
     >
-      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
-        Empty trash
-      </Button>
+      <Button variant="destructive">Empty trash</Button>
     </ConfirmButton>
   );
 }
@@ -35,13 +33,9 @@ export default function TrashPage() {
       <LibraryView
         mode="trash"
         title="Trash"
-        headerExtra={
-          <>
-            <span className="text-xs text-muted-foreground">Items are deleted automatically after 30 days.</span>
-            <EmptyTrash />
-          </>
-        }
-        emptyState={<p className="text-sm text-muted-foreground">Trash is empty.</p>}
+        subtitle="Deleted for good after 30 days."
+        actions={<EmptyTrash />}
+        emptyState={<p className="text-sm text-ink-muted">Trash is empty.</p>}
       />
     </Suspense>
   );

@@ -101,8 +101,8 @@ export function GlobalLayer() {
       <PromptCopyDialog />
       {dragging && (
         <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center bg-background/70 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-primary px-12 py-10 text-sm">
-            <Upload className="size-6 text-primary" aria-hidden />
+          <div className="flex flex-col items-center gap-2 rounded-[14px] border-2 border-dashed border-accent-text bg-surface px-12 py-10 text-sm">
+            <Upload className="size-6 text-accent-text" aria-hidden />
             Drop to add to your library
           </div>
         </div>

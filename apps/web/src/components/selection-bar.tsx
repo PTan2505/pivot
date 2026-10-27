@@ -71,34 +71,34 @@ export function SelectionBar({
     <div
       role="toolbar"
       aria-label="Selection actions"
-      className="fixed bottom-5 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border bg-popover p-1.5 pl-3 shadow-2xl shadow-black/40 animate-in fade-in slide-in-from-bottom-2 duration-200"
+      className="fixed bottom-6 left-1/2 z-40 flex max-w-[calc(100%-2rem)] -translate-x-1/2 flex-wrap items-center gap-1 rounded-[28px] bg-surface-raised p-1.5 pl-4 shadow-overlay animate-in fade-in slide-in-from-bottom-2 duration-200"
     >
-      <span className="mr-2 font-mono text-xs text-muted-foreground tabular-nums">{ids.length} selected</span>
+      <span className="mr-2 font-mono text-xs text-ink-subtle tabular-nums">{ids.length} selected</span>
       {mode === "library" ? (
         <>
-          <Button variant="ghost" size="sm" onClick={() => copyContext(ids)}>
+          <Button variant="ghost" onClick={() => copyContext(ids)}>
             <ClipboardCopy /> Copy context
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => openExport({ ids, name: exportName })}>
+          <Button variant="ghost" onClick={() => openExport({ ids, name: exportName })}>
             <PackageOpen /> Export
           </Button>
           <AddToCollection ids={ids} onDone={onClear}>
-            <Button variant="ghost" size="sm">
+            <Button variant="ghost">
               <FolderInput /> Collection
             </Button>
           </AddToCollection>
           {collectionId && (
-            <Button variant="ghost" size="sm" onClick={() => run("removeFromCollection", "Removed from collection")}>
+            <Button variant="ghost" onClick={() => run("removeFromCollection", "Removed from collection")}>
               <FolderMinus /> Remove
             </Button>
           )}
-          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => run("trash", `Moved ${ids.length} to trash`)}>
+          <Button variant="ghost" className="text-danger hover:text-danger" onClick={() => run("trash", `Moved ${ids.length} to trash`)}>
             <Trash2 /> Trash
           </Button>
         </>
       ) : (
         <>
-          <Button variant="ghost" size="sm" onClick={() => run("restore", `Restored ${ids.length}`)}>
+          <Button variant="ghost" onClick={() => run("restore", `Restored ${ids.length}`)}>
             <RotateCcw /> Restore
           </Button>
           <ConfirmButton
@@ -107,13 +107,13 @@ export function SelectionBar({
             confirmLabel="Delete forever"
             onConfirm={() => run("purge", "Deleted permanently")}
           >
-            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+            <Button variant="ghost" className="text-danger hover:text-danger">
               <Trash2 /> Delete forever
             </Button>
           </ConfirmButton>
         </>
       )}
-      <Button variant="ghost" size="icon-sm" aria-label="Clear selection" onClick={onClear}>
+      <Button variant="ghost" size="icon" aria-label="Clear selection" onClick={onClear}>
         <X />
       </Button>
     </div>

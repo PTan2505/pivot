@@ -5,121 +5,119 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --font-sans: var(--font-geist);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --color-surface-sunken: var(--surface-sunken);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  /* Stan Bag design-system tokens (see DESIGN.md) */
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-divider: var(--divider);
+  --color-ink: var(--ink);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+  --color-inverse: var(--inverse);
+  --color-on-inverse: var(--on-inverse);
+  --color-accent-text: var(--accent-text);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 14px;
+  --radius-2xl: 14px;
+  --radius-3xl: 14px;
+  --radius-4xl: 9999px;
+  --shadow-overlay: var(--shadow-overlay);
 }
 
-/* Stan Bag — Linear-style structure (near-black canvas, hairline borders) with a Raycast coral accent.
-   Contrast checked: body text ≥ 18:1, muted text ≥ 5.5:1, primary button text ≥ 5:1 in both themes. */
+/* Stan Bag — Savee direction: a black canvas where saved screenshots carry the colour.
+   Hierarchy comes from surface steps (canvas → surface → surface-raised), not borders or shadows.
+   One electric-indigo fill per screen for the primary action. Contrast verified ≥ 4.5:1 for every
+   text token on canvas, surface and surface-raised in both themes. */
 :root {
-  --radius: 0.5rem;
-  --background: #fbfbfb;
-  --foreground: #08090a;
-  --card: #ffffff;
-  --card-foreground: #08090a;
-  --popover: #ffffff;
-  --popover-foreground: #08090a;
-  --primary: #c93a3a;
-  --primary-foreground: #ffffff;
-  --secondary: #f1f1f2;
-  --secondary-foreground: #08090a;
-  --muted: #f1f1f2;
-  --muted-foreground: #62666d;
-  --accent: #ececee;
-  --accent-foreground: #08090a;
-  --destructive: #c93a3a;
-  --border: #e4e4e7;
-  --input: #dcdce0;
-  --ring: #c93a3a;
-  --chart-1: #c93a3a;
-  --chart-2: #6366f1;
-  --chart-3: #02b8cc;
-  --chart-4: #27a644;
-  --chart-5: #8b5cf6;
-  --sidebar: #f5f5f6;
-  --sidebar-foreground: #08090a;
-  --sidebar-primary: #c93a3a;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e9e9eb;
-  --sidebar-accent-foreground: #08090a;
-  --sidebar-border: #e4e4e7;
-  --sidebar-ring: #c93a3a;
-  --surface-sunken: #f1f1f2;
+  --canvas: #ffffff;
+  --surface: #f2f2f2;
+  --surface-raised: #e6e6e6;
+  --divider: #dcdcdc;
+  --ink: #0a0a0a;
+  --ink-secondary: #2e2e2e;
+  --ink-muted: #545454;
+  --ink-subtle: #636363;
+  --inverse: #0a0a0a;
+  --on-inverse: #ffffff;
+  --accent-fill: #1500ff;
+  --on-accent: #ffffff;
+  --accent-text: #1500ff;
+  --danger: #c21f1f;
+  --success: #17703d;
+  --warning: #8a5600;
+  --shadow-overlay: 0 24px 64px rgba(10, 10, 10, 0.16);
 }
 
 .dark {
-  --background: #08090a;
-  --foreground: #f7f8f8;
-  --card: #0f1011;
-  --card-foreground: #f7f8f8;
-  --popover: #121314;
-  --popover-foreground: #f7f8f8;
-  --primary: #ff6363;
-  --primary-foreground: #08090a;
-  --secondary: #161718;
-  --secondary-foreground: #f7f8f8;
-  --muted: #161718;
-  --muted-foreground: #8a8f98;
-  --accent: #1c1d20;
-  --accent-foreground: #f7f8f8;
-  --destructive: #ff6363;
-  --border: #23252a;
-  --input: #2a2c31;
-  --ring: #ff6363;
-  --chart-1: #ff6363;
-  --chart-2: #6366f1;
-  --chart-3: #02b8cc;
-  --chart-4: #27a644;
-  --chart-5: #8b5cf6;
-  --sidebar: #0b0c0d;
-  --sidebar-foreground: #d0d6e0;
-  --sidebar-primary: #ff6363;
-  --sidebar-primary-foreground: #08090a;
-  --sidebar-accent: #17181a;
-  --sidebar-accent-foreground: #f7f8f8;
-  --sidebar-border: #1c1e21;
-  --sidebar-ring: #ff6363;
-  --surface-sunken: #050506;
+  --canvas: #050505;
+  --surface: #151515;
+  --surface-raised: #1e1e1e;
+  --divider: #2f2f2f;
+  --ink: #fdfdfd;
+  --ink-secondary: #d4d4d4;
+  --ink-muted: #a3a3a3;
+  --ink-subtle: #8a8a8a;
+  --inverse: #fdfdfd;
+  --on-inverse: #050505;
+  --accent-fill: #1500ff;
+  --on-accent: #ffffff;
+  --accent-text: #8b84ff;
+  --danger: #ff7a7a;
+  --success: #4cc38a;
+  --warning: #f5b33f;
+  --shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+
+/* shadcn/ui variables, mapped onto the design-system tokens. */
+:root,
+.dark {
+  --radius: 14px;
+  --background: var(--canvas);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface-raised);
+  --popover-foreground: var(--ink);
+  --primary: var(--accent-fill);
+  --primary-foreground: var(--on-accent);
+  --secondary: var(--surface);
+  --secondary-foreground: var(--ink-secondary);
+  --muted: var(--surface);
+  --muted-foreground: var(--ink-muted);
+  --accent: var(--surface-raised);
+  --accent-foreground: var(--ink);
+  --destructive: var(--danger);
+  --border: var(--divider);
+  --input: var(--divider);
+  --ring: var(--accent-text);
+  --surface-sunken: var(--surface);
 }
 
 @layer base {
@@ -134,10 +132,14 @@
   }
   html {
     @apply font-sans;
-    font-feature-settings: "cv01", "cv11", "ss03";
+    font-size: 14px;
   }
   ::selection {
-    background: color-mix(in oklch, var(--primary) 35%, transparent);
+    background: color-mix(in oklch, var(--accent-text) 35%, transparent);
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent-text);
+    outline-offset: 3px;
   }
 }
 
@@ -151,16 +153,16 @@
 /* Markdown preview */
 .prose-sb { line-height: 1.6; font-size: 0.875rem; }
 .prose-sb > * + * { margin-top: 0.75em; }
-.prose-sb h1 { font-size: 1.25rem; font-weight: 590; letter-spacing: -0.012em; }
-.prose-sb h2 { font-size: 1.05rem; font-weight: 590; margin-top: 1.4em; }
-.prose-sb h3 { font-size: 0.95rem; font-weight: 590; margin-top: 1.2em; }
+.prose-sb h1 { font-size: 1.25rem; font-weight: 500; letter-spacing: -0.012em; }
+.prose-sb h2 { font-size: 1.05rem; font-weight: 500; margin-top: 1.4em; }
+.prose-sb h3 { font-size: 0.95rem; font-weight: 500; margin-top: 1.2em; }
 .prose-sb ul { list-style: disc; padding-left: 1.25rem; }
 .prose-sb ol { list-style: decimal; padding-left: 1.25rem; }
 .prose-sb li + li { margin-top: 0.25em; }
 .prose-sb li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.25rem; }
-.prose-sb a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
-.prose-sb code { font-family: var(--font-mono); font-size: 0.8em; background: var(--muted); border-radius: 4px; padding: 0.1em 0.35em; }
-.prose-sb pre { background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; overflow-x: auto; }
+.prose-sb a { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
+.prose-sb code { font-family: var(--font-mono); font-size: 0.8em; background: var(--surface-raised); border-radius: 6px; padding: 0.1em 0.35em; }
+.prose-sb pre { background: var(--surface); border-radius: 14px; padding: 0.75rem 1rem; overflow-x: auto; }
 .prose-sb pre code { background: none; padding: 0; font-size: 0.78rem; }
 .prose-sb blockquote { border-left: 2px solid var(--border); padding-left: 0.75rem; color: var(--muted-foreground); }
 .prose-sb table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }

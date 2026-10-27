@@ -27,12 +27,12 @@ function KindPicker({ kind, value, onChange }: { kind: TagKind; value: TagInput[
   return (
     <div className="flex flex-wrap items-center gap-1">
       {mine.map((t) => (
-        <span key={t.name} className="flex h-6 items-center gap-1 rounded-[5px] bg-muted pr-1 pl-2 text-xs">
+        <span key={t.name} className="flex h-7 items-center gap-1 rounded-full bg-surface-raised pr-1.5 pl-3 text-xs font-medium text-ink-secondary">
           {t.name}
           <button
             type="button"
             onClick={() => remove(t.name)}
-            className="grid size-4 place-items-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="grid size-4 place-items-center rounded-full text-ink-muted hover:bg-surface hover:text-ink"
             aria-label={`Remove ${t.name}`}
           >
             <X className="size-3" />
@@ -41,7 +41,7 @@ function KindPicker({ kind, value, onChange }: { kind: TagKind; value: TagInput[
       ))}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button type="button" variant="ghost" size="xs" className="h-6 text-xs text-muted-foreground" aria-label={`Add ${TAG_KIND_LABELS[kind]}`}>
+          <Button type="button" variant="secondary" size="xs" className="h-7 text-ink-muted" aria-label={`Add ${TAG_KIND_LABELS[kind]}`}>
             <Plus /> {mine.length ? "" : "Add"}
           </Button>
         </PopoverTrigger>
@@ -78,7 +78,7 @@ export function TagsEditor({ kinds, value, onChange }: { kinds: TagKind[]; value
     <div className="space-y-2">
       {kinds.map((kind) => (
         <div key={kind} className="grid grid-cols-[88px_1fr] items-start gap-2">
-          <span className="pt-1 text-xs text-muted-foreground">{TAG_KIND_LABELS[kind]}</span>
+          <span className="pt-1.5 text-xs text-ink-subtle">{TAG_KIND_LABELS[kind]}</span>
           <KindPicker kind={kind} value={value} onChange={onChange} />
         </div>
       ))}

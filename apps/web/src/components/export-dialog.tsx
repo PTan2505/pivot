@@ -89,17 +89,17 @@ function ExportBody({ ids, initialName, onClose }: { ids: string[]; initialName:
 
         {result ? (
           <div className="space-y-3">
-            <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-sunken px-3 py-2 font-mono text-xs break-all">
-              <Check className="size-3.5 shrink-0 text-primary" aria-hidden /> {result.path}
+            <div className="flex items-center gap-2 rounded-[14px] bg-surface px-4 py-3 font-mono text-xs break-all">
+              <Check className="size-3.5 shrink-0 text-success" aria-hidden /> {result.path}
             </div>
             <p className="text-xs text-muted-foreground">
               {result.fileCount} files · ~{formatTokens(result.tokens.total)} tokens
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => copyText(`Read ${result.path}/context.md and use it as context for this task.`, "Prompt copied")}>
+              <Button variant="secondary" onClick={() => copyText(`Read ${result.path}/context.md and use it as context for this task.`, "Prompt copied")}>
                 <ClipboardCopy /> Copy prompt for Claude
               </Button>
-              <Button size="sm" variant="outline" onClick={() => copyText(result.path, "Path copied")}>
+              <Button variant="secondary" onClick={() => copyText(result.path, "Path copied")}>
                 <ClipboardCopy /> Copy path
               </Button>
               <Button
@@ -140,7 +140,7 @@ function ExportBody({ ids, initialName, onClose }: { ids: string[]; initialName:
           </form>
         )}
 
-        <div className="flex items-center justify-between gap-3 border-t border-border pt-3 text-xs text-muted-foreground">
+        <div className="flex items-center justify-between gap-3 border-t border-divider pt-4 text-xs text-ink-muted">
           <span>
             {t ? (
               <>
@@ -153,11 +153,11 @@ function ExportBody({ ids, initialName, onClose }: { ids: string[]; initialName:
           </span>
           <DialogFooter className="m-0 p-0">
             {result ? (
-              <Button size="sm" onClick={onClose}>
+              <Button onClick={onClose}>
                 Done
               </Button>
             ) : (
-              <Button size="sm" type="submit" form="export-form" disabled={busy || !dir.trim() || !name.trim()}>
+              <Button type="submit" form="export-form" disabled={busy || !dir.trim() || !name.trim()}>
                 {busy && <Loader2 className="animate-spin" />} Export
               </Button>
             )}

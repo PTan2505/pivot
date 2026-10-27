@@ -31,10 +31,10 @@ export function Options() {
     <main className="mx-auto max-w-lg space-y-6 px-6 py-12">
       <div className="flex items-center gap-2">
         <Logo />
-        <h1 className="text-base font-semibold">Stan Bag extension</h1>
+        <h1 className="text-[22px] leading-[1.2] font-medium tracking-[-0.02em]">Stan Bag extension</h1>
       </div>
-      <p className="text-sm text-muted-foreground">
-        Find both values in Stan Bag › <span className="text-foreground">Settings › Browser extension</span>. The token lets this extension add to your library; other websites can’t.
+      <p className="text-sm text-ink-muted">
+        Find both values in Stan Bag › <span className="text-ink">Settings › Browser extension</span>. The token lets this extension add to your library; other websites can’t.
       </p>
       <form
         className="space-y-4"
@@ -54,30 +54,30 @@ export function Options() {
             {state.kind === "testing" && <Loader2 className="animate-spin" />} Save & test
           </Button>
           {state.kind === "ok" && (
-            <span role="status" className="flex items-center gap-1.5 text-xs text-emerald-500">
+            <span role="status" className="flex items-center gap-1.5 text-xs text-success">
               <Check className="size-3.5" /> {state.message}
             </span>
           )}
           {state.kind === "error" && (
-            <span role="alert" className="flex items-center gap-1.5 text-xs text-primary">
+            <span role="alert" className="flex items-center gap-1.5 text-xs text-danger">
               <X className="size-3.5" /> {state.message}
             </span>
           )}
         </div>
       </form>
-      <section className="space-y-2 border-t border-border pt-6 text-sm">
+      <section className="space-y-2 border-t border-divider pt-6 text-sm">
         <h2 className="font-medium">How to save</h2>
-        <ul className="space-y-1.5 text-xs text-muted-foreground">
+        <ul className="space-y-1.5 text-xs text-ink-muted">
           <li>
-            <kbd className="font-mono text-foreground">⌥⇧S</kbd> or the toolbar button — save the tab with a screenshot of what you see, add tags and notes.
+            <kbd className="font-mono text-ink">⌥⇧S</kbd> or the toolbar button — save the tab with a screenshot of what you see, add tags and notes.
           </li>
           <li>
-            <kbd className="font-mono text-foreground">⌥⇧D</kbd> — quick-save the tab without the popup.
+            <kbd className="font-mono text-ink">⌥⇧D</kbd> — quick-save the tab without the popup.
           </li>
           <li>Right-click a page, link or image → “Save … to Stan Bag”.</li>
           <li>Select text, right-click → save it as a snippet or prompt.</li>
         </ul>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-ink-muted">
           Change shortcuts at <code className="font-mono">chrome://extensions/shortcuts</code>.
         </p>
       </section>

@@ -25,7 +25,7 @@
 | 15–16 | Backup/restore | Chưa làm. |
 | 17 | Import | Nhập thủ công; có ô dán **nhiều URL** (mỗi dòng một URL) để thêm hàng loạt. |
 | 18 | Ngôn ngữ UI | Tiếng Anh. |
-| 19 | Thiết kế | Tham khảo [Linear](https://styles.refero.design/style/90ce5883-bb24-4466-93f7-801cd617b0d1) (cấu trúc tối, viền hairline, Inter, radius 6/12px) + [Raycast](https://styles.refero.design/style/3b6a17f0-3bdf-418c-a95e-0b89e5a8b2f8) (accent coral, ⌘K). Dark mặc định, có light mode. |
+| 19 | Thiết kế | Hướng **Savee** (mockup phương án 3, chốt 2026-10-27): nền đen, phân tầng bằng surface thay vì viền, mọi control dạng viên thuốc, một nút indigo chính mỗi màn hình, font Geist, không sidebar (thanh trên cùng + tab loại). Chi tiết: [DESIGN.md](../DESIGN.md). |
 | 20 | Phím tắt | Command palette `⌘K`; dán URL hoặc ảnh ở bất kỳ đâu để tạo resource. |
 | 21 | Stack | Next.js (App Router) + pnpm + shadcn/ui + Tailwind v4 + TanStack Query + Drizzle ORM (Neon / PGlite). |
 | 22 | Repo | pnpm monorepo: `apps/web` (Next.js), `packages/core` (schema, data access, logic dùng chung — sau này `apps/mcp` dùng lại). |

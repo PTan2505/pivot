@@ -53,12 +53,12 @@ function Body({ id, onDone }: { id: string; onDone: () => void }) {
           </div>
         ))}
       </div>
-      <pre className="max-h-64 overflow-auto rounded-lg border border-border bg-surface-sunken p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
+      <pre className="max-h-64 overflow-auto rounded-[14px] bg-surface p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap">
         {filled}
       </pre>
       <DialogFooter>
         <Button type="submit">
-          <Copy /> Copy prompt <Kbd className="bg-primary-foreground/20 text-primary-foreground">⌘↵</Kbd>
+          <Copy /> Copy prompt <Kbd className="bg-on-accent/20 text-on-accent">⌘↵</Kbd>
         </Button>
       </DialogFooter>
     </form>

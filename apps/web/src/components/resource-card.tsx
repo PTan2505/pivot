@@ -2,10 +2,9 @@
 
 import { Check, Copy, ExternalLink, ImageOff, Loader2 } from "lucide-react";
 import Link from "next/link";
-import type { MouseEvent, ReactNode } from "react";
+import type { MouseEvent } from "react";
 import { TYPE_DEFS, type ResourceDTO } from "@stan-bag/core/types";
 import { TypeIcon } from "@/components/type-icon";
-import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCopyResource } from "@/hooks/use-copy-resource";
 import { assetUrl } from "@/lib/api";
@@ -25,7 +24,20 @@ function stop(e: MouseEvent) {
   e.stopPropagation();
 }
 
-export function SelectBox({ selected, onToggle, className }: { selected: boolean; onToggle: (e: MouseEvent) => void; className?: string }) {
+/** Plain-text excerpt for a note card: no frontmatter, no markdown syntax. */
+function excerpt(r: ResourceDTO) {
+  if (r.type === "skill" && r.description) return r.description;
+  return r.content
+    .replace(/^---[\s\S]*?---\s*/, "")
+    .replace(/^#+\s*/gm, "")
+    .replace(/^[-*]\s+(\[[ x]\]\s*)?/gim, "")
+    .replace(/[*_`>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 140);
+}
+
+export function SelectBox({ selected, onToggle, visible }: { selected: boolean; onToggle: (e: MouseEvent) => void; visible: boolean }) {
   return (
     <button
       type="button"
@@ -37,9 +49,11 @@ export function SelectBox({ selected, onToggle, className }: { selected: boolean
         onToggle(e);
       }}
       className={cn(
-        "grid size-5 place-items-center rounded-[5px] border border-white/40 bg-black/50 text-white backdrop-blur transition-opacity",
-        selected ? "border-primary bg-primary text-primary-foreground opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
-        className,
+        "absolute top-3 left-3 grid size-6 place-items-center rounded-full border-2 transition-opacity duration-150",
+        selected
+          ? "border-inverse bg-inverse text-on-inverse opacity-100"
+          : "border-white/70 bg-black/40 text-white backdrop-blur group-hover:opacity-100 focus-visible:opacity-100",
+        !selected && (visible ? "opacity-100" : "opacity-0"),
       )}
     >
       {selected && <Check className="size-3.5" strokeWidth={3} />}
@@ -47,65 +61,46 @@ export function SelectBox({ selected, onToggle, className }: { selected: boolean
   );
 }
 
-function CardActions({ resource }: { resource: ResourceDTO }) {
+function CardActions({ resource, className }: { resource: ResourceDTO; className?: string }) {
   const copy = useCopyResource();
   const def = TYPE_DEFS[resource.type];
+  const pill = "grid size-8 place-items-center rounded-full bg-surface-raised/90 text-ink-secondary backdrop-blur transition-colors hover:text-ink";
   return (
-    <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+    <div className={cn("flex gap-1.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100", className)}>
       {resource.sourceUrl && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
+            <button
+              type="button"
+              className={pill}
               aria-label="Open source URL"
               onClick={(e) => {
                 stop(e);
                 window.open(resource.sourceUrl!, "_blank", "noopener,noreferrer");
               }}
             >
-              <ExternalLink />
-            </Button>
+              <ExternalLink className="size-3.5" />
+            </button>
           </TooltipTrigger>
           <TooltipContent>Open source</TooltipContent>
         </Tooltip>
       )}
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-xs"
+          <button
+            type="button"
+            className={pill}
             aria-label={def.content === "none" ? "Copy as context" : "Copy content"}
             onClick={(e) => {
               stop(e);
               copy(resource);
             }}
           >
-            <Copy />
-          </Button>
+            <Copy className="size-3.5" />
+          </button>
         </TooltipTrigger>
         <TooltipContent>{def.content === "none" ? "Copy as context" : "Copy"}</TooltipContent>
       </Tooltip>
-    </div>
-  );
-}
-
-function TagLine({ resource, max = 3 }: { resource: ResourceDTO; max?: number }) {
-  if (!resource.tags.length) return null;
-  const shown = resource.tags.slice(0, max);
-  const rest = resource.tags.length - shown.length;
-  return (
-    <div className="flex min-w-0 flex-wrap gap-1">
-      {shown.map((t) => (
-        <span key={t.id} className="max-w-32 truncate rounded-[4px] bg-muted px-1.5 py-px text-[11px] text-muted-foreground">
-          {t.name}
-        </span>
-      ))}
-      {rest > 0 && (
-        <span className="rounded-[4px] px-1 py-px text-[11px] text-muted-foreground" title={resource.tags.slice(max).map((t) => t.name).join(", ")}>
-          +{rest}
-        </span>
-      )}
     </div>
   );
 }
@@ -126,7 +121,7 @@ function Cover({ resource }: { resource: ResourceDTO }) {
           if (!img.dataset.fallback) {
             img.dataset.fallback = "1";
             img.src = assetUrl(resource.coverAssetId!);
-            img.className = "size-full object-contain p-6";
+            img.className = "size-full object-contain p-8";
           }
         }}
       />
@@ -143,7 +138,7 @@ function Cover({ resource }: { resource: ResourceDTO }) {
   }
   if (resource.captureStatus === "pending") {
     return (
-      <div className="grid size-full animate-pulse place-items-center bg-muted text-xs text-muted-foreground">
+      <div className="grid size-full animate-pulse place-items-center text-[13px] text-ink-muted [animation-duration:1.6s]">
         <span className="flex items-center gap-1.5">
           <Loader2 className="size-3.5 animate-spin" aria-hidden /> Capturing…
         </span>
@@ -151,8 +146,8 @@ function Cover({ resource }: { resource: ResourceDTO }) {
     );
   }
   return (
-    <div className="grid size-full place-items-center bg-surface-sunken text-muted-foreground">
-      {resource.captureStatus === "failed" ? <ImageOff className="size-5" aria-label="No preview" /> : <TypeIcon type={resource.type} className="size-6 opacity-60" />}
+    <div className="grid size-full place-items-center text-ink-subtle">
+      {resource.captureStatus === "failed" ? <ImageOff className="size-6" aria-label="No preview" /> : <TypeIcon type={resource.type} className="size-7" />}
     </div>
   );
 }
@@ -162,92 +157,67 @@ interface CardProps {
   selected: boolean;
   selecting: boolean;
   onToggle: (e: MouseEvent) => void;
-  extraAction?: ReactNode;
+}
+
+function metaLine(r: ResourceDTO) {
+  const def = TYPE_DEFS[r.type];
+  if (def.visual) return [hostOf(r.sourceUrl) ?? def.label, r.tags[0]?.name].filter(Boolean).join(" · ");
+  const purpose = (r.meta.whenToUse as string) || (r.meta.purpose as string) || (r.type === "skill" ? "" : r.description);
+  return [def.label, purpose].filter(Boolean).join(" · ");
 }
 
 export function ResourceCard({ resource, selected, selecting, onToggle }: CardProps) {
   const def = TYPE_DEFS[resource.type];
-  const host = hostOf(resource.sourceUrl);
   const onClick = (e: MouseEvent) => {
     if (selecting || e.shiftKey || e.metaKey) {
       stop(e);
       onToggle(e);
     }
   };
+  const isCode = def.content === "code" || def.content === "json";
 
-  if (def.visual) {
-    return (
-      <Link
-        href={`/r/${resource.id}`}
-        onClick={onClick}
+  return (
+    <Link href={`/r/${resource.id}`} onClick={onClick} className="group flex min-w-0 flex-col gap-3 outline-none">
+      <div
         className={cn(
-          "group relative flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-[border-color,box-shadow] hover:border-input focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-          selected && "border-primary ring-1 ring-primary",
+          "relative aspect-[16/10] max-w-full overflow-hidden rounded-[14px] bg-surface transition-colors duration-150",
+          "group-focus-visible:outline-2 group-focus-visible:outline-offset-3 group-focus-visible:outline-accent-text",
+          selected && "outline-2 outline-offset-3 outline-accent-text",
+          !def.visual && "group-hover:bg-surface-raised",
         )}
       >
-        <div className="relative aspect-[16/10] overflow-hidden border-b border-border bg-muted">
+        {def.visual ? (
           <Cover resource={resource} />
-          <SelectBox selected={selected} onToggle={onToggle} className={cn("absolute top-2 left-2", selecting && "opacity-100")} />
-        </div>
-        <div className="flex flex-col gap-1.5 p-3">
-          <div className="flex items-start gap-2">
-            <div className="min-w-0 flex-1">
-              <h3 className="truncate text-[13px] font-medium" title={resource.title}>
-                {resource.title}
-              </h3>
-              <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-                <TypeIcon type={resource.type} className="size-3 shrink-0" />
-                <span className="truncate">{host ?? def.label}</span>
+        ) : (
+          <div className="flex size-full flex-col justify-between gap-3 p-6">
+            {isCode ? (
+              <pre className="line-clamp-6 overflow-hidden font-mono text-xs leading-relaxed whitespace-pre-wrap text-ink-muted">
+                {resource.content.slice(0, 400) || "Empty"}
+              </pre>
+            ) : (
+              <p className="line-clamp-3 text-[22px] leading-[1.2] font-medium tracking-[-0.02em] text-ink">
+                {excerpt(resource) || <span className="text-ink-subtle">Empty</span>}
               </p>
-            </div>
-            <CardActions resource={resource} />
+            )}
+            <span className="self-start rounded-full bg-surface-raised px-3 py-1 text-xs font-medium text-ink-secondary group-hover:bg-surface">
+              {def.label}
+            </span>
           </div>
-          <TagLine resource={resource} />
-        </div>
-      </Link>
-    );
-  }
-
-  const purpose = (resource.meta.purpose as string) || (resource.meta.whenToUse as string) || resource.description;
-  return (
-    <Link
-      href={`/r/${resource.id}`}
-      onClick={onClick}
-      className={cn(
-        "group relative flex min-h-48 flex-col gap-2 rounded-xl border border-border bg-card p-3 transition-[border-color,box-shadow] hover:border-input focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-        selected && "border-primary ring-1 ring-primary",
-      )}
-    >
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <SelectBox
-          selected={selected}
-          onToggle={onToggle}
-          className={cn("border-input bg-muted text-foreground", selecting && "opacity-100")}
-        />
-        <TypeIcon type={resource.type} className="size-3.5" />
-        <span>{def.label}</span>
-        <div className="ml-auto">
-          <CardActions resource={resource} />
-        </div>
+        )}
+        <SelectBox selected={selected} onToggle={onToggle} visible={selecting} />
+        <CardActions resource={resource} className="absolute top-3 right-3" />
       </div>
-      <div className="min-w-0">
-        <h3 className="line-clamp-2 text-[13px] font-medium" title={resource.title}>
+      <div className="flex min-w-0 flex-col gap-0.5 px-0.5">
+        <h3 className="truncate text-[15px] leading-[1.4] font-medium text-ink" title={resource.title}>
           {resource.title}
         </h3>
-        {purpose && <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{purpose}</p>}
+        <p className="truncate text-[13px] leading-[1.4] text-ink-subtle">{metaLine(resource)}</p>
       </div>
-      {resource.content && (
-        <pre className="relative line-clamp-4 flex-1 overflow-hidden rounded-md bg-surface-sunken px-2.5 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
-          {resource.content.replace(/^---[\s\S]*?---\s*/, "").slice(0, 400)}
-        </pre>
-      )}
-      <TagLine resource={resource} />
     </Link>
   );
 }
 
 export function ResourceRow({ resource, selected, selecting, onToggle }: CardProps) {
-  const def = TYPE_DEFS[resource.type];
   return (
     <Link
       href={`/r/${resource.id}`}
@@ -258,36 +228,45 @@ export function ResourceRow({ resource, selected, selecting, onToggle }: CardPro
         }
       }}
       className={cn(
-        "group flex h-12 items-center gap-3 border-b border-border px-3 transition-colors hover:bg-muted/50 focus-visible:bg-muted focus-visible:outline-none",
-        selected && "bg-primary/5",
+        "group relative flex h-16 items-center gap-4 rounded-[14px] px-3 transition-colors duration-150 hover:bg-surface focus-visible:bg-surface",
+        selected && "bg-surface outline-2 outline-offset-0 outline-accent-text",
       )}
     >
-      <SelectBox selected={selected} onToggle={onToggle} className={cn("border-input bg-muted text-foreground", selecting && "opacity-100")} />
-      <div className="size-8 shrink-0 overflow-hidden rounded-md border border-border bg-muted">
+      <div className="relative h-10 w-16 shrink-0 overflow-hidden rounded-[8px] bg-surface">
         {resource.coverAssetId ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={assetUrl(resource.coverAssetId, { thumb: true })} alt="" loading="lazy" className="size-full object-cover object-top" onError={(e) => (e.currentTarget.style.display = "none")} />
         ) : (
-          <div className="grid size-full place-items-center text-muted-foreground">
-            <TypeIcon type={resource.type} className="size-3.5" />
+          <div className="grid size-full place-items-center text-ink-subtle">
+            <TypeIcon type={resource.type} className="size-4" />
           </div>
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] font-medium">{resource.title}</div>
-        <div className="truncate text-xs text-muted-foreground">{hostOf(resource.sourceUrl) ?? resource.description}</div>
+        <div className="truncate text-[15px] font-medium text-ink">{resource.title}</div>
+        <div className="truncate text-[13px] text-ink-subtle">{metaLine(resource)}</div>
       </div>
-      <span className="hidden w-28 shrink-0 items-center gap-1.5 text-xs text-muted-foreground md:flex">
-        <TypeIcon type={resource.type} className="size-3" />
-        {def.label}
-      </span>
-      <div className="hidden w-56 shrink-0 lg:block">
-        <TagLine resource={resource} max={2} />
-      </div>
-      <time className="w-20 shrink-0 text-right font-mono text-[11px] text-muted-foreground tabular-nums" dateTime={resource.updatedAt}>
+      <time className="hidden w-20 shrink-0 text-right font-mono text-xs text-ink-subtle tabular-nums sm:block" dateTime={resource.updatedAt}>
         {new Date(resource.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
       </time>
       <CardActions resource={resource} />
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={selected}
+        aria-label={selected ? "Deselect" : "Select"}
+        onClick={(e) => {
+          stop(e);
+          onToggle(e);
+        }}
+        className={cn(
+          "grid size-6 shrink-0 place-items-center rounded-full border-2 transition-opacity",
+          selected ? "border-inverse bg-inverse text-on-inverse" : "border-ink-subtle opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+          selecting && "opacity-100",
+        )}
+      >
+        {selected && <Check className="size-3.5" strokeWidth={3} />}
+      </button>
     </Link>
   );
 }

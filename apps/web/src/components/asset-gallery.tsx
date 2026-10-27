@@ -79,7 +79,7 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
         setOver(false);
         attach([...e.dataTransfer.files]);
       }}
-      className={cn("space-y-3 rounded-xl transition-shadow", over && "ring-2 ring-primary ring-offset-4 ring-offset-background")}
+      className={cn("space-y-3 rounded-[14px]", over && "outline-2 outline-offset-4 outline-accent-text")}
     >
       <input ref={fileRef} type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => (attach([...(e.target.files ?? [])]), (e.target.value = ""))} />
 
@@ -87,8 +87,8 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
         <div
           role="status"
           className={cn(
-            "flex items-center gap-2 rounded-lg border px-3 py-2 text-xs",
-            capturing ? "border-border text-muted-foreground" : "border-primary/30 bg-primary/5",
+            "flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-xs",
+            capturing ? "text-ink-muted" : "text-danger",
           )}
         >
           {capturing ? <Loader2 className="size-3.5 animate-spin" /> : <Camera className="size-3.5" />}
@@ -96,7 +96,7 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
             {capturing ? "Capturing screenshots…" : `Screenshot failed: ${resource.captureError ?? "unknown error"}`}
           </span>
           {!capturing && (
-            <Button size="xs" variant="outline" onClick={recapture}>
+            <Button size="xs" variant="secondary" className="bg-surface-raised" onClick={recapture}>
               Retry
             </Button>
           )}
@@ -104,7 +104,7 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
       )}
 
       {selected ? (
-        <div className={cn("overflow-auto rounded-xl border border-border bg-surface-sunken", compact ? "max-h-80" : "max-h-[75vh]")}>
+        <div className={cn("overflow-auto rounded-[14px] bg-surface", compact ? "max-h-80" : "max-h-[75vh]")}>
           <div className="grid min-h-48 place-items-center">
             <AssetPreview asset={selected} />
           </div>
@@ -114,7 +114,7 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="grid aspect-[16/9] w-full place-items-center rounded-xl border border-dashed border-border bg-surface-sunken text-sm text-muted-foreground transition-colors hover:border-input hover:text-foreground"
+            className="grid aspect-[16/10] w-full place-items-center rounded-[14px] bg-surface text-sm text-ink-muted transition-colors hover:bg-surface-raised hover:text-ink"
           >
             <span className="flex flex-col items-center gap-2">
               <TypeIcon type={resource.type} className="size-6" />
@@ -133,32 +133,32 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
             aria-pressed={selected?.id === a.id}
             aria-label={`${ROLE_LABEL[a.role]}: ${a.fileName}`}
             className={cn(
-              "relative size-14 overflow-hidden rounded-md border border-border bg-muted transition-colors hover:border-input",
-              selected?.id === a.id && "border-primary ring-1 ring-primary",
+              "relative size-14 overflow-hidden rounded-[10px] bg-surface transition-colors hover:bg-surface-raised",
+              selected?.id === a.id && "outline-2 outline-offset-2 outline-accent-text",
             )}
           >
             {a.kind === "image" || a.kind === "svg" ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={assetUrl(a.id, { thumb: a.kind === "image" })} alt="" className="size-full object-cover object-top" />
             ) : (
-              <span className="grid size-full place-items-center font-mono text-[10px] text-muted-foreground uppercase">{a.kind}</span>
+              <span className="grid size-full place-items-center font-mono text-[10px] text-ink-subtle uppercase">{a.kind}</span>
             )}
-            {a.id === resource.coverAssetId && <Star className="absolute top-0.5 right-0.5 size-3 fill-primary text-primary" aria-label="Cover" />}
+            {a.id === resource.coverAssetId && <Star className="absolute top-1 right-1 size-3 fill-ink text-ink drop-shadow" aria-label="Cover" />}
           </button>
         ))}
-        <Button variant="outline" size="icon" className="size-14 rounded-md border-dashed" onClick={() => fileRef.current?.click()} aria-label="Add files">
+        <Button variant="secondary" size="icon" className="size-14 rounded-[10px]" onClick={() => fileRef.current?.click()} aria-label="Add files">
           <Plus />
         </Button>
         {resource.sourceUrl && ["reference", "library", "animation"].includes(resource.type) && (
-          <Button variant="ghost" size="sm" onClick={recapture} disabled={capturing} className="ml-auto">
+          <Button variant="secondary" onClick={recapture} disabled={capturing} className="ml-auto">
             <Camera /> {resource.captureStatus === "done" ? "Retake screenshot" : "Capture screenshot"}
           </Button>
         )}
       </div>
 
       {selected && (
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span className="rounded-[4px] bg-muted px-1.5 py-px">{ROLE_LABEL[selected.role]}</span>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-subtle">
+          <span className="rounded-full bg-surface px-2.5 py-0.5 text-ink-secondary">{ROLE_LABEL[selected.role]}</span>
           <span className="max-w-60 truncate font-mono" title={selected.fileName}>
             {selected.fileName}
           </span>
@@ -198,7 +198,7 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
               confirmLabel="Remove"
               onConfirm={() => remove(selected)}
             >
-              <Button size="icon-xs" variant="ghost" aria-label="Remove file" className="hover:text-destructive">
+              <Button size="icon-xs" variant="ghost" aria-label="Remove file" className="hover:text-danger">
                 <Trash2 />
               </Button>
             </ConfirmButton>
@@ -225,7 +225,7 @@ function AssetNotes({ asset, resourceId }: { asset: AssetDTO; resourceId: string
       onBlur={save}
       placeholder="Note about this file — where it came from, what to look at…"
       aria-label="File note"
-      className="h-7 basis-full text-xs"
+      className="h-8 basis-full text-xs"
     />
   );
 }

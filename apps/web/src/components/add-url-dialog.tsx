@@ -171,7 +171,7 @@ function AddUrlForm({ initialUrls, initialType, onClose }: { initialUrls: string
           </div>
 
           {single && (
-            <div className="space-y-3 rounded-lg border border-border bg-surface-sunken/50 p-3">
+            <div className="space-y-3 rounded-[14px] bg-surface p-4">
               {preview.isFetching && (
                 <p className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="size-3 animate-spin" /> Fetching page details…
@@ -182,9 +182,9 @@ function AddUrlForm({ initialUrls, initialType, onClose }: { initialUrls: string
                   <AlertTriangle className="size-3" /> Couldn’t read the page ({preview.data.error}). Fill in the details yourself.
                 </p>
               )}
-              {preview.error && <p className="text-xs text-primary">{preview.error.message}</p>}
+              {preview.error && <p className="text-xs text-danger">{preview.error.message}</p>}
               {dupes.length > 0 && (
-                <p className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+                <p className="flex items-center gap-2 text-xs text-warning">
                   <AlertTriangle className="size-3" /> Already saved as{" "}
                   <Link href={`/r/${dupes[0].id}`} onClick={onClose} className="underline">
                     {dupes[0].title}
@@ -194,7 +194,7 @@ function AddUrlForm({ initialUrls, initialType, onClose }: { initialUrls: string
               <div className="flex gap-3">
                 {preview.data?.metadata?.imageUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={preview.data.metadata.imageUrl} alt="" referrerPolicy="no-referrer" className="h-20 w-32 shrink-0 rounded-md border border-border object-cover" />
+                  <img src={preview.data.metadata.imageUrl} alt="" referrerPolicy="no-referrer" className="h-20 w-32 shrink-0 rounded-[10px] object-cover" />
                 )}
                 <div className="flex-1 space-y-2">
                   <Input value={effectiveTitle} onChange={(e) => setTitle(e.target.value)} placeholder="Title" aria-label="Title" />

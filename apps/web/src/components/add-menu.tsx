@@ -81,8 +81,8 @@ export function AddMenu({ preferType }: { preferType?: ResourceType }) {
     <div className="flex">
       <input ref={fileRef} type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => onFiles(e.target.files)} />
       <Button
-        size="sm"
-        className="rounded-r-none"
+        size="lg"
+        className="rounded-r-none pr-4"
         onClick={() => (preferType ? createOfType(preferType, pickFile) : openAddUrl())}
       >
         <Plus />
@@ -90,7 +90,7 @@ export function AddMenu({ preferType }: { preferType?: ResourceType }) {
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button size="sm" className="rounded-l-none border-l border-primary-foreground/20 px-1.5" aria-label="More ways to add">
+          <Button size="lg" className="rounded-l-none border-l border-on-accent/25 pr-3 pl-2.5" aria-label="More ways to add">
             <ChevronDown />
           </Button>
         </DropdownMenuTrigger>

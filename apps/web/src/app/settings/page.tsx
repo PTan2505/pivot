@@ -13,7 +13,7 @@ import { copyText } from "@/lib/clipboard";
 
 function Row({ label, value, mono = true, children }: { label: string; value?: string; mono?: boolean; children?: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[160px_1fr] items-start gap-4 border-b border-border py-3 last:border-0">
+    <div className="grid grid-cols-[160px_1fr] items-start gap-4 border-b border-divider py-3.5 last:border-0">
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="min-w-0 text-[13px]">
         {value && (
@@ -42,7 +42,7 @@ function TagRow({ tag }: { tag: TagDTO }) {
     }
   };
   return (
-    <li className="group flex h-8 items-center gap-2 rounded-md px-2 text-[13px] hover:bg-muted/60">
+    <li className="group flex h-9 items-center gap-2 rounded-full px-3 text-[13px] hover:bg-surface-raised">
       {editing ? (
         <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && save()} className="h-7 text-[13px]" />
       ) : (
@@ -79,10 +79,10 @@ function ExtensionSection({ serverUrl }: { serverUrl?: string }) {
   return (
     <section className="space-y-3">
       <div>
-        <h2 className="text-sm font-semibold">Browser extension</h2>
+        <h2 className="text-[22px] leading-[1.2] font-medium tracking-[-0.02em]">Browser extension</h2>
         <p className="text-sm text-muted-foreground">Save the current tab, images and selected text from Chrome. The extension needs this server address and token.</p>
       </div>
-      <dl className="rounded-xl border border-border bg-card px-4">
+      <dl className="rounded-[14px] bg-surface px-5">
         <Row label="Server URL" value={serverUrl} />
         <Row label="API token">
           <div className="flex items-center gap-1">
@@ -130,14 +130,14 @@ export default function SettingsPage() {
   const { data: s } = useSettings();
   const { data: tags = [] } = useTags();
   return (
-    <div className="mx-auto max-w-3xl space-y-10 px-6 py-8">
+    <div className="mx-auto max-w-4xl space-y-12 px-4 pt-10 pb-16 md:px-10">
       <section className="space-y-3">
-        <h1 className="text-lg font-semibold tracking-tight">Settings</h1>
+        <h1 className="text-[clamp(44px,6vw,72px)] leading-[0.96] font-medium tracking-[-0.045em]">Settings</h1>
         <p className="text-sm text-muted-foreground">
           Configure these with environment variables in <code className="font-mono text-xs">.env</code> at the repo root, then restart with{" "}
           <code className="font-mono text-xs">npm start</code>.
         </p>
-        <dl className="rounded-xl border border-border bg-card px-4">
+        <dl className="rounded-[14px] bg-surface px-5">
           <Row label="Data folder" value={s?.dataDir} />
           <Row label="Database">
             {s && (
@@ -153,11 +153,11 @@ export default function SettingsPage() {
             {s &&
               (s.playwright.installed ? (
                 <span className="flex items-center gap-1.5">
-                  <Check className="size-3.5 text-emerald-500" aria-hidden /> Chromium ready
+                  <Check className="size-3.5 text-success" aria-hidden /> Chromium ready
                 </span>
               ) : (
                 <span className="flex items-center gap-1.5">
-                  <TriangleAlert className="size-3.5 text-amber-500" aria-hidden /> Chromium is not installed. Run{" "}
+                  <TriangleAlert className="size-3.5 text-warning" aria-hidden /> Chromium is not installed. Run{" "}
                   <code className="font-mono text-xs">pnpm setup:browser</code>
                 </span>
               ))}
@@ -169,14 +169,14 @@ export default function SettingsPage() {
 
       <section className="space-y-3">
         <div>
-          <h2 className="text-sm font-semibold">Tags & facets</h2>
+          <h2 className="text-[22px] leading-[1.2] font-medium tracking-[-0.02em]">Tags & facets</h2>
           <p className="text-sm text-muted-foreground">Renaming to an existing name merges the two.</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           {TAG_KINDS.map((kind) => {
             const list = tags.filter((t) => t.kind === kind);
             return (
-              <div key={kind} className="rounded-xl border border-border bg-card p-2">
+              <div key={kind} className="rounded-[14px] bg-surface p-2">
                 <h3 className="px-2 pt-1 pb-2 text-xs font-medium text-muted-foreground">
                   {TAG_KIND_LABELS[kind]} <span className="font-mono">{list.length}</span>
                 </h3>
@@ -196,7 +196,7 @@ export default function SettingsPage() {
       </section>
 
       <section className="space-y-2 text-sm text-muted-foreground">
-        <h2 className="text-sm font-semibold text-foreground">Shortcuts</h2>
+        <h2 className="text-[22px] leading-[1.2] font-medium tracking-[-0.02em] text-ink">Shortcuts</h2>
         <ul className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
           <li><kbd className="font-mono">⌘K</kbd> search & commands</li>
           <li><kbd className="font-mono">/</kbd> focus library search</li>

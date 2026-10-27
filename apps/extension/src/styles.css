@@ -1,65 +1,89 @@
 @import "tailwindcss";
 
-/* Same tokens as the app (Linear-style surfaces, coral accent). Dark by default, light follows the OS. */
+/* Stan Bag design system (DESIGN.md): black canvas, surface steps instead of borders, pill controls,
+   one electric-indigo primary action. Dark by default, light follows the OS. */
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans: Geist, "DM Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-accent: var(--accent);
-  --color-sunken: var(--sunken);
+  --color-background: var(--canvas);
+  --color-foreground: var(--ink);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-divider: var(--divider);
+  --color-ink: var(--ink);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+  --color-inverse: var(--inverse);
+  --color-on-inverse: var(--on-inverse);
+  --color-primary: var(--accent-fill);
+  --color-primary-foreground: var(--on-accent);
+  --color-accent-text: var(--accent-text);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  /* legacy names used by the popup markup */
+  --color-muted: var(--surface);
+  --color-muted-foreground: var(--ink-muted);
+  --color-border: var(--divider);
+  --color-input: var(--surface-raised);
+  --color-accent: var(--surface-raised);
+  --color-card: var(--surface);
+  --color-sunken: var(--surface);
 }
 
 :root {
   color-scheme: dark;
-  --background: #08090a;
-  --foreground: #f7f8f8;
-  --card: #0f1011;
-  --muted: #161718;
-  --muted-foreground: #8a8f98;
-  --border: #23252a;
-  --input: #2a2c31;
-  --primary: #ff6363;
-  --primary-foreground: #08090a;
-  --accent: #1c1d20;
-  --sunken: #050506;
+  --canvas: #050505;
+  --surface: #151515;
+  --surface-raised: #1e1e1e;
+  --divider: #2f2f2f;
+  --ink: #fdfdfd;
+  --ink-secondary: #d4d4d4;
+  --ink-muted: #a3a3a3;
+  --ink-subtle: #8a8a8a;
+  --inverse: #fdfdfd;
+  --on-inverse: #050505;
+  --accent-fill: #1500ff;
+  --on-accent: #ffffff;
+  --accent-text: #8b84ff;
+  --danger: #ff7a7a;
+  --success: #4cc38a;
+  --warning: #f5b33f;
 }
 
 @media (prefers-color-scheme: light) {
   :root {
     color-scheme: light;
-    --background: #fbfbfb;
-    --foreground: #08090a;
-    --card: #ffffff;
-    --muted: #f1f1f2;
-    --muted-foreground: #62666d;
-    --border: #e4e4e7;
-    --input: #dcdce0;
-    --primary: #c93a3a;
-    --primary-foreground: #ffffff;
-    --accent: #ececee;
-    --sunken: #f1f1f2;
+    --canvas: #ffffff;
+    --surface: #f2f2f2;
+    --surface-raised: #e6e6e6;
+    --divider: #dcdcdc;
+    --ink: #0a0a0a;
+    --ink-secondary: #2e2e2e;
+    --ink-muted: #545454;
+    --ink-subtle: #636363;
+    --inverse: #0a0a0a;
+    --on-inverse: #ffffff;
+    --accent-text: #1500ff;
+    --danger: #c21f1f;
+    --success: #17703d;
+    --warning: #8a5600;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--canvas);
+  color: var(--ink);
   font-family: var(--font-sans);
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
 }
 
 :focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 1px;
+  outline: 2px solid var(--accent-text);
+  outline-offset: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {

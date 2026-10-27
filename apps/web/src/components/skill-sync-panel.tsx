@@ -21,11 +21,11 @@ export const SKILL_STATE_LABEL: Record<SkillStatusDTO["state"], string> = {
 
 export const SKILL_STATE_TONE: Record<SkillStatusDTO["state"], string> = {
   synced: "text-muted-foreground",
-  "app-changed": "text-amber-600 dark:text-amber-400",
-  "disk-changed": "text-sky-600 dark:text-sky-400",
-  conflict: "text-primary",
+  "app-changed": "text-warning",
+  "disk-changed": "text-accent-text",
+  conflict: "text-danger",
   missing: "text-muted-foreground",
-  untracked: "text-sky-600 dark:text-sky-400",
+  untracked: "text-accent-text",
 };
 
 let autoSynced = false;
@@ -61,7 +61,7 @@ export function SkillSyncPanel() {
   const attention = statuses.filter((s) => s.state !== "synced" && s.state !== "untracked");
 
   return (
-    <div className="rounded-xl border border-border bg-card p-3">
+    <div className="rounded-[14px] bg-surface p-4">
       <div className="flex items-center gap-3">
         <FolderSync className="size-4 text-muted-foreground" aria-hidden />
         <div className="min-w-0 flex-1 text-xs">
@@ -71,13 +71,13 @@ export function SkillSyncPanel() {
         <span className="font-mono text-xs text-muted-foreground tabular-nums">
           {statuses.filter((s) => s.state === "synced").length}/{statuses.length} in sync
         </span>
-        <Button size="sm" variant="outline" onClick={() => sync.mutate({ auto: false })} disabled={sync.isPending}>
+        <Button variant="secondary" className="bg-surface-raised" onClick={() => sync.mutate({ auto: false })} disabled={sync.isPending}>
           {sync.isPending ? <Loader2 className="animate-spin" /> : <FolderSync />}
           Sync from disk
         </Button>
       </div>
       {attention.length > 0 && (
-        <ul className="mt-3 space-y-1 border-t border-border pt-3">
+        <ul className="mt-4 space-y-1.5 border-t border-divider pt-4">
           {attention.map((s) => (
             <li key={s.skillName} className="flex items-center gap-2 text-xs">
               {s.resourceId ? (

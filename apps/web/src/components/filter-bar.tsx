@@ -1,12 +1,14 @@
 "use client";
 
-import { ChevronDown, X } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
 import { TAG_KIND_LABELS, TAG_KINDS, TYPE_DEFS, type ResourceType, type TagDTO, type TagKind } from "@stan-bag/core/types";
-import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTags } from "@/lib/api";
 import { cn } from "@/lib/utils";
+
+const pill =
+  "inline-flex h-[30px] items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition-colors duration-150";
 
 function FacetPopover({
   kind,
@@ -23,13 +25,16 @@ function FacetPopover({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className={cn("h-7 gap-1 text-xs font-normal", active && "border-primary/50 text-foreground")}>
+        <button
+          type="button"
+          className={cn(pill, active ? "bg-inverse text-on-inverse" : "bg-surface text-ink-secondary hover:bg-surface-raised hover:text-ink")}
+        >
           {TAG_KIND_LABELS[kind]}
-          {active > 0 && <span className="rounded-sm bg-primary px-1 font-mono text-[10px] text-primary-foreground">{active}</span>}
-          <ChevronDown className="size-3 opacity-60" />
-        </Button>
+          {active > 0 && <span className="font-mono text-[11px] opacity-70">{active}</span>}
+          <ChevronDown className="size-3.5 opacity-60" aria-hidden />
+        </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-60 p-0">
+      <PopoverContent align="start" className="w-64 p-0">
         <Command>
           <CommandInput placeholder={`Filter ${TAG_KIND_LABELS[kind].toLowerCase()}…`} />
           <CommandList>
@@ -40,16 +45,13 @@ function FacetPopover({
                 return (
                   <CommandItem key={t.id} value={t.name} onSelect={() => onToggle(t.id)} data-checked={on}>
                     <span
-                      className={cn(
-                        "grid size-3.5 place-items-center rounded-[3px] border border-input",
-                        on && "border-primary bg-primary text-primary-foreground",
-                      )}
+                      className={cn("grid size-4 place-items-center rounded-full border-2 border-ink-subtle", on && "border-inverse bg-inverse text-on-inverse")}
                       aria-hidden
                     >
-                      {on && <span className="block size-1.5 rounded-[1px] bg-current" />}
+                      {on && <Check className="size-2.5" strokeWidth={3.5} />}
                     </span>
                     <span className="truncate">{t.name}</span>
-                    <span className="ml-auto font-mono text-[11px] text-muted-foreground tabular-nums">{t.count}</span>
+                    <span className="ml-auto font-mono text-[11px] text-ink-subtle tabular-nums">{t.count}</span>
                   </CommandItem>
                 );
               })}
@@ -76,7 +78,7 @@ export function FilterBar({
   const chosen = tags.filter((t) => selected.includes(t.id));
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-2">
       {kinds.map((kind) => {
         // Hide facet values nobody uses yet, unless already selected.
         const list = tags.filter((t) => t.kind === kind && ((t.count ?? 0) > 0 || selected.includes(t.id)));
@@ -88,17 +90,17 @@ export function FilterBar({
           key={t.id}
           type="button"
           onClick={() => toggle(t.id)}
-          className="flex h-7 items-center gap-1 rounded-md bg-primary/10 px-2 text-xs text-foreground transition-colors hover:bg-primary/20"
+          className={cn(pill, "bg-surface-raised text-ink hover:bg-surface")}
           aria-label={`Remove filter ${t.name}`}
         >
-          <span className="text-muted-foreground">{TAG_KIND_LABELS[t.kind]}:</span> {t.name}
-          <X className="size-3" />
+          <span className="text-ink-subtle">{TAG_KIND_LABELS[t.kind]}</span> {t.name}
+          <X className="size-3.5" aria-hidden />
         </button>
       ))}
       {chosen.length > 0 && (
-        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onChange([])}>
+        <button type="button" className={cn(pill, "text-ink-muted hover:text-ink")} onClick={() => onChange([])}>
           Clear filters
-        </Button>
+        </button>
       )}
     </div>
   );
