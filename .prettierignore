@@ -1,0 +1,12 @@
+# Generated or vendored — formatting them only creates churn.
+node_modules
+.next
+dist
+coverage
+pnpm-lock.yaml
+next-env.d.ts
+packages/core/src/db/migrations
+apps/web/src/components/ui
+docs/requirements-v0.1.md
+*.pem
+*.crx

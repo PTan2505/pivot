@@ -1,0 +1,10 @@
+{
+  "printWidth": 120,
+  "trailingComma": "all",
+  "plugins": ["prettier-plugin-tailwindcss"],
+  "tailwindFunctions": ["cn", "cva", "cx"],
+  "overrides": [
+    { "files": "apps/web/**", "options": { "tailwindStylesheet": "./apps/web/src/app/globals.css" } },
+    { "files": "apps/extension/**", "options": { "tailwindStylesheet": "./apps/extension/src/styles.css" } }
+  ]
+}
