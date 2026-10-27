@@ -1,4 +1,20 @@
-import { and, asc, desc, eq, exists, ilike, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  ne,
+  notInArray,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import matter from "gray-matter";
 import { z } from "zod";
 import { deleteOrphanAssets, listResourceAssets } from "./assets";
@@ -8,6 +24,7 @@ import { normalizeUrl, urlKey } from "./net-guard";
 import {
   FACET_SUGGESTIONS,
   RESOURCE_TYPES,
+  SEPARATE_TYPES,
   TAG_KINDS,
   type CaptureStatus,
   type ResourceDetailDTO,
@@ -41,6 +58,8 @@ export type ResourcePatch = z.infer<typeof resourcePatch>;
 export interface ListFilters {
   q?: string;
   type?: ResourceType;
+  /** Leave these types out; ignored when `type` is set. */
+  excludeTypes?: ResourceType[];
   tagIds?: string[];
   collectionId?: string;
   trash?: boolean;
@@ -96,6 +115,7 @@ export async function listResources(filters: ListFilters = {}): Promise<Resource
   const db = await getDb();
   const where: SQL[] = [filters.trash ? isNotNull(resources.deletedAt) : isNull(resources.deletedAt)];
   if (filters.type) where.push(eq(resources.type, filters.type));
+  else if (filters.excludeTypes?.length) where.push(notInArray(resources.type, filters.excludeTypes));
 
   const q = filters.q?.trim();
   if (q) {
@@ -139,7 +159,9 @@ export async function listResources(filters: ListFilters = {}): Promise<Resource
         db
           .select({ one: sql`1` })
           .from(collectionItems)
-          .where(and(eq(collectionItems.resourceId, resources.id), eq(collectionItems.collectionId, filters.collectionId))),
+          .where(
+            and(eq(collectionItems.resourceId, resources.id), eq(collectionItems.collectionId, filters.collectionId)),
+          ),
       ),
     );
   }
@@ -375,7 +397,7 @@ export async function typeCounts(): Promise<Record<string, number>> {
   const counts: Record<string, number> = { trash: Number(trash[0]?.count ?? 0), all: 0 };
   for (const r of rows) {
     counts[r.type] = Number(r.count);
-    counts.all += Number(r.count);
+    if (!SEPARATE_TYPES.includes(r.type as ResourceType)) counts.all += Number(r.count);
   }
   return counts;
 }
@@ -480,7 +502,10 @@ export async function getCollection(id: string) {
 export async function createCollection(input: z.infer<typeof collectionInput>) {
   const data = collectionInput.parse(input);
   const db = await getDb();
-  const [row] = await db.insert(collections).values({ name: data.name, description: data.description ?? "" }).returning();
+  const [row] = await db
+    .insert(collections)
+    .values({ name: data.name, description: data.description ?? "" })
+    .returning();
   return row;
 }
 

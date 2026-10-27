@@ -37,7 +37,15 @@ function excerpt(r: ResourceDTO) {
     .slice(0, 140);
 }
 
-export function SelectBox({ selected, onToggle, visible }: { selected: boolean; onToggle: (e: MouseEvent) => void; visible: boolean }) {
+export function SelectBox({
+  selected,
+  onToggle,
+  visible,
+}: {
+  selected: boolean;
+  onToggle: (e: MouseEvent) => void;
+  visible: boolean;
+}) {
   return (
     <button
       type="button"
@@ -64,9 +72,15 @@ export function SelectBox({ selected, onToggle, visible }: { selected: boolean; 
 function CardActions({ resource, className }: { resource: ResourceDTO; className?: string }) {
   const copy = useCopyResource();
   const def = TYPE_DEFS[resource.type];
-  const pill = "grid size-8 place-items-center rounded-full bg-surface-raised/90 text-ink-secondary backdrop-blur transition-colors hover:text-ink";
+  const pill =
+    "grid size-8 place-items-center rounded-full bg-surface-raised/90 text-ink-secondary backdrop-blur transition-colors hover:text-ink";
   return (
-    <div className={cn("flex gap-1.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100", className)}>
+    <div
+      className={cn(
+        "flex gap-1.5 opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100",
+        className,
+      )}
+    >
       {resource.sourceUrl && (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -147,7 +161,11 @@ function Cover({ resource }: { resource: ResourceDTO }) {
   }
   return (
     <div className="grid size-full place-items-center text-ink-subtle">
-      {resource.captureStatus === "failed" ? <ImageOff className="size-6" aria-label="No preview" /> : <TypeIcon type={resource.type} className="size-7" />}
+      {resource.captureStatus === "failed" ? (
+        <ImageOff className="size-6" aria-label="No preview" />
+      ) : (
+        <TypeIcon type={resource.type} className="size-7" />
+      )}
     </div>
   );
 }
@@ -162,7 +180,9 @@ interface CardProps {
 function metaLine(r: ResourceDTO) {
   const def = TYPE_DEFS[r.type];
   if (def.visual) return [hostOf(r.sourceUrl) ?? def.label, r.tags[0]?.name].filter(Boolean).join(" · ");
-  const purpose = (r.meta.whenToUse as string) || (r.meta.purpose as string) || (r.type === "skill" ? "" : r.description);
+  if (r.type === "skill")
+    return [(r.meta.invocation as string) || def.label, r.meta.readonly ? "plugin" : ""].filter(Boolean).join(" · ");
+  const purpose = (r.meta.whenToUse as string) || (r.meta.purpose as string) || r.description;
   return [def.label, purpose].filter(Boolean).join(" · ");
 }
 
@@ -235,7 +255,13 @@ export function ResourceRow({ resource, selected, selecting, onToggle }: CardPro
       <div className="relative h-10 w-16 shrink-0 overflow-hidden rounded-[8px] bg-surface">
         {resource.coverAssetId ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={assetUrl(resource.coverAssetId, { thumb: true })} alt="" loading="lazy" className="size-full object-cover object-top" onError={(e) => (e.currentTarget.style.display = "none")} />
+          <img
+            src={assetUrl(resource.coverAssetId, { thumb: true })}
+            alt=""
+            loading="lazy"
+            className="size-full object-cover object-top"
+            onError={(e) => (e.currentTarget.style.display = "none")}
+          />
         ) : (
           <div className="grid size-full place-items-center text-ink-subtle">
             <TypeIcon type={resource.type} className="size-4" />
@@ -246,7 +272,10 @@ export function ResourceRow({ resource, selected, selecting, onToggle }: CardPro
         <div className="truncate text-[15px] font-medium text-ink">{resource.title}</div>
         <div className="truncate text-[13px] text-ink-subtle">{metaLine(resource)}</div>
       </div>
-      <time className="hidden w-20 shrink-0 text-right font-mono text-xs text-ink-subtle tabular-nums sm:block" dateTime={resource.updatedAt}>
+      <time
+        className="hidden w-20 shrink-0 text-right font-mono text-xs text-ink-subtle tabular-nums sm:block"
+        dateTime={resource.updatedAt}
+      >
         {new Date(resource.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
       </time>
       <CardActions resource={resource} />
@@ -261,7 +290,9 @@ export function ResourceRow({ resource, selected, selecting, onToggle }: CardPro
         }}
         className={cn(
           "grid size-6 shrink-0 place-items-center rounded-full border-2 transition-opacity",
-          selected ? "border-inverse bg-inverse text-on-inverse" : "border-ink-subtle opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+          selected
+            ? "border-inverse bg-inverse text-on-inverse"
+            : "border-ink-subtle opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
           selecting && "opacity-100",
         )}
       >

@@ -9,6 +9,7 @@ export const GET = route(async (req: Request) => {
   const filters: ListFilters = {
     q: sp.get("q") ?? undefined,
     type: isResourceType(type) ? type : undefined,
+    excludeTypes: sp.get("exclude")?.split(",").filter(isResourceType),
     tagIds: sp.get("tags")?.split(",").filter(Boolean),
     collectionId: sp.get("collection") ?? undefined,
     trash: sp.get("trash") === "1",

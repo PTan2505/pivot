@@ -4,11 +4,13 @@ import { LayoutGrid, List } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { RESOURCE_TYPES, TYPE_DEFS, type ResourceType } from "@stan-bag/core/types";
+import { RESOURCE_TYPES, SEPARATE_TYPES, TYPE_DEFS, type ResourceType } from "@stan-bag/core/types";
 import { FilterBar } from "@/components/filter-bar";
 import { ResourceCard, ResourceRow } from "@/components/resource-card";
 import { SelectionBar } from "@/components/selection-bar";
+import { SkillPackGroups } from "@/components/skill-pack-groups";
 import { SkillSyncPanel } from "@/components/skill-sync-panel";
+import { TypeIcon } from "@/components/type-icon";
 import { Kbd } from "@/components/ui/kbd";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,28 +30,47 @@ const SHORT_LABEL: Partial<Record<ResourceType, string>> = {
   mcp: "MCP",
 };
 
-/** One row of pills: All + every resource type. The active one is inverse. */
+/**
+ * One row of pills: All + every resource type. The active one is inverse.
+ * Separate types (skills) sit after a divider: they have their own tab and are not part of All.
+ */
 function TypeTabs({ active, showCounts }: { active?: ResourceType; showCounts: boolean }) {
   const pathname = usePathname();
   const { data: counts } = useCounts();
-  const tab = (href: string, label: string, isActive: boolean, count?: number) => (
+  const tab = (href: string, label: ReactNode, isActive: boolean, count?: number) => (
     <Link
       key={href}
       href={href}
       aria-current={isActive ? "page" : undefined}
       className={cn(
         "inline-flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-medium transition-colors duration-150",
-        isActive ? "bg-inverse text-on-inverse" : "bg-surface text-ink-secondary hover:bg-surface-raised hover:text-ink",
+        isActive
+          ? "bg-inverse text-on-inverse"
+          : "bg-surface text-ink-secondary hover:bg-surface-raised hover:text-ink",
       )}
     >
       {label}
-      {showCounts && count !== undefined && <span className="font-normal opacity-70 tabular-nums">{count}</span>}
+      {showCounts && count !== undefined && <span className="font-normal tabular-nums opacity-70">{count}</span>}
     </Link>
   );
   return (
     <nav aria-label="Resource types" className="flex flex-wrap gap-2">
       {tab(pathname, "All", !active, counts?.all)}
-      {RESOURCE_TYPES.map((t) => tab(`${pathname}?type=${t}`, SHORT_LABEL[t] ?? TYPE_DEFS[t].plural, active === t, counts?.[t] ?? 0))}
+      {RESOURCE_TYPES.filter((t) => !SEPARATE_TYPES.includes(t)).map((t) =>
+        tab(`${pathname}?type=${t}`, SHORT_LABEL[t] ?? TYPE_DEFS[t].plural, active === t, counts?.[t] ?? 0),
+      )}
+      <span aria-hidden className="mx-1 my-1.5 w-px self-stretch bg-surface-raised" />
+      {SEPARATE_TYPES.map((t) =>
+        tab(
+          `${pathname}?type=${t}`,
+          <>
+            <TypeIcon type={t} className="size-3.5" />
+            {TYPE_DEFS[t].plural}
+          </>,
+          active === t,
+          counts?.[t] ?? 0,
+        ),
+      )}
     </nav>
   );
 }
@@ -75,9 +96,15 @@ export function LibraryView({
   const [weekAgo] = useState(() => Date.now() - 7 * 24 * 60 * 60 * 1000);
   const { set } = params;
 
-  const { data: items, isLoading, error } = useResources({
+  const {
+    data: items,
+    isLoading,
+    error,
+  } = useResources({
     q: params.q,
     type: params.type,
+    // the library's "All" leaves skills to their own tab; collections and trash show everything
+    exclude: mode === "library" && !collectionId && !params.type ? SEPARATE_TYPES : undefined,
     tags: params.tags,
     sort: params.sort,
     collection: collectionId,
@@ -129,7 +156,9 @@ export function LibraryView({
     <div className="flex min-h-full flex-col">
       <section className="flex flex-col gap-6 px-4 pt-8 pb-2 md:px-10 md:pt-10">
         <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
-          <h1 className="text-[clamp(44px,6vw,72px)] leading-[0.96] font-medium tracking-[-0.045em] text-balance text-ink">{heading}</h1>
+          <h1 className="text-[clamp(44px,6vw,72px)] leading-[0.96] font-medium tracking-[-0.045em] text-balance text-ink">
+            {heading}
+          </h1>
           <p className="pb-1.5 text-base text-ink-muted">{subtitle ?? defaultSubtitle}</p>
           {actions && <div className="ml-auto flex flex-wrap items-center gap-2 pb-1">{actions}</div>}
         </div>
@@ -203,22 +232,42 @@ export function LibraryView({
               ))
             )}
           </div>
+        ) : params.type === "skill" && mode === "library" && !collectionId && items ? (
+          <SkillPackGroups items={items} view={params.view} selection={selection} toggle={toggle} />
         ) : params.view === "grid" ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] gap-x-6 gap-y-10">
             {items?.map((r) => (
-              <ResourceCard key={r.id} resource={r} selected={selection.includes(r.id)} selecting={selection.length > 0} onToggle={toggle(r.id)} />
+              <ResourceCard
+                key={r.id}
+                resource={r}
+                selected={selection.includes(r.id)}
+                selecting={selection.length > 0}
+                onToggle={toggle(r.id)}
+              />
             ))}
           </div>
         ) : (
           <div className="flex flex-col gap-1">
             {items?.map((r) => (
-              <ResourceRow key={r.id} resource={r} selected={selection.includes(r.id)} selecting={selection.length > 0} onToggle={toggle(r.id)} />
+              <ResourceRow
+                key={r.id}
+                resource={r}
+                selected={selection.includes(r.id)}
+                selecting={selection.length > 0}
+                onToggle={toggle(r.id)}
+              />
             ))}
           </div>
         )}
       </div>
 
-      <SelectionBar ids={selection} onClear={() => setSelected([])} mode={mode} collectionId={collectionId} exportName={exportName} />
+      <SelectionBar
+        ids={selection}
+        onClear={() => setSelected([])}
+        mode={mode}
+        collectionId={collectionId}
+        exportName={exportName}
+      />
     </div>
   );
 }
