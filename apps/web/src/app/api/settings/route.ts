@@ -1,5 +1,7 @@
 import { databaseMode, dataDir, paths, skillsDir } from "@stan-bag/core/config";
+import { storageSummary } from "@stan-bag/core/assets";
 import { playwrightStatus } from "@stan-bag/core/capture";
+import { storageMode, writeStore } from "@stan-bag/core/storage";
 import { json, route } from "@/lib/server/http";
 
 export const GET = route(async (req: Request) => {
@@ -20,5 +22,6 @@ export const GET = route(async (req: Request) => {
     skillsDir: skillsDir(),
     exportsDir: paths.exports(),
     playwright: await playwrightStatus(),
+    storage: { mode: storageMode(), target: writeStore().describe(), files: await storageSummary() },
   });
 });

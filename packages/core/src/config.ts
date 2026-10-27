@@ -21,6 +21,7 @@ export const paths = {
   assets: () => path.join(dataDir(), "assets"),
   thumbnails: () => path.join(dataDir(), "thumbnails"),
   exports: () => path.join(dataDir(), "exports"),
+  cache: () => path.join(dataDir(), "cache", "assets"),
 };
 
 export function databaseMode(): "neon" | "local" {

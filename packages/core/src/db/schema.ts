@@ -56,8 +56,10 @@ export const assets = pgTable(
     id: id(),
     kind: text("kind").notNull(),
     fileName: text("file_name").notNull(),
-    /** Path relative to the data directory. */
+    /** Object key: a path relative to the data directory (local) or inside the R2 bucket. */
     storagePath: text("storage_path").notNull(),
+    /** Which store holds the bytes: "local" or "r2". */
+    storage: text("storage").notNull().default("local"),
     mimeType: text("mime_type").notNull(),
     size: integer("size").notNull(),
     width: integer("width"),

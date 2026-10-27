@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, Eye, EyeOff, Pencil, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
+import { Check, Copy, Eye, EyeOff, Loader2, Pencil, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -68,6 +68,78 @@ function TagRow({ tag }: { tag: TagDTO }) {
         </ConfirmButton>
       </div>
     </li>
+  );
+}
+
+function formatSize(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function StorageRow() {
+  const { data: s } = useSettings();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState<"check" | "migrate" | null>(null);
+  if (!s) return <Row label="Files" />;
+  const { mode, target, files } = s.storage;
+  const local = files.local;
+
+  const check = async () => {
+    setBusy("check");
+    try {
+      const r = await api<{ ms: number; target: string }>("/api/storage/check", { method: "POST" });
+      toast.success(`Storage works · ${r.target} · ${r.ms} ms round trip`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Storage check failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+  const migrate = async () => {
+    setBusy("migrate");
+    try {
+      const r = await api<{ moved: number; missing: string[] }>("/api/storage/migrate", { method: "POST" });
+      toast.success(`Moved ${r.moved} file${r.moved === 1 ? "" : "s"} to R2${r.missing.length ? ` · ${r.missing.length} missing locally` : ""}`);
+      qc.invalidateQueries({ queryKey: ["settings"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Move failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Row label="Files" mono={false}>
+      <div className="space-y-2">
+        <div>{mode === "r2" ? "Cloudflare R2" : "This computer"}</div>
+        <div className="font-mono text-xs break-all text-ink-subtle">{target}</div>
+        <div className="text-xs text-ink-subtle">
+          {(["r2", "local"] as const)
+            .filter((k) => files[k])
+            .map((k) => `${files[k]!.count} file${files[k]!.count === 1 ? "" : "s"} ${k === "r2" ? "in R2" : "on this computer"} (${formatSize(files[k]!.bytes)})`)
+            .join(" · ") || "No files yet."}
+        </div>
+        {mode === "local" && <p className="text-xs text-ink-subtle">Add the R2 keys to .env to store files in Cloudflare instead.</p>}
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Button variant="secondary" size="sm" className="bg-surface-raised" onClick={check} disabled={!!busy}>
+            {busy === "check" && <Loader2 className="animate-spin" />} Test storage
+          </Button>
+          {mode === "r2" && !!local?.count && (
+            <ConfirmButton
+              title={`Move ${local.count} local file${local.count === 1 ? "" : "s"} to R2?`}
+              description="Each file is uploaded to the bucket, then deleted from this computer."
+              confirmLabel="Move to R2"
+              onConfirm={migrate}
+            >
+              <Button size="sm" disabled={!!busy}>
+                {busy === "migrate" && <Loader2 className="animate-spin" />} Move local files to R2
+              </Button>
+            </ConfirmButton>
+          )}
+        </div>
+      </div>
+    </Row>
   );
 }
 
@@ -147,6 +219,7 @@ export default function SettingsPage() {
               </div>
             )}
           </Row>
+          <StorageRow />
           <Row label="Global skills" value={s?.skillsDir} />
           <Row label="Default export folder" value={s?.exportsDir} />
           <Row label="Screenshots">
