@@ -15,6 +15,17 @@ export function skillsDir(): string {
   return path.resolve(/* turbopackIgnore: true */ expandHome(process.env.CLAUDE_SKILLS_DIR || "~/.claude/skills"));
 }
 
+export function pluginsDir(): string {
+  return path.resolve(/* turbopackIgnore: true */ expandHome(process.env.CLAUDE_PLUGINS_DIR || "~/.claude/plugins"));
+}
+
+/** Lock file written by the `skills` installer (npx skills add …): records each skill's source repo. */
+export function skillLockPath(): string {
+  return path.resolve(
+    /* turbopackIgnore: true */ expandHome(process.env.AGENTS_SKILL_LOCK || "~/.agents/.skill-lock.json"),
+  );
+}
+
 export const paths = {
   db: () => path.join(dataDir(), "db"),
   dbLock: () => path.join(dataDir(), "db.lock"),

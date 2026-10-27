@@ -85,6 +85,7 @@ One shape, two states.
 - Inactive: `surface` fill, `ink-secondary` label; hover `surface-raised`.
 - Active: `inverse` fill, `on-inverse` label. Exactly one active pill in the type-tab row; filters may have several.
 - Heights: 36px type tabs, 30px filters, 28px editable tags, 24px tags inside a card.
+- The type-tab row ends with a 1px `surface-raised` divider, then the Skills tab with its wand icon. Skills have their own tab and are not part of All.
 - An optional count follows the label at 70% opacity, `tabular-nums`.
 - Rows wrap onto new lines; never scroll a pill row horizontally.
 
@@ -115,7 +116,7 @@ A text resource (prompt, skill, snippet, rule, checklist, MCP config), shaped li
 - Same 16:10 `surface` frame, padded 24px; hover `surface-raised`.
 - Prompts, rules, checklists and skills show an excerpt as a `title-lg` quote in `ink` (frontmatter and markdown syntax stripped; skills show their description). Snippets and MCP JSON show the first lines in `mono`, `ink-muted`.
 - A type chip at the bottom-left: `surface-raised`, `radius-pill`, `ink-secondary`.
-- Under the frame: title, then `Type · purpose` (or *When to use* for skills) in `ink-subtle`.
+- Under the frame: title, then `Type · purpose` in `ink-subtle`. Skills show their invocation instead (`/name`, plus `· plugin` for plugin skills).
 
 ### List row — `components/resource-card.tsx` (`ResourceRow`)
 
@@ -142,6 +143,35 @@ Appears at the bottom centre while resources are selected.
 - Then the type pills, then facet filter pills with sort select and grid/list toggle on the right.
 - Grid: `repeat(auto-fill, minmax(min(100%, 360px), 1fr))`, 40px between rows, 24px between columns.
 
+### Skill pack group — `components/skill-pack-groups.tsx`
+
+The Skills page groups cards by pack (a GitHub repo, a Claude Code plugin, or an author) instead of one long grid.
+
+- Header: a chevron toggle and the pack name in `title-lg` (22px, `ink`), then `author · kind · N skills` in `ink-subtle`. Website and Repository links on the right are small `surface` pills (32px, 12px label).
+- The pack description follows in `ink-muted` at a 3xl measure.
+- Under the header sits the normal card grid or list. Groups are 64px apart; the header is 24px above its cards.
+- Collapsing a group hides its cards; the toggle carries `aria-expanded`/`aria-controls`.
+
+### Pack shelf — `components/skill-pack-groups.tsx` (`PackShelf`), `components/ui/glass-folder-cards.tsx`
+
+The top of the Skills page shows one glass folder per pack, as a visual index above the grouped sections.
+
+- Each folder (300px wide) has generated liquid art on its back panel, picked from the pack id so a pack always keeps its look. The skills are paper sheets inside the folder, at most four visible. A frosted front panel carries the pack name and `N skills` in `mono`.
+- Hover leans the glass forward. Click, Enter or Space opens the folder and fans the skills out. Choosing a sheet opens that skill. Escape or a click outside closes it.
+- The `···` key opens a frosted menu: Open folder, Show all N skills (scrolls to the pack's section and expands it), Open repository, Open website.
+- Tone follows the theme: smoked glass in dark mode, milk glass in light mode. Folders assemble on first view, staggered 90ms each. Reduced motion turns every transition off.
+- **Deliberate exception:** the folder is drawn as an object, so it keeps its own soft shadow, glass rim and the component's system font. The no-shadow and no-border rules still apply to cards.
+
+### Skill guide — `components/skill-guide.tsx` (`SkillGuide`, `PackField`)
+
+The "How to use" block on a skill's detail page, between the skill bar and the content.
+
+- A `surface` panel with `radius-card`. Header: the title, the invocation as a `mono` chip that copies on click, then Source and Edit guide as ghost pills.
+- Usage renders as Markdown. Examples are `mono` rows on `surface-raised`, and each row copies its prompt.
+- Edit mode swaps these for an Invocation input, a Usage textarea and an Examples textarea (one per line).
+- `PackField` in the aside is a Select listing "Detected · <pack>" first, then every pack.
+- Plugin skills replace the skill bar with a "Plugin skill · read-only" note, and their content shows as a preview only.
+
 ### Dialogs, popovers, menus — `components/ui/dialog.tsx`, `alert-dialog.tsx`, `popover.tsx`, `dropdown-menu.tsx`, `select.tsx`, `command.tsx`
 
 - `surface-raised` (`--popover`) background, `radius-card`, `shadow-overlay`, a 5% ink ring. Dialog footers are separated by a `divider` line.
@@ -156,24 +186,24 @@ Appears at the bottom centre while resources are selected.
 
 ### Color
 
-| Token | Dark | Light | Usage |
-|---|---|---|---|
-| `canvas` | `#050505` | `#ffffff` | Page background behind everything. Sections are separated by empty canvas, never by lines. |
-| `surface` | `#151515` | `#f2f2f2` | Thumbnail frames, note cards, search field, inactive pills and buttons. |
-| `surface-raised` | `#1e1e1e` | `#e6e6e6` | Hover state of surface, chips that sit on a surface, inputs inside cards, popovers. |
-| `divider` | `#2f2f2f` | `#dcdcdc` | Rare structural lines: dialog footers, table rows. Not for cards or section breaks. |
-| `ink` | `#fdfdfd` | `#0a0a0a` | Headings, card titles, primary text on canvas, surface and surface-raised. |
-| `ink-secondary` | `#d4d4d4` | `#2e2e2e` | Inactive pill labels, button labels on surface, body copy that should recede a step. |
-| `ink-muted` | `#a3a3a3` | `#545454` | Helper text, placeholders, icons on canvas, surface and surface-raised. |
-| `ink-subtle` | `#8a8a8a` | `#636363` | Metadata: hosts, counts, timestamps, shortcut hints. Reads 4.8:1 or better on canvas, surface and surface-raised. |
-| `inverse` | `#fdfdfd` | `#0a0a0a` | Fill of the active pill (current type tab or filter). |
-| `on-inverse` | `#050505` | `#ffffff` | Label on an inverse fill. |
-| `accent` | `#1500ff` | `#1500ff` | Electric indigo. Fill of the single primary action per screen (Add, Save, Export). Never text, icons or decoration. |
-| `on-accent` | `#ffffff` | `#ffffff` | Label on an accent fill (8.5:1). |
-| `accent-text` | `#8b84ff` | `#1500ff` | Links, the focus ring and the selected-card outline, on canvas, surface and surface-raised. |
-| `danger` | `#ff7a7a` | `#c21f1f` | Destructive labels and error text (Delete forever, failed capture). Always paired with a word or icon. |
-| `success` | `#4cc38a` | `#17703d` | Saved / in sync states. Same lightness as danger, so always pair with a word or icon. |
-| `warning` | `#f5b33f` | `#8a5600` | Duplicate URL and unsaved-skill notices, with an icon. |
+| Token            | Dark      | Light     | Usage                                                                                                               |
+| ---------------- | --------- | --------- | ------------------------------------------------------------------------------------------------------------------- |
+| `canvas`         | `#050505` | `#ffffff` | Page background behind everything. Sections are separated by empty canvas, never by lines.                          |
+| `surface`        | `#151515` | `#f2f2f2` | Thumbnail frames, note cards, search field, inactive pills and buttons.                                             |
+| `surface-raised` | `#1e1e1e` | `#e6e6e6` | Hover state of surface, chips that sit on a surface, inputs inside cards, popovers.                                 |
+| `divider`        | `#2f2f2f` | `#dcdcdc` | Rare structural lines: dialog footers, table rows. Not for cards or section breaks.                                 |
+| `ink`            | `#fdfdfd` | `#0a0a0a` | Headings, card titles, primary text on canvas, surface and surface-raised.                                          |
+| `ink-secondary`  | `#d4d4d4` | `#2e2e2e` | Inactive pill labels, button labels on surface, body copy that should recede a step.                                |
+| `ink-muted`      | `#a3a3a3` | `#545454` | Helper text, placeholders, icons on canvas, surface and surface-raised.                                             |
+| `ink-subtle`     | `#8a8a8a` | `#636363` | Metadata: hosts, counts, timestamps, shortcut hints. Reads 4.8:1 or better on canvas, surface and surface-raised.   |
+| `inverse`        | `#fdfdfd` | `#0a0a0a` | Fill of the active pill (current type tab or filter).                                                               |
+| `on-inverse`     | `#050505` | `#ffffff` | Label on an inverse fill.                                                                                           |
+| `accent`         | `#1500ff` | `#1500ff` | Electric indigo. Fill of the single primary action per screen (Add, Save, Export). Never text, icons or decoration. |
+| `on-accent`      | `#ffffff` | `#ffffff` | Label on an accent fill (8.5:1).                                                                                    |
+| `accent-text`    | `#8b84ff` | `#1500ff` | Links, the focus ring and the selected-card outline, on canvas, surface and surface-raised.                         |
+| `danger`         | `#ff7a7a` | `#c21f1f` | Destructive labels and error text (Delete forever, failed capture). Always paired with a word or icon.              |
+| `success`        | `#4cc38a` | `#17703d` | Saved / in sync states. Same lightness as danger, so always pair with a word or icon.                               |
+| `warning`        | `#f5b33f` | `#8a5600` | Duplicate URL and unsaved-skill notices, with an icon.                                                              |
 
 `shadow-overlay` is the only shadow (dialogs, popovers, selection bar).
 
@@ -181,15 +211,15 @@ Appears at the bottom centre while resources are selected.
 
 Families: `--font-sans` Geist, `--font-mono` Geist Mono (loaded with `next/font`).
 
-| Style | Size / line-height · weight | Usage |
-|---|---|---|
-| `display` | 72px / 0.96 · 500 · -0.045em | The page title of a library view. One per screen. |
-| `title-lg` | 22px / 1.2 · 500 · -0.02em | The quote inside a note card; dialog titles. |
-| `title` | 15px / 1.4 · 500 | Card titles, list row titles. |
-| `body` | 14px / 1.5 · 400 | Notes, descriptions, form fields. |
-| `label` | 13px / 1.2 · 500 | Pills, buttons, tabs. |
-| `meta` | 13px / 1.4 · 400 | Host and tag line under a card title, in ink-subtle. |
-| `mono` | 12px / 1.6 · 400 | Prompt and code previews, keyboard hints, counts. |
+| Style      | Size / line-height · weight  | Usage                                                |
+| ---------- | ---------------------------- | ---------------------------------------------------- |
+| `display`  | 72px / 0.96 · 500 · -0.045em | The page title of a library view. One per screen.    |
+| `title-lg` | 22px / 1.2 · 500 · -0.02em   | The quote inside a note card; dialog titles.         |
+| `title`    | 15px / 1.4 · 500             | Card titles, list row titles.                        |
+| `body`     | 14px / 1.5 · 400             | Notes, descriptions, form fields.                    |
+| `label`    | 13px / 1.2 · 500             | Pills, buttons, tabs.                                |
+| `meta`     | 13px / 1.4 · 400             | Host and tag line under a card title, in ink-subtle. |
+| `mono`     | 12px / 1.6 · 400             | Prompt and code previews, keyboard hints, counts.    |
 
 ### Spacing & radius
 

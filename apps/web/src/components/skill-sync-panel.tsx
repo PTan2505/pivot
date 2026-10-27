@@ -36,7 +36,9 @@ export function SkillSyncPanel() {
   const invalidate = useInvalidate();
   const sync = useMutation({
     mutationFn: async ({ auto }: { auto: boolean }) => ({
-      ...(await api<{ created: number; updated: number; conflicts: number; total: number }>("/api/skills/sync", { method: "POST" })),
+      ...(await api<{ created: number; updated: number; conflicts: number; total: number }>("/api/skills/sync", {
+        method: "POST",
+      })),
       auto,
     }),
     onSuccess: (r) => {
@@ -65,13 +67,18 @@ export function SkillSyncPanel() {
       <div className="flex items-center gap-3">
         <FolderSync className="size-4 text-muted-foreground" aria-hidden />
         <div className="min-w-0 flex-1 text-xs">
-          <div className="font-medium text-foreground">Global skills</div>
+          <div className="font-medium text-foreground">Global skills and plugin skills</div>
           <div className="truncate font-mono text-muted-foreground">{settings?.skillsDir ?? "~/.claude/skills"}</div>
         </div>
         <span className="font-mono text-xs text-muted-foreground tabular-nums">
           {statuses.filter((s) => s.state === "synced").length}/{statuses.length} in sync
         </span>
-        <Button variant="secondary" className="bg-surface-raised" onClick={() => sync.mutate({ auto: false })} disabled={sync.isPending}>
+        <Button
+          variant="secondary"
+          className="bg-surface-raised"
+          onClick={() => sync.mutate({ auto: false })}
+          disabled={sync.isPending}
+        >
           {sync.isPending ? <Loader2 className="animate-spin" /> : <FolderSync />}
           Sync from disk
         </Button>

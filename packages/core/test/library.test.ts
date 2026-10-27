@@ -17,6 +17,8 @@ beforeAll(async () => {
   tmp = await fs.mkdtemp(path.join(os.tmpdir(), "stan-bag-test-"));
   process.env.STAN_BAG_DATA_DIR = path.join(tmp, "data");
   process.env.CLAUDE_SKILLS_DIR = path.join(tmp, "skills");
+  process.env.CLAUDE_PLUGINS_DIR = path.join(tmp, "plugins");
+  process.env.AGENTS_SKILL_LOCK = path.join(tmp, "skill-lock.json");
   process.env.STAN_BAG_MIGRATIONS_DIR = path.resolve(__dirname, "../src/db/migrations");
   delete process.env.DATABASE_URL;
   core = {
@@ -49,7 +51,10 @@ describe("resources", () => {
       type: "reference",
       title: "Stripe pricing",
       sourceUrl: "https://stripe.com/pricing",
-      tags: [{ kind: "pageType", name: "Pricing" }, { kind: "technology", name: "react" }],
+      tags: [
+        { kind: "pageType", name: "Pricing" },
+        { kind: "technology", name: "react" },
+      ],
     });
     await createResource({ type: "prompt", title: "Dashboard brief", content: "Build a {{thing}} dashboard" });
 
@@ -58,7 +63,9 @@ describe("resources", () => {
     const react = a.tags.find((t) => t.kind === "technology")!;
     const dashboard = a.tags.find((t) => t.kind === "pageType")!;
     expect((await listResources({ tagIds: [react.id] })).length).toBe(2);
-    expect((await listResources({ tagIds: [react.id, dashboard.id] })).map((r) => r.title)).toEqual(["Linear dashboard"]);
+    expect((await listResources({ tagIds: [react.id, dashboard.id] })).map((r) => r.title)).toEqual([
+      "Linear dashboard",
+    ]);
     expect((await listResources({ q: "dashboard" })).length).toBe(2);
     expect((await listResources({ q: "dashboard", type: "prompt" })).length).toBe(1);
     // Title matches rank above newer content-only matches.
@@ -68,16 +75,32 @@ describe("resources", () => {
     expect((await listResources({ q: "pricing", type: "reference" })).map((r) => r.title)).toEqual(["Stripe pricing"]);
   });
 
+  it("keeps skills out of All but lists them in their own tab", async () => {
+    const { createResource, listResources, typeCounts } = core.resources;
+    const before = await typeCounts();
+    await createResource({ type: "skill", title: "dashboard-skill", content: "---\nname: dashboard-skill\n---\nBody" });
+    const all = await listResources({ q: "dashboard", excludeTypes: ["skill"] });
+    expect(all.map((r) => r.type)).not.toContain("skill");
+    expect((await listResources({ q: "dashboard" })).map((r) => r.type)).toContain("skill");
+    expect((await listResources({ type: "skill", excludeTypes: ["skill"] })).length).toBe(1);
+    const after = await typeCounts();
+    expect(after.all).toBe(before.all);
+    expect(after.skill).toBe((before.skill ?? 0) + 1);
+  });
+
   it("detects duplicate URLs", async () => {
     const dupes = await core.resources.findByUrl("http://www.linear.app");
     expect(dupes.map((d) => d.title)).toEqual(["Linear dashboard"]);
   });
 
   it("moves to trash, restores and purges with asset cleanup", async () => {
-    const { createResource, trashResources, restoreResources, purgeResources, listResources, getResource } = core.resources;
+    const { createResource, trashResources, restoreResources, purgeResources, listResources, getResource } =
+      core.resources;
     const { saveAsset, attachAsset, absoluteAssetPath } = core.assets;
     const r = await createResource({ type: "media", title: "Hero shot" });
-    const png = await sharp({ create: { width: 64, height: 40, channels: 3, background: "#ff6363" } }).png().toBuffer();
+    const png = await sharp({ create: { width: 64, height: 40, channels: 3, background: "#ff6363" } })
+      .png()
+      .toBuffer();
     const asset = await saveAsset({ data: png, fileName: "hero.png" });
     expect(asset.width).toBe(64);
     await attachAsset(r.id, asset.id);
@@ -105,7 +128,10 @@ describe("resources", () => {
     const { createCollection, addToCollection, collectionResourceIds, listResources, listCollections } = core.resources;
     const all = await listResources();
     const c = await createCollection({ name: "SaaS Dashboard" });
-    await addToCollection(c.id, all.map((r) => r.id));
+    await addToCollection(
+      c.id,
+      all.map((r) => r.id),
+    );
     await addToCollection(c.id, [all[0].id]); // idempotent
     expect(await collectionResourceIds(c.id)).toEqual(all.map((r) => r.id));
     expect((await listCollections()).find((x) => x.id === c.id)!.count).toBe(all.length);
@@ -123,7 +149,9 @@ describe("context & export", () => {
       notes: "Look at the hero grid.",
       tags: [{ kind: "uiPattern", name: "Hero" }],
     });
-    const big = await sharp({ create: { width: 3200, height: 2000, channels: 3, background: "#111" } }).png().toBuffer();
+    const big = await sharp({ create: { width: 3200, height: 2000, channels: 3, background: "#111" } })
+      .png()
+      .toBuffer();
     const shot = await saveAsset({ data: big, fileName: "vercel.png" });
     await attachAsset(ref.id, shot.id, "screenshot");
     const prompt = await createResource({ type: "prompt", title: "Hero brief", content: "Make a hero." });
@@ -150,7 +178,11 @@ describe("context & export", () => {
     expect(Math.max(meta.width!, meta.height!)).toBe(1568);
 
     // Exporting again never overwrites: a new folder is created.
-    const again = await core.context.exportBundle({ resourceIds: [prompt.id], targetDir: path.join(tmp, "out"), bundleName: "Hero bundle" });
+    const again = await core.context.exportBundle({
+      resourceIds: [prompt.id],
+      targetDir: path.join(tmp, "out"),
+      bundleName: "Hero bundle",
+    });
     expect(path.basename(again.path)).toBe("hero-bundle-2");
   });
 });

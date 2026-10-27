@@ -29,6 +29,9 @@ beforeAll(async () => {
   });
   const { port } = (await server.run()) as { port: number };
   process.env.STAN_BAG_DATA_DIR = path.join(tmp, "data");
+  process.env.CLAUDE_SKILLS_DIR = path.join(tmp, "skills");
+  process.env.CLAUDE_PLUGINS_DIR = path.join(tmp, "plugins");
+  process.env.AGENTS_SKILL_LOCK = path.join(tmp, "skill-lock.json");
   process.env.STAN_BAG_MIGRATIONS_DIR = path.resolve(__dirname, "../src/db/migrations");
   delete process.env.DATABASE_URL;
   // s3rver accepts these fixed credentials.
@@ -70,7 +73,9 @@ describe("R2 store", () => {
   });
 
   it("refuses keys that escape the bucket prefix", async () => {
-    await expect(core.storage.writeStore().put("../evil", Buffer.from("x"), "text/plain")).rejects.toThrow(/Invalid storage key/);
+    await expect(core.storage.writeStore().put("../evil", Buffer.from("x"), "text/plain")).rejects.toThrow(
+      /Invalid storage key/,
+    );
   });
 });
 
@@ -78,7 +83,9 @@ describe("assets on R2", () => {
   it("saves to R2 with a thumbnail, keeps nothing local, and cleans up", async () => {
     const { saveAsset, attachAsset, readAssetBytes, streamThumbnail, materializeAsset } = core.assets;
     const { createResource, purgeResources } = core.resources;
-    const png = await sharp({ create: { width: 1600, height: 1000, channels: 3, background: "#1500ff" } }).png().toBuffer();
+    const png = await sharp({ create: { width: 1600, height: 1000, channels: 3, background: "#1500ff" } })
+      .png()
+      .toBuffer();
 
     const asset = await saveAsset({ data: png, fileName: "shot.png" });
     expect(asset.storage).toBe("r2");
@@ -98,7 +105,12 @@ describe("assets on R2", () => {
     expect(clip.markdown).toContain(cached!);
 
     // Export writes the bytes (resized to Claude's 1568px edge) into the bundle.
-    const out = await core.context.exportBundle({ resourceIds: [r.id], targetDir: path.join(tmp, "out"), bundleName: "r2", resizeImages: true });
+    const out = await core.context.exportBundle({
+      resourceIds: [r.id],
+      targetDir: path.join(tmp, "out"),
+      bundleName: "r2",
+      resizeImages: true,
+    });
     const meta = await sharp(path.join(out.path, "assets", "indigo.png")).metadata();
     expect(meta.width).toBe(1568);
 
@@ -117,7 +129,15 @@ describe("assets on R2", () => {
     await local.put("assets/2026-10/legacy.txt", Buffer.from("legacy"), "text/plain");
     const [row] = await db
       .insert(assets)
-      .values({ kind: "text", fileName: "legacy.txt", storagePath: "assets/2026-10/legacy.txt", storage: "local", mimeType: "text/plain", size: 6, sha256: "legacy" })
+      .values({
+        kind: "text",
+        fileName: "legacy.txt",
+        storagePath: "assets/2026-10/legacy.txt",
+        storage: "local",
+        mimeType: "text/plain",
+        size: 6,
+        sha256: "legacy",
+      })
       .returning();
 
     const result = await core.assets.migrateLocalAssets();

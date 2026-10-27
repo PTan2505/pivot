@@ -29,6 +29,7 @@ import { AssetGallery, useAttach } from "@/components/asset-gallery";
 import { ConfirmButton } from "@/components/confirm-button";
 import { Markdown } from "@/components/markdown";
 import { AddToCollection } from "@/components/selection-bar";
+import { PackField, SkillGuide } from "@/components/skill-guide";
 import { SKILL_STATE_LABEL, SKILL_STATE_TONE } from "@/components/skill-sync-panel";
 import { TagsEditor } from "@/components/tags-editor";
 import { TypeIcon } from "@/components/type-icon";
@@ -41,7 +42,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useUi } from "@/components/ui-store";
 import { copyContext, useCopyResource } from "@/hooks/use-copy-resource";
-import { api, ApiError, useBulk, useInvalidate, useResource, useSkillStatuses, useUpdateResource, type TagInput } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  useBulk,
+  useInvalidate,
+  useResource,
+  useSkillStatuses,
+  useUpdateResource,
+  type TagInput,
+} from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 
@@ -148,14 +158,30 @@ function SaveIndicator({ state }: { state: SaveState }) {
       {state === "saving" ? (
         <Loader2 className="size-3 animate-spin" aria-hidden />
       ) : (
-        <span className={cn("size-1.5 rounded-full", state === "saved" ? "bg-success" : state === "error" ? "bg-danger" : "bg-warning")} aria-hidden />
+        <span
+          className={cn(
+            "size-1.5 rounded-full",
+            state === "saved" ? "bg-success" : state === "error" ? "bg-danger" : "bg-warning",
+          )}
+          aria-hidden
+        />
       )}
       {label}
     </span>
   );
 }
 
-function Field({ label, htmlFor, children, hint }: { label: string; htmlFor?: string; children: React.ReactNode; hint?: string }) {
+function Field({
+  label,
+  htmlFor,
+  children,
+  hint,
+}: {
+  label: string;
+  htmlFor?: string;
+  children: React.ReactNode;
+  hint?: string;
+}) {
   return (
     <div className="space-y-1.5">
       <Label htmlFor={htmlFor} className="text-xs font-normal text-ink-subtle">
@@ -212,7 +238,13 @@ function ColorsEditor({ value, onChange }: { value: string[]; onChange: (v: stri
           add();
         }}
       >
-        <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder="#08090a, #ff6363 …" className="font-mono text-xs" aria-label="Add colors" />
+        <Input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="#08090a, #ff6363 …"
+          className="font-mono text-xs"
+          aria-label="Add colors"
+        />
         <Button type="submit" size="sm" variant="outline">
           Add
         </Button>
@@ -221,7 +253,15 @@ function ColorsEditor({ value, onChange }: { value: string[]; onChange: (v: stri
   );
 }
 
-function MetaFieldInput({ field, draft, change }: { field: MetaField; draft: Draft; change: (p: Partial<Draft>) => void }) {
+function MetaFieldInput({
+  field,
+  draft,
+  change,
+}: {
+  field: MetaField;
+  draft: Draft;
+  change: (p: Partial<Draft>) => void;
+}) {
   const v = draft.meta[field.key];
   const set = (value: unknown) => change({ meta: { ...draft.meta, [field.key]: value } });
   const id = `meta-${field.key}`;
@@ -242,7 +282,6 @@ function MetaFieldInput({ field, draft, change }: { field: MetaField; draft: Dra
                 .filter(Boolean),
             )
           }
-
         />
       </Field>
     );
@@ -250,7 +289,14 @@ function MetaFieldInput({ field, draft, change }: { field: MetaField; draft: Dra
   if (field.kind === "textarea") {
     return (
       <Field label={field.label} htmlFor={id}>
-        <Textarea id={id} value={String(v ?? "")} onChange={(e) => set(e.target.value)} placeholder={field.placeholder} rows={4} className="text-[13px]" />
+        <Textarea
+          id={id}
+          value={String(v ?? "")}
+          onChange={(e) => set(e.target.value)}
+          placeholder={field.placeholder}
+          rows={4}
+          className="text-[13px]"
+        />
       </Field>
     );
   }
@@ -261,9 +307,20 @@ function MetaFieldInput({ field, draft, change }: { field: MetaField; draft: Dra
   );
 }
 
-function ContentEditor({ draft, change }: { draft: Draft; change: (p: Partial<Draft>) => void }) {
+function ContentEditor({
+  draft,
+  change,
+  readOnly = false,
+}: {
+  draft: Draft;
+  change: (p: Partial<Draft>) => void;
+  readOnly?: boolean;
+}) {
   const def = TYPE_DEFS[draft.type];
-  const vars = useMemo(() => (draft.type === "prompt" ? extractVariables(draft.content) : []), [draft.type, draft.content]);
+  const vars = useMemo(
+    () => (draft.type === "prompt" ? extractVariables(draft.content) : []),
+    [draft.type, draft.content],
+  );
   const jsonError = useMemo(() => {
     if (def.content !== "json" || !draft.content.trim()) return null;
     try {
@@ -291,10 +348,23 @@ function ContentEditor({ draft, change }: { draft: Draft; change: (p: Partial<Dr
       }}
       spellCheck={def.content === "markdown"}
       aria-label="Content"
-      placeholder={draft.type === "prompt" ? "Write the prompt. Use {{variable}} or {{variable|default}} for blanks." : "Content…"}
+      placeholder={
+        draft.type === "prompt" ? "Write the prompt. Use {{variable}} or {{variable|default}} for blanks." : "Content…"
+      }
       className="min-h-[55vh] resize-y font-mono text-[12.5px] leading-relaxed"
     />
   );
+
+  if (readOnly) {
+    // Plugin skills: show the file, never an editor.
+    return (
+      <section className="space-y-2" aria-label="Content">
+        <div className="min-h-[30vh] rounded-[14px] bg-surface px-6 py-5">
+          <Markdown>{draft.content}</Markdown>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-2" aria-label="Content">
@@ -348,7 +418,8 @@ function SkillBar({ resource, flush }: { resource: ResourceDetailDTO; flush: () 
       toast.success(`Saved to ${r.path}`);
       invalidate(resource.id);
     } catch (err) {
-      if (err instanceof ApiError && err.data.conflict) toast.error(err.message, { description: "Use “Overwrite disk” or “Use disk version”." });
+      if (err instanceof ApiError && err.data.conflict)
+        toast.error(err.message, { description: "Use “Overwrite disk” or “Use disk version”." });
       else toast.error(err instanceof Error ? err.message : "Could not write skill");
     } finally {
       setBusy(false);
@@ -370,11 +441,28 @@ function SkillBar({ resource, flush }: { resource: ResourceDetailDTO; flush: () 
   };
 
   const state = status?.state ?? "missing";
+  if (resource.meta.readonly) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-[14px] bg-surface px-4 py-3 text-xs">
+        <span className="rounded-full bg-surface-raised px-2.5 py-0.5 text-[11px] font-medium text-ink-secondary">
+          Plugin skill · read-only
+        </span>
+        <span className="truncate font-mono text-ink-subtle">
+          {status?.dirPath ?? String(resource.meta.dirPath ?? "")}
+        </span>
+        <span className="text-ink-subtle">Updated by the plugin; the guide and notes here are yours to edit.</span>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-[14px] bg-surface px-4 py-3 text-xs">
       <span className="font-mono text-ink-subtle">{status?.dirPath ?? "Not on disk yet"}</span>
-      {status?.isSymlink && <span className="rounded-full bg-surface-raised px-2 py-0.5 text-[11px] text-ink-secondary">symlink</span>}
-      <span className={cn("font-medium", SKILL_STATE_TONE[state])}>{status ? SKILL_STATE_LABEL[state] : "Not saved to disk"}</span>
+      {status?.isSymlink && (
+        <span className="rounded-full bg-surface-raised px-2 py-0.5 text-[11px] text-ink-secondary">symlink</span>
+      )}
+      <span className={cn("font-medium", SKILL_STATE_TONE[state])}>
+        {status ? SKILL_STATE_LABEL[state] : "Not saved to disk"}
+      </span>
       <div className="ml-auto flex gap-1.5">
         {(state === "disk-changed" || state === "conflict") && (
           <Button size="sm" variant="secondary" className="bg-surface-raised" onClick={pull} disabled={busy}>
@@ -444,7 +532,8 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
     });
   };
 
-  const removeFromCollection = (collectionId: string) => bulk.mutate({ action: "removeFromCollection", ids: [resource.id], collectionId });
+  const removeFromCollection = (collectionId: string) =>
+    bulk.mutate({ action: "removeFromCollection", ids: [resource.id], collectionId });
 
   const colors = Array.isArray(draft.meta.colors) ? (draft.meta.colors as string[]) : [];
   const showGallery = def.visual || resource.assets.length > 0;
@@ -453,7 +542,12 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
     <div className="flex min-h-full flex-col">
       <header className="flex flex-col gap-5 px-4 pt-6 md:px-10 md:pt-8">
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="secondary" size="icon" aria-label="Back" onClick={() => (history.length > 1 ? router.back() : router.push("/"))}>
+          <Button
+            variant="secondary"
+            size="icon"
+            aria-label="Back"
+            onClick={() => (history.length > 1 ? router.back() : router.push("/"))}
+          >
             <ArrowLeft />
           </Button>
           <Button variant="secondary" asChild>
@@ -470,7 +564,10 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
                 </a>
               </Button>
             )}
-            <Button variant="secondary" onClick={() => flush().then(() => copy({ ...resource, content: draft.content, type: draft.type }))}>
+            <Button
+              variant="secondary"
+              onClick={() => flush().then(() => copy({ ...resource, content: draft.content, type: draft.type }))}
+            >
               <Copy /> Copy
             </Button>
             <Button variant="secondary" onClick={() => flush().then(() => copyContext([resource.id]))}>
@@ -499,6 +596,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
       <div className="grid flex-1 gap-10 px-4 pt-6 pb-16 md:px-10 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-5">
           {draft.type === "skill" && <SkillBar resource={resource} flush={flush} />}
+          {draft.type === "skill" && <SkillGuide meta={draft.meta} sourceUrl={draft.sourceUrl} onChange={change} />}
           {draft.type === "typography" && (
             <section className="space-y-3" aria-label="Palette">
               <h2 className="text-xs text-ink-subtle">Colors</h2>
@@ -516,7 +614,9 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
             </section>
           )}
           {showGallery && <AssetGallery resource={resource} compact={!def.visual} />}
-          {def.content !== "none" && <ContentEditor draft={draft} change={change} />}
+          {def.content !== "none" && (
+            <ContentEditor draft={draft} change={change} readOnly={!!resource.meta.readonly} />
+          )}
           {!def.visual && resource.assets.length === 0 && (
             <p className="text-xs text-ink-subtle">Paste or drop files on this page to attach them.</p>
           )}
@@ -525,7 +625,13 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
         <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start" aria-label="Details">
           {draft.type !== "skill" && (
             <Field label="Description" htmlFor="desc">
-              <Textarea id="desc" value={draft.description} onChange={(e) => change({ description: e.target.value })} rows={3} placeholder="One or two lines to recognise it later" />
+              <Textarea
+                id="desc"
+                value={draft.description}
+                onChange={(e) => change({ description: e.target.value })}
+                rows={3}
+                placeholder="One or two lines to recognise it later"
+              />
             </Field>
           )}
           <Field label="Source URL" htmlFor="url">
@@ -537,6 +643,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
               className="font-mono text-xs"
             />
           </Field>
+          {draft.type === "skill" && <PackField meta={draft.meta} onChange={change} />}
           {def.fields.map((f) => (
             <MetaFieldInput key={f.key} field={f} draft={draft} change={change} />
           ))}
@@ -545,13 +652,22 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
             <TagsEditor kinds={[...def.facets, "tag"]} value={draft.tags} onChange={(tags) => change({ tags })} />
           </div>
           <Field label="Notes" htmlFor="notes">
-            <Textarea id="notes" value={draft.notes} onChange={(e) => change({ notes: e.target.value })} rows={5} placeholder="What’s good about it, how to use it…" />
+            <Textarea
+              id="notes"
+              value={draft.notes}
+              onChange={(e) => change({ notes: e.target.value })}
+              rows={5}
+              placeholder="What’s good about it, how to use it…"
+            />
           </Field>
           <div className="space-y-1.5">
             <Label className="text-xs font-normal text-ink-subtle">Collections</Label>
             <div className="flex flex-wrap items-center gap-1">
               {resource.collections.map((c) => (
-                <span key={c.id} className="flex h-7 items-center gap-1 rounded-full bg-surface pr-1.5 pl-3 text-xs font-medium text-ink-secondary">
+                <span
+                  key={c.id}
+                  className="flex h-7 items-center gap-1 rounded-full bg-surface pr-1.5 pl-3 text-xs font-medium text-ink-secondary"
+                >
                   <Link href={`/collections/${c.id}`} className="hover:underline">
                     {c.name}
                   </Link>
@@ -618,7 +734,9 @@ export function ResourceDetail({ id }: { id: string }) {
     return (
       <div className="grid h-full place-items-center p-6 text-center">
         <div className="space-y-2">
-          <p className="text-sm font-medium">{error instanceof ApiError && error.status === 404 ? "Resource not found" : "Could not load this resource"}</p>
+          <p className="text-sm font-medium">
+            {error instanceof ApiError && error.status === 404 ? "Resource not found" : "Could not load this resource"}
+          </p>
           <Button asChild variant="outline" size="sm">
             <Link href="/">Back to library</Link>
           </Button>

@@ -4,6 +4,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import type {
   CollectionDTO,
   ResourceDetailDTO,
+  SkillPackDTO,
   ResourceDTO,
   ResourceType,
   SkillStatusDTO,
@@ -41,11 +42,13 @@ export const keys = {
   counts: ["counts"] as const,
   settings: ["settings"] as const,
   skills: ["skills-status"] as const,
+  skillPacks: ["skill-packs"] as const,
 };
 
 export interface ResourceQuery {
   q?: string;
   type?: ResourceType;
+  exclude?: readonly ResourceType[];
   tags?: string[];
   collection?: string;
   trash?: boolean;
@@ -56,6 +59,7 @@ function toParams(q: ResourceQuery): Record<string, string | undefined> {
   return {
     q: q.q || undefined,
     type: q.type,
+    exclude: q.exclude?.length ? q.exclude.join(",") : undefined,
     tags: q.tags?.length ? q.tags.join(",") : undefined,
     collection: q.collection,
     trash: q.trash ? "1" : undefined,
@@ -121,6 +125,10 @@ export function useSkillStatuses(enabled = true) {
   return useQuery({ queryKey: keys.skills, queryFn: () => api<SkillStatusDTO[]>("/api/skills/status"), enabled });
 }
 
+export function useSkillPacks(enabled = true) {
+  return useQuery({ queryKey: keys.skillPacks, queryFn: () => api<SkillPackDTO[]>("/api/skill-packs"), enabled });
+}
+
 /** Invalidate everything list-shaped after a write. */
 export function useInvalidate() {
   const qc = useQueryClient();
@@ -130,6 +138,7 @@ export function useInvalidate() {
     qc.invalidateQueries({ queryKey: keys.collections });
     qc.invalidateQueries({ queryKey: keys.counts });
     qc.invalidateQueries({ queryKey: keys.skills });
+    qc.invalidateQueries({ queryKey: keys.skillPacks });
     if (resourceId) qc.invalidateQueries({ queryKey: keys.resource(resourceId) });
   };
 }
@@ -152,7 +161,8 @@ export function useUpdateResource(id: string) {
   const qc = useQueryClient();
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (patch: ResourcePatch) => api<ResourceDetailDTO>(`/api/resources/${id}`, { method: "PATCH", json: patch }),
+    mutationFn: (patch: ResourcePatch) =>
+      api<ResourceDetailDTO>(`/api/resources/${id}`, { method: "PATCH", json: patch }),
     onSuccess: (data) => {
       qc.setQueryData(keys.resource(id), data);
       invalidate();

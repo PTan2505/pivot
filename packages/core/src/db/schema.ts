@@ -1,7 +1,10 @@
 import { sql } from "drizzle-orm";
 import { index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
-const id = () => text("id").primaryKey().$defaultFn(() => crypto.randomUUID());
+const id = () =>
+  text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID());
 const createdAt = () => timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow();
 
@@ -44,8 +47,12 @@ export const tags = pgTable(
 export const resourceTags = pgTable(
   "resource_tags",
   {
-    resourceId: text("resource_id").notNull().references(() => resources.id, { onDelete: "cascade" }),
-    tagId: text("tag_id").notNull().references(() => tags.id, { onDelete: "cascade" }),
+    resourceId: text("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    tagId: text("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
   },
   (t) => [primaryKey({ columns: [t.resourceId, t.tagId] }), index("resource_tags_tag_idx").on(t.tagId)],
 );
@@ -75,13 +82,31 @@ export const assets = pgTable(
 export const resourceAssets = pgTable(
   "resource_assets",
   {
-    resourceId: text("resource_id").notNull().references(() => resources.id, { onDelete: "cascade" }),
-    assetId: text("asset_id").notNull().references(() => assets.id, { onDelete: "cascade" }),
+    resourceId: text("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    assetId: text("asset_id")
+      .notNull()
+      .references(() => assets.id, { onDelete: "cascade" }),
     role: text("role").notNull().default("attachment"),
     position: integer("position").notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.resourceId, t.assetId] }), index("resource_assets_asset_idx").on(t.assetId)],
 );
+
+/** A set of skills that come from one place: a GitHub repo, a Claude Code plugin, or an author. */
+export const skillPacks = pgTable("skill_packs", {
+  /** "owner/repo", "plugin:<name>", "author:<name>" or "local". */
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  author: text("author"),
+  kind: text("kind").notNull().default("repo"),
+  repoUrl: text("repo_url"),
+  homepage: text("homepage"),
+  description: text("description").notNull().default(""),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
 
 export const collections = pgTable("collections", {
   id: id(),
@@ -94,8 +119,12 @@ export const collections = pgTable("collections", {
 export const collectionItems = pgTable(
   "collection_items",
   {
-    collectionId: text("collection_id").notNull().references(() => collections.id, { onDelete: "cascade" }),
-    resourceId: text("resource_id").notNull().references(() => resources.id, { onDelete: "cascade" }),
+    collectionId: text("collection_id")
+      .notNull()
+      .references(() => collections.id, { onDelete: "cascade" }),
+    resourceId: text("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
     position: integer("position").notNull().default(0),
     addedAt: timestamp("added_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
