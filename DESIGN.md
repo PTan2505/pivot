@@ -63,6 +63,95 @@ Stan Bag is a personal library of UI references, assets, prompts and Claude Code
 - Lucide stroke icons at 16px, stroke 2, colored `ink-muted` (or the label color inside a button). Icons sit beside a word; icon-only buttons carry an `aria-label`.
 - The Stan Bag mark is the archive glyph in `canvas` on an `ink` disc. There is no other logo; set the name in Geist 500.
 
+## Components
+
+Each entry says what the component is for, what the caller provides and where it lives in the code (paths under `apps/web/src/` unless written out).
+
+### Button — `apps/web/src/components/ui/button.tsx`
+
+Pill-shaped button in three roles.
+
+- `default` (indigo `accent` fill, `on-accent` label): the **one** primary action on a screen — Add, Save, Export.
+- `secondary` (`surface` fill, `ink-secondary` label, hover `surface-raised`): everything else. `outline` renders the same; there are no outline-only buttons.
+- `ghost`: secondary actions inside a raised container (selection bar, menus).
+- `destructive` (`surface` fill, `danger` label): always with an explicit verb or icon ("Delete forever").
+- Sizes: `lg` 40px in the top bar, `default` 36px, `sm` 32px, `xs` 24px; `icon*` variants are round.
+- The caller provides a verb as the label and, optionally, a leading 16px Lucide icon. Icon-only buttons need `aria-label`.
+
+### Pill (type tabs, filters, tags) — `components/library-view.tsx` (`TypeTabs`), `components/filter-bar.tsx`, `components/tags-editor.tsx`
+
+One shape, two states.
+
+- Inactive: `surface` fill, `ink-secondary` label; hover `surface-raised`.
+- Active: `inverse` fill, `on-inverse` label. Exactly one active pill in the type-tab row; filters may have several.
+- Heights: 36px type tabs, 30px filters, 28px editable tags, 24px tags inside a card.
+- An optional count follows the label at 70% opacity, `tabular-nums`.
+- Rows wrap onto new lines; never scroll a pill row horizontally.
+
+### Search field — `components/app-shell.tsx` (`SearchField`)
+
+The top-bar search, which also opens the ⌘K palette.
+
+- 44px tall, `radius-pill`, `surface` fill, no border, up to 560px wide, centred in the top bar (its own row below 1024px).
+- Leading search icon and placeholder in `ink-muted`; typed text `ink`; trailing `⌘K` button in `ink-subtle` (`mono`).
+- On library pages typing filters the grid (debounced 200ms, kept in the `?q=` URL param); elsewhere Enter jumps to `/?q=…`. `/` focuses it from anywhere.
+- Focus: 2px `accent-text` outline, 3px offset.
+
+### Resource card — `components/resource-card.tsx` (`ResourceCard`)
+
+A visual resource (reference, library, image, icon, animation, palette): the screenshot does the talking.
+
+- A 16:10 frame, `radius-card`, `surface` behind the image (`object-fit: cover; object-position: top`). No border, no shadow, no hover lift.
+- Under it, 12px apart: title (`title`, `ink`, one line) and meta `host · first tag` (`meta`, `ink-subtle`).
+- Hover reveals round `surface-raised` action buttons (open source, copy) in the frame's top-right and the select checkbox top-left.
+- Selected: 2px `accent-text` outline with 3px offset on the frame; the checkbox turns `inverse`.
+- Capturing: a pulsing frame with "Capturing…" in `ink-muted`. Failed capture: an image-off icon in `ink-subtle`.
+- The caller provides the resource DTO, `selected`, `selecting` and `onToggle`.
+
+### Note card — `components/resource-card.tsx` (`ResourceCard`, text types)
+
+A text resource (prompt, skill, snippet, rule, checklist, MCP config), shaped like a resource card so both share one grid.
+
+- Same 16:10 `surface` frame, padded 24px; hover `surface-raised`.
+- Prompts, rules, checklists and skills show an excerpt as a `title-lg` quote in `ink` (frontmatter and markdown syntax stripped; skills show their description). Snippets and MCP JSON show the first lines in `mono`, `ink-muted`.
+- A type chip at the bottom-left: `surface-raised`, `radius-pill`, `ink-secondary`.
+- Under the frame: title, then `Type · purpose` (or *When to use* for skills) in `ink-subtle`.
+
+### List row — `components/resource-card.tsx` (`ResourceRow`)
+
+The list-view alternative to cards.
+
+- 64px row, `radius-card`, transparent; hover and selected `surface`, selected adds the `accent-text` outline.
+- 64×40 thumbnail (`radius` 8px), title + meta, date in `mono`, actions and a round checkbox on hover.
+
+### Selection bar — `components/selection-bar.tsx`
+
+Appears at the bottom centre while resources are selected.
+
+- `surface-raised`, radius 28px, `shadow-overlay`; wraps on narrow screens.
+- Count in `mono` / `ink-subtle`, then `ghost` actions: Copy context, Export, Collection, Remove (in a collection), Trash; in Trash: Restore and Delete forever (`danger`, confirmed in a dialog).
+
+### Top bar — `components/app-shell.tsx` (`TopBar`)
+
+- Logo (archive glyph in `canvas` on an `ink` disc + "Stan Bag" in Geist 500), search field, then Collections menu, Trash and Settings round buttons (`inverse` when on that page), theme toggle, and the split `Add` button (the screen's primary action).
+- No sidebar anywhere; navigation between types happens through the type pills under the page title.
+
+### Page header — `components/library-view.tsx`
+
+- `display` title (72px, clamps down to 44px on narrow screens), a `meta`-sized count line in `ink-muted` ("24 saved · 6 this week"), and optional actions aligned right (collections: Copy context, Export, Delete).
+- Then the type pills, then facet filter pills with sort select and grid/list toggle on the right.
+- Grid: `repeat(auto-fill, minmax(min(100%, 360px), 1fr))`, 40px between rows, 24px between columns.
+
+### Dialogs, popovers, menus — `components/ui/dialog.tsx`, `alert-dialog.tsx`, `popover.tsx`, `dropdown-menu.tsx`, `select.tsx`, `command.tsx`
+
+- `surface-raised` (`--popover`) background, `radius-card`, `shadow-overlay`, a 5% ink ring. Dialog footers are separated by a `divider` line.
+- Inputs inside are filled pills; the ⌘K palette input is a 40px `surface` pill.
+
+### Form fields — `components/ui/input.tsx`, `textarea.tsx`
+
+- Single-line inputs: 36px `surface` pills, no border, hover/focus `surface-raised`, focus outline `accent-text`.
+- Textareas and the content editor: `radius-card`, same fill. Labels above fields in `xs` / `ink-subtle`.
+
 ## Tokens
 
 ### Color
