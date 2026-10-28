@@ -5,7 +5,7 @@ import { Slot } from "radix-ui"
 
 // Stan Bag: every control is a pill (radius-pill). One `default` (indigo) button per screen.
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-full border-0 text-[13px] font-medium whitespace-nowrap transition-colors duration-150 ease-out outline-none select-none focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-text disabled:pointer-events-none disabled:opacity-40 aria-invalid:outline-2 aria-invalid:outline-danger [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-full border-0 text-[14px] font-medium whitespace-nowrap transition-colors duration-150 ease-out outline-none select-none focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-text disabled:pointer-events-none disabled:opacity-40 aria-invalid:outline-2 aria-invalid:outline-danger [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -19,7 +19,7 @@ const buttonVariants = cva(
       size: {
         default: "h-9 gap-1.5 px-4",
         xs: "h-6 gap-1 px-2.5 text-xs [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-8 gap-1.5 px-3 text-[12px] [&_svg:not([class*='size-'])]:size-3.5",
+        sm: "h-8 gap-1.5 px-3 text-[13px] [&_svg:not([class*='size-'])]:size-3.5",
         lg: "h-10 gap-2 px-5",
         icon: "size-9",
         "icon-xs": "size-6 [&_svg:not([class*='size-'])]:size-3",

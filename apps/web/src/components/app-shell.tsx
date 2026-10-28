@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ChevronDown, FolderPlus, Moon, Search, Settings, Sun, Trash2 } from "lucide-react";
+import { Archive, ChevronDown, FolderPlus, Folders, Moon, Search, Settings, Sun, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -8,6 +8,7 @@ import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { isResourceType } from "@stan-bag/core/types";
 import { AddMenu } from "@/components/add-menu";
+import { SectionNav } from "@/components/section-nav";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -99,7 +100,7 @@ function SearchField() {
         }}
         placeholder="Search your bag — sites, prompts, skills…"
         aria-label="Search your bag"
-        className="min-w-0 flex-1 bg-transparent text-[14px] text-ink outline-none placeholder:text-ink-muted focus-visible:outline-none"
+        className="min-w-0 flex-1 bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-muted focus-visible:outline-none"
       />
       <button
         type="button"
@@ -138,18 +139,23 @@ function CollectionsMenu() {
       <DropdownMenu>
         <PopoverAnchor asChild>
           <DropdownMenuTrigger asChild>
-            <Button variant="secondary" size="lg">
-              Collections <ChevronDown className="opacity-60" />
+            <Button variant="secondary" size="lg" aria-label="Collections" className="max-sm:size-10 max-sm:px-0">
+              {/* icon-only on phones so the action row fits */}
+              <Folders className="sm:hidden" aria-hidden />
+              <span className="max-sm:hidden">Collections</span>
+              <ChevronDown className="opacity-60 max-sm:hidden" />
             </Button>
           </DropdownMenuTrigger>
         </PopoverAnchor>
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuLabel className="text-xs text-ink-subtle">Collections</DropdownMenuLabel>
-          {collections.length === 0 && <p className="px-2 py-1.5 text-xs text-ink-muted">Group resources for a task.</p>}
+          {collections.length === 0 && (
+            <p className="px-2 py-1.5 text-xs text-ink-muted">Group resources for a task.</p>
+          )}
           {collections.map((c) => (
             <DropdownMenuItem key={c.id} onSelect={() => router.push(`/collections/${c.id}`)}>
               <span className="truncate">{c.name}</span>
-              <span className="ml-auto font-mono text-[11px] text-ink-subtle">{c.count}</span>
+              <span className="ml-auto font-mono text-[12px] text-ink-subtle">{c.count}</span>
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
@@ -166,7 +172,13 @@ function CollectionsMenu() {
           }}
           className="flex gap-2"
         >
-          <Input autoFocus placeholder="Collection name" value={name} onChange={(e) => setName(e.target.value)} aria-label="Collection name" />
+          <Input
+            autoFocus
+            placeholder="Collection name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            aria-label="Collection name"
+          />
           <Button type="submit" disabled={!name.trim()}>
             Create
           </Button>
@@ -185,29 +197,41 @@ function TopBar() {
 
   return (
     <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-3 px-4 py-4 md:px-10">
-      <Link href="/" className="flex items-center gap-2.5 rounded-full" aria-label="Stan Bag — all resources">
+      <Link href="/" className="flex items-center gap-2.5 rounded-full" aria-label="Stan Bag — library">
         <span className="grid size-[26px] place-items-center rounded-full bg-ink text-canvas">
           <Archive className="size-3.5" strokeWidth={2.4} aria-hidden />
         </span>
         <span className="text-base font-medium tracking-[-0.02em]">Stan Bag</span>
       </Link>
+      <SectionNav />
       <div className="order-last flex basis-full justify-center lg:order-none lg:flex-1 lg:basis-auto">
         <SearchField />
       </div>
       <nav aria-label="App" className="ml-auto flex items-center gap-2">
         <CollectionsMenu />
-        <Button variant="secondary" size="icon-lg" asChild aria-label={`Trash${counts?.trash ? `, ${counts.trash} items` : ""}`}>
-          <Link href="/trash" className={cn("relative", pathname === "/trash" && "bg-inverse text-on-inverse hover:bg-inverse")}>
+        <Button
+          variant="secondary"
+          size="icon-lg"
+          asChild
+          aria-label={`Trash${counts?.trash ? `, ${counts.trash} items` : ""}`}
+        >
+          <Link
+            href="/trash"
+            className={cn("relative", pathname === "/trash" && "bg-inverse text-on-inverse hover:bg-inverse")}
+          >
             <Trash2 />
             {!!counts?.trash && (
-              <span className="absolute -top-1 -right-1 grid h-4 min-w-4 place-items-center rounded-full bg-surface-raised px-1 font-mono text-[10px] text-ink-secondary">
+              <span className="absolute -top-1 -right-1 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-surface-raised px-1 font-mono text-[12px] text-ink-secondary">
                 {counts.trash}
               </span>
             )}
           </Link>
         </Button>
         <Button variant="secondary" size="icon-lg" asChild aria-label="Settings">
-          <Link href="/settings" className={cn(pathname === "/settings" && "bg-inverse text-on-inverse hover:bg-inverse")}>
+          <Link
+            href="/settings"
+            className={cn(pathname === "/settings" && "bg-inverse text-on-inverse hover:bg-inverse")}
+          >
             <Settings />
           </Link>
         </Button>

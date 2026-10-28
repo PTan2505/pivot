@@ -39,7 +39,8 @@ export function useAttach(resourceId: string) {
 export function AssetGallery({ resource, compact = false }: { resource: ResourceDetailDTO; compact?: boolean }) {
   const assets = resource.assets;
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = assets.find((a) => a.id === selectedId) ?? assets.find((a) => a.id === resource.coverAssetId) ?? assets[0];
+  const selected =
+    assets.find((a) => a.id === selectedId) ?? assets.find((a) => a.id === resource.coverAssetId) ?? assets[0];
   const fileRef = useRef<HTMLInputElement>(null);
   const attach = useAttach(resource.id);
   const invalidate = useInvalidate();
@@ -81,7 +82,14 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
       }}
       className={cn("space-y-3 rounded-[14px]", over && "outline-2 outline-offset-4 outline-accent-text")}
     >
-      <input ref={fileRef} type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => (attach([...(e.target.files ?? [])]), (e.target.value = ""))} />
+      <input
+        ref={fileRef}
+        type="file"
+        multiple
+        accept={ACCEPT}
+        className="hidden"
+        onChange={(e) => (attach([...(e.target.files ?? [])]), (e.target.value = ""))}
+      />
 
       {(capturing || resource.captureStatus === "failed") && (
         <div
@@ -139,14 +147,28 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
           >
             {a.kind === "image" || a.kind === "svg" ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={assetUrl(a.id, { thumb: a.kind === "image" })} alt="" className="size-full object-cover object-top" />
+              <img
+                src={assetUrl(a.id, { thumb: a.kind === "image" })}
+                alt=""
+                className="size-full object-cover object-top"
+              />
             ) : (
-              <span className="grid size-full place-items-center font-mono text-[10px] text-ink-subtle uppercase">{a.kind}</span>
+              <span className="grid size-full place-items-center font-mono text-[12px] text-ink-subtle uppercase">
+                {a.kind}
+              </span>
             )}
-            {a.id === resource.coverAssetId && <Star className="absolute top-1 right-1 size-3 fill-ink text-ink drop-shadow" aria-label="Cover" />}
+            {a.id === resource.coverAssetId && (
+              <Star className="absolute top-1 right-1 size-3 fill-ink text-ink drop-shadow" aria-label="Cover" />
+            )}
           </button>
         ))}
-        <Button variant="secondary" size="icon" className="size-14 rounded-[10px]" onClick={() => fileRef.current?.click()} aria-label="Add files">
+        <Button
+          variant="secondary"
+          size="icon"
+          className="size-14 rounded-[10px]"
+          onClick={() => fileRef.current?.click()}
+          aria-label="Add files"
+        >
           <Plus />
         </Button>
         {resource.sourceUrl && ["reference", "library", "animation"].includes(resource.type) && (

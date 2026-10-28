@@ -75,17 +75,16 @@ describe("resources", () => {
     expect((await listResources({ q: "pricing", type: "reference" })).map((r) => r.title)).toEqual(["Stripe pricing"]);
   });
 
-  it("keeps skills out of All but lists them in their own tab", async () => {
-    const { createResource, listResources, typeCounts } = core.resources;
-    const before = await typeCounts();
+  it("lists a section's types, and a single type within it", async () => {
+    const { sectionOf } = await import("../src/types");
+    const { createResource, listResources } = core.resources;
     await createResource({ type: "skill", title: "dashboard-skill", content: "---\nname: dashboard-skill\n---\nBody" });
-    const all = await listResources({ q: "dashboard", excludeTypes: ["skill"] });
-    expect(all.map((r) => r.type)).not.toContain("skill");
+    const knowledge = await listResources({ q: "dashboard", types: sectionOf("prompt").types });
+    expect(knowledge.map((r) => r.type)).toEqual(["prompt"]);
     expect((await listResources({ q: "dashboard" })).map((r) => r.type)).toContain("skill");
-    expect((await listResources({ type: "skill", excludeTypes: ["skill"] })).length).toBe(1);
-    const after = await typeCounts();
-    expect(after.all).toBe(before.all);
-    expect(after.skill).toBe((before.skill ?? 0) + 1);
+    // An explicit type wins over the section.
+    expect((await listResources({ type: "skill", types: sectionOf("prompt").types })).length).toBe(1);
+    expect(sectionOf("source").id).toBe("sources");
   });
 
   it("detects duplicate URLs", async () => {

@@ -152,7 +152,7 @@ function Cover({ resource }: { resource: ResourceDTO }) {
   }
   if (resource.captureStatus === "pending") {
     return (
-      <div className="grid size-full animate-pulse place-items-center text-[13px] text-ink-muted [animation-duration:1.6s]">
+      <div className="grid size-full animate-pulse place-items-center text-[14px] text-ink-muted [animation-duration:1.6s]">
         <span className="flex items-center gap-1.5">
           <Loader2 className="size-3.5 animate-spin" aria-hidden /> Capturing…
         </span>
@@ -263,10 +263,10 @@ export function ResourceCard({ resource, selected, selecting, onToggle, meta }: 
         <CardActions resource={resource} className="absolute top-3 right-3" />
       </div>
       <div className="flex min-w-0 flex-col gap-0.5 px-0.5">
-        <h3 className="truncate text-[15px] leading-[1.4] font-medium text-ink" title={resource.title}>
+        <h3 className="truncate text-[16px] leading-[1.4] font-medium text-ink" title={resource.title}>
           {resource.title}
         </h3>
-        <p className="truncate text-[13px] leading-[1.4] text-ink-subtle">{meta ?? metaLine(resource)}</p>
+        <p className="truncate text-[14px] leading-[1.4] text-ink-subtle">{meta ?? metaLine(resource)}</p>
       </div>
     </Link>
   );
@@ -304,8 +304,8 @@ export function ResourceRow({ resource, selected, selecting, onToggle, meta }: C
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[15px] font-medium text-ink">{resource.title}</div>
-        <div className="truncate text-[13px] text-ink-subtle">{meta ?? metaLine(resource)}</div>
+        <div className="truncate text-[16px] font-medium text-ink">{resource.title}</div>
+        <div className="truncate text-[14px] text-ink-subtle">{meta ?? metaLine(resource)}</div>
       </div>
       <time
         className="hidden w-20 shrink-0 text-right font-mono text-xs text-ink-subtle tabular-nums sm:block"

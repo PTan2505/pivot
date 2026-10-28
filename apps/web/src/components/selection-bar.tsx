@@ -10,7 +10,15 @@ import { useUi } from "@/components/ui-store";
 import { copyContext } from "@/hooks/use-copy-resource";
 import { useBulk, useCollections } from "@/lib/api";
 
-export function AddToCollection({ ids, onDone, children }: { ids: string[]; onDone?: () => void; children: React.ReactNode }) {
+export function AddToCollection({
+  ids,
+  onDone,
+  children,
+}: {
+  ids: string[];
+  onDone?: () => void;
+  children: React.ReactNode;
+}) {
   const { data: collections = [] } = useCollections();
   const bulk = useBulk();
   return (
@@ -33,7 +41,7 @@ export function AddToCollection({ ids, onDone, children }: { ids: string[]; onDo
                   }}
                 >
                   {c.name}
-                  <span className="ml-auto font-mono text-[11px] text-muted-foreground">{c.count}</span>
+                  <span className="ml-auto font-mono text-[12px] text-muted-foreground">{c.count}</span>
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -71,7 +79,7 @@ export function SelectionBar({
     <div
       role="toolbar"
       aria-label="Selection actions"
-      className="fixed bottom-6 left-1/2 z-40 flex max-w-[calc(100%-2rem)] -translate-x-1/2 flex-wrap items-center gap-1 rounded-[28px] bg-surface-raised p-1.5 pl-4 shadow-overlay animate-in fade-in slide-in-from-bottom-2 duration-200"
+      className="fixed bottom-6 left-1/2 z-40 flex max-w-[calc(100%-2rem)] -translate-x-1/2 animate-in flex-wrap items-center gap-1 rounded-[28px] bg-surface-raised p-1.5 pl-4 shadow-overlay duration-200 fade-in slide-in-from-bottom-2"
     >
       <span className="mr-2 font-mono text-xs text-ink-subtle tabular-nums">{ids.length} selected</span>
       {mode === "library" ? (
@@ -92,7 +100,11 @@ export function SelectionBar({
               <FolderMinus /> Remove
             </Button>
           )}
-          <Button variant="ghost" className="text-danger hover:text-danger" onClick={() => run("trash", `Moved ${ids.length} to trash`)}>
+          <Button
+            variant="ghost"
+            className="text-danger hover:text-danger"
+            onClick={() => run("trash", `Moved ${ids.length} to trash`)}
+          >
             <Trash2 /> Trash
           </Button>
         </>

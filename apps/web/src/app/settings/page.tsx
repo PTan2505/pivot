@@ -11,13 +11,27 @@ import { Input } from "@/components/ui/input";
 import { api, useInvalidate, useSettings, useTags } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
 
-function Row({ label, value, mono = true, children }: { label: string; value?: string; mono?: boolean; children?: React.ReactNode }) {
+function Row({
+  label,
+  value,
+  mono = true,
+  children,
+}: {
+  label: string;
+  value?: string;
+  mono?: boolean;
+  children?: React.ReactNode;
+}) {
   return (
     <div className="grid grid-cols-[160px_1fr] items-start gap-4 border-b border-divider py-3.5 last:border-0">
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 text-[13px]">
+      <dd className="min-w-0 text-[14px]">
         {value && (
-          <button type="button" onClick={() => copyText(value, "Copied")} className={mono ? "font-mono text-xs break-all hover:underline" : "hover:underline"}>
+          <button
+            type="button"
+            onClick={() => copyText(value, "Copied")}
+            className={mono ? "font-mono text-xs break-all hover:underline" : "hover:underline"}
+          >
             {value}
           </button>
         )}
@@ -42,14 +56,21 @@ function TagRow({ tag }: { tag: TagDTO }) {
     }
   };
   return (
-    <li className="group flex h-9 items-center gap-2 rounded-full px-3 text-[13px] hover:bg-surface-raised">
+    <li className="group flex h-9 items-center gap-2 rounded-full px-3 text-[14px] hover:bg-surface-raised">
       {editing ? (
-        <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && save()} className="h-7 text-[13px]" />
+        <Input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={save}
+          onKeyDown={(e) => e.key === "Enter" && save()}
+          className="h-7 text-[14px]"
+        />
       ) : (
         <span className="truncate">{tag.name}</span>
       )}
-      <span className="ml-auto font-mono text-[11px] text-muted-foreground tabular-nums">{tag.count}</span>
-      <div className="flex opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
+      <span className="ml-auto font-mono text-[12px] text-muted-foreground tabular-nums">{tag.count}</span>
+      <div className="flex opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
         <Button variant="ghost" size="icon-xs" aria-label={`Rename ${tag.name}`} onClick={() => setEditing(true)}>
           {editing ? <Check /> : <Pencil />}
         </Button>
@@ -100,7 +121,9 @@ function StorageRow() {
     setBusy("migrate");
     try {
       const r = await api<{ moved: number; missing: string[] }>("/api/storage/migrate", { method: "POST" });
-      toast.success(`Moved ${r.moved} file${r.moved === 1 ? "" : "s"} to R2${r.missing.length ? ` · ${r.missing.length} missing locally` : ""}`);
+      toast.success(
+        `Moved ${r.moved} file${r.moved === 1 ? "" : "s"} to R2${r.missing.length ? ` · ${r.missing.length} missing locally` : ""}`,
+      );
       qc.invalidateQueries({ queryKey: ["settings"] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Move failed");
@@ -117,10 +140,15 @@ function StorageRow() {
         <div className="text-xs text-ink-subtle">
           {(["r2", "local"] as const)
             .filter((k) => files[k])
-            .map((k) => `${files[k]!.count} file${files[k]!.count === 1 ? "" : "s"} ${k === "r2" ? "in R2" : "on this computer"} (${formatSize(files[k]!.bytes)})`)
+            .map(
+              (k) =>
+                `${files[k]!.count} file${files[k]!.count === 1 ? "" : "s"} ${k === "r2" ? "in R2" : "on this computer"} (${formatSize(files[k]!.bytes)})`,
+            )
             .join(" · ") || "No files yet."}
         </div>
-        {mode === "local" && <p className="text-xs text-ink-subtle">Add the R2 keys to .env to store files in Cloudflare instead.</p>}
+        {mode === "local" && (
+          <p className="text-xs text-ink-subtle">Add the R2 keys to .env to store files in Cloudflare instead.</p>
+        )}
         <div className="flex flex-wrap gap-2 pt-1">
           <Button variant="secondary" size="sm" className="bg-surface-raised" onClick={check} disabled={!!busy}>
             {busy === "check" && <Loader2 className="animate-spin" />} Test storage
@@ -152,17 +180,29 @@ function ExtensionSection({ serverUrl }: { serverUrl?: string }) {
     <section className="space-y-3">
       <div>
         <h2 className="text-[22px] leading-[1.2] font-medium tracking-[-0.02em]">Browser extension</h2>
-        <p className="text-sm text-muted-foreground">Save the current tab, images and selected text from Chrome. The extension needs this server address and token.</p>
+        <p className="text-sm text-muted-foreground">
+          Save the current tab, images and selected text from Chrome. The extension needs this server address and token.
+        </p>
       </div>
       <dl className="rounded-[14px] bg-surface px-5">
         <Row label="Server URL" value={serverUrl} />
         <Row label="API token">
           <div className="flex items-center gap-1">
             <code className="min-w-0 flex-1 truncate font-mono text-xs">{shown ? token : "•".repeat(32)}</code>
-            <Button variant="ghost" size="icon-xs" aria-label={shown ? "Hide token" : "Show token"} onClick={() => setShown((v) => !v)}>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={shown ? "Hide token" : "Show token"}
+              onClick={() => setShown((v) => !v)}
+            >
               {shown ? <EyeOff /> : <Eye />}
             </Button>
-            <Button variant="ghost" size="icon-xs" aria-label="Copy token" onClick={() => copyText(token, "Token copied")}>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Copy token"
+              onClick={() => copyText(token, "Token copied")}
+            >
               <Copy />
             </Button>
             <ConfirmButton
@@ -187,8 +227,8 @@ function ExtensionSection({ serverUrl }: { serverUrl?: string }) {
               Run <code className="font-mono">pnpm ext:build</code> in the repo.
             </li>
             <li>
-              Open <code className="font-mono">chrome://extensions</code>, enable Developer mode, click “Load unpacked” and pick{" "}
-              <code className="font-mono">apps/extension/dist</code>.
+              Open <code className="font-mono">chrome://extensions</code>, enable Developer mode, click “Load unpacked”
+              and pick <code className="font-mono">apps/extension/dist</code>.
             </li>
             <li>Open the extension’s options and paste the server URL and token.</li>
           </ol>
@@ -206,8 +246,8 @@ export default function SettingsPage() {
       <section className="space-y-3">
         <h1 className="text-[clamp(44px,6vw,72px)] leading-[0.96] font-medium tracking-[-0.045em]">Settings</h1>
         <p className="text-sm text-muted-foreground">
-          Configure these with environment variables in <code className="font-mono text-xs">.env</code> at the repo root, then restart with{" "}
-          <code className="font-mono text-xs">npm start</code>.
+          Configure these with environment variables in <code className="font-mono text-xs">.env</code> at the repo
+          root, then restart with <code className="font-mono text-xs">npm start</code>.
         </p>
         <dl className="rounded-[14px] bg-surface px-5">
           <Row label="Data folder" value={s?.dataDir} />
@@ -271,12 +311,24 @@ export default function SettingsPage() {
       <section className="space-y-2 text-sm text-muted-foreground">
         <h2 className="text-[22px] leading-[1.2] font-medium tracking-[-0.02em] text-ink">Shortcuts</h2>
         <ul className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
-          <li><kbd className="font-mono">⌘K</kbd> search & commands</li>
-          <li><kbd className="font-mono">/</kbd> focus library search</li>
-          <li><kbd className="font-mono">⌘V</kbd> paste URL or image anywhere</li>
-          <li><kbd className="font-mono">⌘S</kbd> save now</li>
-          <li><kbd className="font-mono">⇧ click</kbd> select a range</li>
-          <li><kbd className="font-mono">⌘A</kbd> select all · <kbd className="font-mono">esc</kbd> clear</li>
+          <li>
+            <kbd className="font-mono">⌘K</kbd> search & commands
+          </li>
+          <li>
+            <kbd className="font-mono">/</kbd> focus library search
+          </li>
+          <li>
+            <kbd className="font-mono">⌘V</kbd> paste URL or image anywhere
+          </li>
+          <li>
+            <kbd className="font-mono">⌘S</kbd> save now
+          </li>
+          <li>
+            <kbd className="font-mono">⇧ click</kbd> select a range
+          </li>
+          <li>
+            <kbd className="font-mono">⌘A</kbd> select all · <kbd className="font-mono">esc</kbd> clear
+          </li>
         </ul>
       </section>
     </div>

@@ -108,6 +108,8 @@ export interface ResourceTypeDef {
   type: ResourceType;
   label: string;
   plural: string;
+  /** One line on what this type holds, shown in the navbar menu. */
+  blurb: string;
   group: "visual" | "knowledge";
   /** Lucide icon name, resolved in the web app. */
   icon: string;
@@ -163,6 +165,7 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
     type: "reference",
     label: "Reference",
     plural: "References",
+    blurb: "Pages and screens worth studying",
     group: "visual",
     icon: "globe",
     visual: true,
@@ -176,6 +179,7 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
     type: "library",
     label: "UI Library",
     plural: "UI Libraries",
+    blurb: "Component kits and design-system docs",
     group: "visual",
     icon: "library",
     visual: true,
@@ -189,6 +193,7 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
     type: "media",
     label: "Image & Video",
     plural: "Images & Videos",
+    blurb: "Screenshots, mood images and clips",
     group: "visual",
     icon: "image",
     visual: true,
@@ -202,6 +207,7 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
     type: "icon",
     label: "Icon & SVG",
     plural: "Icons & SVGs",
+    blurb: "Icon sets, logos and SVG art",
     group: "visual",
     icon: "shapes",
     visual: true,
@@ -215,6 +221,7 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
     type: "animation",
     label: "Animation",
     plural: "Animations",
+    blurb: "Lottie files, motion code and recordings",
     group: "visual",
     icon: "sparkles",
     visual: true,
@@ -228,6 +235,7 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
     type: "typography",
     label: "Font & Palette",
     plural: "Fonts & Palettes",
+    blurb: "Typefaces, pairings and color palettes",
     group: "visual",
     icon: "palette",
     visual: true,
@@ -244,6 +252,7 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
     type: "prompt",
     label: "Prompt",
     plural: "Prompts & Briefs",
+    blurb: "Briefs with {{variables}} to reuse",
     group: "knowledge",
     icon: "message-square-text",
     visual: false,
@@ -257,6 +266,7 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
     type: "skill",
     label: "Skill",
     plural: "Skills",
+    blurb: "Claude Code skills, grouped by pack",
     group: "knowledge",
     icon: "wand",
     visual: false,
@@ -277,6 +287,7 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
     type: "snippet",
     label: "Snippet",
     plural: "Code Snippets",
+    blurb: "Code to copy into your projects",
     group: "knowledge",
     icon: "code",
     visual: false,
@@ -290,6 +301,7 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
     type: "rule",
     label: "Coding Rule",
     plural: "Coding Rules",
+    blurb: "Conventions to hand to an AI agent",
     group: "knowledge",
     icon: "scroll-text",
     visual: false,
@@ -303,6 +315,7 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
     type: "checklist",
     label: "Checklist",
     plural: "Checklists & SOPs",
+    blurb: "Steps to run before you ship",
     group: "knowledge",
     icon: "list-checks",
     visual: false,
@@ -316,6 +329,7 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
     type: "mcp",
     label: "MCP Config",
     plural: "MCP Configs",
+    blurb: "Server configs for Claude Code",
     group: "knowledge",
     icon: "plug",
     visual: false,
@@ -329,6 +343,7 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
     type: "source",
     label: "Source",
     plural: "Sources",
+    blurb: "Sites to browse for references",
     group: "visual",
     icon: "compass",
     visual: true,
@@ -346,11 +361,24 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
   },
 };
 
-/**
- * Types that live in their own tab and stay out of the library's "All" view and count:
- * sources are where references come from, skills are tools.
- */
-export const SEPARATE_TYPES: readonly ResourceType[] = ["source", "skill"];
+/** The app's top-level sections, shown in the navbar. Every type belongs to exactly one. */
+export const SECTIONS = [
+  { id: "library", label: "Library", types: ["reference", "library", "media", "icon", "animation", "typography"] },
+  { id: "knowledge", label: "Knowledge", types: ["prompt", "snippet", "rule", "checklist", "mcp"] },
+  { id: "sources", label: "Sources", types: ["source"] },
+  { id: "skills", label: "Skills", types: ["skill"] },
+] as const satisfies readonly { id: string; label: string; types: readonly ResourceType[] }[];
+
+export type SectionId = (typeof SECTIONS)[number]["id"];
+export type Section = { id: SectionId; label: string; types: readonly ResourceType[] };
+
+export function sectionOf(type: ResourceType): Section {
+  return SECTIONS.find((s) => (s.types as readonly ResourceType[]).includes(type))!;
+}
+
+export function isSectionId(v: unknown): v is SectionId {
+  return SECTIONS.some((s) => s.id === v);
+}
 
 export function isResourceType(v: unknown): v is ResourceType {
   return typeof v === "string" && (RESOURCE_TYPES as readonly string[]).includes(v);

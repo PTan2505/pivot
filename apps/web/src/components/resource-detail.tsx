@@ -26,6 +26,7 @@ import {
   type ResourceType,
 } from "@stan-bag/core/types";
 import { AssetGallery, useAttach } from "@/components/asset-gallery";
+import { Breadcrumbs, typeCrumbs } from "@/components/breadcrumbs";
 import { ConfirmButton } from "@/components/confirm-button";
 import { Markdown } from "@/components/markdown";
 import { AddToCollection } from "@/components/selection-bar";
@@ -217,7 +218,7 @@ function ColorsEditor({ value, onChange }: { value: string[]; onChange: (v: stri
                 onClick={() => copyText(c, `Copied ${c}`)}
                 aria-label={`Copy ${c}`}
               />
-              <div className="flex items-center justify-between px-2 py-1 font-mono text-[11px]">
+              <div className="flex items-center justify-between px-2 py-1 font-mono text-[12px]">
                 {c}
                 <button
                   type="button"
@@ -314,7 +315,7 @@ function MetaFieldInput({
           onChange={(e) => set(e.target.value)}
           placeholder={field.placeholder}
           rows={4}
-          className="text-[13px]"
+          className="text-[14px]"
         />
       </Field>
     );
@@ -412,7 +413,7 @@ function ContentEditor({
         <p className="flex flex-wrap items-center gap-1.5 text-xs text-ink-subtle">
           Variables:
           {vars.map((v) => (
-            <code key={v.name} className="rounded-full bg-surface px-2.5 py-0.5 font-mono text-[11px] text-ink">
+            <code key={v.name} className="rounded-full bg-surface px-2.5 py-0.5 font-mono text-[12px] text-ink">
               {v.name}
               {v.defaultValue && <span className="text-ink-subtle"> = {v.defaultValue}</span>}
             </code>
@@ -463,7 +464,7 @@ function SkillBar({ resource, flush }: { resource: ResourceDetailDTO; flush: () 
   if (resource.meta.readonly) {
     return (
       <div className="flex flex-wrap items-center gap-2 rounded-[14px] bg-surface px-4 py-3 text-xs">
-        <span className="rounded-full bg-surface-raised px-2.5 py-0.5 text-[11px] font-medium text-ink-secondary">
+        <span className="rounded-full bg-surface-raised px-2.5 py-0.5 text-[12px] font-medium text-ink-secondary">
           Plugin skill · read-only
         </span>
         <span className="truncate font-mono text-ink-subtle">
@@ -477,7 +478,7 @@ function SkillBar({ resource, flush }: { resource: ResourceDetailDTO; flush: () 
     <div className="flex flex-wrap items-center gap-2 rounded-[14px] bg-surface px-4 py-3 text-xs">
       <span className="font-mono text-ink-subtle">{status?.dirPath ?? "Not on disk yet"}</span>
       {status?.isSymlink && (
-        <span className="rounded-full bg-surface-raised px-2 py-0.5 text-[11px] text-ink-secondary">symlink</span>
+        <span className="rounded-full bg-surface-raised px-2 py-0.5 text-[12px] text-ink-secondary">symlink</span>
       )}
       <span className={cn("font-medium", SKILL_STATE_TONE[state])}>
         {status ? SKILL_STATE_LABEL[state] : "Not saved to disk"}
@@ -569,11 +570,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
           >
             <ArrowLeft />
           </Button>
-          <Button variant="secondary" asChild>
-            <Link href={`/?type=${draft.type}`}>
-              <TypeIcon type={draft.type} /> {def.plural}
-            </Link>
-          </Button>
+          <Breadcrumbs items={[...typeCrumbs(draft.type), { label: draft.title || "Untitled" }]} />
           <SaveIndicator state={state} />
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {draft.sourceUrl && (

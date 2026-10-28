@@ -118,10 +118,10 @@ function ImportBody({ onClose }: { onClose: () => void }) {
           ) : (
             <FileUp className="size-6 text-ink-muted" />
           )}
-          <span className="text-[15px] font-medium text-ink">
+          <span className="text-[16px] font-medium text-ink">
             {reading ? "Reading bookmarks…" : "Choose bookmarks file"}
           </span>
-          <span className="text-[13px] text-ink-subtle">bookmarks_*.html</span>
+          <span className="text-[14px] text-ink-subtle">bookmarks_*.html</span>
           <input
             type="file"
             accept=".html,.htm,text/html"
@@ -164,7 +164,7 @@ function ImportBody({ onClose }: { onClose: () => void }) {
               aria-selected={show === value}
               onClick={() => setShow(value)}
               className={cn(
-                "h-8 rounded-full px-3 text-[12px] font-medium transition-colors",
+                "h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
                 show === value ? "bg-inverse text-on-inverse" : "bg-surface text-ink-secondary hover:bg-surface-raised",
               )}
             >
@@ -177,7 +177,7 @@ function ImportBody({ onClose }: { onClose: () => void }) {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Filter by title, URL or folder"
           aria-label="Filter bookmarks"
-          className="h-8 min-w-0 flex-1 text-[13px]"
+          className="h-8 min-w-0 flex-1 text-[14px]"
         />
       </div>
 
@@ -197,10 +197,10 @@ function ImportBody({ onClose }: { onClose: () => void }) {
               aria-label={`Import ${r.title}`}
             />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] font-medium text-ink" title={r.title}>
+              <div className="truncate text-[14px] font-medium text-ink" title={r.title}>
                 {r.title}
               </div>
-              <div className="truncate font-mono text-[11px] text-ink-subtle" title={r.url}>
+              <div className="truncate font-mono text-[12px] text-ink-subtle" title={r.url}>
                 {r.duplicate ? "Already saved · " : ""}
                 {r.url.replace(/^https?:\/\/(www\.)?/, "")}
                 {r.folders.length ? ` · ${r.folders.join(" / ")}` : ""}
@@ -211,7 +211,7 @@ function ImportBody({ onClose }: { onClose: () => void }) {
               onValueChange={(v) => update(r.url, { type: v as Row["type"] })}
               disabled={r.duplicate}
             >
-              <SelectTrigger size="sm" className="w-[112px]" aria-label="Save as">
+              <SelectTrigger size="sm" className="w-[128px]" aria-label="Save as">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -224,7 +224,7 @@ function ImportBody({ onClose }: { onClose: () => void }) {
               onValueChange={(v) => update(r.url, { choice: v === "none" ? "" : (v as SourceCategory) })}
               disabled={r.duplicate || r.type !== "source"}
             >
-              <SelectTrigger size="sm" className="w-[150px]" aria-label="Category">
+              <SelectTrigger size="sm" className="w-[172px]" aria-label="Category">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
