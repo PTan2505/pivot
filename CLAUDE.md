@@ -52,6 +52,6 @@ See [HOOK.md](HOOK.md). A Claude Code `PostToolUse` hook formats every file you 
 
 - Library logic belongs in `packages/core`; route handlers in `apps/web/src/app/api` stay thin and wrap work in `route()` from `lib/server/http.ts` (it forces request-time rendering and maps errors to JSON).
 - `apps/web` runs Next.js 16 with Cache Components; read the bundled docs in `apps/web/node_modules/next/dist/docs/` before using an unfamiliar API (see `apps/web/AGENTS.md`).
-- UI follows [DESIGN.md](DESIGN.md): design-system tokens (`bg-surface`, `text-ink-subtle`, `outline-accent-text`…), pill controls, one indigo primary action per screen, no borders or shadows on cards. Check text contrast (≥ 4.5:1) when adding colours.
+- UI follows [DESIGN.md](DESIGN.md): design-system tokens (`bg-surface`, `text-ink-subtle`, `outline-accent-text`…), pill controls, one lime primary action per screen, no borders or shadows on cards. Check text contrast (≥ 4.5:1) when adding colours.
 - Files go through the blob store (`packages/core/src/storage.ts`): R2 when the `R2_*` keys are set, otherwise the data folder. Never read or write asset files by path directly.
 - The API only answers localhost, and writes need the same origin or the extension's API token (`src/proxy.ts`). Keep it that way when adding routes.

@@ -3,7 +3,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
 import { Slot } from "radix-ui"
 
-// PIVOT: every control is a pill (radius-pill). One `default` (indigo) button per screen.
+// PIVOT: every control is a pill (radius-pill). One `default` (lime) button per screen.
 const buttonVariants = cva(
   "group/button inline-flex shrink-0 items-center justify-center rounded-full border-0 text-[14px] font-medium whitespace-nowrap transition-colors duration-150 ease-out outline-none select-none focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-text disabled:pointer-events-none disabled:opacity-40 aria-invalid:outline-2 aria-invalid:outline-danger [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {

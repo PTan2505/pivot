@@ -80,8 +80,6 @@ export function AddMenu({ preferType }: { preferType?: ResourceType }) {
     }
   };
 
-  const primaryLabel = preferType ? `New ${TYPE_DEFS[preferType].label.toLowerCase()}` : "Add";
-
   return (
     <div className="flex">
       <input
@@ -95,10 +93,18 @@ export function AddMenu({ preferType }: { preferType?: ResourceType }) {
       <Button
         size="lg"
         className="rounded-r-none pr-4"
+        aria-label={preferType ? `New ${TYPE_DEFS[preferType].label.toLowerCase()}` : undefined}
         onClick={() => (preferType ? createOfType(preferType, pickFile) : openAddUrl())}
       >
         <Plus />
-        {primaryLabel}
+        {preferType ? (
+          // "New source" doesn't fit next to the other top-bar buttons on a phone; "New" does
+          <span>
+            New<span className="max-sm:hidden"> {TYPE_DEFS[preferType].label.toLowerCase()}</span>
+          </span>
+        ) : (
+          "Add"
+        )}
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

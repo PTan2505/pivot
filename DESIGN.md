@@ -6,7 +6,7 @@ The browsable version with component previews: [PIVOT Design System](https://cla
 
 Direction: **Savee** (from [Refero Styles](https://styles.refero.design/style/c6d8490d-e3f2-45c8-aebf-fe5f11daf116)) — mockup option 3.
 
-PIVOT is a personal library of UI references, assets, prompts and Claude Code skills. The interface is a black canvas: saved screenshots carry the color, the chrome stays out of the way. One electric-indigo button per screen marks the action that matters.
+PIVOT is a personal library of UI references, assets, prompts and Claude Code skills. The interface is a near-black canvas: saved screenshots carry the color, the chrome stays out of the way. One acid-lime button per screen marks the action that matters.
 
 ## Content fundamentals
 
@@ -26,7 +26,7 @@ PIVOT is a personal library of UI references, assets, prompts and Claude Code sk
 - Links, the focus ring and the selected-card outline use `accent-text`.
 - The active pill is `inverse` with `on-inverse` text. Every other pill is `surface` with `ink-secondary` text.
 - `danger`, `success` and `warning` always come with a word or an icon. `success` and `danger` have the same lightness, so color alone never tells them apart.
-- Dark is the primary theme. Light keeps the same structure: `canvas` is white and `surface` a light grey, so pills and thumbnail frames stay visible against the page.
+- Dark is the primary theme. Light keeps the same structure: `canvas` is warm paper (`#F4F4EF`) and `surface` a step darker, so pills and thumbnail frames stay visible against the page. The lime button stays lime in both themes, always with `#101010` text.
 
 ## Typography
 
@@ -72,7 +72,7 @@ Each entry says what the component is for, what the caller provides and where it
 
 Pill-shaped button in three roles.
 
-- `default` (indigo `accent` fill, `on-accent` label): the **one** primary action on a screen — Add, Save, Export.
+- `default` (lime `accent` fill, `on-accent` label): the **one** primary action on a screen — Add, Save, Export.
 - `secondary` (`surface` fill, `ink-secondary` label, hover `surface-raised`): everything else. `outline` renders the same; there are no outline-only buttons.
 - `ghost`: secondary actions inside a raised container (selection bar, menus).
 - `destructive` (`surface` fill, `danger` label): always with an explicit verb or icon ("Delete forever").
@@ -156,7 +156,7 @@ Appears at the bottom centre while resources are selected.
 ### Top bar — `components/app-shell.tsx` (`TopBar`)
 
 - Logo (archive glyph in `canvas` on an `ink` disc + "PIVOT" in Geist 500), the section nav, search field, then Collections menu, Trash and Settings round buttons (`inverse` when on that page), theme toggle, and the split `Add` button (the screen's primary action).
-- On phones the Collections button is icon-only so the action row fits; the search field drops to its own row.
+- On phones the Collections button is icon-only and the primary button reads just "New" (its full name stays in `aria-label`), so the action row fits at 375px; the search field drops to its own row.
 - No sidebar anywhere. Sections are in the top bar; a section's types are in the Type select.
 
 ### Breadcrumbs — `components/breadcrumbs.tsx`
@@ -227,24 +227,29 @@ The "How to use" block on a skill's detail page, between the skill bar and the c
 
 ### Color
 
-| Token            | Dark      | Light     | Usage                                                                                                               |
-| ---------------- | --------- | --------- | ------------------------------------------------------------------------------------------------------------------- |
-| `canvas`         | `#050505` | `#ffffff` | Page background behind everything. Sections are separated by empty canvas, never by lines.                          |
-| `surface`        | `#151515` | `#f2f2f2` | Thumbnail frames, note cards, search field, inactive pills and buttons.                                             |
-| `surface-raised` | `#1e1e1e` | `#e6e6e6` | Hover state of surface, chips that sit on a surface, inputs inside cards, popovers.                                 |
-| `divider`        | `#2f2f2f` | `#dcdcdc` | Rare structural lines: dialog footers, table rows. Not for cards or section breaks.                                 |
-| `ink`            | `#fdfdfd` | `#0a0a0a` | Headings, card titles, primary text on canvas, surface and surface-raised.                                          |
-| `ink-secondary`  | `#d4d4d4` | `#2e2e2e` | Inactive pill labels, button labels on surface, body copy that should recede a step.                                |
-| `ink-muted`      | `#a3a3a3` | `#545454` | Helper text, placeholders, icons on canvas, surface and surface-raised.                                             |
-| `ink-subtle`     | `#8a8a8a` | `#636363` | Metadata: hosts, counts, timestamps, shortcut hints. Reads 4.8:1 or better on canvas, surface and surface-raised.   |
-| `inverse`        | `#fdfdfd` | `#0a0a0a` | Fill of the active pill (current section or chosen tag).                                                            |
-| `on-inverse`     | `#050505` | `#ffffff` | Label on an inverse fill.                                                                                           |
-| `accent`         | `#1500ff` | `#1500ff` | Electric indigo. Fill of the single primary action per screen (Add, Save, Export). Never text, icons or decoration. |
-| `on-accent`      | `#ffffff` | `#ffffff` | Label on an accent fill (8.5:1).                                                                                    |
-| `accent-text`    | `#8b84ff` | `#1500ff` | Links, the focus ring and the selected-card outline, on canvas, surface and surface-raised.                         |
-| `danger`         | `#ff7a7a` | `#c21f1f` | Destructive labels and error text (Delete forever, failed capture). Always paired with a word or icon.              |
-| `success`        | `#4cc38a` | `#17703d` | Saved / in sync states. Same lightness as danger, so always pair with a word or icon.                               |
-| `warning`        | `#f5b33f` | `#8a5600` | Duplicate URL and unsaved-skill notices, with an icon.                                                              |
+Palette (2026-10-28): `#101010` near-black, `#C7FF35` acid lime, `#F4F4EF` warm paper, `#747474` grey. The surfaces and secondary inks are steps between `#101010` and `#F4F4EF`. Two tokens are nudged for contrast, both computed for ≥ 4.6:1 on canvas, surface and surface-raised:
+
+- `#747474` reads only 4.07:1 on `#101010` and 4.24:1 on `#F4F4EF`, so `ink-subtle` is it moved 18% toward the ink.
+- The lime is 1.07:1 on the paper canvas, so the light theme's `accent-text` is the lime darkened to `#556a1e`.
+
+| Token            | Dark      | Light     | Usage                                                                                                                           |
+| ---------------- | --------- | --------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `canvas`         | `#101010` | `#f4f4ef` | Page background behind everything. Sections are separated by empty canvas, never by lines.                                      |
+| `surface`        | `#1a1a1a` | `#ebebe6` | Thumbnail frames, note cards, search field, inactive pills and buttons.                                                         |
+| `surface-raised` | `#232323` | `#e1e1dc` | Hover state of surface, chips that sit on a surface, inputs inside cards, popovers.                                             |
+| `divider`        | `#323231` | `#d6d6d2` | Rare structural lines: dialog footers, table rows. Not for cards or section breaks.                                             |
+| `ink`            | `#f4f4ef` | `#101010` | Headings, card titles, primary text (14.2:1 or better on every surface).                                                        |
+| `ink-secondary`  | `#d4d4d0` | `#30302f` | Inactive pill labels, button labels on surface, body copy that should recede a step.                                            |
+| `ink-muted`      | `#aeaeab` | `#474747` | Helper text, placeholders, icons (7:1 or better).                                                                               |
+| `ink-subtle`     | `#8b8b8a` | `#626262` | Metadata: hosts, counts, timestamps, shortcut hints. The palette grey nudged to 4.6:1 or better on every surface.               |
+| `inverse`        | `#f4f4ef` | `#101010` | Fill of the active pill (current section or chosen tag).                                                                        |
+| `on-inverse`     | `#101010` | `#f4f4ef` | Label on an inverse fill.                                                                                                       |
+| `accent`         | `#c7ff35` | `#c7ff35` | Acid lime. Fill of the single primary action per screen (Add, Save, Export). Never text, icons or decoration.                   |
+| `on-accent`      | `#101010` | `#101010` | Label on an accent fill (16.1:1).                                                                                               |
+| `accent-text`    | `#c7ff35` | `#556a1e` | Links, the focus ring and the selected-card outline. Lime on dark (13.3:1 or better); darkened lime on light (4.6:1 or better). |
+| `danger`         | `#ff7a7a` | `#c21f1f` | Destructive labels and error text (Delete forever, failed capture). Always paired with a word or icon.                          |
+| `success`        | `#4cc38a` | `#17703d` | Saved / in sync states. Always pair with a word or icon.                                                                        |
+| `warning`        | `#f5b33f` | `#8a5600` | Duplicate URL and unsaved-skill notices, with an icon.                                                                          |
 
 `shadow-overlay` is the only shadow (dialogs, popovers, selection bar).
 
@@ -271,6 +276,6 @@ Radius: `radius-sm` 6px · `radius-card` 14px · `radius-pill` 9999px
 ## Implementation notes
 
 - shadcn/ui variables (`--background`, `--card`, `--primary`…) are mapped onto these tokens in `globals.css`; prefer the design-system names in new code.
-- Buttons (`components/ui/button.tsx`): `default` = the single indigo primary action, `secondary` = surface pill, `ghost`, `destructive`. All pills.
+- Buttons (`components/ui/button.tsx`): `default` = the single lime primary action, `secondary` = surface pill, `ghost`, `destructive`. All pills.
 - Inputs are filled `surface` pills; textareas use `radius-card`. Focus is a 2px `accent-text` outline with 3px offset everywhere.
 - Contrast: every text token is ≥ 4.5:1 on `canvas`, `surface` and `surface-raised` in both themes (checked when the palette was chosen).
