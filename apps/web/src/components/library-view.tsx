@@ -90,7 +90,7 @@ function TypeShelf({ types, items }: { types: readonly ResourceType[]; items: Re
             meta: hostOf(r.sourceUrl) ?? undefined,
             image: r.coverAssetId ? assetUrl(r.coverAssetId, { thumb: true }) : undefined,
           })),
-          menu: [{ label: `Open ${plural}`, onSelect: () => router.push(`/?type=${t}`) }],
+          activate: () => router.push(`/?type=${t}`),
         };
       })}
     />

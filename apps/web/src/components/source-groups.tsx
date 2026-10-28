@@ -2,10 +2,11 @@
 
 import { FileUp, Search } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type MouseEvent } from "react";
 import { SOURCE_CATEGORIES, sourceSearchUrl, type ResourceDTO } from "@stan-bag/core/types";
 import { BookmarkImportDialog } from "@/components/bookmark-import-dialog";
-import { FolderShelf, scrollToSection } from "@/components/folder-shelf";
+import { FolderShelf } from "@/components/folder-shelf";
 import { hostOf, ResourceCard, ResourceRow } from "@/components/resource-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -101,6 +102,7 @@ export function SourceGroups({
   toggle: (id: string) => (e: MouseEvent) => void;
 }) {
   const { data: stats = {} } = useSourceStats();
+  const router = useRouter();
   const meta = (r: ResourceDTO) =>
     [hostOf(r.sourceUrl), stats[r.id] ? `${stats[r.id]} saved` : "", searchTemplate(r) ? "searchable" : ""]
       .filter(Boolean)
@@ -127,7 +129,7 @@ export function SourceGroups({
               meta: hostOf(r.sourceUrl) ?? undefined,
               image: r.coverAssetId ? assetUrl(r.coverAssetId, { thumb: true }) : undefined,
             })),
-            menu: [{ label: `Show all ${g.list.length} sources`, onSelect: () => scrollToSection(g.id) }],
+            activate: () => router.push(g.value ? `/?type=source&category=${g.value}` : "/?type=source"),
           }))}
         />
       )}

@@ -79,8 +79,9 @@ export function SkillPackGroups({
               name: r.title,
               meta: ((r.meta.invocation as string) || "").split(" ")[0] || undefined,
             })),
+            // packs have no page of their own: clicking scrolls to the pack's section
+            activate: () => showPack(pack.id),
             menu: [
-              { label: `Show all ${list.length} skills`, onSelect: () => showPack(pack.id) },
               ...links.map((l) => ({
                 label: l.label,
                 onSelect: () => window.open(l.url, "_blank", "noopener,noreferrer"),
