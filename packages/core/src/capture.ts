@@ -9,7 +9,10 @@ import { assertPublicUrl, safeFetch } from "./net-guard";
 import { setResourceFields } from "./resources";
 
 const VIEWPORT = { width: 1440, height: 900 };
-const MAX_FULL_PAGE_HEIGHT = 8000;
+/** Full-page shots keep only the top 12000px; Chromium never renders below the clip. */
+export const MAX_FULL_PAGE_HEIGHT = 12_000;
+// sharp rejects inputs above ~268 MP by default; size its limit to the clipped full-page shot.
+const FULL_PAGE_PIXEL_LIMIT = VIEWPORT.width * MAX_FULL_PAGE_HEIGHT;
 const IDLE_CLOSE_MS = 2 * 60 * 1000;
 
 interface CaptureState {
@@ -37,13 +40,17 @@ async function browser(): Promise<Browser> {
   return state.browser;
 }
 
+/** Closes the shared Chromium instance; the next capture launches a new one. */
+export async function closeCaptureBrowser() {
+  clearTimeout(state.idleTimer);
+  const b = state.browser;
+  state.browser = undefined;
+  await (await b)?.close().catch(() => {});
+}
+
 function scheduleIdleClose() {
   clearTimeout(state.idleTimer);
-  state.idleTimer = setTimeout(async () => {
-    const b = state.browser;
-    state.browser = undefined;
-    await (await b)?.close().catch(() => {});
-  }, IDLE_CLOSE_MS);
+  state.idleTimer = setTimeout(closeCaptureBrowser, IDLE_CLOSE_MS);
 }
 
 export async function screenshotUrl(url: string) {
@@ -66,18 +73,19 @@ export async function screenshotUrl(url: string) {
     await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
     await page.waitForTimeout(800);
     const viewport = await page.screenshot({ type: "png" });
-    const fullRaw = await page.screenshot({ type: "png", fullPage: true });
-    const meta = await sharp(fullRaw).metadata();
-    const full =
-      meta.height && meta.height > MAX_FULL_PAGE_HEIGHT
-        ? await sharp(fullRaw)
-            .extract({ left: 0, top: 0, width: meta.width!, height: MAX_FULL_PAGE_HEIGHT })
-            .png()
-            .toBuffer()
-        : fullRaw;
+    // A too-tall or broken full-page shot must not cost us the viewport shot.
+    const full = await page
+      .screenshot({
+        type: "png",
+        fullPage: true,
+        // Playwright trims the clip to the document, so short pages keep their real height.
+        clip: { x: 0, y: 0, width: VIEWPORT.width, height: MAX_FULL_PAGE_HEIGHT },
+      })
+      .then((png) => sharp(png, { limitInputPixels: FULL_PAGE_PIXEL_LIMIT }).webp({ quality: 80 }).toBuffer())
+      .catch(() => null);
     return {
       viewport: await sharp(viewport).webp({ quality: 85 }).toBuffer(),
-      full: await sharp(full).webp({ quality: 80 }).toBuffer(),
+      full,
     };
   } finally {
     await context.close();
@@ -107,10 +115,16 @@ async function captureOne(resourceId: string) {
   try {
     const shots = await screenshotUrl(row.sourceUrl);
     const oldIds = await detachScreenshots(resourceId);
-    const viewport = await saveAsset({ data: shots.viewport, fileName: `${host}-${stamp}.webp`, sourceUrl: row.sourceUrl });
-    const full = await saveAsset({ data: shots.full, fileName: `${host}-${stamp}-full.webp`, sourceUrl: row.sourceUrl });
+    const viewport = await saveAsset({
+      data: shots.viewport,
+      fileName: `${host}-${stamp}.webp`,
+      sourceUrl: row.sourceUrl,
+    });
+    const full =
+      shots.full &&
+      (await saveAsset({ data: shots.full, fileName: `${host}-${stamp}-full.webp`, sourceUrl: row.sourceUrl }));
     await attachAsset(resourceId, viewport.id, "screenshot");
-    await attachAsset(resourceId, full.id, "screenshot-full");
+    if (full) await attachAsset(resourceId, full.id, "screenshot-full");
     // Keep a cover the user chose (or one clipped by the extension); replace only a previous server shot.
     const keepCover = row.coverAssetId && !oldIds.includes(row.coverAssetId);
     await setResourceFields(resourceId, {
@@ -118,7 +132,7 @@ async function captureOne(resourceId: string) {
       captureStatus: "done",
       captureError: null,
     });
-    await deleteOrphanAssets(oldIds.filter((id) => id !== viewport.id && id !== full.id));
+    await deleteOrphanAssets(oldIds.filter((id) => id !== viewport.id && id !== full?.id));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     // Fall back to the page's Open Graph image so the card still has a picture.
