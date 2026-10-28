@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
-/* PIVOT design system (DESIGN.md): near-black canvas, surface steps instead of borders, pill controls,
-   one acid-lime primary action. Dark by default, light follows the OS. */
+/* PIVOT design system (DESIGN.md): ember and glass. Warm black canvas, surface steps instead of borders, pill
+   controls, one ember-orange primary action. Dark only, like the web app. */
 @theme {
   --font-sans: Geist, "DM Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -35,42 +35,22 @@
 
 :root {
   color-scheme: dark;
-  --canvas: #101010;
-  --surface: #1a1a1a;
-  --surface-raised: #232323;
-  --divider: #323231;
-  --ink: #f4f4ef;
-  --ink-secondary: #d4d4d0;
-  --ink-muted: #aeaeab;
-  --ink-subtle: #8b8b8a;
-  --inverse: #f4f4ef;
-  --on-inverse: #101010;
-  --accent-fill: #c7ff35;
-  --on-accent: #101010;
-  --accent-text: #c7ff35;
-  --danger: #ff7a7a;
-  --success: #4cc38a;
-  --warning: #f5b33f;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
-    --canvas: #f4f4ef;
-    --surface: #ebebe6;
-    --surface-raised: #e1e1dc;
-    --divider: #d6d6d2;
-    --ink: #101010;
-    --ink-secondary: #30302f;
-    --ink-muted: #474747;
-    --ink-subtle: #626262;
-    --inverse: #101010;
-    --on-inverse: #f4f4ef;
-    --accent-text: #556a1e;
-    --danger: #c21f1f;
-    --success: #17703d;
-    --warning: #8a5600;
-  }
+  --canvas: #0c0806;
+  --surface: #18110d;
+  --surface-raised: #221812;
+  --divider: #33251c;
+  --ink: #fbf3ea;
+  --ink-secondary: #e0d3c7;
+  --ink-muted: #b8a596;
+  --ink-subtle: #94806f;
+  --inverse: #fbf3ea;
+  --on-inverse: #0c0806;
+  --accent-fill: #ff6a13;
+  --on-accent: #0c0806;
+  --accent-text: #ff8c42;
+  --danger: #ff6b81;
+  --success: #5ad19a;
+  --warning: #ffc24a;
 }
 
 body {

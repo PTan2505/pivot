@@ -136,7 +136,11 @@ export function SourceGroups({
       {groups.map((g) => {
         const { list, id } = g;
         return (
-          <section key={id} aria-labelledby={id} className="space-y-6">
+          <section
+            key={id}
+            aria-labelledby={id}
+            className="scroll-mt-8 space-y-6 md:scroll-mt-[calc(var(--topbar-h)+1rem)]"
+          >
             <header className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <h2 id={id} className="text-[22px] leading-[1.2] font-medium tracking-[-0.02em] text-ink">
                 {g.label}

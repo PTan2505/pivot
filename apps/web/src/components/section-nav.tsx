@@ -33,8 +33,8 @@ import { cn } from "@/lib/utils";
 
 const pill =
   "inline-flex h-9 shrink-0 items-center rounded-full px-4 text-[15px] font-medium transition-colors duration-150 max-sm:px-3";
-const idle =
-  "text-ink-secondary hover:bg-surface hover:text-ink data-[state=open]:bg-surface data-[state=open]:text-ink";
+// Idle labels sit directly on the top bar's 65% glass, where only `ink` holds 4.5:1 with a white screenshot behind.
+const idle = "text-ink hover:bg-surface hover:text-ink data-[state=open]:bg-surface data-[state=open]:text-ink";
 const on = "bg-inverse text-on-inverse";
 
 /**
@@ -141,7 +141,7 @@ export function SectionNav() {
         data-instant={instant || undefined}
         style={{ "--section-panel-x": `${offset}px` } as CSSProperties}
       >
-        <NavigationMenu.Viewport className="section-panel-viewport overflow-hidden rounded-[20px] bg-surface-raised shadow-overlay" />
+        <NavigationMenu.Viewport className="section-panel-viewport glass-strong overflow-hidden rounded-[20px]" />
       </div>
     </NavigationMenu.Root>
   );

@@ -985,7 +985,7 @@ const GF_CSS = `
   -webkit-tap-highlight-color: transparent;
   isolation: isolate;
 }
-.gf-root[data-tone="dark"] { --gf-ink: #f5f5f7; --gf-ink-soft: rgba(245, 245, 247, .58); }
+.gf-root[data-tone="dark"] { --gf-ink: #fbf3ea; --gf-ink-soft: #d8cbbf; }
 .gf-root[data-open-on="click"]:hover, .gf-root[data-open-on="click"]:focus-within { --gf-hinge: -11deg; --gf-lift: -34px; --gf-spread: 8px; --gf-fan: 1.4deg; --gf-stack: 10px; }
 .gf-root[data-open] { --gf-hinge: -24deg; --gf-lift: -96px; --gf-spread: 40px; --gf-fan: 5deg; --gf-stack: 30px; }
 

@@ -95,7 +95,11 @@ export function SkillPackGroups({
         const open = !collapsed.includes(pack.id);
         const panelId = sectionId(pack.id);
         return (
-          <section key={pack.id} aria-labelledby={`${panelId}-title`} className="scroll-mt-8 space-y-6">
+          <section
+            key={pack.id}
+            aria-labelledby={`${panelId}-title`}
+            className="scroll-mt-8 space-y-6 md:scroll-mt-[calc(var(--topbar-h)+1rem)]"
+          >
             <header className="space-y-2">
               <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
                 <button

@@ -1,9 +1,9 @@
 "use client";
 
-import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import GlassFolder, { hashString, type ArtPreset, type FolderMenuItem } from "@/components/ui/glass-folder-cards";
 
+// The folders keep the component's multi-colour art (owner's call, 2026-10-28): a spot of colour in the ember world.
 const ARTS: ArtPreset[] = ["aurora", "ember", "dusk", "glacier", "verdant"];
 
 export interface ShelfFolder {
@@ -23,7 +23,6 @@ export interface ShelfFolder {
  * opens it and fans its contents; clicking it goes to its page.
  */
 export function FolderShelf({ label, folders }: { label: string; folders: ShelfFolder[] }) {
-  const { resolvedTheme } = useTheme();
   const router = useRouter();
   return (
     <div
@@ -38,7 +37,7 @@ export function FolderShelf({ label, folders }: { label: string; folders: ShelfF
           <div role="listitem" key={f.id}>
             <GlassFolder
               width={300}
-              tone={resolvedTheme === "light" ? "light" : "dark"}
+              tone="dark"
               label={f.label}
               meta={f.meta}
               art={ARTS[hash % ARTS.length]}

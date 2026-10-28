@@ -1,8 +1,7 @@
 "use client";
 
-import { FolderSync, Layers, Link2, Moon, Search, Settings, Trash2 } from "lucide-react";
+import { FolderSync, Layers, Link2, Search, Settings, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { RESOURCE_TYPES, SECTIONS, sourceSearchUrl, TYPE_DEFS } from "@pivot/core/types";
@@ -28,7 +27,6 @@ import { api, useCollections, useInvalidate, useResources } from "@/lib/api";
 export function CommandPalette() {
   const { paletteOpen, setPaletteOpen, openAddUrl } = useUi();
   const router = useRouter();
-  const { resolvedTheme, setTheme } = useTheme();
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [highlighted, setHighlighted] = useState("");
@@ -59,9 +57,14 @@ export function CommandPalette() {
     setPaletteOpen(open);
   };
 
-  const { data: results = [] } = useResources({ q: debounced }, { enabled: paletteOpen });
+  const { data: results = [], isFetching: searching } = useResources({ q: debounced }, { enabled: paletteOpen });
   const shown = results.slice(0, debounced ? 20 : 8);
-  const { data: sources = [] } = useResources({ type: "source", sort: "title" }, { enabled: paletteOpen });
+  const { data: sources = [], isLoading: loadingSources } = useResources(
+    { type: "source", sort: "title" },
+    { enabled: paletteOpen },
+  );
+  // While the typed query hasn't reached the list yet, an empty list means "not yet", not "nothing".
+  const pending = search !== debounced || searching || loadingSources;
   const searchable = sources.flatMap((s) =>
     typeof s.meta.searchUrl === "string" && s.meta.searchUrl.includes("{q}")
       ? [{ ...s, template: s.meta.searchUrl }]
@@ -90,7 +93,7 @@ export function CommandPalette() {
       >
         <CommandInput placeholder="Search resources, or type a command…" value={search} onValueChange={setSearch} />
         <CommandList className="max-h-[60vh]">
-          <CommandEmpty>No results.</CommandEmpty>
+          <CommandEmpty>{pending ? "Searching…" : "No results."}</CommandEmpty>
           {shown.length > 0 && (
             <CommandGroup heading={debounced ? "Resources" : "Recent"}>
               {shown.map((r) => (
@@ -154,9 +157,6 @@ export function CommandPalette() {
               }
             >
               <FolderSync /> Sync skills from disk
-            </CommandItem>
-            <CommandItem onSelect={() => run(() => setTheme(resolvedTheme === "dark" ? "light" : "dark"))}>
-              <Moon /> Toggle theme
             </CommandItem>
           </CommandGroup>
           <CommandSeparator />
