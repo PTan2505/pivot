@@ -1,5 +1,5 @@
-import { normalizeUrl } from "@stan-bag/core/net-guard";
-import { findByUrl } from "@stan-bag/core/resources";
+import { normalizeUrl } from "@pivot/core/net-guard";
+import { findByUrl } from "@pivot/core/resources";
 import { HttpError, json, route } from "@/lib/server/http";
 
 /** Cheap duplicate check (no page fetch) used by the extension popup. */

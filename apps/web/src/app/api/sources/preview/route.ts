@@ -1,4 +1,4 @@
-import { previewBookmarkImport } from "@stan-bag/core/sources";
+import { previewBookmarkImport } from "@pivot/core/sources";
 import { body, HttpError, json, route } from "@/lib/server/http";
 
 /** Parses an exported bookmarks file and suggests which entries are sources. Nothing is saved. */

@@ -3,7 +3,7 @@
 import { Camera, Download, ExternalLink, Loader2, Plus, Star, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import type { AssetDTO, ResourceDetailDTO } from "@stan-bag/core/types";
+import type { AssetDTO, ResourceDetailDTO } from "@pivot/core/types";
 import { AssetPreview, formatBytes } from "@/components/asset-preview";
 import { ConfirmButton } from "@/components/confirm-button";
 import { TypeIcon } from "@/components/type-icon";

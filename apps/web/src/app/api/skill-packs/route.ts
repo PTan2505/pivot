@@ -1,4 +1,4 @@
-import { listSkillPacks, packInput, updateSkillPack } from "@stan-bag/core/skills";
+import { listSkillPacks, packInput, updateSkillPack } from "@pivot/core/skills";
 import { body, json, route } from "@/lib/server/http";
 
 export const GET = route(async () => json(await listSkillPacks()));

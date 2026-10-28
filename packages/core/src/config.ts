@@ -8,7 +8,7 @@ function expandHome(p: string): string {
 }
 
 export function dataDir(): string {
-  return path.resolve(/* turbopackIgnore: true */ expandHome(process.env.STAN_BAG_DATA_DIR || "~/.stan-bag"));
+  return path.resolve(/* turbopackIgnore: true */ expandHome(process.env.PIVOT_DATA_DIR || "~/.pivot"));
 }
 
 export function skillsDir(): string {

@@ -1,7 +1,7 @@
 import path from "node:path";
-import { attachAsset, saveAsset } from "@stan-bag/core/assets";
-import { createResource, setResourceFields } from "@stan-bag/core/resources";
-import { isResourceType, type ResourceType } from "@stan-bag/core/types";
+import { attachAsset, saveAsset } from "@pivot/core/assets";
+import { createResource, setResourceFields } from "@pivot/core/resources";
+import { isResourceType, type ResourceType } from "@pivot/core/types";
 import { HttpError, json, route } from "@/lib/server/http";
 
 function typeForKind(kind: string): ResourceType {
@@ -23,7 +23,11 @@ export const POST = route(async (req: Request) => {
   const forced = form.get("type");
   const created: string[] = [];
   for (const file of files) {
-    const asset = await saveAsset({ data: Buffer.from(await file.arrayBuffer()), fileName: file.name, mimeType: file.type });
+    const asset = await saveAsset({
+      data: Buffer.from(await file.arrayBuffer()),
+      fileName: file.name,
+      mimeType: file.type,
+    });
     const type = isResourceType(forced) ? forced : typeForKind(asset.kind);
     const r = await createResource({ type, title: titleFrom(file.name) });
     await attachAsset(r.id, asset.id, "attachment");

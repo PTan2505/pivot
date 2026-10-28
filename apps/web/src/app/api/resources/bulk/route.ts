@@ -5,7 +5,7 @@ import {
   removeFromCollection,
   restoreResources,
   trashResources,
-} from "@stan-bag/core/resources";
+} from "@pivot/core/resources";
 import { body, json, route } from "@/lib/server/http";
 
 const schema = z.object({

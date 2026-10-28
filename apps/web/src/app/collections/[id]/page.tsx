@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { useUi } from "@/components/ui-store";
 import { copyContext } from "@/hooks/use-copy-resource";
 import { api, useInvalidate } from "@/lib/api";
-import type { CollectionDTO } from "@stan-bag/core/types";
+import type { CollectionDTO } from "@pivot/core/types";
 
 function NameInput({ id, initial }: { id: string; initial: string }) {
   const [name, setName] = useState(initial);

@@ -3,7 +3,7 @@
 import { Check, Copy, ExternalLink, ImageOff, Loader2 } from "lucide-react";
 import Link from "next/link";
 import type { CSSProperties, MouseEvent } from "react";
-import { TYPE_DEFS, type ResourceDTO } from "@stan-bag/core/types";
+import { TYPE_DEFS, type ResourceDTO } from "@pivot/core/types";
 import { TypeIcon } from "@/components/type-icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCopyResource } from "@/hooks/use-copy-resource";

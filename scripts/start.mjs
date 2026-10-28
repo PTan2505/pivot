@@ -3,6 +3,7 @@
 // `npm run dev` (this script with --dev): same environment, Next.js dev server.
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,7 +39,17 @@ function newestMtime(dir) {
 }
 
 loadEnv(path.join(root, ".env"));
-process.env.STAN_BAG_MIGRATIONS_DIR ??= path.join(root, "packages/core/src/db/migrations");
+
+// The project used to be called Stan Bag and kept its data in ~/.stan-bag (API token, cache, local database).
+// Move it once to the new default so the paired extension and local data carry over.
+const legacyDataDir = path.join(os.homedir(), ".stan-bag");
+const dataDir = path.join(os.homedir(), ".pivot");
+if (!process.env.PIVOT_DATA_DIR && !fs.existsSync(dataDir) && fs.existsSync(legacyDataDir)) {
+  fs.renameSync(legacyDataDir, dataDir);
+  console.log(`› Moved ${legacyDataDir} to ${dataDir}`);
+}
+
+process.env.PIVOT_MIGRATIONS_DIR ??= path.join(root, "packages/core/src/db/migrations");
 const port = process.env.PORT || "4321";
 
 if (!fs.existsSync(path.join(web, "node_modules"))) {
@@ -67,13 +78,13 @@ if (!dev) {
     ...["next.config.ts", "package.json"].map((f) => fs.statSync(path.join(web, f)).mtimeMs),
   );
   if (changed > built || process.argv.includes("--rebuild")) {
-    console.log("› Building Stan Bag…");
+    console.log("› Building PIVOT…");
     run("pnpm", ["--filter", "web", "exec", "next", "build"]);
   }
 }
 
 const url = `http://127.0.0.1:${port}`;
-console.log(`› Stan Bag ${dev ? "(dev) " : ""}→ ${url}`);
+console.log(`› PIVOT ${dev ? "(dev) " : ""}→ ${url}`);
 const server = spawn("pnpm", ["exec", "next", dev ? "dev" : "start", "-H", "127.0.0.1", "-p", port], {
   cwd: web,
   stdio: "inherit",
@@ -81,7 +92,7 @@ const server = spawn("pnpm", ["exec", "next", dev ? "dev" : "start", "-H", "127.
 });
 
 // Open the browser once the server answers (macOS), unless disabled.
-if (process.platform === "darwin" && !process.env.STAN_BAG_NO_OPEN) {
+if (process.platform === "darwin" && !process.env.PIVOT_NO_OPEN) {
   const started = Date.now();
   const poll = setInterval(async () => {
     try {

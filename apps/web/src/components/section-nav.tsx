@@ -25,7 +25,7 @@ import {
   type Section,
   type SectionId,
   type SourceCategory,
-} from "@stan-bag/core/types";
+} from "@pivot/core/types";
 import { TypeIcon } from "@/components/type-icon";
 import { sectionHref } from "@/hooks/use-library-params";
 import { useCounts, useResources } from "@/lib/api";

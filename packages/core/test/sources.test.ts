@@ -34,10 +34,10 @@ const BOOKMARKS = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
 </DL><p>`;
 
 beforeAll(async () => {
-  tmp = await fs.mkdtemp(path.join(os.tmpdir(), "stan-bag-sources-"));
+  tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pivot-sources-"));
   Object.assign(process.env, {
-    STAN_BAG_DATA_DIR: path.join(tmp, "data"),
-    STAN_BAG_MIGRATIONS_DIR: path.resolve(__dirname, "../src/db/migrations"),
+    PIVOT_DATA_DIR: path.join(tmp, "data"),
+    PIVOT_MIGRATIONS_DIR: path.resolve(__dirname, "../src/db/migrations"),
   });
   delete process.env.DATABASE_URL;
   sources = await import("../src/sources");

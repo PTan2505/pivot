@@ -1,6 +1,6 @@
-import { fetchUrlMetadata } from "@stan-bag/core/metadata";
-import { normalizeUrl } from "@stan-bag/core/net-guard";
-import { findByUrl } from "@stan-bag/core/resources";
+import { fetchUrlMetadata } from "@pivot/core/metadata";
+import { normalizeUrl } from "@pivot/core/net-guard";
+import { findByUrl } from "@pivot/core/resources";
 import { HttpError, json, route } from "@/lib/server/http";
 
 /** Preview for the "Add from URL" dialog. Metadata failures are reported, not thrown, so manual entry still works. */
@@ -18,6 +18,11 @@ export const GET = route(async (req: Request) => {
     const metadata = await fetchUrlMetadata(url);
     return json({ url, metadata, duplicates, error: null });
   } catch (err) {
-    return json({ url, metadata: null, duplicates, error: err instanceof Error ? err.message : "Could not fetch the page." });
+    return json({
+      url,
+      metadata: null,
+      duplicates,
+      error: err instanceof Error ? err.message : "Could not fetch the page.",
+    });
   }
 });

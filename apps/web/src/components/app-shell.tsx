@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { isResourceType } from "@stan-bag/core/types";
+import { isResourceType } from "@pivot/core/types";
 import { AddMenu } from "@/components/add-menu";
 import { SectionNav } from "@/components/section-nav";
 import { Button } from "@/components/ui/button";
@@ -197,11 +197,11 @@ function TopBar() {
 
   return (
     <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-3 px-4 py-4 md:px-10">
-      <Link href="/" className="flex items-center gap-2.5 rounded-full" aria-label="Stan Bag — library">
+      <Link href="/" className="flex items-center gap-2.5 rounded-full" aria-label="PIVOT — library">
         <span className="grid size-[26px] place-items-center rounded-full bg-ink text-canvas">
           <Archive className="size-3.5" strokeWidth={2.4} aria-hidden />
         </span>
-        <span className="text-base font-medium tracking-[-0.02em]">Stan Bag</span>
+        <span className="text-base font-medium tracking-[-0.02em]">PIVOT</span>
       </Link>
       <SectionNav />
       <div className="order-last flex basis-full justify-center lg:order-none lg:flex-1 lg:basis-auto">

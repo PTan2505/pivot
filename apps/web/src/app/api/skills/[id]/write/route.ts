@@ -1,4 +1,4 @@
-import { writeSkillToDisk } from "@stan-bag/core/skills";
+import { writeSkillToDisk } from "@pivot/core/skills";
 import { body, json, route, type IdParams } from "@/lib/server/http";
 
 export const POST = route(async (req: Request, { params }: IdParams) => {

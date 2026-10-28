@@ -1,19 +1,19 @@
-# Stan Bag — Design system
+# PIVOT — Design system
 
 Source of truth for the app (`apps/web`) and the extension (`apps/extension`). Tokens live as CSS variables in
 [`apps/web/src/app/globals.css`](apps/web/src/app/globals.css) and are exposed to Tailwind as `bg-surface`, `text-ink-subtle`, `outline-accent-text`…
-The browsable version with component previews: [Stan Bag Design System](https://claude.ai/artifact/6NEyzcYbPGtnjScMY33Lfd) (private).
+The browsable version with component previews: [PIVOT Design System](https://claude.ai/artifact/6NEyzcYbPGtnjScMY33Lfd) (private).
 
 Direction: **Savee** (from [Refero Styles](https://styles.refero.design/style/c6d8490d-e3f2-45c8-aebf-fe5f11daf116)) — mockup option 3.
 
-Stan Bag is a personal library of UI references, assets, prompts and Claude Code skills. The interface is a black canvas: saved screenshots carry the color, the chrome stays out of the way. One electric-indigo button per screen marks the action that matters.
+PIVOT is a personal library of UI references, assets, prompts and Claude Code skills. The interface is a black canvas: saved screenshots carry the color, the chrome stays out of the way. One electric-indigo button per screen marks the action that matters.
 
 ## Content fundamentals
 
 - Write in English, sentence case, from the user's side: "Add", "Copy context", "Export", "Move to trash". Never "Submit" or "OK".
 - Buttons name the action; toasts confirm it in past tense: "Copy context" → "Context copied · ~1.9k tokens".
 - Name things the way the user saved them. A resource's title is what the site calls itself ("Linear — Issues board"); the meta line is `host · tag` ("linear.app · Dashboard").
-- Errors say what happened and what to do: "Stan Bag isn't running. Start it with `npm start`."
+- Errors say what happened and what to do: "PIVOT isn't running. Start it with `npm start`."
 - Counts are plain numbers in `ink-subtle` ("References 24"), never badges.
 - No emoji anywhere in the UI.
 
@@ -62,7 +62,7 @@ Stan Bag is a personal library of UI references, assets, prompts and Claude Code
 ## Iconography
 
 - Lucide stroke icons at 16px, stroke 2, colored `ink-muted` (or the label color inside a button). Icons sit beside a word; icon-only buttons carry an `aria-label`.
-- The Stan Bag mark is the archive glyph in `canvas` on an `ink` disc. There is no other logo; set the name in Geist 500.
+- The PIVOT mark is the archive glyph in `canvas` on an `ink` disc. There is no other logo; set the name in Geist 500.
 
 ## Components
 
@@ -155,7 +155,7 @@ Appears at the bottom centre while resources are selected.
 
 ### Top bar — `components/app-shell.tsx` (`TopBar`)
 
-- Logo (archive glyph in `canvas` on an `ink` disc + "Stan Bag" in Geist 500), the section nav, search field, then Collections menu, Trash and Settings round buttons (`inverse` when on that page), theme toggle, and the split `Add` button (the screen's primary action).
+- Logo (archive glyph in `canvas` on an `ink` disc + "PIVOT" in Geist 500), the section nav, search field, then Collections menu, Trash and Settings round buttons (`inverse` when on that page), theme toggle, and the split `Add` button (the screen's primary action).
 - On phones the Collections button is icon-only so the action row fits; the search field drops to its own row.
 - No sidebar anywhere. Sections are in the top bar; a section's types are in the Type select.
 

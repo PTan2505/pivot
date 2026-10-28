@@ -2,9 +2,16 @@
 
 import { Copy } from "lucide-react";
 import { useMemo, useState } from "react";
-import { extractVariables, fillVariables } from "@stan-bag/core/prompt-vars";
+import { extractVariables, fillVariables } from "@pivot/core/prompt-vars";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Kbd } from "@/components/ui/kbd";
@@ -69,7 +76,9 @@ export function PromptCopyDialog() {
   const { promptResourceId, closePromptCopy } = useUi();
   return (
     <Dialog open={!!promptResourceId} onOpenChange={(o) => !o && closePromptCopy()}>
-      <DialogContent className="sm:max-w-xl">{promptResourceId && <Body key={promptResourceId} id={promptResourceId} onDone={closePromptCopy} />}</DialogContent>
+      <DialogContent className="sm:max-w-xl">
+        {promptResourceId && <Body key={promptResourceId} id={promptResourceId} onDone={closePromptCopy} />}
+      </DialogContent>
     </Dialog>
   );
 }

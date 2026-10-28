@@ -26,9 +26,30 @@ interface PlannedAsset {
 }
 
 const LANG_EXT: Record<string, string> = {
-  typescript: "ts", ts: "ts", tsx: "tsx", javascript: "js", js: "js", jsx: "jsx", css: "css", scss: "scss",
-  html: "html", python: "py", py: "py", json: "json", markdown: "md", md: "md", bash: "sh", sh: "sh",
-  shell: "sh", vue: "vue", svelte: "svelte", swift: "swift", kotlin: "kt", go: "go", rust: "rs", sql: "sql",
+  typescript: "ts",
+  ts: "ts",
+  tsx: "tsx",
+  javascript: "js",
+  js: "js",
+  jsx: "jsx",
+  css: "css",
+  scss: "scss",
+  html: "html",
+  python: "py",
+  py: "py",
+  json: "json",
+  markdown: "md",
+  md: "md",
+  bash: "sh",
+  sh: "sh",
+  shell: "sh",
+  vue: "vue",
+  svelte: "svelte",
+  swift: "swift",
+  kotlin: "kt",
+  go: "go",
+  rust: "rs",
+  sql: "sql",
 };
 
 export function slugify(s: string, fallback = "item") {
@@ -60,12 +81,7 @@ function relevantAssets(assets: AssetDTO[], opts: ContextOptions) {
   );
 }
 
-function sectionFor(
-  r: ResourceDTO,
-  index: number,
-  planned: PlannedAsset[],
-  fileRef: string | null,
-) {
+function sectionFor(r: ResourceDTO, index: number, planned: PlannedAsset[], fileRef: string | null) {
   const def = TYPE_DEFS[r.type];
   const lines: string[] = [`## ${index}. ${r.title} — ${def.label}`, ""];
   const facts: string[] = [];
@@ -77,7 +93,8 @@ function sectionFor(
   const meta = r.meta as Record<string, unknown>;
   if (typeof meta.purpose === "string" && meta.purpose) facts.push(`- **Purpose:** ${meta.purpose}`);
   if (Array.isArray(meta.fonts) && meta.fonts.length) facts.push(`- **Fonts:** ${meta.fonts.join(", ")}`);
-  if (Array.isArray(meta.colors) && meta.colors.length) facts.push(`- **Colors:** ${meta.colors.map((c) => `\`${c}\``).join(" ")}`);
+  if (Array.isArray(meta.colors) && meta.colors.length)
+    facts.push(`- **Colors:** ${meta.colors.map((c) => `\`${c}\``).join(" ")}`);
   if (typeof meta.whenToUse === "string" && meta.whenToUse) facts.push(`- **When to use:** ${meta.whenToUse}`);
   if (facts.length) lines.push(...facts, "");
   if (r.description) lines.push(r.description.trim(), "");
@@ -113,13 +130,15 @@ function header(count: number) {
   return [
     "# UI Context",
     "",
-    `> ${count} resource${count === 1 ? "" : "s"} from Stan Bag, ${date}. Use them as references for the task — match the patterns, styles and rules described, and open the listed assets to see them.`,
+    `> ${count} resource${count === 1 ? "" : "s"} from PIVOT, ${date}. Use them as references for the task — match the patterns, styles and rules described, and open the listed assets to see them.`,
     "",
   ].join("\n");
 }
 
 function estimate(markdown: string, planned: PlannedAsset[]): TokenEstimate {
-  const images = planned.filter((p) => (p.asset.kind === "image" || p.asset.kind === "svg") && p.asset.width && p.asset.height);
+  const images = planned.filter(
+    (p) => (p.asset.kind === "image" || p.asset.kind === "svg") && p.asset.width && p.asset.height,
+  );
   const imageTokens = images.reduce((sum, p) => sum + estimateImageTokens(p.asset.width!, p.asset.height!), 0);
   const text = estimateTextTokens(markdown);
   return { text, images: imageTokens, total: text + imageTokens, imageCount: images.length };
@@ -164,7 +183,13 @@ async function pathExists(p: string) {
 
 async function writeAsset(data: Buffer, dest: string, asset: AssetDTO, resize: boolean) {
   const resizable = asset.kind === "image" && asset.mimeType !== "image/gif";
-  if (resize && resizable && asset.width && asset.height && Math.max(asset.width, asset.height) > CLAUDE_MAX_IMAGE_EDGE) {
+  if (
+    resize &&
+    resizable &&
+    asset.width &&
+    asset.height &&
+    Math.max(asset.width, asset.height) > CLAUDE_MAX_IMAGE_EDGE
+  ) {
     const s = scaledImageSize(asset.width, asset.height);
     await sharp(data).resize({ width: s.width, height: s.height }).toFile(dest);
     return { ...asset, width: s.width, height: s.height };
@@ -237,7 +262,11 @@ export async function exportBundle(opts: ExportOptions) {
       fileCount++;
     } else if (r.content.trim() && def.content !== "none") {
       const ext =
-        def.content === "json" ? ".json" : def.content === "code" ? `.${LANG_EXT[String(meta.language ?? "").toLowerCase()] ?? "txt"}` : ".md";
+        def.content === "json"
+          ? ".json"
+          : def.content === "code"
+            ? `.${LANG_EXT[String(meta.language ?? "").toLowerCase()] ?? "txt"}`
+            : ".md";
       const used = usedFileNames.get(def.exportDir) ?? new Set<string>();
       usedFileNames.set(def.exportDir, used);
       const name = uniqueName(slug, ext, used);

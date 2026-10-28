@@ -1,5 +1,5 @@
-import { createResource, listResources, type ListFilters } from "@stan-bag/core/resources";
-import { isResourceType } from "@stan-bag/core/types";
+import { createResource, listResources, type ListFilters } from "@pivot/core/resources";
+import { isResourceType } from "@pivot/core/types";
 import { body, json, route } from "@/lib/server/http";
 
 export const GET = route(async (req: Request) => {

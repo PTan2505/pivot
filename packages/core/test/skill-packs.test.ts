@@ -17,12 +17,12 @@ async function writeSkill(dir: string, content: string) {
 }
 
 beforeAll(async () => {
-  tmp = await fs.mkdtemp(path.join(os.tmpdir(), "stan-bag-packs-"));
+  tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pivot-packs-"));
   const skillsDir = path.join(tmp, "skills");
   const pluginsDir = path.join(tmp, "plugins");
   Object.assign(process.env, {
-    STAN_BAG_DATA_DIR: path.join(tmp, "data"),
-    STAN_BAG_MIGRATIONS_DIR: path.resolve(__dirname, "../src/db/migrations"),
+    PIVOT_DATA_DIR: path.join(tmp, "data"),
+    PIVOT_MIGRATIONS_DIR: path.resolve(__dirname, "../src/db/migrations"),
     CLAUDE_SKILLS_DIR: skillsDir,
     CLAUDE_PLUGINS_DIR: pluginsDir,
     AGENTS_SKILL_LOCK: path.join(tmp, "skill-lock.json"),

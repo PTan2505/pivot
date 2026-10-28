@@ -14,12 +14,12 @@ let core: {
 };
 
 beforeAll(async () => {
-  tmp = await fs.mkdtemp(path.join(os.tmpdir(), "stan-bag-test-"));
-  process.env.STAN_BAG_DATA_DIR = path.join(tmp, "data");
+  tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pivot-test-"));
+  process.env.PIVOT_DATA_DIR = path.join(tmp, "data");
   process.env.CLAUDE_SKILLS_DIR = path.join(tmp, "skills");
   process.env.CLAUDE_PLUGINS_DIR = path.join(tmp, "plugins");
   process.env.AGENTS_SKILL_LOCK = path.join(tmp, "skill-lock.json");
-  process.env.STAN_BAG_MIGRATIONS_DIR = path.resolve(__dirname, "../src/db/migrations");
+  process.env.PIVOT_MIGRATIONS_DIR = path.resolve(__dirname, "../src/db/migrations");
   delete process.env.DATABASE_URL;
   core = {
     resources: await import("../src/resources"),

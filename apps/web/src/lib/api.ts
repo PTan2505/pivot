@@ -10,7 +10,7 @@ import type {
   SkillStatusDTO,
   TagDTO,
   TagKind,
-} from "@stan-bag/core/types";
+} from "@pivot/core/types";
 
 export class ApiError extends Error {
   constructor(

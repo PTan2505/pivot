@@ -1,12 +1,12 @@
 import path from "node:path";
 import sharp from "sharp";
 import { z } from "zod";
-import { attachAsset, saveAsset } from "@stan-bag/core/assets";
-import { enqueueCapture } from "@stan-bag/core/capture";
-import { fetchUrlMetadata } from "@stan-bag/core/metadata";
-import { normalizeUrl, safeFetch } from "@stan-bag/core/net-guard";
-import { addToCollection, createResource, setResourceFields } from "@stan-bag/core/resources";
-import { RESOURCE_TYPES, TAG_KINDS } from "@stan-bag/core/types";
+import { attachAsset, saveAsset } from "@pivot/core/assets";
+import { enqueueCapture } from "@pivot/core/capture";
+import { fetchUrlMetadata } from "@pivot/core/metadata";
+import { normalizeUrl, safeFetch } from "@pivot/core/net-guard";
+import { addToCollection, createResource, setResourceFields } from "@pivot/core/resources";
+import { RESOURCE_TYPES, TAG_KINDS } from "@pivot/core/types";
 import { HttpError, json, route } from "@/lib/server/http";
 
 const fields = z.object({
@@ -59,9 +59,15 @@ export const POST = route(async (req: Request) => {
     id = r.id;
     const shot = form.get("screenshot");
     if (shot instanceof File && shot.size > 0) {
-      const webp = await sharp(Buffer.from(await shot.arrayBuffer())).webp({ quality: 85 }).toBuffer();
+      const webp = await sharp(Buffer.from(await shot.arrayBuffer()))
+        .webp({ quality: 85 })
+        .toBuffer();
       const stamp = new Date().toISOString().slice(0, 10);
-      const asset = await saveAsset({ data: webp, fileName: `${hostOf(pageUrl)}-${stamp}-view.webp`, sourceUrl: pageUrl });
+      const asset = await saveAsset({
+        data: webp,
+        fileName: `${hostOf(pageUrl)}-${stamp}-view.webp`,
+        sourceUrl: pageUrl,
+      });
       await attachAsset(id, asset.id, "attachment");
       await setResourceFields(id, { coverAssetId: asset.id });
     }
@@ -99,7 +105,11 @@ export const POST = route(async (req: Request) => {
   } else {
     const text = input.text?.trim();
     if (!text) throw new HttpError(400, "No text selected.");
-    const firstLine = text.split("\n").find((l) => l.trim())?.trim() ?? "Selection";
+    const firstLine =
+      text
+        .split("\n")
+        .find((l) => l.trim())
+        ?.trim() ?? "Selection";
     const r = await createResource({
       type: input.type ?? "snippet",
       title: input.title?.trim() || (firstLine.length > 80 ? `${firstLine.slice(0, 77)}…` : firstLine),

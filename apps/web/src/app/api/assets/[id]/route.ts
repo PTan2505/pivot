@@ -5,7 +5,7 @@ import {
   streamScrollPreview,
   streamThumbnail,
   updateAssetNotes,
-} from "@stan-bag/core/assets";
+} from "@pivot/core/assets";
 import { body, HttpError, json, route, type IdParams } from "@/lib/server/http";
 
 // Assets are user files: never let one run script on this origin (e.g. a malicious SVG opened directly).

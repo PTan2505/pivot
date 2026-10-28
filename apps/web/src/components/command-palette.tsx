@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { RESOURCE_TYPES, SECTIONS, sourceSearchUrl, TYPE_DEFS } from "@stan-bag/core/types";
+import { RESOURCE_TYPES, SECTIONS, sourceSearchUrl, TYPE_DEFS } from "@pivot/core/types";
 import { useCreateOfType } from "@/components/add-menu";
 import { hostOf } from "@/components/resource-card";
 import { TypeIcon } from "@/components/type-icon";

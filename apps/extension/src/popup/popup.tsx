@@ -8,7 +8,7 @@ import {
   type ResourceType,
   type TagDTO,
   type TagKind,
-} from "@stan-bag/core/types";
+} from "@pivot/core/types";
 import { api, ApiError, openInApp } from "../lib/api";
 import { captureTab, getPageInfo, isSavable, type PageInfo } from "../lib/page";
 import { Button, cx, Field, Input, Logo, Textarea } from "../ui";
@@ -38,7 +38,9 @@ function FacetPicker({
     .filter((t) => t.kind === kind)
     .sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.name.localeCompare(b.name));
   const shown = expanded ? options : options.slice(0, 8);
-  const extra = value.filter((t) => t.kind === kind && !options.some((o) => o.name.toLowerCase() === t.name.toLowerCase()));
+  const extra = value.filter(
+    (t) => t.kind === kind && !options.some((o) => o.name.toLowerCase() === t.name.toLowerCase()),
+  );
 
   const toggle = (name: string) =>
     onChange(
@@ -61,7 +63,9 @@ function FacetPicker({
               onClick={() => toggle(name)}
               className={cx(
                 "h-7 cursor-pointer rounded-full px-3 text-xs font-medium transition-colors duration-150",
-                on ? "bg-inverse text-on-inverse" : "bg-surface text-ink-secondary hover:bg-surface-raised hover:text-ink",
+                on
+                  ? "bg-inverse text-on-inverse"
+                  : "bg-surface text-ink-secondary hover:bg-surface-raised hover:text-ink",
               )}
             >
               {name}
@@ -69,7 +73,11 @@ function FacetPicker({
           );
         })}
         {options.length > 8 && (
-          <button type="button" onClick={() => setExpanded((v) => !v)} className="h-6 cursor-pointer px-1.5 text-xs text-ink-muted hover:text-foreground">
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="h-6 cursor-pointer px-1.5 text-xs text-ink-muted hover:text-foreground"
+          >
             {expanded ? "less" : `+${options.length - 8}`}
           </button>
         )}
@@ -85,7 +93,7 @@ function FacetPicker({
           }}
           placeholder="+ new"
           aria-label={`Add ${TAG_KIND_LABELS[kind]}`}
-          className="h-7 w-24 rounded-full bg-surface px-3 text-xs text-ink placeholder:text-ink-muted transition-[width] focus:w-36 focus:bg-surface-raised"
+          className="h-7 w-24 rounded-full bg-surface px-3 text-xs text-ink transition-[width] placeholder:text-ink-muted focus:w-36 focus:bg-surface-raised"
         />
       </div>
     </div>
@@ -157,7 +165,14 @@ export function Popup() {
       const res =
         mode === "page"
           ? await api.clip(
-              { ...common, kind: "page", type, title, description, serverCapture: TYPE_DEFS[type].visual && serverCapture },
+              {
+                ...common,
+                kind: "page",
+                type,
+                title,
+                description,
+                serverCapture: TYPE_DEFS[type].visual && serverCapture,
+              },
               { screenshot: attachShot && shot ? shot : undefined },
             )
           : await api.clip({ ...common, kind: "selection", type: textType, title, text });
@@ -175,7 +190,7 @@ export function Popup() {
   const header = (
     <header className="flex h-14 items-center gap-2.5 px-4">
       <Logo />
-      <span className="text-[15px] font-medium tracking-[-0.01em]">Save to Stan Bag</span>
+      <span className="text-[15px] font-medium tracking-[-0.01em]">Save to PIVOT</span>
       <button
         type="button"
         onClick={() => chrome.runtime.openOptionsPage()}
@@ -199,41 +214,42 @@ export function Popup() {
   }
 
   if (status !== "ready" || saved) {
-    const body =
-      saved ? (
-        <>
-          <span className="grid size-10 place-items-center rounded-full bg-surface text-success">
-            <Check className="size-4" />
-          </span>
-          <p className="font-medium">Saved</p>
-          <p className="text-xs text-ink-muted">
-            {mode === "page" && serverCapture && TYPE_DEFS[type].visual ? "A full-page screenshot is being captured in the background." : "It’s in your library."}
-          </p>
-          <div className="flex gap-2 pt-1">
-            <Button variant="outline" onClick={() => window.close()}>
-              Close
-            </Button>
-            <Button onClick={() => openInApp(saved).then(() => window.close())}>
-              <ExternalLink /> Open
-            </Button>
-          </div>
-        </>
-      ) : status === "unsupported" ? (
-        <p className="text-ink-muted">This page can’t be saved. Open a regular http(s) page and try again.</p>
-      ) : status === "offline" ? (
-        <>
-          <p className="font-medium">Stan Bag isn’t running</p>
-          <p className="text-xs text-ink-muted">
-            Start it with <code className="font-mono">npm start</code> in the stan-bag folder, then reopen this popup.
-          </p>
-        </>
-      ) : (
-        <>
-          <p className="font-medium">Connect the extension</p>
-          <p className="text-xs text-ink-muted">{error ?? "Paste the API token from Stan Bag › Settings."}</p>
-          <Button onClick={() => chrome.runtime.openOptionsPage()}>Open extension settings</Button>
-        </>
-      );
+    const body = saved ? (
+      <>
+        <span className="grid size-10 place-items-center rounded-full bg-surface text-success">
+          <Check className="size-4" />
+        </span>
+        <p className="font-medium">Saved</p>
+        <p className="text-xs text-ink-muted">
+          {mode === "page" && serverCapture && TYPE_DEFS[type].visual
+            ? "A full-page screenshot is being captured in the background."
+            : "It’s in your library."}
+        </p>
+        <div className="flex gap-2 pt-1">
+          <Button variant="outline" onClick={() => window.close()}>
+            Close
+          </Button>
+          <Button onClick={() => openInApp(saved).then(() => window.close())}>
+            <ExternalLink /> Open
+          </Button>
+        </div>
+      </>
+    ) : status === "unsupported" ? (
+      <p className="text-ink-muted">This page can’t be saved. Open a regular http(s) page and try again.</p>
+    ) : status === "offline" ? (
+      <>
+        <p className="font-medium">PIVOT isn’t running</p>
+        <p className="text-xs text-ink-muted">
+          Start it with <code className="font-mono">npm start</code> in the project folder, then reopen this popup.
+        </p>
+      </>
+    ) : (
+      <>
+        <p className="font-medium">Connect the extension</p>
+        <p className="text-xs text-ink-muted">{error ?? "Paste the API token from PIVOT › Settings."}</p>
+        <Button onClick={() => chrome.runtime.openOptionsPage()}>Open extension settings</Button>
+      </>
+    );
     return (
       <div className="w-[400px]">
         {header}
@@ -267,7 +283,10 @@ export function Popup() {
                 role="tab"
                 aria-selected={mode === m}
                 onClick={() => setMode(m)}
-                className={cx("h-8 cursor-pointer rounded-full font-medium transition-colors", mode === m ? "bg-inverse text-on-inverse" : "text-ink-secondary hover:text-ink")}
+                className={cx(
+                  "h-8 cursor-pointer rounded-full font-medium transition-colors",
+                  mode === m ? "bg-inverse text-on-inverse" : "text-ink-secondary hover:text-ink",
+                )}
               >
                 {m === "page" ? "Page" : "Selected text"}
               </button>
@@ -279,9 +298,18 @@ export function Popup() {
           <>
             {shotUrl && (
               <div className="relative overflow-hidden rounded-[14px] bg-surface">
-                <img src={shotUrl} alt="Screenshot of the current tab" className={cx("aspect-[16/10] w-full object-cover object-top", !attachShot && "opacity-30")} />
+                <img
+                  src={shotUrl}
+                  alt="Screenshot of the current tab"
+                  className={cx("aspect-[16/10] w-full object-cover object-top", !attachShot && "opacity-30")}
+                />
                 <label className="absolute right-2.5 bottom-2.5 flex cursor-pointer items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-[11px] font-medium text-white backdrop-blur">
-                  <input type="checkbox" checked={attachShot} onChange={(e) => setAttachShot(e.target.checked)} className="accent-[var(--accent-fill)]" />
+                  <input
+                    type="checkbox"
+                    checked={attachShot}
+                    onChange={(e) => setAttachShot(e.target.checked)}
+                    className="accent-[var(--accent-fill)]"
+                  />
                   Attach this view
                 </label>
               </div>
@@ -289,7 +317,11 @@ export function Popup() {
             {duplicates.length > 0 && (
               <p className="flex items-center gap-1.5 text-xs text-warning">
                 <AlertTriangle className="size-3.5 shrink-0" /> Already saved as
-                <button type="button" onClick={() => openInApp(`/r/${duplicates[0].id}`)} className="cursor-pointer truncate underline">
+                <button
+                  type="button"
+                  onClick={() => openInApp(`/r/${duplicates[0].id}`)}
+                  className="cursor-pointer truncate underline"
+                >
                   {duplicates[0].title}
                 </button>
               </p>
@@ -327,7 +359,9 @@ export function Popup() {
                     onClick={() => setTextType(t)}
                     className={cx(
                       "h-8 cursor-pointer rounded-full text-xs font-medium transition-colors duration-150",
-                      textType === t ? "bg-inverse text-on-inverse" : "bg-surface text-ink-secondary hover:bg-surface-raised hover:text-ink",
+                      textType === t
+                        ? "bg-inverse text-on-inverse"
+                        : "bg-surface text-ink-secondary hover:bg-surface-raised hover:text-ink",
                     )}
                   >
                     {TYPE_DEFS[t].label}
@@ -336,10 +370,21 @@ export function Popup() {
               </div>
             </Field>
             <Field label="Title (optional)" htmlFor="sel-title">
-              <Input id="sel-title" value={title === page?.title ? "" : title} onChange={(e) => setTitle(e.target.value)} placeholder="First line is used if empty" />
+              <Input
+                id="sel-title"
+                value={title === page?.title ? "" : title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="First line is used if empty"
+              />
             </Field>
             <Field label="Text" htmlFor="sel-text">
-              <Textarea id="sel-text" value={text} onChange={(e) => setText(e.target.value)} rows={7} className="font-mono text-xs" />
+              <Textarea
+                id="sel-text"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={7}
+                className="font-mono text-xs"
+              />
             </Field>
           </>
         )}
@@ -351,7 +396,13 @@ export function Popup() {
         </div>
 
         <Field label="Notes" htmlFor="notes">
-          <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="What’s worth stealing here?" />
+          <Textarea
+            id="notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            placeholder="What’s worth stealing here?"
+          />
         </Field>
 
         {collections.length > 0 && (
@@ -374,10 +425,17 @@ export function Popup() {
 
         {mode === "page" && TYPE_DEFS[type].visual && (
           <label className="flex cursor-pointer items-start gap-2 text-xs">
-            <input type="checkbox" checked={serverCapture} onChange={(e) => setServerCapture(e.target.checked)} className="mt-0.5 accent-[var(--accent-fill)]" />
+            <input
+              type="checkbox"
+              checked={serverCapture}
+              onChange={(e) => setServerCapture(e.target.checked)}
+              className="mt-0.5 accent-[var(--accent-fill)]"
+            />
             <span>
               Also capture a full-page screenshot
-              <span className="block text-ink-subtle">Taken by Stan Bag, so logged-in pages show their logged-out version.</span>
+              <span className="block text-ink-subtle">
+                Taken by PIVOT, so logged-in pages show their logged-out version.
+              </span>
             </span>
           </label>
         )}

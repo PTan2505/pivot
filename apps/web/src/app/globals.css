@@ -26,7 +26,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  /* Stan Bag design-system tokens (see DESIGN.md) */
+  /* PIVOT design-system tokens (see DESIGN.md) */
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
   --color-surface-raised: var(--surface-raised);
@@ -51,7 +51,7 @@
   --shadow-overlay: var(--shadow-overlay);
 }
 
-/* Stan Bag — Savee direction: a black canvas where saved screenshots carry the colour.
+/* PIVOT — Savee direction: a black canvas where saved screenshots carry the colour.
    Hierarchy comes from surface steps (canvas → surface → surface-raised), not borders or shadows.
    One electric-indigo fill per screen for the primary action. Contrast verified ≥ 4.5:1 for every
    text token on canvas, surface and surface-raised in both themes. */

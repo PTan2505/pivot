@@ -2,7 +2,7 @@
 
 import { ChevronDown, ExternalLink, Globe } from "lucide-react";
 import { useState, type MouseEvent } from "react";
-import type { ResourceDTO, SkillPackDTO } from "@stan-bag/core/types";
+import type { ResourceDTO, SkillPackDTO } from "@pivot/core/types";
 import { ResourceCard, ResourceRow } from "@/components/resource-card";
 import { FolderShelf, scrollToSection } from "@/components/folder-shelf";
 import { useSkillPacks } from "@/lib/api";

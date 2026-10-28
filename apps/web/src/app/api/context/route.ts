@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { buildClipboardContext } from "@stan-bag/core/context";
+import { buildClipboardContext } from "@pivot/core/context";
 import { body, json, route } from "@/lib/server/http";
 
 const schema = z.object({

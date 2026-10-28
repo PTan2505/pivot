@@ -11,7 +11,7 @@ import {
   type ResourceType,
   type Section,
   type SourceCategory,
-} from "@stan-bag/core/types";
+} from "@pivot/core/types";
 
 export interface LibraryParams {
   q: string;

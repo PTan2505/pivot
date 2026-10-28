@@ -2,7 +2,7 @@
 
 import { ChevronDown, X } from "lucide-react";
 import { useMemo } from "react";
-import { TAG_KIND_LABELS, TAG_KINDS, type ResourceDTO, type TagDTO } from "@stan-bag/core/types";
+import { TAG_KIND_LABELS, TAG_KINDS, type ResourceDTO, type TagDTO } from "@pivot/core/types";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTags } from "@/lib/api";

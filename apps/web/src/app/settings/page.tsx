@@ -4,7 +4,7 @@ import { Check, Copy, Eye, EyeOff, Loader2, Pencil, RefreshCw, Trash2, TriangleA
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { TAG_KIND_LABELS, TAG_KINDS, type TagDTO } from "@stan-bag/core/types";
+import { TAG_KIND_LABELS, TAG_KINDS, type TagDTO } from "@pivot/core/types";
 import { ConfirmButton } from "@/components/confirm-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

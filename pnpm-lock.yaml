@@ -178,7 +178,7 @@ importers:
 
   apps/extension:
     dependencies:
-      '@stan-bag/core':
+      '@pivot/core':
         specifier: workspace:*
         version: link:../../packages/core
       lucide-react:
@@ -227,7 +227,7 @@ importers:
       '@electric-sql/pglite':
         specifier: ^0.5.11
         version: 0.5.11
-      '@stan-bag/core':
+      '@pivot/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@tanstack/react-query':

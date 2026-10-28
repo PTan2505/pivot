@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Stan Bag design system (DESIGN.md): black canvas, surface steps instead of borders, pill controls,
+/* PIVOT design system (DESIGN.md): black canvas, surface steps instead of borders, pill controls,
    one electric-indigo primary action. Dark by default, light follows the OS. */
 @theme {
   --font-sans: Geist, "DM Sans", system-ui, -apple-system, sans-serif;
@@ -87,5 +87,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

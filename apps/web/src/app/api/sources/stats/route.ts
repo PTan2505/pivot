@@ -1,4 +1,4 @@
-import { sourceStats } from "@stan-bag/core/resources";
+import { sourceStats } from "@pivot/core/resources";
 import { json, route } from "@/lib/server/http";
 
 /** How many saved resources came from each source. */

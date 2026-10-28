@@ -1,4 +1,4 @@
-# Stan Bag — notes for Claude
+# PIVOT — notes for Claude
 
 Personal UI/UX resource library: pnpm monorepo with `apps/web` (Next.js 16 app + API), `apps/extension` (Chrome MV3) and `packages/core` (schema, migrations, library logic). Decisions: [docs/SPEC.md](docs/SPEC.md). Visual rules: [DESIGN.md](DESIGN.md). Talk to the user in Vietnamese; code, UI copy and commits in English.
 
@@ -21,7 +21,7 @@ Personal UI/UX resource library: pnpm monorepo with `apps/web` (Next.js 16 app +
 
 ## Keep the spec current
 
-[docs/SPEC.md](docs/SPEC.md) is the source of truth for what Stan Bag does. **Every change that adds or alters a feature, behaviour or piece of logic updates the spec in the same branch and PR as the code** — new or changed resource types, API routes, database or storage behaviour, settings, security rules, extension capabilities, and anything removed.
+[docs/SPEC.md](docs/SPEC.md) is the source of truth for what PIVOT does. **Every change that adds or alters a feature, behaviour or piece of logic updates the spec in the same branch and PR as the code** — new or changed resource types, API routes, database or storage behaviour, settings, security rules, extension capabilities, and anything removed.
 
 - A decision goes in the §1 table: add a row, or edit the existing row and mark it `(cập nhật YYYY-MM-DD)`. A feature area goes in its section, or in a new numbered section marked `(bổ sung YYYY-MM-DD)`. When something from "Ngoài phạm vi" gets built, remove it from that list.
 - Rewrite statements that are no longer true instead of appending a contradiction. Write in Vietnamese, like the rest of the file.
@@ -42,7 +42,7 @@ pnpm db:generate       # after editing packages/core/src/db/schema.ts — commit
 pnpm ext:build         # build the extension into apps/extension/dist
 ```
 
-Run `pnpm check` (format check, lint, typecheck, tests) before saying a change is done. To try the app without touching the real Neon database or R2 bucket, start it with a scratch environment: `DATABASE_URL= STAN_BAG_DATA_DIR=<tmp dir> PORT=4400 node scripts/start.mjs` (unset the `R2_*` variables the same way).
+Run `pnpm check` (format check, lint, typecheck, tests) before saying a change is done. To try the app without touching the real Neon database or R2 bucket, start it with a scratch environment: `DATABASE_URL= PIVOT_DATA_DIR=<tmp dir> PORT=4400 node scripts/start.mjs` (unset the `R2_*` variables the same way).
 
 ## Hooks
 

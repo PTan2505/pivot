@@ -16,10 +16,10 @@ let core: {
   db: typeof import("../src/db/client");
 };
 
-const BUCKET = "stan-bag-test";
+const BUCKET = "pivot-test";
 
 beforeAll(async () => {
-  tmp = await fs.mkdtemp(path.join(os.tmpdir(), "stan-bag-r2-"));
+  tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pivot-r2-"));
   server = new S3rver({
     port: 0,
     address: "127.0.0.1",
@@ -28,11 +28,11 @@ beforeAll(async () => {
     configureBuckets: [{ name: BUCKET, configs: [] }],
   });
   const { port } = (await server.run()) as { port: number };
-  process.env.STAN_BAG_DATA_DIR = path.join(tmp, "data");
+  process.env.PIVOT_DATA_DIR = path.join(tmp, "data");
   process.env.CLAUDE_SKILLS_DIR = path.join(tmp, "skills");
   process.env.CLAUDE_PLUGINS_DIR = path.join(tmp, "plugins");
   process.env.AGENTS_SKILL_LOCK = path.join(tmp, "skill-lock.json");
-  process.env.STAN_BAG_MIGRATIONS_DIR = path.resolve(__dirname, "../src/db/migrations");
+  process.env.PIVOT_MIGRATIONS_DIR = path.resolve(__dirname, "../src/db/migrations");
   delete process.env.DATABASE_URL;
   // s3rver accepts these fixed credentials.
   process.env.R2_ACCESS_KEY_ID = "S3RVER";
@@ -93,7 +93,7 @@ describe("assets on R2", () => {
     const thumb = await streamThumbnail(asset);
     expect(thumb?.length).toBeGreaterThan(0);
     // Nothing was written to the local assets folder.
-    await expect(fs.access(path.join(process.env.STAN_BAG_DATA_DIR!, asset.storagePath))).rejects.toThrow();
+    await expect(fs.access(path.join(process.env.PIVOT_DATA_DIR!, asset.storagePath))).rejects.toThrow();
 
     const r = await createResource({ type: "media", title: "Indigo" });
     await attachAsset(r.id, asset.id);

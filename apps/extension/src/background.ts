@@ -2,18 +2,18 @@ import { api, ApiError, getConfig, type ClipData } from "./lib/api";
 import { captureTab, getPageInfo, isSavable } from "./lib/page";
 
 const MENU = {
-  page: "stan-bag-page",
-  link: "stan-bag-link",
-  image: "stan-bag-image",
-  snippet: "stan-bag-selection-snippet",
-  prompt: "stan-bag-selection-prompt",
+  page: "pivot-page",
+  link: "pivot-link",
+  image: "pivot-image",
+  snippet: "pivot-selection-snippet",
+  prompt: "pivot-selection-prompt",
 } as const;
 
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: MENU.page, title: "Save page to Stan Bag", contexts: ["page"] });
-    chrome.contextMenus.create({ id: MENU.link, title: "Save link to Stan Bag", contexts: ["link"] });
-    chrome.contextMenus.create({ id: MENU.image, title: "Save image to Stan Bag", contexts: ["image"] });
+    chrome.contextMenus.create({ id: MENU.page, title: "Save page to PIVOT", contexts: ["page"] });
+    chrome.contextMenus.create({ id: MENU.link, title: "Save link to PIVOT", contexts: ["link"] });
+    chrome.contextMenus.create({ id: MENU.image, title: "Save image to PIVOT", contexts: ["image"] });
     chrome.contextMenus.create({ id: MENU.snippet, title: "Save selection as snippet", contexts: ["selection"] });
     chrome.contextMenus.create({ id: MENU.prompt, title: "Save selection as prompt", contexts: ["selection"] });
   });
@@ -46,7 +46,7 @@ chrome.notifications.onClicked.addListener(async (id) => {
 async function run(label: string, task: () => Promise<{ path: string; title: string }>) {
   try {
     const { path, title } = await task();
-    await notify("Saved to Stan Bag", `${label}: ${title}`, path);
+    await notify("Saved to PIVOT", `${label}: ${title}`, path);
   } catch (err) {
     const message = err instanceof ApiError || err instanceof Error ? err.message : String(err);
     if (err instanceof ApiError && err.status === 403) chrome.runtime.openOptionsPage();
@@ -57,7 +57,13 @@ async function run(label: string, task: () => Promise<{ path: string; title: str
 async function savePage(tab: chrome.tabs.Tab) {
   if (!isSavable(tab.url)) throw new Error("Only http(s) pages can be saved.");
   const [info, shot] = await Promise.all([getPageInfo(tab), captureTab(tab.windowId)]);
-  const data: ClipData = { kind: "page", url: info.url, title: info.title, description: info.description, serverCapture: true };
+  const data: ClipData = {
+    kind: "page",
+    url: info.url,
+    title: info.title,
+    description: info.description,
+    serverCapture: true,
+  };
   const res = await api.clip(data, { screenshot: shot ?? undefined });
   return { path: res.path, title: info.title || info.url };
 }
@@ -72,7 +78,9 @@ async function saveImage(srcUrl: string, pageUrl: string) {
   } catch {}
   if (!image && !data.imageUrl) throw new Error("This image can’t be read.");
   const ext = image?.type.split("/")[1]?.replace("svg+xml", "svg").replace("jpeg", "jpg") ?? "png";
-  const name = srcUrl.startsWith("data:") ? `image.${ext}` : decodeURIComponent(new URL(srcUrl).pathname.split("/").pop() || `image.${ext}`);
+  const name = srcUrl.startsWith("data:")
+    ? `image.${ext}`
+    : decodeURIComponent(new URL(srcUrl).pathname.split("/").pop() || `image.${ext}`);
   const res = await api.clip(data, { image, imageName: /\.\w{2,5}$/.test(name) ? name : `${name}.${ext}` });
   return { path: res.path, title: name };
 }
