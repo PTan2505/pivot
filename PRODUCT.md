@@ -48,7 +48,7 @@ PIVOT is not a public gallery or a team tool. It is one person's working bag, an
 ## Brand Commitments
 
 - Name: PIVOT, renamed from Stan Bag on 2026-10-28.
-- The mark is the archive glyph on a disc.
+- The mark is the PT monogram (the first and last letters, the T sitting in the P's counter) with the PIVOT wordmark; its ember O is for the icon and brand use only. Pinned by the owner on 2026-10-28; see DESIGN.md › Brand mark and `docs/brand/`.
 - Visual direction pinned by the owner on 2026-10-28: black and orange, after a reference shot of glowing orange light between dark tiles with a frosted glass tile. Glass is used for the chrome and overlays, never on the cards that show saved work. Dark only.
 
 ## Evidence on Hand

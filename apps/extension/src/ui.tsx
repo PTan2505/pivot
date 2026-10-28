@@ -4,7 +4,11 @@ export function cx(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(" ");
 }
 
-export function Button({ variant = "primary", className, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "ghost" | "outline" }) {
+export function Button({
+  variant = "primary",
+  className,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "ghost" | "outline" }) {
   return (
     <button
       type="button"
@@ -55,14 +59,12 @@ export function Field({ label, htmlFor, children }: { label: string; htmlFor?: s
   );
 }
 
+/** The PT monogram, the same paths as apps/web/src/components/brand.tsx. */
 export function Logo() {
   return (
-    <span className="grid size-6 place-items-center rounded-full bg-ink text-canvas">
-      <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <rect width="20" height="5" x="2" y="3" rx="1" />
-        <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
-        <path d="M10 12h4" />
-      </svg>
-    </span>
+    <svg viewBox="0 0 232 170" fill="currentColor" className="h-5 w-auto shrink-0 text-ink" aria-hidden>
+      <path d="M0 0H94A40 34 0 0 1 134 34H22A22 34 0 0 1 0 0ZM22 68H134A40 34 0 0 1 94 102H34V116A20 20 0 0 1 14 136H0V90A22 22 0 0 1 22 68Z" />
+      <path d="M0 0H98V34H50V110A26 26 0 0 1 24 136H16V34H0Z" transform="translate(134 34)" />
+    </svg>
   );
 }
