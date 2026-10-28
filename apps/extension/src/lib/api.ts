@@ -1,4 +1,4 @@
-import type { CollectionDTO, ResourceType, TagDTO, TagKind } from "@stan-bag/core/types";
+import type { CollectionDTO, ResourceType, TagDTO, TagKind } from "@pivot/core/types";
 
 export interface Config {
   serverUrl: string;
@@ -34,7 +34,7 @@ async function request<T>(path: string, init: RequestInit = {}, config?: Config)
       headers: { ...init.headers, authorization: `Bearer ${token}` },
     });
   } catch {
-    throw new ApiError("Stan Bag isn’t running. Start it with `npm start`.", 0);
+    throw new ApiError("PIVOT isn’t running. Start it with `npm start`.", 0);
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError((data as { error?: string }).error ?? res.statusText, res.status);
@@ -50,7 +50,9 @@ export const api = {
   tags: () => request<TagDTO[]>("/api/tags"),
   collections: () => request<CollectionDTO[]>("/api/collections"),
   lookup: (url: string) =>
-    request<{ duplicates: { id: string; title: string; type: ResourceType }[] }>(`/api/lookup?url=${encodeURIComponent(url)}`),
+    request<{ duplicates: { id: string; title: string; type: ResourceType }[] }>(
+      `/api/lookup?url=${encodeURIComponent(url)}`,
+    ),
   clip: (data: ClipData, files: { screenshot?: Blob; image?: Blob; imageName?: string } = {}) => {
     const form = new FormData();
     form.set("data", JSON.stringify(data));

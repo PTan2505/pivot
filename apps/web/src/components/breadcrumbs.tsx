@@ -1,7 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
-import { sectionOf, TYPE_DEFS, type ResourceType } from "@stan-bag/core/types";
+import { sectionOf, TYPE_DEFS, type ResourceType } from "@pivot/core/types";
 import { sectionHref } from "@/hooks/use-library-params";
 
 export interface Crumb {

@@ -1,5 +1,5 @@
-import { attachAsset, saveAsset } from "@stan-bag/core/assets";
-import { getResource, setResourceFields } from "@stan-bag/core/resources";
+import { attachAsset, saveAsset } from "@pivot/core/assets";
+import { getResource, setResourceFields } from "@pivot/core/resources";
 import { HttpError, json, route, type IdParams } from "@/lib/server/http";
 
 /** Upload one or more files and attach them to the resource. */

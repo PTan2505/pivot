@@ -3,8 +3,8 @@
 import { FileUp, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { BookmarkRow } from "@stan-bag/core/sources";
-import { SOURCE_CATEGORIES, type SourceCategory } from "@stan-bag/core/types";
+import type { BookmarkRow } from "@pivot/core/sources";
+import { SOURCE_CATEGORIES, type SourceCategory } from "@pivot/core/types";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {

@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@stan-bag/core": "workspace:*",
+    "@pivot/core": "workspace:*",
     "lucide-react": "^1.61.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"

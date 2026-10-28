@@ -3,13 +3,7 @@
 import { LayoutGrid, List, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import {
-  RESOURCE_TYPES,
-  SOURCE_CATEGORIES,
-  TYPE_DEFS,
-  type ResourceDTO,
-  type ResourceType,
-} from "@stan-bag/core/types";
+import { RESOURCE_TYPES, SOURCE_CATEGORIES, TYPE_DEFS, type ResourceDTO, type ResourceType } from "@pivot/core/types";
 import { Breadcrumbs, typeCrumbs, type Crumb } from "@/components/breadcrumbs";
 import { FolderShelf } from "@/components/folder-shelf";
 import { ResourceCard, ResourceRow } from "@/components/resource-card";

@@ -1,4 +1,4 @@
-import { importSkillGuides } from "@stan-bag/core/skills";
+import { importSkillGuides } from "@pivot/core/skills";
 import { body, json, route } from "@/lib/server/http";
 
 /** Loads usage guides (pack info, invocation, how-to, example prompts) for skills by name. */

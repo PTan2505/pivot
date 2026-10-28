@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { isValidApiToken } from "@stan-bag/core/api-token";
+import { isValidApiToken } from "@pivot/core/api-token";
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
@@ -24,7 +24,11 @@ export function proxy(request: NextRequest) {
     const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
     if (!sameOrigin && !isValidApiToken(bearer)) {
       return NextResponse.json(
-        { error: origin?.startsWith("chrome-extension://") ? "Invalid API token — copy it again from Stan Bag › Settings." : "Cross-origin request blocked" },
+        {
+          error: origin?.startsWith("chrome-extension://")
+            ? "Invalid API token — copy it again from PIVOT › Settings."
+            : "Cross-origin request blocked",
+        },
         { status: 403 },
       );
     }

@@ -4,7 +4,7 @@ import { FileUp, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type MouseEvent } from "react";
-import { SOURCE_CATEGORIES, sourceSearchUrl, type ResourceDTO } from "@stan-bag/core/types";
+import { SOURCE_CATEGORIES, sourceSearchUrl, type ResourceDTO } from "@pivot/core/types";
 import { BookmarkImportDialog } from "@/components/bookmark-import-dialog";
 import { FolderShelf } from "@/components/folder-shelf";
 import { hostOf, ResourceCard, ResourceRow } from "@/components/resource-card";
@@ -214,7 +214,7 @@ export function SourceInfo({ id, searchUrl }: { id: string; searchUrl: unknown }
           </Button>
         </form>
       ) : (
-        <p className="text-xs text-ink-subtle">Add a search URL with {"{q}"} to search this source from Stan Bag.</p>
+        <p className="text-xs text-ink-subtle">Add a search URL with {"{q}"} to search this source from PIVOT.</p>
       )}
     </div>
   );

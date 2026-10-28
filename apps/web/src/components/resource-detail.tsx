@@ -17,14 +17,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { extractVariables } from "@stan-bag/core/prompt-vars";
+import { extractVariables } from "@pivot/core/prompt-vars";
 import {
   RESOURCE_TYPES,
   TYPE_DEFS,
   type MetaField,
   type ResourceDetailDTO,
   type ResourceType,
-} from "@stan-bag/core/types";
+} from "@pivot/core/types";
 import { AssetGallery, useAttach } from "@/components/asset-gallery";
 import { Breadcrumbs, typeCrumbs } from "@/components/breadcrumbs";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -492,7 +492,7 @@ function SkillBar({ resource, flush }: { resource: ResourceDetailDTO; flush: () 
         {state === "conflict" ? (
           <ConfirmButton
             title="Overwrite SKILL.md on disk?"
-            description="The file was changed outside Stan Bag. Writing now replaces those changes with the version here."
+            description="The file was changed outside PIVOT. Writing now replaces those changes with the version here."
             confirmLabel="Overwrite disk"
             onConfirm={() => write(true)}
           >

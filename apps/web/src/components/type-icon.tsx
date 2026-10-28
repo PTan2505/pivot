@@ -14,7 +14,7 @@ import {
   Wand,
   type LucideIcon,
 } from "lucide-react";
-import { TYPE_DEFS, type ResourceType } from "@stan-bag/core/types";
+import { TYPE_DEFS, type ResourceType } from "@pivot/core/types";
 
 const ICONS: Record<string, LucideIcon> = {
   globe: Globe,

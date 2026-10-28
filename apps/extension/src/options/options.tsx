@@ -31,10 +31,11 @@ export function Options() {
     <main className="mx-auto max-w-lg space-y-6 px-6 py-12">
       <div className="flex items-center gap-2">
         <Logo />
-        <h1 className="text-[22px] leading-[1.2] font-medium tracking-[-0.02em]">Stan Bag extension</h1>
+        <h1 className="text-[22px] leading-[1.2] font-medium tracking-[-0.02em]">PIVOT extension</h1>
       </div>
       <p className="text-sm text-ink-muted">
-        Find both values in Stan Bag › <span className="text-ink">Settings › Browser extension</span>. The token lets this extension add to your library; other websites can’t.
+        Find both values in PIVOT › <span className="text-ink">Settings › Browser extension</span>. The token lets this
+        extension add to your library; other websites can’t.
       </p>
       <form
         className="space-y-4"
@@ -44,10 +45,22 @@ export function Options() {
         }}
       >
         <Field label="Server URL" htmlFor="server">
-          <Input id="server" value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} className="font-mono text-xs" />
+          <Input
+            id="server"
+            value={serverUrl}
+            onChange={(e) => setServerUrl(e.target.value)}
+            className="font-mono text-xs"
+          />
         </Field>
         <Field label="API token" htmlFor="token">
-          <Input id="token" type="password" value={token} onChange={(e) => setToken(e.target.value)} className="font-mono text-xs" autoComplete="off" />
+          <Input
+            id="token"
+            type="password"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            className="font-mono text-xs"
+            autoComplete="off"
+          />
         </Field>
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={state.kind === "testing"}>
@@ -69,12 +82,13 @@ export function Options() {
         <h2 className="font-medium">How to save</h2>
         <ul className="space-y-1.5 text-xs text-ink-muted">
           <li>
-            <kbd className="font-mono text-ink">⌥⇧S</kbd> or the toolbar button — save the tab with a screenshot of what you see, add tags and notes.
+            <kbd className="font-mono text-ink">⌥⇧S</kbd> or the toolbar button — save the tab with a screenshot of what
+            you see, add tags and notes.
           </li>
           <li>
             <kbd className="font-mono text-ink">⌥⇧D</kbd> — quick-save the tab without the popup.
           </li>
-          <li>Right-click a page, link or image → “Save … to Stan Bag”.</li>
+          <li>Right-click a page, link or image → “Save … to PIVOT”.</li>
           <li>Select text, right-click → save it as a snippet or prompt.</li>
         </ul>
         <p className="text-xs text-ink-muted">

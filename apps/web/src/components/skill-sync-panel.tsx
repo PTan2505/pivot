@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { SkillStatusDTO } from "@stan-bag/core/types";
+import type { SkillStatusDTO } from "@pivot/core/types";
 import { Button } from "@/components/ui/button";
 import { api, useInvalidate, useSettings, useSkillStatuses } from "@/lib/api";
 import { cn } from "@/lib/utils";

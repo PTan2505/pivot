@@ -28,7 +28,8 @@ export interface BlobStore {
 export class StorageError extends Error {}
 
 function assertKey(key: string) {
-  if (!key || key.startsWith("/") || key.split(/[\\/]/).includes("..")) throw new StorageError(`Invalid storage key: ${key}`);
+  if (!key || key.startsWith("/") || key.split(/[\\/]/).includes(".."))
+    throw new StorageError(`Invalid storage key: ${key}`);
 }
 
 // ---- Local disk ------------------------------------------------------------
@@ -139,7 +140,9 @@ export class R2Store implements BlobStore {
   async put(key: string, data: Buffer, contentType: string) {
     assertKey(key);
     const { s3, client } = await this.sdk();
-    await client.send(new s3.PutObjectCommand({ Bucket: this.config.bucket, Key: key, Body: data, ContentType: contentType }));
+    await client.send(
+      new s3.PutObjectCommand({ Bucket: this.config.bucket, Key: key, Body: data, ContentType: contentType }),
+    );
   }
 
   async get(key: string) {
@@ -193,8 +196,8 @@ export class R2Store implements BlobStore {
 
 // ---- Selection -------------------------------------------------------------
 
-const g = globalThis as unknown as { __stanBagStores?: Partial<Record<StorageKind, BlobStore>> };
-const stores = (g.__stanBagStores ??= {});
+const g = globalThis as unknown as { __pivotStores?: Partial<Record<StorageKind, BlobStore>> };
+const stores = (g.__pivotStores ??= {});
 
 export function storageMode(): StorageKind {
   return r2ConfigFromEnv() ? "r2" : "local";
@@ -219,7 +222,7 @@ export function writeStore(): BlobStore {
 /** Round-trips a small object to prove the credentials and bucket work. */
 export async function checkStore(store: BlobStore = writeStore()) {
   const key = `healthcheck/${Date.now()}.txt`;
-  const body = Buffer.from("stan-bag");
+  const body = Buffer.from("pivot");
   const started = Date.now();
   await store.put(key, body, "text/plain");
   const back = await store.get(key);

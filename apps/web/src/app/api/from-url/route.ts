@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { enqueueCapture } from "@stan-bag/core/capture";
-import { fetchUrlMetadata } from "@stan-bag/core/metadata";
-import { normalizeUrl } from "@stan-bag/core/net-guard";
-import { createResource, findByUrl } from "@stan-bag/core/resources";
-import { RESOURCE_TYPES, TAG_KINDS } from "@stan-bag/core/types";
+import { enqueueCapture } from "@pivot/core/capture";
+import { fetchUrlMetadata } from "@pivot/core/metadata";
+import { normalizeUrl } from "@pivot/core/net-guard";
+import { createResource, findByUrl } from "@pivot/core/resources";
+import { RESOURCE_TYPES, TAG_KINDS } from "@pivot/core/types";
 import { body, json, route } from "@/lib/server/http";
 
 const schema = z.object({

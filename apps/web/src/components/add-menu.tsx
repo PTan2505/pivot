@@ -4,7 +4,7 @@ import { ChevronDown, Link2, Plus, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef } from "react";
 import { toast } from "sonner";
-import { RESOURCE_TYPES, TYPE_DEFS, type ResourceType } from "@stan-bag/core/types";
+import { RESOURCE_TYPES, TYPE_DEFS, type ResourceType } from "@pivot/core/types";
 import { TypeIcon } from "@/components/type-icon";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,7 +31,11 @@ export function useCreateOfType() {
     if (def.url === "primary") return openAddUrl([], type);
     if (UPLOAD_TYPES.includes(type) && pickFile) return pickFile(type);
     try {
-      const r = await createResource({ type, title: `Untitled ${def.label.toLowerCase()}`, content: starterContent(type) });
+      const r = await createResource({
+        type,
+        title: `Untitled ${def.label.toLowerCase()}`,
+        content: starterContent(type),
+      });
       router.push(`/r/${r.id}?new=1`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create");
@@ -40,7 +44,8 @@ export function useCreateOfType() {
 }
 
 function starterContent(type: ResourceType) {
-  if (type === "skill") return "---\nname: my-skill\ndescription: What this skill does and when Claude should use it.\n---\n\n# My skill\n\n";
+  if (type === "skill")
+    return "---\nname: my-skill\ndescription: What this skill does and when Claude should use it.\n---\n\n# My skill\n\n";
   if (type === "checklist") return "- [ ] \n";
   if (type === "mcp") return '{\n  "mcpServers": {\n  }\n}\n';
   return "";
@@ -75,22 +80,39 @@ export function AddMenu({ preferType }: { preferType?: ResourceType }) {
     }
   };
 
-  const primaryLabel = preferType ? `New ${TYPE_DEFS[preferType].label.toLowerCase()}` : "Add";
-
   return (
     <div className="flex">
-      <input ref={fileRef} type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => onFiles(e.target.files)} />
+      <input
+        ref={fileRef}
+        type="file"
+        multiple
+        accept={ACCEPT}
+        className="hidden"
+        onChange={(e) => onFiles(e.target.files)}
+      />
       <Button
         size="lg"
         className="rounded-r-none pr-4"
+        aria-label={preferType ? `New ${TYPE_DEFS[preferType].label.toLowerCase()}` : undefined}
         onClick={() => (preferType ? createOfType(preferType, pickFile) : openAddUrl())}
       >
         <Plus />
-        {primaryLabel}
+        {preferType ? (
+          // "New source" doesn't fit next to the other top-bar buttons on a phone; "New" does
+          <span>
+            New<span className="max-sm:hidden"> {TYPE_DEFS[preferType].label.toLowerCase()}</span>
+          </span>
+        ) : (
+          "Add"
+        )}
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button size="lg" className="rounded-l-none border-l border-on-accent/25 pr-3 pl-2.5" aria-label="More ways to add">
+          <Button
+            size="lg"
+            className="border-on-accent/25 rounded-l-none border-l pr-3 pl-2.5"
+            aria-label="More ways to add"
+          >
             <ChevronDown />
           </Button>
         </DropdownMenuTrigger>

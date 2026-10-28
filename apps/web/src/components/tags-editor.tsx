@@ -2,7 +2,7 @@
 
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
-import { TAG_KIND_LABELS, type TagKind } from "@stan-bag/core/types";
+import { TAG_KIND_LABELS, type TagKind } from "@pivot/core/types";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";

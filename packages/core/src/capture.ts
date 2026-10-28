@@ -26,8 +26,8 @@ interface CaptureState {
   running: boolean;
 }
 
-const g = globalThis as unknown as { __stanBagCapture?: CaptureState };
-const state: CaptureState = (g.__stanBagCapture ??= { queue: [], running: false });
+const g = globalThis as unknown as { __pivotCapture?: CaptureState };
+const state: CaptureState = (g.__pivotCapture ??= { queue: [], running: false });
 
 async function browser(): Promise<Browser> {
   if (!state.browser) {

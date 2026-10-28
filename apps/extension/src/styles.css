@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
-/* Stan Bag design system (DESIGN.md): black canvas, surface steps instead of borders, pill controls,
-   one electric-indigo primary action. Dark by default, light follows the OS. */
+/* PIVOT design system (DESIGN.md): near-black canvas, surface steps instead of borders, pill controls,
+   one acid-lime primary action. Dark by default, light follows the OS. */
 @theme {
   --font-sans: Geist, "DM Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -35,19 +35,19 @@
 
 :root {
   color-scheme: dark;
-  --canvas: #050505;
-  --surface: #151515;
-  --surface-raised: #1e1e1e;
-  --divider: #2f2f2f;
-  --ink: #fdfdfd;
-  --ink-secondary: #d4d4d4;
-  --ink-muted: #a3a3a3;
-  --ink-subtle: #8a8a8a;
-  --inverse: #fdfdfd;
-  --on-inverse: #050505;
-  --accent-fill: #1500ff;
-  --on-accent: #ffffff;
-  --accent-text: #8b84ff;
+  --canvas: #101010;
+  --surface: #1a1a1a;
+  --surface-raised: #232323;
+  --divider: #323231;
+  --ink: #f4f4ef;
+  --ink-secondary: #d4d4d0;
+  --ink-muted: #aeaeab;
+  --ink-subtle: #8b8b8a;
+  --inverse: #f4f4ef;
+  --on-inverse: #101010;
+  --accent-fill: #c7ff35;
+  --on-accent: #101010;
+  --accent-text: #c7ff35;
   --danger: #ff7a7a;
   --success: #4cc38a;
   --warning: #f5b33f;
@@ -56,17 +56,17 @@
 @media (prefers-color-scheme: light) {
   :root {
     color-scheme: light;
-    --canvas: #ffffff;
-    --surface: #f2f2f2;
-    --surface-raised: #e6e6e6;
-    --divider: #dcdcdc;
-    --ink: #0a0a0a;
-    --ink-secondary: #2e2e2e;
-    --ink-muted: #545454;
-    --ink-subtle: #636363;
-    --inverse: #0a0a0a;
-    --on-inverse: #ffffff;
-    --accent-text: #1500ff;
+    --canvas: #f4f4ef;
+    --surface: #ebebe6;
+    --surface-raised: #e1e1dc;
+    --divider: #d6d6d2;
+    --ink: #101010;
+    --ink-secondary: #30302f;
+    --ink-muted: #474747;
+    --ink-subtle: #626262;
+    --inverse: #101010;
+    --on-inverse: #f4f4ef;
+    --accent-text: #556a1e;
     --danger: #c21f1f;
     --success: #17703d;
     --warning: #8a5600;
@@ -87,5 +87,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

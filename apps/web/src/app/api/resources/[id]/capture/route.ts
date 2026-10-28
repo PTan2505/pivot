@@ -1,5 +1,5 @@
-import { enqueueCapture } from "@stan-bag/core/capture";
-import { getResource } from "@stan-bag/core/resources";
+import { enqueueCapture } from "@pivot/core/capture";
+import { getResource } from "@pivot/core/resources";
 import { HttpError, json, route, type IdParams } from "@/lib/server/http";
 
 export const POST = route(async (_req: Request, { params }: IdParams) => {

@@ -1,5 +1,5 @@
-import { enqueueCapture } from "@stan-bag/core/capture";
-import { importBookmarks } from "@stan-bag/core/sources";
+import { enqueueCapture } from "@pivot/core/capture";
+import { importBookmarks } from "@pivot/core/sources";
 import { body, json, route } from "@/lib/server/http";
 
 /** Saves the bookmarks chosen in the review list; screenshots run in the background. */

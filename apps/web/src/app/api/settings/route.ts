@@ -1,7 +1,7 @@
-import { databaseMode, dataDir, paths, skillsDir } from "@stan-bag/core/config";
-import { storageSummary } from "@stan-bag/core/assets";
-import { playwrightStatus } from "@stan-bag/core/capture";
-import { storageMode, writeStore } from "@stan-bag/core/storage";
+import { databaseMode, dataDir, paths, skillsDir } from "@pivot/core/config";
+import { storageSummary } from "@pivot/core/assets";
+import { playwrightStatus } from "@pivot/core/capture";
+import { storageMode, writeStore } from "@pivot/core/storage";
 import { json, route } from "@/lib/server/http";
 
 export const GET = route(async (req: Request) => {
