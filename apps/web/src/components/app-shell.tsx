@@ -1,12 +1,13 @@
 "use client";
 
-import { Archive, ChevronDown, FolderPlus, Folders, Search, Settings, Trash2 } from "lucide-react";
+import { ChevronDown, FolderPlus, Folders, Search, Settings, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { isResourceType } from "@pivot/core/types";
 import { AddMenu } from "@/components/add-menu";
+import { PivotMark, PivotWordmark } from "@/components/brand";
 import { SectionNav } from "@/components/section-nav";
 import { Button } from "@/components/ui/button";
 import {
@@ -216,11 +217,9 @@ function TopBar() {
       {/* The glass is a layer, not the header itself: an element with backdrop-filter becomes the backdrop root of
           its children, so the section menu (rendered inside the header) could only blur the bar, not the page. */}
       <div aria-hidden className="glass absolute inset-0 -z-10 border-x-0 border-t-0" />
-      <Link href="/" className="flex items-center gap-2.5 rounded-full" aria-label="PIVOT — library">
-        <span className="grid size-[26px] place-items-center rounded-full bg-ink text-canvas">
-          <Archive className="size-3.5" strokeWidth={2.4} aria-hidden />
-        </span>
-        <span className="text-base font-medium tracking-[-0.02em]">PIVOT</span>
+      <Link href="/" className="flex items-center gap-2.5 rounded-full text-ink" aria-label="PIVOT — library">
+        <PivotMark className="h-[22px]" />
+        <PivotWordmark className="h-[13px]" />
       </Link>
       <SectionNav />
       <div className="order-last flex basis-full justify-center lg:order-none lg:flex-1 lg:basis-auto">
