@@ -31,6 +31,7 @@ import { Markdown } from "@/components/markdown";
 import { AddToCollection } from "@/components/selection-bar";
 import { PackField, SkillGuide } from "@/components/skill-guide";
 import { SKILL_STATE_LABEL, SKILL_STATE_TONE } from "@/components/skill-sync-panel";
+import { SourceInfo } from "@/components/source-groups";
 import { TagsEditor } from "@/components/tags-editor";
 import { TypeIcon } from "@/components/type-icon";
 import { Button } from "@/components/ui/button";
@@ -283,6 +284,24 @@ function MetaFieldInput({
             )
           }
         />
+      </Field>
+    );
+  }
+  if (field.kind === "select") {
+    return (
+      <Field label={field.label} htmlFor={id}>
+        <Select value={typeof v === "string" ? v : ""} onValueChange={set}>
+          <SelectTrigger id={id} size="sm" className="w-full">
+            <SelectValue placeholder="Choose…" />
+          </SelectTrigger>
+          <SelectContent>
+            {field.options.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </Field>
     );
   }
@@ -644,6 +663,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
             />
           </Field>
           {draft.type === "skill" && <PackField meta={draft.meta} onChange={change} />}
+          {draft.type === "source" && <SourceInfo id={resource.id} searchUrl={draft.meta.searchUrl} />}
           {def.fields.map((f) => (
             <MetaFieldInput key={f.key} field={f} draft={draft} change={change} />
           ))}

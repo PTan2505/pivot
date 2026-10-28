@@ -79,7 +79,7 @@ export type GlassFolderProps = {
   seed?: number;
   /** Your own picture for the back panel, instead of generated art. */
   image?: string;
-  /** The folder's contents. Read once; after that the folder owns the list. */
+  /** The folder's contents. When this list changes the folder follows it; files added with `+` last until then. */
   files?: FolderFile[];
   /** `add` drops new files in, `more` opens a menu, `none` hides the key. */
   action?: "add" | "more" | "none";
@@ -566,6 +566,15 @@ export default function GlassFolder({
 
   // ids survive re-renders so a newly added file is the only one that animates in
   const [entries, setEntries] = React.useState(() => initialFiles.map((file, id) => ({ file, id })));
+  // Follow the `files` prop when its content changes (a cover arrives, a file is renamed) without
+  // remounting, so the folder doesn't replay its entrance. Adjusting state while rendering is React's
+  // pattern for deriving state from props.
+  const filesSignature = JSON.stringify(initialFiles);
+  const [syncedSignature, setSyncedSignature] = React.useState(filesSignature);
+  if (filesSignature !== syncedSignature) {
+    setSyncedSignature(filesSignature);
+    setEntries(initialFiles.map((file, id) => ({ file, id })));
+  }
   const files = entries.map((e) => e.file);
   const nextId = React.useRef(initialFiles.length);
   const [dropped, setDropped] = React.useState<number | null>(null);
@@ -683,7 +692,8 @@ export default function GlassFolder({
     const made = onAdd?.(files);
     const file: FolderFile = made || { name: "Untitled " + (files.length + 1), meta: "Just now" };
     const next = [...files, file];
-    const id = nextId.current++;
+    const id = Math.max(nextId.current, ...entries.map((e) => e.id + 1));
+    nextId.current = id + 1;
     setEntries((list) => [...list, { file, id }]);
     setDropped(id);
     setBump((b) => b + 1);

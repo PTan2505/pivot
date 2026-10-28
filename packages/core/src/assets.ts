@@ -89,6 +89,14 @@ export function thumbnailKey(assetId: string) {
   return `thumbnails/${assetId}.webp`;
 }
 
+/** Object key of a tall image's scroll preview: the whole image at card width, for hover-to-scroll cards. */
+export function previewKey(assetId: string) {
+  return `previews/${assetId}.webp`;
+}
+
+/** Full-page screenshots and other images much taller than wide get a scroll preview. */
+const isTall = (width: number | null, height: number | null) => !!width && !!height && height > width * 1.5;
+
 const storeOf = (row: Pick<AssetRow, "storage">) => storeFor(row.storage as StorageKind);
 
 export interface SaveAssetInput {
@@ -106,6 +114,15 @@ async function makeThumbnail(img: ReturnType<typeof sharp>, width: number, heigh
   let pipeline = img.clone().resize({ width: w });
   if (h > 1200) pipeline = pipeline.extract({ left: 0, top: 0, width: w, height: 1200 });
   return pipeline.webp({ quality: 78 }).toBuffer();
+}
+
+/** The whole image scaled to 720px wide (no crop), light enough to load in a grid of cards. */
+async function makeScrollPreview(img: ReturnType<typeof sharp>, width: number) {
+  return img
+    .clone()
+    .resize({ width: Math.min(720, width) })
+    .webp({ quality: 72 })
+    .toBuffer();
 }
 
 /**
@@ -139,6 +156,7 @@ export async function saveAsset(input: SaveAssetInput) {
       height = m.height ?? null;
       if (kind === "image" && width && height) {
         await store.put(thumbnailKey(id), await makeThumbnail(img, width, height), "image/webp");
+        if (isTall(width, height)) await store.put(previewKey(id), await makeScrollPreview(img, width), "image/webp");
       }
     } catch {
       // Unreadable image metadata is not fatal; the original is still stored.
@@ -180,7 +198,21 @@ export async function streamThumbnail(row: AssetRow) {
   return storeOf(row).stream(thumbnailKey(row.id));
 }
 
-const cachePath = (row: Pick<AssetRow, "id" | "storagePath">) => path.join(paths.cache(), `${row.id}${path.extname(row.storagePath)}`);
+/** Streams a tall image's scroll preview, making it on first use for images saved before previews existed. */
+export async function streamScrollPreview(row: AssetRow) {
+  if (row.kind !== "image" || !isTall(row.width, row.height)) return null;
+  const store = storeOf(row);
+  const existing = await store.stream(previewKey(row.id));
+  if (existing) return existing;
+  const bytes = await readAssetBytes(row);
+  if (!bytes) return null;
+  const img = sharp(bytes, { animated: false, limitInputPixels: 268_402_689 });
+  await store.put(previewKey(row.id), await makeScrollPreview(img, row.width!), "image/webp");
+  return store.stream(previewKey(row.id));
+}
+
+const cachePath = (row: Pick<AssetRow, "id" | "storagePath">) =>
+  path.join(paths.cache(), `${row.id}${path.extname(row.storagePath)}`);
 
 /**
  * A path on this machine that Claude Code can open. Local files are used in place; R2 files are
@@ -220,7 +252,8 @@ export async function pruneAssetCache(maxAgeDays = 7) {
 /** Copies every locally stored asset (and thumbnail) into the active remote store, then deletes the local copies. */
 export async function migrateLocalAssets(onProgress?: (done: number, total: number) => void) {
   const target = writeStore();
-  if (target.kind === "local") throw new AssetError("Cloudflare R2 is not configured, so there is nowhere to move files to.");
+  if (target.kind === "local")
+    throw new AssetError("Cloudflare R2 is not configured, so there is nowhere to move files to.");
   const db = await getDb();
   const local = new LocalStore();
   const rows = await db.select().from(assets).where(eq(assets.storage, "local"));
@@ -233,11 +266,14 @@ export async function migrateLocalAssets(onProgress?: (done: number, total: numb
       continue;
     }
     await target.put(row.storagePath, data, row.mimeType);
-    const thumb = await local.get(thumbnailKey(row.id));
-    if (thumb) await target.put(thumbnailKey(row.id), thumb, "image/webp");
+    for (const key of [thumbnailKey(row.id), previewKey(row.id)]) {
+      const derived = await local.get(key);
+      if (derived) await target.put(key, derived, "image/webp");
+    }
     await db.update(assets).set({ storage: target.kind }).where(eq(assets.id, row.id));
     await local.delete(row.storagePath);
     await local.delete(thumbnailKey(row.id));
+    await local.delete(previewKey(row.id));
     moved++;
     onProgress?.(moved, rows.length);
   }
@@ -247,12 +283,16 @@ export async function migrateLocalAssets(onProgress?: (done: number, total: numb
 export async function storageSummary() {
   const db = await getDb();
   const rows = await db
-    .select({ storage: assets.storage, count: sql<number>`count(*)::int`, bytes: sql<number>`coalesce(sum(${assets.size}), 0)::bigint` })
+    .select({
+      storage: assets.storage,
+      count: sql<number>`count(*)::int`,
+      bytes: sql<number>`coalesce(sum(${assets.size}), 0)::bigint`,
+    })
     .from(assets)
     .groupBy(assets.storage);
-  return Object.fromEntries(rows.map((r) => [r.storage, { count: Number(r.count), bytes: Number(r.bytes) }])) as Partial<
-    Record<StorageKind, { count: number; bytes: number }>
-  >;
+  return Object.fromEntries(
+    rows.map((r) => [r.storage, { count: Number(r.count), bytes: Number(r.bytes) }]),
+  ) as Partial<Record<StorageKind, { count: number; bytes: number }>>;
 }
 
 export async function attachAsset(resourceId: string, assetId: string, role: AssetRole = "attachment") {
@@ -295,6 +335,7 @@ export async function deleteOrphanAssets(assetIds: string[]) {
     const store = storeOf(row);
     await store.delete(row.storagePath).catch(() => {});
     await store.delete(thumbnailKey(row.id)).catch(() => {});
+    await store.delete(previewKey(row.id)).catch(() => {});
     await fs.rm(cachePath(row), { force: true });
   }
 }

@@ -19,8 +19,9 @@ import matter from "gray-matter";
 import { z } from "zod";
 import { deleteOrphanAssets, listResourceAssets } from "./assets";
 import { getDb } from "./db/client";
-import { collectionItems, collections, resourceAssets, resources, resourceTags, tags } from "./db/schema";
+import { assets, collectionItems, collections, resourceAssets, resources, resourceTags, tags } from "./db/schema";
 import { normalizeUrl, urlKey } from "./net-guard";
+import { hostOf, knownSourceFor, knownSourceMeta, matchHost } from "./source-match";
 import {
   FACET_SUGGESTIONS,
   RESOURCE_TYPES,
@@ -60,6 +61,8 @@ export interface ListFilters {
   type?: ResourceType;
   /** Leave these types out; ignored when `type` is set. */
   excludeTypes?: ResourceType[];
+  /** Only resources saved from this source (matched by host). */
+  via?: string;
   tagIds?: string[];
   collectionId?: string;
   trash?: boolean;
@@ -69,7 +72,9 @@ export interface ListFilters {
 
 type ResourceRow = typeof resources.$inferSelect;
 
-function toDTO(row: ResourceRow, rowTags: TagDTO[]): ResourceDTO {
+type FullShot = ResourceDTO["fullShot"];
+
+function toDTO(row: ResourceRow, rowTags: TagDTO[], fullShot: FullShot = null): ResourceDTO {
   return {
     id: row.id,
     type: row.type as ResourceType,
@@ -86,7 +91,21 @@ function toDTO(row: ResourceRow, rowTags: TagDTO[]): ResourceDTO {
     updatedAt: row.updatedAt.toISOString(),
     deletedAt: row.deletedAt?.toISOString() ?? null,
     tags: rowTags,
+    fullShot,
   };
+}
+
+async function fullShotsFor(resourceIds: string[]): Promise<Map<string, NonNullable<FullShot>>> {
+  const map = new Map<string, NonNullable<FullShot>>();
+  if (resourceIds.length === 0) return map;
+  const db = await getDb();
+  const rows = await db
+    .select({ resourceId: resourceAssets.resourceId, id: assets.id, width: assets.width, height: assets.height })
+    .from(resourceAssets)
+    .innerJoin(assets, eq(assets.id, resourceAssets.assetId))
+    .where(and(inArray(resourceAssets.resourceId, resourceIds), eq(resourceAssets.role, "screenshot-full")));
+  for (const r of rows) map.set(r.resourceId, { id: r.id, width: r.width, height: r.height });
+  return map;
 }
 
 async function tagsFor(resourceIds: string[]): Promise<Map<string, TagDTO[]>> {
@@ -116,6 +135,10 @@ export async function listResources(filters: ListFilters = {}): Promise<Resource
   const where: SQL[] = [filters.trash ? isNotNull(resources.deletedAt) : isNull(resources.deletedAt)];
   if (filters.type) where.push(eq(resources.type, filters.type));
   else if (filters.excludeTypes?.length) where.push(notInArray(resources.type, filters.excludeTypes));
+  if (filters.via) {
+    const ids = (await sourceAttribution()).get(filters.via) ?? [];
+    where.push(ids.length ? inArray(resources.id, ids) : sql`false`);
+  }
 
   const q = filters.q?.trim();
   if (q) {
@@ -189,16 +212,18 @@ export async function listResources(filters: ListFilters = {}): Promise<Resource
     .where(and(...where))
     .orderBy(...relevance, ...order)
     .limit(filters.limit ?? 1000);
-  const tagMap = await tagsFor(rows.map((r) => r.id));
-  return rows.map((r) => toDTO(r, tagMap.get(r.id) ?? []));
+  const ids = rows.map((r) => r.id);
+  const [tagMap, shots] = await Promise.all([tagsFor(ids), fullShotsFor(ids)]);
+  return rows.map((r) => toDTO(r, tagMap.get(r.id) ?? [], shots.get(r.id)));
 }
 
 export async function getResource(id: string): Promise<ResourceDetailDTO | null> {
   const db = await getDb();
   const [row] = await db.select().from(resources).where(eq(resources.id, id)).limit(1);
   if (!row) return null;
-  const [tagMap, assetList, cols] = await Promise.all([
+  const [tagMap, shots, assetList, cols] = await Promise.all([
     tagsFor([id]),
+    fullShotsFor([id]),
     listResourceAssets(id),
     db
       .select({ id: collections.id, name: collections.name })
@@ -207,15 +232,15 @@ export async function getResource(id: string): Promise<ResourceDetailDTO | null>
       .where(eq(collectionItems.resourceId, id))
       .orderBy(asc(collections.name)),
   ]);
-  return { ...toDTO(row, tagMap.get(id) ?? []), assets: assetList, collections: cols };
+  return { ...toDTO(row, tagMap.get(id) ?? [], shots.get(id)), assets: assetList, collections: cols };
 }
 
 export async function getResourcesByIds(ids: string[]): Promise<ResourceDTO[]> {
   if (ids.length === 0) return [];
   const db = await getDb();
   const rows = await db.select().from(resources).where(inArray(resources.id, ids));
-  const tagMap = await tagsFor(ids);
-  const byId = new Map(rows.map((r) => [r.id, toDTO(r, tagMap.get(r.id) ?? [])]));
+  const [tagMap, shots] = await Promise.all([tagsFor(ids), fullShotsFor(ids)]);
+  const byId = new Map(rows.map((r) => [r.id, toDTO(r, tagMap.get(r.id) ?? [], shots.get(r.id))]));
   return ids.map((id) => byId.get(id)).filter((r): r is ResourceDTO => !!r);
 }
 
@@ -272,7 +297,13 @@ function cleanUrl(url: string | null | undefined) {
 export async function createResource(input: ResourceInput): Promise<ResourceDetailDTO> {
   const data = resourceInput.parse(input);
   const db = await getDb();
-  const derived = data.type === "skill" && data.content ? deriveFromSkill(data.content) : {};
+  const derived: { title?: string; description?: string } =
+    data.type === "skill" && data.content ? deriveFromSkill(data.content) : {};
+  if (data.type === "source") {
+    // A site we know starts with its category, search URL and pricing filled in.
+    data.meta = { ...knownSourceMeta(data.sourceUrl), ...data.meta };
+    derived.description = knownSourceFor(data.sourceUrl)?.description;
+  }
   const [row] = await db
     .insert(resources)
     .values({
@@ -381,6 +412,38 @@ export async function findByUrl(url: string, excludeId?: string): Promise<Resour
       ),
     );
   return rows.filter((r) => r.sourceUrl && urlKey(r.sourceUrl) === key).map((r) => toDTO(r, []));
+}
+
+/**
+ * Which saved resources came from which source, by host. Each resource goes to the most specific
+ * source that matches it, so a styles.refero.design page belongs to that source, not refero.design.
+ */
+export async function sourceAttribution(): Promise<Map<string, string[]>> {
+  const db = await getDb();
+  const rows = await db
+    .select({ id: resources.id, type: resources.type, sourceUrl: resources.sourceUrl })
+    .from(resources)
+    .where(and(isNull(resources.deletedAt), isNotNull(resources.sourceUrl)));
+  const sourceByHost = new Map<string, string>();
+  for (const r of rows) {
+    const host = r.type === "source" ? hostOf(r.sourceUrl) : null;
+    if (host && !sourceByHost.has(host)) sourceByHost.set(host, r.id);
+  }
+  const out = new Map<string, string[]>();
+  for (const r of rows) {
+    if (r.type === "source") continue;
+    const host = hostOf(r.sourceUrl);
+    const match = host && matchHost(host, sourceByHost.keys());
+    if (!match) continue;
+    const id = sourceByHost.get(match)!;
+    out.set(id, [...(out.get(id) ?? []), r.id]);
+  }
+  return out;
+}
+
+/** Number of saved resources per source id. */
+export async function sourceStats(): Promise<Record<string, number>> {
+  return Object.fromEntries([...(await sourceAttribution())].map(([id, ids]) => [id, ids.length]));
 }
 
 export async function typeCounts(): Promise<Record<string, number>> {

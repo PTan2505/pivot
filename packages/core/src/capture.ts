@@ -1,5 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
-import type { Browser } from "playwright";
+import type { Browser, Page } from "playwright";
 import sharp from "sharp";
 import { attachAsset, deleteOrphanAssets, saveAsset } from "./assets";
 import { getDb } from "./db/client";
@@ -9,7 +9,14 @@ import { assertPublicUrl, safeFetch } from "./net-guard";
 import { setResourceFields } from "./resources";
 
 const VIEWPORT = { width: 1440, height: 900 };
-const MAX_FULL_PAGE_HEIGHT = 8000;
+/** Full-page shots keep only the top 12000px; Chromium never renders below the clip. */
+export const MAX_FULL_PAGE_HEIGHT = 12_000;
+// sharp rejects inputs above ~268 MP by default; size its limit to the clipped full-page shot.
+const FULL_PAGE_PIXEL_LIMIT = VIEWPORT.width * MAX_FULL_PAGE_HEIGHT;
+/** Upper bounds for walking a page before the full-page shot, so endless feeds still finish. */
+const MAX_SCROLL_STEPS = 60;
+const MAX_LOAD_MORE_CLICKS = 8;
+const SCROLL_BUDGET_MS = 45_000;
 const IDLE_CLOSE_MS = 2 * 60 * 1000;
 
 interface CaptureState {
@@ -37,16 +44,129 @@ async function browser(): Promise<Browser> {
   return state.browser;
 }
 
-function scheduleIdleClose() {
+/** Closes the shared Chromium instance; the next capture launches a new one. */
+export async function closeCaptureBrowser() {
   clearTimeout(state.idleTimer);
-  state.idleTimer = setTimeout(async () => {
-    const b = state.browser;
-    state.browser = undefined;
-    await (await b)?.close().catch(() => {});
-  }, IDLE_CLOSE_MS);
+  const b = state.browser;
+  state.browser = undefined;
+  await (await b)?.close().catch(() => {});
 }
 
-export async function screenshotUrl(url: string) {
+function scheduleIdleClose() {
+  clearTimeout(state.idleTimer);
+  state.idleTimer = setTimeout(closeCaptureBrowser, IDLE_CLOSE_MS);
+}
+
+/** Resolves once the page has had no request in flight for `quietMs`, or after `maxMs`. */
+function networkQuiet(page: Page) {
+  let inflight = 0;
+  let last = Date.now();
+  const up = () => {
+    inflight++;
+    last = Date.now();
+  };
+  const down = () => {
+    inflight = Math.max(0, inflight - 1);
+    last = Date.now();
+  };
+  page.on("request", up);
+  page.on("requestfinished", down);
+  page.on("requestfailed", down);
+  return async (quietMs = 400, maxMs = 3000) => {
+    const start = Date.now();
+    while (Date.now() - start < maxMs) {
+      if (inflight === 0 && Date.now() - last >= quietMs) return;
+      await page.waitForTimeout(100);
+    }
+  };
+}
+
+/**
+ * Walks the page top to bottom before the full-page shot, so content that only appears on scroll is in it:
+ * lazy images, reveal-on-scroll sections, infinite lists, and "Load more" buttons. Stops at the bottom once the
+ * height stops growing, or when the page passes the full-page cap, or after the step/time budget.
+ */
+async function loadWholePage(page: Page, settle: ReturnType<typeof networkQuiet>) {
+  // Pages that scroll an inner container instead of the document would otherwise shoot as one screen.
+  await page.evaluate(UNLOCK_INNER_SCROLL).catch(() => {});
+  await page.evaluate(EAGER_IMAGES).catch(() => {});
+
+  const started = Date.now();
+  let lastHeight = 0;
+  let stableAtBottom = 0;
+  let clicks = 0;
+  for (let step = 0; step < MAX_SCROLL_STEPS && Date.now() - started < SCROLL_BUDGET_MS; step++) {
+    const { bottom, height } = await page.evaluate<{ bottom: number; height: number }>(
+      scrollStep(Math.round(VIEWPORT.height * 0.85)),
+    );
+    await settle(250, 2500);
+    if (height >= MAX_FULL_PAGE_HEIGHT) break;
+    if (bottom < height - 2) {
+      stableAtBottom = 0;
+    } else if (clicks < MAX_LOAD_MORE_CLICKS && (await page.evaluate<boolean>(CLICK_LOAD_MORE).catch(() => false))) {
+      clicks++;
+      stableAtBottom = 0;
+      await settle(500, 4000);
+    } else {
+      // At the bottom: give an infinite list a moment to append before deciding it's done.
+      stableAtBottom = height === lastHeight ? stableAtBottom + 1 : 0;
+      if (stableAtBottom >= 2) break;
+      await page.waitForTimeout(500);
+    }
+    lastHeight = height;
+  }
+  await page.evaluate("scrollTo(0, 0)");
+  await settle(300, 1500);
+  await page.waitForTimeout(400);
+}
+
+// Scripts that run inside the captured page. Kept as strings: this package compiles without DOM types.
+
+/** Lets an inner scroll container grow to its content, so a full-page shot of an app-like page includes it. */
+const UNLOCK_INNER_SCROLL = `(() => {
+  const doc = document.scrollingElement || document.documentElement;
+  if (doc.scrollHeight > innerHeight + 10) return;
+  let best = null;
+  for (const el of document.querySelectorAll("body *")) {
+    const style = getComputedStyle(el);
+    if (!/(auto|scroll)/.test(style.overflowY) || el.clientHeight < innerHeight * 0.5) continue;
+    if (el.scrollHeight - el.clientHeight > 50 && (!best || el.scrollHeight > best.scrollHeight)) best = el;
+  }
+  for (let el = best; el; el = el.parentElement) {
+    el.style.setProperty("overflow", "visible", "important");
+    el.style.setProperty("height", "auto", "important");
+    el.style.setProperty("max-height", "none", "important");
+  }
+})()`;
+
+const EAGER_IMAGES = `document.querySelectorAll("img[loading=lazy]").forEach((img) => { img.loading = "eager"; })`;
+
+/** Scrolls down by a step; returns how far down the page we are and how tall it is. */
+const scrollStep = (by: number) => `(() => {
+  scrollBy(0, ${by});
+  const el = document.scrollingElement || document.documentElement;
+  return { bottom: el.scrollTop + innerHeight, height: el.scrollHeight };
+})()`;
+
+/** Clicks one visible "Load more"-style button. Buttons only, never links or form submits, so it can't navigate. */
+const CLICK_LOAD_MORE = `(() => {
+  const label = /^\\s*(load|show|view|see)\\s+more\\b|^\\s*(xem|tải)\\s+thêm\\b/i;
+  for (const el of document.querySelectorAll("button, [role=button]")) {
+    if (el.closest("a, form") || el.disabled) continue;
+    const text = (el.innerText || el.getAttribute("aria-label") || "").trim();
+    const r = el.getBoundingClientRect();
+    if (text.length > 40 || !label.test(text) || r.width === 0 || r.height === 0) continue;
+    el.click();
+    return true;
+  }
+  return false;
+})()`;
+
+/**
+ * Screenshots a URL: the first screen, and (unless `fullPage` is false) the whole page after walking it so
+ * scroll-loaded content is included.
+ */
+export async function screenshotUrl(url: string, { fullPage = true }: { fullPage?: boolean } = {}) {
   await assertPublicUrl(url);
   const b = await browser();
   const context = await b.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1, colorScheme: "dark" });
@@ -62,23 +182,26 @@ export async function screenshotUrl(url: string) {
   });
   try {
     const page = await context.newPage();
+    const settle = networkQuiet(page);
     await page.goto(url, { waitUntil: "load", timeout: 30_000 });
     await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
     await page.waitForTimeout(800);
     const viewport = await page.screenshot({ type: "png" });
-    const fullRaw = await page.screenshot({ type: "png", fullPage: true });
-    const meta = await sharp(fullRaw).metadata();
-    const full =
-      meta.height && meta.height > MAX_FULL_PAGE_HEIGHT
-        ? await sharp(fullRaw)
-            .extract({ left: 0, top: 0, width: meta.width!, height: MAX_FULL_PAGE_HEIGHT })
-            .png()
-            .toBuffer()
-        : fullRaw;
-    return {
-      viewport: await sharp(viewport).webp({ quality: 85 }).toBuffer(),
-      full: await sharp(full).webp({ quality: 80 }).toBuffer(),
-    };
+    let full: Buffer | null = null;
+    if (fullPage) {
+      await loadWholePage(page, settle).catch(() => {});
+      // A too-tall or broken full-page shot must not cost us the viewport shot.
+      full = await page
+        .screenshot({
+          type: "png",
+          fullPage: true,
+          // Playwright trims the clip to the document, so short pages keep their real height.
+          clip: { x: 0, y: 0, width: VIEWPORT.width, height: MAX_FULL_PAGE_HEIGHT },
+        })
+        .then((png) => sharp(png, { limitInputPixels: FULL_PAGE_PIXEL_LIMIT }).webp({ quality: 80 }).toBuffer())
+        .catch(() => null);
+    }
+    return { viewport: await sharp(viewport).webp({ quality: 85 }).toBuffer(), full };
   } finally {
     await context.close();
     scheduleIdleClose();
@@ -105,12 +228,19 @@ async function captureOne(resourceId: string) {
   const stamp = new Date().toISOString().slice(0, 10);
 
   try {
-    const shots = await screenshotUrl(row.sourceUrl);
+    // A source is a site you browse, not a page to study: its first screen is enough.
+    const shots = await screenshotUrl(row.sourceUrl, { fullPage: row.type !== "source" });
     const oldIds = await detachScreenshots(resourceId);
-    const viewport = await saveAsset({ data: shots.viewport, fileName: `${host}-${stamp}.webp`, sourceUrl: row.sourceUrl });
-    const full = await saveAsset({ data: shots.full, fileName: `${host}-${stamp}-full.webp`, sourceUrl: row.sourceUrl });
+    const viewport = await saveAsset({
+      data: shots.viewport,
+      fileName: `${host}-${stamp}.webp`,
+      sourceUrl: row.sourceUrl,
+    });
+    const full =
+      shots.full &&
+      (await saveAsset({ data: shots.full, fileName: `${host}-${stamp}-full.webp`, sourceUrl: row.sourceUrl }));
     await attachAsset(resourceId, viewport.id, "screenshot");
-    await attachAsset(resourceId, full.id, "screenshot-full");
+    if (full) await attachAsset(resourceId, full.id, "screenshot-full");
     // Keep a cover the user chose (or one clipped by the extension); replace only a previous server shot.
     const keepCover = row.coverAssetId && !oldIds.includes(row.coverAssetId);
     await setResourceFields(resourceId, {
@@ -118,7 +248,7 @@ async function captureOne(resourceId: string) {
       captureStatus: "done",
       captureError: null,
     });
-    await deleteOrphanAssets(oldIds.filter((id) => id !== viewport.id && id !== full.id));
+    await deleteOrphanAssets(oldIds.filter((id) => id !== viewport.id && id !== full?.id));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     // Fall back to the page's Open Graph image so the card still has a picture.
