@@ -186,8 +186,9 @@ The Skills page groups cards by pack (a GitHub repo, a Claude Code plugin, or an
 The top of the Skills and Sources pages shows a row of glass folders as a visual index above the grouped sections. Skills get one folder per pack, with a paper sheet per skill. Sources get one folder per category, with each source's screenshot as its sheet (a paper sheet until the screenshot exists).
 
 - Each folder (300px wide) has generated liquid art on its back panel, picked from the folder id so it always keeps its look. At most four sheets are visible. A frosted front panel carries the name and `N skills` / `N sources` in `mono`. The folder follows its list in place (a screenshot arriving swaps the sheet), so it never replays its entrance.
-- Hover leans the glass forward. Click, Enter or Space opens the folder and fans the sheets out. Choosing a sheet opens that resource. Escape or a click outside closes it.
-- The `···` key opens a frosted menu: Open folder, Show all N … (scrolls to the group's section), and for skill packs Open repository and Open website.
+- Shelf folders open on hover (`openOn="hover"`): hovering, or focusing with the keyboard, opens the folder and fans its sheets out in place of the old lean. Leaving closes it. Choosing a sheet opens that resource.
+- Clicking the folder itself goes to its page: a type folder to `/?type=…`, a source category to `/?type=source&category=…`. A skill pack, which has no page, scrolls to its section. On touch screens a tap goes straight there.
+- The `···` key only appears when a folder has extra actions (skill packs: Open repository, Open website). The component's default `click` mode (click to open and close, hover leans) is unchanged for other uses.
 - Tone follows the theme: smoked glass in dark mode, milk glass in light mode. Folders assemble on first view, staggered 90ms each. Reduced motion turns every transition off.
 - **Deliberate exception:** the folder is drawn as an object, so it keeps its own soft shadow, glass rim and the component's system font. The no-shadow and no-border rules still apply to cards.
 

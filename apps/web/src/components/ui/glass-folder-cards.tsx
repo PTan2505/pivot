@@ -86,8 +86,15 @@ export type GlassFolderProps = {
   /** What `add` puts in the folder. Return nothing for an "Untitled" sheet. */
   onAdd?: (files: FolderFile[]) => FolderFile | void;
   onFilesChange?: (files: FolderFile[]) => void;
-  /** Items for the `more` menu. An Open / Close item is always first. */
+  /** Items for the `more` menu. In `click` mode an Open / Close item is always first. */
   menu?: FolderMenuItem[];
+  /**
+   * `click` (default): clicking the folder opens and closes it; hovering only leans the glass.
+   * `hover`: the folder opens while hovered or focused, and clicking it calls `onActivate` (e.g. go to its page).
+   */
+  openOn?: "click" | "hover";
+  /** With `openOn="hover"`: what clicking the folder does. */
+  onActivate?: () => void;
   /** Where the label sits on the front panel. */
   labelPlacement?: "bottom-left" | "top-left" | "top-right";
   open?: boolean;
@@ -546,6 +553,8 @@ export default function GlassFolder({
   onAdd,
   onFilesChange,
   menu = [],
+  openOn = "click",
+  onActivate,
   labelPlacement = "bottom-left",
   open: openProp,
   defaultOpen = false,
@@ -700,10 +709,27 @@ export default function GlassFolder({
     onFilesChange?.(next);
   };
 
-  const menuItems: FolderMenuItem[] = [
-    { label: open ? "Close folder" : "Open folder", onSelect: () => setOpen(!open) },
-    ...menu,
-  ];
+  const hoverMode = openOn === "hover";
+  const menuItems: FolderMenuItem[] = hoverMode
+    ? menu
+    : [{ label: open ? "Close folder" : "Open folder", onSelect: () => setOpen(!open) }, ...menu];
+
+  // Hover mode: open while the pointer is over the folder or focus is inside it (so keyboard users reach the files).
+  const hoverHandlers = hoverMode
+    ? {
+        onPointerEnter: (e: React.PointerEvent) => {
+          if (e.pointerType === "mouse") setOpen(true);
+        },
+        onPointerLeave: (e: React.PointerEvent) => {
+          if (e.pointerType === "mouse" && !menuOpen && !rootRef.current?.contains(document.activeElement))
+            setOpen(false);
+        },
+        onFocus: () => setOpen(true),
+        onBlur: (e: React.FocusEvent) => {
+          if (!rootRef.current?.contains(e.relatedTarget as Node | null)) setOpen(false);
+        },
+      }
+    : {};
 
   const onMenuKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? []);
@@ -733,7 +759,9 @@ export default function GlassFolder({
       data-open={open || undefined}
       data-entered={entered || undefined}
       data-place={labelPlacement}
+      data-open-on={openOn}
       style={{ width, height: (H + HEADROOM) * k, ...style }}
+      {...hoverHandlers}
     >
       <style>{GF_CSS}</style>
       <div className="gf-stage" style={{ transform: "translateY(" + HEADROOM * k + "px) scale(" + k + ")" }}>
@@ -784,11 +812,14 @@ export default function GlassFolder({
               ref={hitRef}
               type="button"
               className="gf-hit"
-              aria-expanded={open}
-              aria-label={(open ? "Close " : "Open ") + label + ", " + count + (count === 1 ? " item" : " items")}
+              aria-expanded={hoverMode ? undefined : open}
+              aria-label={
+                (hoverMode ? "" : open ? "Close " : "Open ") + label + ", " + count + (count === 1 ? " item" : " items")
+              }
               onClick={() => {
                 setMenuOpen(false);
-                setOpen(!open);
+                if (hoverMode) onActivate?.();
+                else setOpen(!open);
               }}
             />
             <div className="gf-label">
@@ -955,7 +986,7 @@ const GF_CSS = `
   isolation: isolate;
 }
 .gf-root[data-tone="dark"] { --gf-ink: #f5f5f7; --gf-ink-soft: rgba(245, 245, 247, .58); }
-.gf-root:hover, .gf-root:focus-within { --gf-hinge: -11deg; --gf-lift: -34px; --gf-spread: 8px; --gf-fan: 1.4deg; --gf-stack: 10px; }
+.gf-root[data-open-on="click"]:hover, .gf-root[data-open-on="click"]:focus-within { --gf-hinge: -11deg; --gf-lift: -34px; --gf-spread: 8px; --gf-fan: 1.4deg; --gf-stack: 10px; }
 .gf-root[data-open] { --gf-hinge: -24deg; --gf-lift: -96px; --gf-spread: 40px; --gf-fan: 5deg; --gf-stack: 30px; }
 
 .gf-stage {

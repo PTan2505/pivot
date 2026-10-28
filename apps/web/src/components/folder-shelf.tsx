@@ -12,10 +12,16 @@ export interface ShelfFolder {
   meta: string;
   /** Resources inside the folder; choosing one opens its page. */
   items: { id: string; name: string; meta?: string; image?: string }[];
-  menu: FolderMenuItem[];
+  /** Clicking the folder: go to the page it stands for. */
+  activate: () => void;
+  /** Extra actions behind the folder's `···` key; none hides the key. */
+  menu?: FolderMenuItem[];
 }
 
-/** A row of glass folders used as a visual index above grouped sections (skill packs, source categories). */
+/**
+ * A row of glass folders used as a visual index (section types, source categories, skill packs). Hovering a folder
+ * opens it and fans its contents; clicking it goes to its page.
+ */
 export function FolderShelf({ label, folders }: { label: string; folders: ShelfFolder[] }) {
   const { resolvedTheme } = useTheme();
   const router = useRouter();
@@ -39,7 +45,9 @@ export function FolderShelf({ label, folders }: { label: string; folders: ShelfF
               seed={hash % 97}
               files={f.items.map(({ name, meta, image }) => ({ name, meta, image }))}
               onFileSelect={(_, index) => router.push(`/r/${f.items[index].id}`)}
-              action="more"
+              openOn="hover"
+              onActivate={f.activate}
+              action={f.menu?.length ? "more" : "none"}
               menu={f.menu}
               appearDelay={Math.min(i, 5) * 90}
             />
