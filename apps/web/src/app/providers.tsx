@@ -14,8 +14,9 @@ export function Providers({ children }: { children: ReactNode }) {
         defaultOptions: { queries: { staleTime: 10_000, refetchOnWindowFocus: true, retry: 1 } },
       }),
   );
+  // PIVOT is dark only (ember and glass); next-themes stays for the `dark` class shadcn components key off.
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+    <ThemeProvider attribute="class" forcedTheme="dark" disableTransitionOnChange>
       <QueryClientProvider client={client}>
         <TooltipProvider delayDuration={300}>
           <UiProvider>

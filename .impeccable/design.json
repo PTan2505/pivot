@@ -1,0 +1,421 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-28T15:40:46+00:00",
+  "title": "Design System: PIVOT",
+  "extensions": {
+    "colorMeta": {
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Kiln Black",
+        "canonical": "#0c0806",
+        "tonalRamp": ["#0c0b0a", "#272423", "#45413f", "#65605d", "#87817e", "#a9a4a1", "#ccc8c6", "#f0eeec"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Oxblood Surface",
+        "canonical": "#18110d",
+        "tonalRamp": ["#0d0b09", "#282422", "#47413d", "#685f5b", "#89807b", "#aba39f", "#cec8c5", "#f2edeb"]
+      },
+      "surface-raised": {
+        "role": "neutral",
+        "displayName": "Raised Oxblood",
+        "canonical": "#221812",
+        "tonalRamp": ["#0e0a08", "#2a2420", "#49403b", "#6a5f58", "#8c8079", "#ada39d", "#cfc7c3", "#f3edea"]
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "Scorched Seam",
+        "canonical": "#33251c",
+        "tonalRamp": ["#0f0a07", "#2b231e", "#4b3f38", "#6d5e54", "#8e7f75", "#afa29a", "#d1c7c0", "#f4ede8"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Warm White",
+        "canonical": "#fbf3ea",
+        "tonalRamp": ["#0d0b09", "#282421", "#46413c", "#666059", "#88817a", "#a9a49e", "#cdc8c3", "#f1eeea"]
+      },
+      "ink-secondary": {
+        "role": "neutral",
+        "displayName": "Ash",
+        "canonical": "#e0d3c7",
+        "tonalRamp": ["#0e0a08", "#29241f", "#484039", "#695f56", "#8b8076", "#aca39b", "#cfc8c1", "#f2ede9"]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Smoke",
+        "canonical": "#b8a596",
+        "tonalRamp": ["#0f0a07", "#2b231d", "#4b3f36", "#6d5e51", "#8f7f72", "#b0a297", "#d2c7be", "#f5ede7"]
+      },
+      "ink-subtle": {
+        "role": "neutral",
+        "displayName": "Cinder",
+        "canonical": "#94806f",
+        "tonalRamp": ["#0f0a06", "#2c231b", "#4c3f34", "#6f5e4f", "#917f6f", "#b1a295", "#d3c7bd", "#f5ede6"]
+      },
+      "inverse": {
+        "role": "neutral",
+        "displayName": "Inverse Warm White",
+        "canonical": "#fbf3ea",
+        "tonalRamp": ["#0d0b09", "#282421", "#46413c", "#666059", "#88817a", "#a9a49e", "#cdc8c3", "#f1eeea"]
+      },
+      "on-inverse": {
+        "role": "neutral",
+        "displayName": "On-inverse Kiln Black",
+        "canonical": "#0c0806",
+        "tonalRamp": ["#0c0b0a", "#272423", "#45413f", "#65605d", "#87817e", "#a9a4a1", "#ccc8c6", "#f0eeec"]
+      },
+      "accent-fill": {
+        "role": "primary",
+        "displayName": "Ember Orange",
+        "canonical": "#ff6a13",
+        "tonalRamp": ["#190500", "#411602", "#6e2a04", "#9f3f07", "#d3560e", "#ef8354", "#feb597", "#feeae1"]
+      },
+      "on-accent": {
+        "role": "primary",
+        "displayName": "On-accent Kiln Black",
+        "canonical": "#0c0806",
+        "tonalRamp": ["#0c0b0a", "#272423", "#45413f", "#65605d", "#87817e", "#a9a4a1", "#ccc8c6", "#f0eeec"]
+      },
+      "accent-text": {
+        "role": "primary",
+        "displayName": "Amber Signal",
+        "canonical": "#ff8c42",
+        "tonalRamp": ["#180600", "#3e1902", "#692f02", "#984704", "#c6621a", "#e18e5d", "#fab894", "#ffeadf"]
+      },
+      "danger": {
+        "role": "status",
+        "displayName": "Danger Rose",
+        "canonical": "#ff6b81",
+        "tonalRamp": ["#1e0005", "#4a0316", "#78152c", "#aa2944", "#d14f64", "#eb808c", "#feb1b7", "#ffe8e9"]
+      },
+      "success": {
+        "role": "status",
+        "displayName": "Success Jade",
+        "canonical": "#5ad19a",
+        "tonalRamp": ["#000f07", "#012d1b", "#004f33", "#10734d", "#279869", "#69b891", "#9ed9b9", "#d2fae3"]
+      },
+      "warning": {
+        "role": "status",
+        "displayName": "Warning Amber",
+        "canonical": "#ffc24a",
+        "tonalRamp": ["#120900", "#322202", "#573d03", "#7e5a06", "#a8790c", "#c89d4f", "#e5c48b", "#ffeccd"]
+      },
+      "ember-core": {
+        "role": "tertiary",
+        "displayName": "Ember Core",
+        "canonical": "#ffb347",
+        "tonalRamp": ["#130900", "#352001", "#5c3a01", "#855602", "#b17305", "#cf9953", "#ebc18d", "#ffebd4"]
+      },
+      "ember": {
+        "role": "tertiary",
+        "displayName": "Ember",
+        "canonical": "#ff6a13",
+        "tonalRamp": ["#190500", "#411602", "#6e2a04", "#9f3f07", "#d3560e", "#ef8354", "#feb597", "#feeae1"]
+      },
+      "ember-deep": {
+        "role": "tertiary",
+        "displayName": "Ember Deep",
+        "canonical": "#b8260b",
+        "tonalRamp": ["#1d0200", "#4a0801", "#7a1706", "#ac2b16", "#d4523b", "#ed826e", "#fdb4a5", "#ffe9e4"]
+      },
+      "glass": {
+        "role": "neutral",
+        "displayName": "Light Glass",
+        "canonical": "rgb(34 24 18 / 0.65)"
+      },
+      "glass-strong": {
+        "role": "neutral",
+        "displayName": "Strong Glass",
+        "canonical": "rgb(34 24 18 / 0.86)"
+      },
+      "glass-edge": {
+        "role": "neutral",
+        "displayName": "Glass Edge",
+        "canonical": "rgb(255 238 222 / 0.1)"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The page title of a library view; one per screen, clamps 44-72px."
+      },
+      "title-lg": {
+        "displayName": "Title large",
+        "purpose": "Note-card quotes, skill-pack headings, dialog titles."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card and list-row titles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Body text set on body; notes, fields, Markdown."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Pills, buttons, tabs; 13px in sm controls, 15px in the section nav."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "host · tag lines and breadcrumbs in ink-subtle."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Code and prompt previews, keyboard hints, counts (12-13px)."
+      }
+    },
+    "shadows": [
+      {
+        "name": "overlay",
+        "value": "0 24px 64px rgb(0 0 0 / 0.6), 0 2px 8px rgb(0 0 0 / 0.35)",
+        "purpose": "Strong-glass overlays only: menus, popovers, section panel, dialogs, palette, toasts, selection bar."
+      },
+      {
+        "name": "glass-sheen",
+        "value": "inset 0 1px 0 rgb(255 248 240 / 0.07)",
+        "purpose": "Inner top highlight on both glass grades."
+      }
+    ],
+    "materials": [
+      {
+        "name": "glass",
+        "value": "background rgb(34 24 18 / 0.65); backdrop-filter blur(24px) saturate(1.5); 1px glass-edge border; glass-sheen",
+        "purpose": "Top bar only; ink-secondary, ink-muted and ink-subtle resolve to ink inside it."
+      },
+      {
+        "name": "glass-strong",
+        "value": "background rgb(34 24 18 / 0.86); backdrop-filter blur(24px) saturate(1.5); 1px glass-edge border; glass-sheen + overlay shadow",
+        "purpose": "Overlays; ink-subtle resolves to ink-muted inside it."
+      },
+      {
+        "name": "scrim",
+        "value": "rgb(0 0 0 / 0.5) dialogs, 0.55 alert dialogs, with backdrop-blur-xs",
+        "purpose": "Behind modal dialogs."
+      },
+      {
+        "name": "ember-pool",
+        "value": "radial gradients ember-core 45% / ember 32% / ember-deep 26% centred at the bar bottom (md+); ember-core 40% / ember 28% low and wide on phones",
+        "purpose": "Light behind the solid search field, top bar only."
+      },
+      {
+        "name": "ember-seam",
+        "value": "2px horizontal gradient ember-deep→ember→ember-core→ember→ember-deep at the bar bottom, 12px upward bloom of ember 34%, masked transparent→22%→78%→transparent",
+        "purpose": "Glowing seam on the top bar lower edge."
+      }
+    ],
+    "motion": [
+      {
+        "name": "hover",
+        "value": "150ms ease-out",
+        "purpose": "Hover, pill and colour changes."
+      },
+      {
+        "name": "panel-open",
+        "value": "180ms cubic-bezier(0.2, 0.8, 0.2, 1); from scale 0.96, translateY -4px, opacity 0",
+        "purpose": "Section panel opening."
+      },
+      {
+        "name": "panel-close",
+        "value": "140ms ease-in",
+        "purpose": "Section panel closing."
+      },
+      {
+        "name": "panel-glide",
+        "value": "270ms cubic-bezier(0.45, 0, 0.25, 1); content slides 32px, blur 2px",
+        "purpose": "Moving the section panel between sections and swapping its content."
+      },
+      {
+        "name": "dialog",
+        "value": "100ms fade + zoom from 95%",
+        "purpose": "Dialogs and alert dialogs."
+      },
+      {
+        "name": "selection-bar",
+        "value": "200ms fade + 8px rise",
+        "purpose": "Selection bar entrance."
+      },
+      {
+        "name": "scroll-shot",
+        "value": "linear, ~1 frame-height/s (1.5-30s); return 500ms ease-out",
+        "purpose": "Reference cards scrolling their full-page shot on hover."
+      },
+      {
+        "name": "folder-stagger",
+        "value": "90ms per folder, capped at 450ms",
+        "purpose": "Folder shelf entrance."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "all transitions and animations 0.01ms",
+        "purpose": "prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "40rem (640px)"
+      },
+      {
+        "name": "md",
+        "value": "48rem (768px)",
+        "note": "top bar becomes fixed; side gutter 40px"
+      },
+      {
+        "name": "lg",
+        "value": "64rem (1024px)",
+        "note": "search joins the top bar row"
+      }
+    ],
+    "layoutVars": [
+      {
+        "name": "--topbar-h",
+        "value": "76px until measured",
+        "purpose": "Live top-bar height; pads main and offsets scroll targets from md."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one ember-orange action per screen, dark label.",
+      "html": "<button class=\"ds-btn-primary\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"M12 5v14\"/></svg> Add</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 16px;border:0;border-radius:9999px;font:500 14px/1.2 Geist,sans-serif;cursor:pointer;transition:background-color 150ms ease-out,color 150ms ease-out;background:var(--accent-fill, #ff6a13);color:var(--on-accent, #0c0806);} .ds-btn-primary:hover{background:color-mix(in oklab,var(--accent-fill, #ff6a13) 90%,transparent);} .ds-btn-primary:focus-visible{outline:2px solid var(--accent-text, #ff8c42);outline-offset:3px;}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Every other action: a quiet surface pill.",
+      "html": "<button class=\"ds-btn-secondary\">Collections</button>",
+      "css": ".ds-btn-secondary{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 16px;border:0;border-radius:9999px;font:500 14px/1.2 Geist,sans-serif;cursor:pointer;transition:background-color 150ms ease-out,color 150ms ease-out;background:var(--surface, #18110d);color:var(--ink-secondary, #e0d3c7);} .ds-btn-secondary:hover{background:var(--surface-raised, #221812);color:var(--ink, #fbf3ea);} .ds-btn-secondary:focus-visible{outline:2px solid var(--accent-text, #ff8c42);outline-offset:3px;}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Actions inside glass containers (selection bar, menus).",
+      "html": "<button class=\"ds-btn-ghost\">Copy context</button>",
+      "css": ".ds-btn-ghost{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 16px;border:0;border-radius:9999px;font:500 14px/1.2 Geist,sans-serif;cursor:pointer;transition:background-color 150ms ease-out,color 150ms ease-out;background:transparent;color:var(--ink-secondary, #e0d3c7);} .ds-btn-ghost:hover{background:var(--surface, #18110d);color:var(--ink, #fbf3ea);} .ds-btn-ghost:focus-visible{outline:2px solid var(--accent-text, #ff8c42);outline-offset:3px;}"
+    },
+    {
+      "name": "Search Field",
+      "kind": "input",
+      "refersTo": "search-field",
+      "description": "Solid 44px surface pill in the top bar; the ember pool glows around it.",
+      "html": "<label class=\"ds-search\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/></svg><input placeholder=\"Search your bag — sites, prompts, skills…\" aria-label=\"Search\"><kbd>⌘K</kbd></label>",
+      "css": ".ds-search{display:flex;align-items:center;gap:10px;height:44px;width:100%;max-width:560px;padding:0 18px;border-radius:9999px;background:var(--surface, #18110d);color:var(--ink-muted, #b8a596);} .ds-search input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink, #fbf3ea);font:400 15px Geist,sans-serif;outline:none;} .ds-search input::placeholder{color:var(--ink-muted, #b8a596);} .ds-search kbd{font:400 12px 'Geist Mono',monospace;color:var(--ink-subtle, #94806f);} .ds-search:focus-within{outline:2px solid var(--accent-text, #ff8c42);outline-offset:3px;}"
+    },
+    {
+      "name": "Section Nav",
+      "kind": "nav",
+      "refersTo": "nav-pill-idle",
+      "description": "Section pills on the top bar glass: idle ink, hover surface, current inverse.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-pill\" href=\"#\">Library</a><a class=\"ds-nav-pill\" href=\"#\">Knowledge</a><a class=\"ds-nav-pill is-on\" href=\"#\" aria-current=\"page\">Sources</a><a class=\"ds-nav-pill\" href=\"#\">Skills</a></nav>",
+      "css": ".ds-nav{display:flex;flex-wrap:wrap;gap:4px;} .ds-nav-pill{display:inline-flex;align-items:center;height:36px;padding:0 16px;border-radius:9999px;font:500 15px Geist,sans-serif;color:var(--ink, #fbf3ea);text-decoration:none;transition:background-color 150ms;} .ds-nav-pill:hover{background:var(--surface, #18110d);} .ds-nav-pill.is-on{background:var(--inverse, #fbf3ea);color:var(--on-inverse, #0c0806);} .ds-nav-pill:focus-visible{outline:2px solid var(--accent-text, #ff8c42);outline-offset:3px;}"
+    },
+    {
+      "name": "Tag Pill",
+      "kind": "chip",
+      "refersTo": "pill-idle",
+      "description": "Filter pills: surface idle, inverse when chosen, count at 70%.",
+      "html": "<div class=\"ds-pills\"><button class=\"ds-pill is-on\">All</button><button class=\"ds-pill\">Dashboard <span>12</span></button><button class=\"ds-pill\">Pricing <span>4</span></button></div>",
+      "css": ".ds-pills{display:flex;flex-wrap:wrap;gap:8px;} .ds-pill{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 16px;border:0;border-radius:9999px;font:500 14px Geist,sans-serif;background:var(--surface, #18110d);color:var(--ink-secondary, #e0d3c7);cursor:pointer;transition:background-color 150ms ease-out;} .ds-pill span{opacity:.7;font-variant-numeric:tabular-nums;} .ds-pill:hover{background:var(--surface-raised, #221812);color:var(--ink, #fbf3ea);} .ds-pill.is-on{background:var(--inverse, #fbf3ea);color:var(--on-inverse, #0c0806);} .ds-pill:focus-visible{outline:2px solid var(--accent-text, #ff8c42);outline-offset:3px;}"
+    },
+    {
+      "name": "Resource Card",
+      "kind": "card",
+      "refersTo": "card-frame",
+      "description": "Solid 16:10 surface frame, no border or shadow; title and meta below.",
+      "html": "<a class=\"ds-card\" href=\"#\"><div class=\"ds-card-frame\"></div><div class=\"ds-card-title\">Linear — Issues board</div><div class=\"ds-card-meta\">linear.app · Dashboard</div></a>",
+      "css": ".ds-card{display:flex;flex-direction:column;gap:12px;width:360px;text-decoration:none;outline:none;} .ds-card-frame{aspect-ratio:16/10;border-radius:14px;background:var(--surface, #18110d);} .ds-card:focus-visible .ds-card-frame{outline:2px solid var(--accent-text, #ff8c42);outline-offset:3px;} .ds-card-title{font:500 16px/1.4 Geist,sans-serif;color:var(--ink, #fbf3ea);margin-bottom:-12px;} .ds-card-meta{font:400 14px/1.4 Geist,sans-serif;color:var(--ink-subtle, #94806f);}"
+    },
+    {
+      "name": "Glass Overlay Menu",
+      "kind": "custom",
+      "refersTo": "overlay",
+      "description": "Strong glass for menus, popovers, dialogs, palette and toasts.",
+      "html": "<div class=\"ds-menu\" role=\"menu\"><div class=\"ds-menu-label\">Collections</div><button class=\"ds-menu-item\" role=\"menuitem\">Onboarding refs<span>8</span></button><button class=\"ds-menu-item\" role=\"menuitem\">Pricing pages<span>3</span></button></div>",
+      "css": ".ds-menu{width:256px;padding:4px;border-radius:14px;background-color:var(--glass-strong, rgb(34 24 18 / 0.86));-webkit-backdrop-filter:blur(24px) saturate(1.5);backdrop-filter:blur(24px) saturate(1.5);border:1px solid var(--glass-edge, rgb(255 238 222 / 0.1));box-shadow:inset 0 1px 0 rgb(255 248 240 / 0.07),0 24px 64px rgb(0 0 0 / 0.6),0 2px 8px rgb(0 0 0 / 0.35);--ink-subtle:var(--ink-muted, #b8a596);} .ds-menu-label{padding:6px 8px;font:400 12px Geist,sans-serif;color:var(--ink-subtle);} .ds-menu-item{display:flex;width:100%;align-items:center;padding:6px 8px;border:0;border-radius:10px;background:transparent;color:var(--ink, #fbf3ea);font:400 14px Geist,sans-serif;cursor:pointer;} .ds-menu-item span{margin-left:auto;font:400 12px 'Geist Mono',monospace;color:var(--ink-subtle);} .ds-menu-item:hover,.ds-menu-item:focus-visible{background:var(--surface-raised, #221812);outline:none;}"
+    },
+    {
+      "name": "Ember Top Bar",
+      "kind": "custom",
+      "description": "Signature: light glass bar, ember pool behind the solid search, glowing seam at the bottom edge.",
+      "html": "<header class=\"ds-bar\"><div class=\"ds-bar-glass\"></div><strong class=\"ds-bar-logo\">PIVOT</strong><label class=\"ds-bar-search\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/></svg><span>Search your bag…</span></label><button class=\"ds-bar-add\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"M12 5v14\"/></svg> Add</button></header>",
+      "css": ".ds-bar{position:relative;isolation:isolate;display:flex;align-items:center;gap:16px;padding:16px 40px;background:var(--canvas, #0c0806);overflow:hidden;} .ds-bar::before{content:'';position:absolute;inset:0;z-index:-2;pointer-events:none;background:radial-gradient(22% 130% at 50% 100%,color-mix(in oklch,var(--ember-core, #ffb347) 45%,transparent),transparent 72%),radial-gradient(34% 190% at 50% 100%,color-mix(in oklch,var(--ember, #ff6a13) 32%,transparent),transparent 74%),radial-gradient(48% 260% at 50% 100%,color-mix(in oklch,var(--ember-deep, #b8260b) 26%,transparent),transparent 78%);} .ds-bar-glass{position:absolute;inset:0;z-index:-1;background:var(--glass, rgb(34 24 18 / 0.65));-webkit-backdrop-filter:blur(24px) saturate(1.5);backdrop-filter:blur(24px) saturate(1.5);border-bottom:1px solid var(--glass-edge, rgb(255 238 222 / 0.1));box-shadow:inset 0 1px 0 rgb(255 248 240 / 0.07);} .ds-bar::after{content:'';position:absolute;inset:auto 0 -1px;height:12px;pointer-events:none;background:linear-gradient(90deg,transparent,var(--ember-deep, #b8260b) 18%,var(--ember, #ff6a13) 38%,var(--ember-core, #ffb347) 50%,var(--ember, #ff6a13) 62%,var(--ember-deep, #b8260b) 82%,transparent) bottom/100% 2px no-repeat,linear-gradient(to top,color-mix(in oklch,var(--ember, #ff6a13) 34%,transparent),transparent);-webkit-mask-image:linear-gradient(90deg,transparent,#000 22%,#000 78%,transparent);mask-image:linear-gradient(90deg,transparent,#000 22%,#000 78%,transparent);} .ds-bar-logo{font:500 16px Geist,sans-serif;letter-spacing:-0.02em;color:var(--ink, #fbf3ea);} .ds-bar-search{flex:1;max-width:560px;margin:0 auto;display:flex;align-items:center;gap:10px;height:44px;padding:0 18px;border-radius:9999px;background:var(--surface, #18110d);color:var(--ink-muted, #b8a596);font:400 15px Geist,sans-serif;} .ds-bar-add{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 16px;border:0;border-radius:9999px;font:500 14px/1.2 Geist,sans-serif;cursor:pointer;transition:background-color 150ms ease-out,color 150ms ease-out;height:40px;padding:0 20px;background:var(--accent-fill, #ff6a13);color:var(--on-accent, #0c0806);} .ds-bar-add:focus-visible{outline:2px solid var(--accent-text, #ff8c42);outline-offset:3px;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Kiln",
+    "overview": "The saved work is the light source. The chrome is a dark kiln that screenshots glow out of: a warm black ground with oxblood-brown surface steps, warm white ink, and orange light pooled behind frosted glass at the top of the screen. It refuses the category default of a neutral grey gallery with one blue accent. Saved screenshots keep their true colour because nothing tinted or translucent ever sits on them.\n\nThe interface is dense and quiet. There is no sidebar; one top bar carries the sections, the search and the single primary action, and everything below it is the work. Hierarchy comes from surface steps, not lines or shadows. Two materials exist: solid surfaces for everything that holds saved work, and frosted warm glass for the chrome and the things that float over the work (menus, dialogs, toasts, the selection bar). The one moment of light, the ember, lives only inside the top bar.\n\nPIVOT is dark only, in the app and the extension. There is no light theme and no theme toggle; `color-scheme: dark` is set on the root and the theme provider forces `dark`.",
+    "keyCharacteristics": [
+      "Warm black canvas, surfaces stepped in oxblood brown, warm white ink.",
+      "One ember-orange filled button per screen; everything else is a quiet surface pill.",
+      "Frosted glass only on chrome and overlays; cards stay solid with no border and no shadow.",
+      "Ember light pooled in the top bar and a glowing seam along its lower edge, never under page text.",
+      "Binary radius: pills for controls, 14px for containers.",
+      "Geist at 400 and 500 only; one display title per view."
+    ],
+    "rules": [
+      {
+        "name": "The One Ember Rule",
+        "body": "Exactly one ember-orange filled button per screen, with dark text. Orange never appears as a link, icon, hover state, badge or decoration; links and focus use Amber Signal.",
+        "section": "colors"
+      },
+      {
+        "name": "The Glass Promotion Rule",
+        "body": "Glass raises its faint inks so nothing drops below 4.5:1 over a white screenshot: inside light glass, ink-secondary, ink-muted and ink-subtle all resolve to ink; inside strong glass, ink-subtle resolves to ink-muted. Text sitting directly on the top bar is ink.",
+        "section": "colors"
+      },
+      {
+        "name": "The 4.5 Floor Rule",
+        "body": "Every text token reads at least 4.5:1 on canvas, surface and surface-raised, and on glass in the worst case. Check any new colour against all three surfaces and the glass composite before adding it.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Weights Rule",
+        "body": "Weights are 400 and 500 only. No 600+ anywhere.",
+        "section": "typography"
+      },
+      {
+        "name": "The 16px Root Rule",
+        "body": "The root stays at the browser's 16px. Never set `font-size` on `html`: every rem-based size (control heights, spacing, `text-xs`/`text-sm`) is measured from it; body text is raised to 15px on `body` instead. Never go below 12px.",
+        "section": "typography"
+      },
+      {
+        "name": "The Solid Work Rule",
+        "body": "Glass is for chrome and overlays only. Anything that shows saved work (cards, rows, frames, panels on the page) is solid, with no border and no shadow, so screenshots keep their true colour.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Light Stays Home Rule",
+        "body": "Ember light never sits under page text. It exists only in the top bar's pool and seam; any glow bright enough to see drops small grey text below 4.5:1.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** keep one ember-orange filled button per screen, with dark (on-accent) text.",
+      "**Do** use accent-text for links, focus (2px outline, 3px offset) and the selected outline.",
+      "**Do** build hierarchy with canvas → surface → surface-raised; use divider only in dialog footers and tables.",
+      "**Do** put strong glass on every floating overlay (menus, popovers, selects, dialogs, palette, toasts, selection bar) and light glass on the top bar only.",
+      "**Do** use ink for any text placed directly on the top bar's glass.",
+      "**Do** keep every control a pill and every container at the 14px card radius.",
+      "**Do** check new text colours at 4.5:1 on canvas, surface, surface-raised and the white-backdrop glass composite.",
+      "**Do** keep motion at 150ms ease-out for hover and pill changes and make every transition instant under reduced motion.",
+      "**Do** write in English, sentence case, from the user's side: buttons name the action (\"Add\", \"Copy context\", \"Move to trash\"), toasts confirm it in the past tense (\"Context copied · ~1.9k tokens\"), errors say what happened and what to do.",
+      "**Do** show counts as plain numbers in ink-subtle or mono."
+    ],
+    "donts": [
+      "**Don't** add a light theme, a theme toggle, or any `prefers-color-scheme` branch, in the app or the extension.",
+      "**Don't** put white text on the ember fill (2.87:1).",
+      "**Don't** use orange for icons, hover states, badges or decoration, or ember light anywhere outside the top bar.",
+      "**Don't** put glass, borders or shadows on cards, rows or panels that show saved work.",
+      "**Don't** use weights above 500, sizes below 12px, or `font-size` on `html`.",
+      "**Don't** scale or lift thumbnails on hover.",
+      "**Don't** signal state by colour alone; danger, success and warning always carry a word or an icon.",
+      "**Don't** use \"Submit\", \"OK\", or emoji anywhere in the UI."
+    ]
+  }
+}

@@ -1,9 +1,8 @@
 "use client";
 
-import { Archive, ChevronDown, FolderPlus, Folders, Moon, Search, Settings, Sun, Trash2 } from "lucide-react";
+import { Archive, ChevronDown, FolderPlus, Folders, Search, Settings, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useTheme } from "next-themes";
 import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { isResourceType } from "@pivot/core/types";
@@ -26,11 +25,13 @@ import { cn } from "@/lib/utils";
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-full flex-col">
       <Suspense fallback={<div className="h-[76px] shrink-0" />}>
         <TopBar />
       </Suspense>
-      <main id="main" className="min-h-0 flex-1 overflow-y-auto">
+      {/* The page scrolls (not an inner panel) so the work passes under the glass top bar, which is fixed from md
+          up; the main area starts below it using the bar's measured height. */}
+      <main id="main" className="flex-1 md:pt-(--topbar-h)">
         {children}
       </main>
     </div>
@@ -105,7 +106,7 @@ function SearchField() {
       <button
         type="button"
         onClick={() => setPaletteOpen(true)}
-        className="shrink-0 rounded-sm px-1 font-mono text-xs text-ink-subtle hover:text-ink"
+        className="shrink-0 rounded-sm px-1 font-mono text-xs text-ink-subtle hover:text-ink max-md:hidden"
         aria-label="Open command palette"
       >
         ⌘K
@@ -191,12 +192,30 @@ function CollectionsMenu() {
 function TopBar() {
   const pathname = usePathname();
   const sp = useSearchParams();
-  const { resolvedTheme, setTheme } = useTheme();
   const { data: counts } = useCounts();
   const type = sp.get("type");
+  const barRef = useRef<HTMLElement>(null);
+
+  // The bar is fixed from md up, so the page reserves its height; it wraps to two rows between md and lg.
+  useEffect(() => {
+    const bar = barRef.current;
+    if (!bar) return;
+    const root = document.documentElement;
+    const ro = new ResizeObserver(() => root.style.setProperty("--topbar-h", `${bar.offsetHeight}px`));
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, []);
 
   return (
-    <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-3 px-4 py-4 md:px-10">
+    // Frosted glass over the ember light and the scrolling work; fixed from md up (on phones it wraps to several
+    // rows and would take too much of the screen, so it stays in the flow there).
+    <header
+      ref={barRef}
+      className="ember-bar relative isolate z-40 flex shrink-0 flex-wrap items-center gap-x-4 gap-y-3 px-4 py-4 md:fixed md:inset-x-0 md:top-0 md:px-10"
+    >
+      {/* The glass is a layer, not the header itself: an element with backdrop-filter becomes the backdrop root of
+          its children, so the section menu (rendered inside the header) could only blur the bar, not the page. */}
+      <div aria-hidden className="glass absolute inset-0 -z-10 border-x-0 border-t-0" />
       <Link href="/" className="flex items-center gap-2.5 rounded-full" aria-label="PIVOT — library">
         <span className="grid size-[26px] place-items-center rounded-full bg-ink text-canvas">
           <Archive className="size-3.5" strokeWidth={2.4} aria-hidden />
@@ -234,14 +253,6 @@ function TopBar() {
           >
             <Settings />
           </Link>
-        </Button>
-        <Button
-          variant="secondary"
-          size="icon-lg"
-          aria-label={resolvedTheme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-        >
-          {resolvedTheme === "dark" ? <Sun /> : <Moon />}
         </Button>
         <AddMenu preferType={pathname === "/" && isResourceType(type) ? type : undefined} />
       </nav>

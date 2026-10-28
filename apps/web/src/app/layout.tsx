@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${geist.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
-      <body className="h-full overflow-hidden">
+      <body className="min-h-full">
         <Providers>
           <AppShell>{children}</AppShell>
           <Suspense>

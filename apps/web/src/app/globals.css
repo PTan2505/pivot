@@ -51,55 +51,46 @@
   --shadow-overlay: var(--shadow-overlay);
 }
 
-/* PIVOT — a near-black canvas (#101010) where saved screenshots carry the colour, warm paper ink (#F4F4EF),
-   a grey (#747474) for metadata and one acid-lime (#C7FF35) fill per screen for the primary action.
-   Hierarchy comes from surface steps (canvas → surface → surface-raised), not borders or shadows.
-   Contrast verified ≥ 4.5:1 for every text token on canvas, surface and surface-raised in both themes;
-   #747474 itself reads 4.1–4.2:1, so ink-subtle is it nudged just past 4.6:1, and light-theme links use
-   a darkened lime because the lime itself is 1.07:1 on the paper canvas. */
+/* PIVOT — ember and glass (pinned by the owner, 2026-10-28, from a reference of orange light between dark tiles
+   with a frosted glass tile). Dark only: a warm black kiln where saved screenshots keep their true colour, one
+   ember-orange fill per screen for the primary action, and frosted warm glass for the chrome and overlays.
+   Text contrast is >= 4.5:1 on canvas, surface and surface-raised, and on glass in the worst case (a white
+   screenshot behind it): glass (0.65, top bar) carries only ink text directly on it (4.92:1 worst case), glass-strong adds ink-muted and accent-text,
+   and ink-subtle is promoted inside both (see the .glass rules below). */
 :root {
-  --canvas: #f4f4ef;
-  --surface: #ebebe6;
-  --surface-raised: #e1e1dc;
-  --divider: #d6d6d2;
-  --ink: #101010;
-  --ink-secondary: #30302f;
-  --ink-muted: #474747;
-  --ink-subtle: #626262;
-  --inverse: #101010;
-  --on-inverse: #f4f4ef;
-  --accent-fill: #c7ff35;
-  --on-accent: #101010;
-  --accent-text: #556a1e;
-  --danger: #c21f1f;
-  --success: #17703d;
-  --warning: #8a5600;
-  --shadow-overlay: 0 24px 64px rgba(10, 10, 10, 0.16);
-}
-
-.dark {
-  --canvas: #101010;
-  --surface: #1a1a1a;
-  --surface-raised: #232323;
-  --divider: #323231;
-  --ink: #f4f4ef;
-  --ink-secondary: #d4d4d0;
-  --ink-muted: #aeaeab;
-  --ink-subtle: #8b8b8a;
-  --inverse: #f4f4ef;
-  --on-inverse: #101010;
-  --accent-fill: #c7ff35;
-  --on-accent: #101010;
-  --accent-text: #c7ff35;
-  --danger: #ff7a7a;
-  --success: #4cc38a;
-  --warning: #f5b33f;
-  --shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+  --canvas: #0c0806;
+  --surface: #18110d;
+  --surface-raised: #221812;
+  --divider: #33251c;
+  --ink: #fbf3ea;
+  --ink-secondary: #e0d3c7;
+  --ink-muted: #b8a596;
+  --ink-subtle: #94806f;
+  --inverse: #fbf3ea;
+  --on-inverse: #0c0806;
+  --accent-fill: #ff6a13;
+  --on-accent: #0c0806;
+  --accent-text: #ff8c42;
+  --danger: #ff6b81;
+  --success: #5ad19a;
+  --warning: #ffc24a;
+  --shadow-overlay: 0 24px 64px rgb(0 0 0 / 0.6), 0 2px 8px rgb(0 0 0 / 0.35);
+  /* ember light: amber core, orange body, deep-red falloff */
+  --ember-core: #ffb347;
+  --ember: #ff6a13;
+  --ember-deep: #b8260b;
+  /* glass: surface-raised over whatever is behind, frosted */
+  --glass: rgb(34 24 18 / 0.65);
+  --glass-strong: rgb(34 24 18 / 0.86);
+  --glass-edge: rgb(255 238 222 / 0.1);
+  --glass-sheen: inset 0 1px 0 rgb(255 248 240 / 0.07);
+  /* the fixed top bar's height; measured by the app shell, this is its one-row desktop height until then */
+  --topbar-h: 76px;
 }
 
 /* shadcn/ui variables, mapped onto the design-system tokens. */
-:root,
-.dark {
+:root {
   --radius: 14px;
   --background: var(--canvas);
   --foreground: var(--ink);
@@ -139,8 +130,17 @@
     @apply font-sans;
   }
   ::selection {
-    background: color-mix(in oklch, var(--accent-text) 35%, transparent);
+    background: color-mix(in oklch, var(--ember) 45%, transparent);
+    color: var(--ink);
   }
+  html {
+    /* no rubber-band bounce: it dragged the pinned top bar along when scrolling past the top */
+    overscroll-behavior-y: none;
+    caret-color: var(--accent-text);
+    scrollbar-color: var(--divider) transparent;
+    accent-color: var(--ember);
+  }
+
   :focus-visible {
     outline: 2px solid var(--accent-text);
     outline-offset: 3px;
@@ -329,5 +329,81 @@
   .section-panel-viewport[data-state],
   .section-panel-content[data-motion] {
     animation: none;
+  }
+}
+
+/* Glass (chrome and overlays only; cards stay solid so saved work keeps its true colour).
+   .glass (65%): the top bar; text sitting directly on it is ink (4.92:1 with white behind).
+   .glass-strong: menus, popovers, selects, the command palette, dialogs; ink-muted and accent-text are safe too.
+   Inside glass the faintest inks step up, so a white screenshot blurred behind never drops text below 4.5:1. */
+@layer components {
+  .glass,
+  .glass-strong {
+    -webkit-backdrop-filter: blur(24px) saturate(1.5);
+    backdrop-filter: blur(24px) saturate(1.5);
+    box-shadow: var(--glass-sheen);
+    border: 1px solid var(--glass-edge);
+  }
+  .glass {
+    background-color: var(--glass);
+    --ink-secondary: var(--ink);
+    --ink-muted: var(--ink);
+    --ink-subtle: var(--ink);
+  }
+  .glass-strong {
+    background-color: var(--glass-strong);
+    box-shadow: var(--glass-sheen), var(--shadow-overlay);
+    --ink-subtle: var(--ink-muted);
+  }
+
+  /* The signature move, ember light caught in the glass: a pool of light inside the top bar behind the (solid)
+     search field, and a glowing seam along the bar's lower edge, like light through the gaps between tiles.
+     It never sits under page text: any glow bright enough to see drops small grey text below 4.5:1. */
+  .ember-bar::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 -1px;
+    /* a 2px seam of light that blooms up into the bar's bottom padding (no text lives there) */
+    height: 12px;
+    pointer-events: none;
+    background:
+      linear-gradient(
+          90deg,
+          transparent,
+          var(--ember-deep) 18%,
+          var(--ember) 38%,
+          var(--ember-core) 50%,
+          var(--ember) 62%,
+          var(--ember-deep) 82%,
+          transparent
+        )
+        bottom / 100% 2px no-repeat,
+      linear-gradient(to top, color-mix(in oklch, var(--ember) 34%, transparent), transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);
+  }
+
+  .ember-bar::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    /* phones: the search field is the bar's last row; keep the pool to that row so it never sits under the nav */
+    background:
+      radial-gradient(55% 30% at 50% 100%, color-mix(in oklch, var(--ember-core) 40%, transparent), transparent 72%),
+      radial-gradient(80% 42% at 50% 100%, color-mix(in oklch, var(--ember) 28%, transparent), transparent 76%);
+  }
+  @media (min-width: 48rem) {
+    .ember-bar::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background:
+        radial-gradient(22% 130% at 50% 100%, color-mix(in oklch, var(--ember-core) 45%, transparent), transparent 72%),
+        radial-gradient(34% 190% at 50% 100%, color-mix(in oklch, var(--ember) 32%, transparent), transparent 74%),
+        radial-gradient(48% 260% at 50% 100%, color-mix(in oklch, var(--ember-deep) 26%, transparent), transparent 78%);
+    }
   }
 }

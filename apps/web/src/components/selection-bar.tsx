@@ -79,7 +79,7 @@ export function SelectionBar({
     <div
       role="toolbar"
       aria-label="Selection actions"
-      className="fixed bottom-6 left-1/2 z-40 flex max-w-[calc(100%-2rem)] -translate-x-1/2 animate-in flex-wrap items-center gap-1 rounded-[28px] bg-surface-raised p-1.5 pl-4 shadow-overlay duration-200 fade-in slide-in-from-bottom-2"
+      className="glass-strong fixed bottom-6 left-1/2 z-40 flex max-w-[calc(100%-2rem)] -translate-x-1/2 animate-in flex-wrap items-center gap-1 rounded-[28px] p-1.5 pl-4 duration-200 fade-in slide-in-from-bottom-2"
     >
       <span className="mr-2 font-mono text-xs text-ink-subtle tabular-nums">{ids.length} selected</span>
       {mode === "library" ? (

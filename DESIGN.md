@@ -1,281 +1,433 @@
-# PIVOT — Design system
+---
+name: PIVOT
+description: A personal library of UI references, assets, prompts and skills; ember light and frosted glass on a warm black kiln.
+colors:
+  canvas: "#0c0806"
+  surface: "#18110d"
+  surface-raised: "#221812"
+  divider: "#33251c"
+  ink: "#fbf3ea"
+  ink-secondary: "#e0d3c7"
+  ink-muted: "#b8a596"
+  ink-subtle: "#94806f"
+  inverse: "#fbf3ea"
+  on-inverse: "#0c0806"
+  accent-fill: "#ff6a13"
+  on-accent: "#0c0806"
+  accent-text: "#ff8c42"
+  danger: "#ff6b81"
+  success: "#5ad19a"
+  warning: "#ffc24a"
+  ember-core: "#ffb347"
+  ember: "#ff6a13"
+  ember-deep: "#b8260b"
+  glass: "rgb(34 24 18 / 0.65)"
+  glass-strong: "rgb(34 24 18 / 0.86)"
+  glass-edge: "rgb(255 238 222 / 0.1)"
+typography:
+  display:
+    fontFamily: "Geist, sans-serif"
+    fontSize: "72px"
+    fontWeight: 500
+    lineHeight: 0.96
+    letterSpacing: "-0.045em"
+  title-lg:
+    fontFamily: "Geist, sans-serif"
+    fontSize: "22px"
+    fontWeight: 500
+    lineHeight: 1.2
+    letterSpacing: "-0.02em"
+  title:
+    fontFamily: "Geist, sans-serif"
+    fontSize: "16px"
+    fontWeight: 500
+    lineHeight: 1.4
+  body:
+    fontFamily: "Geist, sans-serif"
+    fontSize: "15px"
+    fontWeight: 400
+    lineHeight: 1.5
+  label:
+    fontFamily: "Geist, sans-serif"
+    fontSize: "14px"
+    fontWeight: 500
+    lineHeight: 1.2
+  meta:
+    fontFamily: "Geist, sans-serif"
+    fontSize: "14px"
+    fontWeight: 400
+    lineHeight: 1.4
+  mono:
+    fontFamily: "Geist Mono, monospace"
+    fontSize: "12px"
+    fontWeight: 400
+    lineHeight: 1.6
+rounded:
+  sm: "6px"
+  md: "10px"
+  card: "14px"
+  panel: "20px"
+  bar: "28px"
+  pill: "9999px"
+spacing:
+  space-1: "4px"
+  space-2: "8px"
+  space-3: "12px"
+  space-4: "16px"
+  space-6: "24px"
+  space-10: "40px"
+  space-16: "64px"
+components:
+  button-primary:
+    backgroundColor: "{colors.accent-fill}"
+    textColor: "{colors.on-accent}"
+    typography: "{typography.label}"
+    rounded: "{rounded.pill}"
+    padding: "0 16px"
+    height: "36px"
+  button-secondary:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink-secondary}"
+    typography: "{typography.label}"
+    rounded: "{rounded.pill}"
+    padding: "0 16px"
+    height: "36px"
+  button-secondary-hover:
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.ink}"
+  button-ghost:
+    textColor: "{colors.ink-secondary}"
+    rounded: "{rounded.pill}"
+    padding: "0 16px"
+    height: "36px"
+  button-ghost-hover:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+  button-destructive:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.danger}"
+    rounded: "{rounded.pill}"
+    height: "36px"
+  pill-idle:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink-secondary}"
+    typography: "{typography.label}"
+    rounded: "{rounded.pill}"
+    padding: "0 16px"
+    height: "36px"
+  pill-active:
+    backgroundColor: "{colors.inverse}"
+    textColor: "{colors.on-inverse}"
+    typography: "{typography.label}"
+    rounded: "{rounded.pill}"
+    padding: "0 16px"
+    height: "36px"
+  nav-pill-idle:
+    textColor: "{colors.ink}"
+    rounded: "{rounded.pill}"
+    padding: "0 16px"
+    height: "36px"
+  search-field:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.pill}"
+    padding: "0 18px"
+    height: "44px"
+    width: "560px"
+  input:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.pill}"
+    padding: "4px 16px"
+    height: "36px"
+  card-frame:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.card}"
+  overlay:
+    backgroundColor: "{colors.glass-strong}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.card}"
+    padding: "20px"
+  selection-bar:
+    backgroundColor: "{colors.glass-strong}"
+    rounded: "{rounded.bar}"
+    padding: "6px 6px 6px 16px"
+---
 
-Source of truth for the app (`apps/web`) and the extension (`apps/extension`). Tokens live as CSS variables in
-[`apps/web/src/app/globals.css`](apps/web/src/app/globals.css) and are exposed to Tailwind as `bg-surface`, `text-ink-subtle`, `outline-accent-text`…
-The browsable version with component previews: [PIVOT Design System](https://claude.ai/artifact/6NEyzcYbPGtnjScMY33Lfd) (private).
+# Design System: PIVOT
 
-Direction: **Savee** (from [Refero Styles](https://styles.refero.design/style/c6d8490d-e3f2-45c8-aebf-fe5f11daf116)) — mockup option 3.
+Tokens are CSS variables in `apps/web/src/app/globals.css` (`:root`), exposed to Tailwind as `bg-surface`, `text-ink-subtle`, `outline-accent-text`…; the extension (`apps/extension/src/styles.css`) declares the same values. The shadcn/ui variables (`--background`, `--card`, `--primary`…) are mapped onto these tokens; prefer the design-system names in new code. Extended tokens (shadows, motion, breakpoints, component snippets) live in `.impeccable/design.json`.
 
-PIVOT is a personal library of UI references, assets, prompts and Claude Code skills. The interface is a near-black canvas: saved screenshots carry the color, the chrome stays out of the way. One acid-lime button per screen marks the action that matters.
+## Overview
 
-## Content fundamentals
+**Creative North Star: "The Kiln"**
 
-- Write in English, sentence case, from the user's side: "Add", "Copy context", "Export", "Move to trash". Never "Submit" or "OK".
-- Buttons name the action; toasts confirm it in past tense: "Copy context" → "Context copied · ~1.9k tokens".
-- Name things the way the user saved them. A resource's title is what the site calls itself ("Linear — Issues board"); the meta line is `host · tag` ("linear.app · Dashboard").
-- Errors say what happened and what to do: "PIVOT isn't running. Start it with `npm start`."
-- Counts are plain numbers in `ink-subtle` ("References 24"), never badges.
-- No emoji anywhere in the UI.
+The saved work is the light source. The chrome is a dark kiln that screenshots glow out of: a warm black ground with oxblood-brown surface steps, warm white ink, and orange light pooled behind frosted glass at the top of the screen. It refuses the category default of a neutral grey gallery with one blue accent. Saved screenshots keep their true colour because nothing tinted or translucent ever sits on them.
 
-## Color
+The interface is dense and quiet. There is no sidebar; one top bar carries the sections, the search and the single primary action, and everything below it is the work. Hierarchy comes from surface steps, not lines or shadows. Two materials exist: solid surfaces for everything that holds saved work, and frosted warm glass for the chrome and the things that float over the work (menus, dialogs, toasts, the selection bar). The one moment of light, the ember, lives only inside the top bar.
 
-- Paint the page `canvas`. Put thumbnails, note cards, the search field and inactive pills on `surface`. Use `surface-raised` for hover, for chips that sit on a surface, and for popovers.
-- Hierarchy comes from surface steps (`canvas` → `surface` → `surface-raised`), not borders or shadows. Use `divider` only inside dialogs and tables.
-- Text: `ink` for titles, `ink-secondary` for labels that recede, `ink-muted` for helper text and icons, `ink-subtle` for metadata. All four read on `canvas`, `surface` and `surface-raised` in both themes.
-- `accent` is for one filled primary button per screen, with `on-accent` text. Do not use it for links, icons, hover states, badges or decoration.
-- Links, the focus ring and the selected-card outline use `accent-text`.
-- The active pill is `inverse` with `on-inverse` text. Every other pill is `surface` with `ink-secondary` text.
-- `danger`, `success` and `warning` always come with a word or an icon. `success` and `danger` have the same lightness, so color alone never tells them apart.
-- Dark is the primary theme. Light keeps the same structure: `canvas` is warm paper (`#F4F4EF`) and `surface` a step darker, so pills and thumbnail frames stay visible against the page. The lime button stays lime in both themes, always with `#101010` text.
+PIVOT is dark only, in the app and the extension. There is no light theme and no theme toggle; `color-scheme: dark` is set on the root and the theme provider forces `dark`.
+
+**Key Characteristics:**
+
+- Warm black canvas, surfaces stepped in oxblood brown, warm white ink.
+- One ember-orange filled button per screen; everything else is a quiet surface pill.
+- Frosted glass only on chrome and overlays; cards stay solid with no border and no shadow.
+- Ember light pooled in the top bar and a glowing seam along its lower edge, never under page text.
+- Binary radius: pills for controls, 14px for containers.
+- Geist at 400 and 500 only; one display title per view.
+
+## Colors
+
+A warm, near-monochrome brown-black ramp with a single orange voice and three status hues.
+
+### Primary
+
+- **Ember Orange** (accent-fill): the fill of the one primary action per screen (Add / New, Save, Create, Import N), always with **Kiln Black** text (on-accent, 6.95:1). White on this orange is 2.87:1 and is never used.
+- **Amber Signal** (accent-text): links, the focus ring, the selected-card outline, the text caret. Reads 7.52:1 or better on every solid surface and 4.92:1 on strong glass over a white screenshot.
+
+### Tertiary (ember light)
+
+- **Ember Core** (ember-core), **Ember** (ember), **Ember Deep** (ember-deep): the three stops of the light in the top bar (amber core, orange body, deep-red falloff). They are light, not paint: used only in the top bar's pool and seam, plus the text selection highlight (ember at 45%) and native controls (`accent-color`). Never as a fill, text or icon colour.
+
+### Neutral
+
+- **Kiln Black** (canvas): the page behind everything; sections are separated by empty canvas, never by lines. Also the label colour on ember and inverse fills.
+- **Oxblood Surface** (surface): thumbnail frames, note cards, the search field, inputs, inactive pills and buttons, option-tile backgrounds.
+- **Raised Oxblood** (surface-raised): hover state of surface, chips that sit on a surface, inputs inside cards; the tint the glass is made from.
+- **Scorched Seam** (divider): rare structural lines (dialog footers, table rows) and the scrollbar thumb. Not for cards or section breaks.
+- **Warm White** (ink): headings, card titles, primary text; the only text colour allowed directly on the top bar's light glass. 15.83:1 or better on every solid surface.
+- **Ash** (ink-secondary): inactive pill and button labels, the current breadcrumb, copy that recedes a step (11.85:1 or better).
+- **Smoke** (ink-muted): helper text, placeholders, icons, page count lines, option blurbs (7.34:1 or better).
+- **Cinder** (ink-subtle): metadata (hosts, counts, timestamps, shortcut hints). 4.62:1 at worst, on surface-raised.
+- **Inverse / on-inverse**: the active pill (current section, chosen tag, current Trash or Settings page) is Warm White with Kiln Black text.
+
+### Status
+
+- **danger** (6.35:1 or better), **success** (9.13:1 or better), **warning** (10.82:1 or better): destructive labels and errors, saved / in-sync states, duplicate and unsaved notices. Always with a word or an icon; `success` and `danger` are never told apart by colour alone.
+
+### Glass
+
+- **Light glass** (glass, 65%): the top bar only.
+- **Strong glass** (glass-strong, 86%): menus, popovers, selects, the section panel, dialogs, the command palette, toasts, the selection bar.
+- **Glass edge** (glass-edge): the 1px rim of both.
+
+Contrast on glass is measured against the worst backdrop, a white screenshot blurred behind it. On strong glass: ink 10.36:1, ink-secondary 7.76:1, ink-muted 4.80:1, accent-text 4.92:1; ink-subtle would fall to 3.02:1. On light glass only ink holds (4.92:1 over white, 17.20:1 over black).
+
+### Named Rules
+
+**The One Ember Rule.** Exactly one ember-orange filled button per screen, with dark text. Orange never appears as a link, icon, hover state, badge or decoration; links and focus use Amber Signal.
+
+**The Glass Promotion Rule.** Glass raises its faint inks so nothing drops below 4.5:1 over a white screenshot: inside light glass, ink-secondary, ink-muted and ink-subtle all resolve to ink; inside strong glass, ink-subtle resolves to ink-muted. Text sitting directly on the top bar is ink.
+
+**The 4.5 Floor Rule.** Every text token reads at least 4.5:1 on canvas, surface and surface-raised, and on glass in the worst case. Check any new colour against all three surfaces and the glass composite before adding it.
 
 ## Typography
 
-- One family, Geist (`--font-sans`), for everything; Geist Mono (`--font-mono`) for prompt and code previews, keyboard hints and counts. Both load from Google Fonts.
-- One `display` title per library view (72px, weight 500, tracking -0.045em, line-height 0.96). It is the only large type on the screen.
-- Card titles are `title`, meta lines `meta` in `ink-subtle`, pills and buttons `label`.
-- The note card shows its content as a `title-lg` quote, not as a code block.
-- Keep weights at 400 and 500. No bold (600+) anywhere.
-- Body text is 15px (set on `body`), labels and meta 14px. Never go below 12px. (Raised one step on 2026-10-28: 14 → 15 body, 13 → 14 labels and meta, 15 → 16 titles.)
-- The root size stays at the browser's 16px. Never set `font-size` on `html`: every rem-based size (control heights, spacing, `text-xs`/`text-sm`) is measured from it, and a 14px root once shrank the whole app by 12.5%.
+**Display Font:** Geist (via `next/font`, `--font-sans`)
+**Body Font:** Geist
+**Label/Mono Font:** Geist Mono (`--font-mono`) for prompt and code previews, keyboard hints and counts
+
+**Character:** One neutral grotesque carries everything; scale and the single display title do the work, weight barely moves.
+
+### Hierarchy
+
+- **Display** (500, 72px clamping down to 44px via `clamp(44px, 6vw, 72px)`, 0.96, -0.045em): the page title of a library view. One per screen, the only large type.
+- **Title-lg** (500, 22px, 1.2, -0.02em): the quote inside a note card, skill-pack headings, dialog titles.
+- **Title** (500, 16px, 1.4): card titles, list row titles, empty-state headings.
+- **Body** (400, 15px, 1.5): set on `body`; notes, descriptions, form fields, Markdown previews, the search input.
+- **Label** (500, 14px): pills, buttons, tabs (13px in `sm` controls). Section-nav labels are 15px.
+- **Meta** (400, 14px, 1.4): the `host · tag` line under a card title and breadcrumbs, in ink-subtle. The page count line under the display title is 16px in ink-muted.
+- **Mono** (400, 12–13px, 1.6): code and prompt previews, keyboard hints, counts (`tabular-nums`).
+
+The extension popup runs at a 13px body with the same families.
+
+### Named Rules
+
+**The Two Weights Rule.** Weights are 400 and 500 only. No 600+ anywhere.
+
+**The 16px Root Rule.** The root stays at the browser's 16px. Never set `font-size` on `html`: every rem-based size (control heights, spacing, `text-xs`/`text-sm`) is measured from it; body text is raised to 15px on `body` instead. Never go below 12px.
 
 ## Layout
 
-- No sidebar. A top bar holds the logo, the section nav (Library · Knowledge · Sources · Skills), the search field (up to 560px) and the account pills; the primary `Add` button sits at its right end.
-- Under it: the `display` page title with a `meta` count line, then a wrapping row of tag pills that filter the list.
-- The grid is `repeat(auto-fill, minmax(360px, 1fr))` with `space-10` between rows and `space-6` between columns. Thumbnails are 16:10.
-- Page side gutter is `space-10` on desktop and 16px on phones. Sections are separated by `space-16` of empty canvas.
-- Radius is binary: `radius-pill` for every control, `radius-card` for every container. `radius-sm` is only for keyboard hints and inline code.
+- **No sidebar.** A single top bar holds the logo, the section nav (Library · Knowledge · Sources · Skills), the search field (up to 560px, centred) and the action pills, with the primary `Add` at its right end. Between `md` and `lg` it wraps to two rows; below `lg` the search drops to its own row.
+- **Pinned bar.** From `md` (48rem) up the top bar is fixed to the top edge across the full width. The app shell measures its height live (a ResizeObserver writes `--topbar-h`, 76px until measured) and `main` is padded by it, so the page itself scrolls and the work passes under the glass. `html` has `overscroll-behavior-y: none` so the bar never rubber-bands. On phones the bar stays in the flow, because its several rows would take too much of the screen.
+- **Scroll targets** that jump to a section (skill packs, source categories) use `scroll-margin-top: calc(var(--topbar-h) + 1rem)` from `md`, 32px below it.
+- **Page head:** the display title with its count line, then the tag pill row, then the Type select / source chip on the left and Sort / grid-list toggle on the right.
+- **Grid:** `repeat(auto-fill, minmax(min(100%, 360px), 1fr))`, 40px between rows, 24px between columns. Thumbnails are 16:10.
+- **Gutters and rhythm:** page side gutter 40px on desktop, 16px on phones. Groups are separated by 64px of empty canvas; a group header sits 24px above its cards; the folder shelf sits 40px above the grid.
+- Rows of pills wrap onto new lines; a pill row never scrolls horizontally.
 
-## States
+## Elevation & Depth
 
-- Hover: a `surface` element becomes `surface-raised`. Thumbnails do not scale or lift.
-- Focus: a 2px `accent-text` outline with 3px offset, on every interactive element.
-- Selected (bulk selection): the thumbnail gets the same 2px `accent-text` outline; a floating selection bar on `surface-raised` with `shadow-overlay` shows the actions.
-- Loading: a `surface` block with a slow opacity pulse; capturing screenshots also shows "Capturing…" in `ink-muted`.
-- Disabled: 40% opacity and no pointer cursor.
+Solid surfaces are flat: depth on the page comes from tonal steps (canvas → surface → surface-raised), never shadows or borders. Depth above the page is glass. Both glass grades blur and saturate what is behind them (`blur(24px) saturate(1.5)`), carry a 1px glass-edge border and a faint inset top sheen; strong glass adds the overlay shadow. Glass lives in the Tailwind components layer so utilities can override it (the top bar's glass drops its side and top borders).
 
-## Motion
+The top bar's glass is a sibling layer behind its content, not the header itself: an element with `backdrop-filter` becomes the backdrop root of its children, and the section menu rendered inside the header would only blur the bar instead of the page.
 
-- 150ms ease-out for hover and pill changes; 200ms for dialogs (fade + 8px rise). Nothing loops except the loading pulse.
-- With `prefers-reduced-motion`, all transitions are instant.
+Modal scrims are black at 50% (dialogs) or 55% (alert dialogs) with a light blur.
 
-## Iconography
+### Shadow Vocabulary
 
-- Lucide stroke icons at 16px, stroke 2, colored `ink-muted` (or the label color inside a button). Icons sit beside a word; icon-only buttons carry an `aria-label`.
-- The PIVOT mark is the archive glyph in `canvas` on an `ink` disc. There is no other logo; set the name in Geist 500.
+- **Overlay** (`0 24px 64px rgb(0 0 0 / 0.6), 0 2px 8px rgb(0 0 0 / 0.35)`): strong glass only (menus, popovers, the section panel, dialogs, the palette, toasts, the selection bar).
+- **Glass sheen** (`inset 0 1px 0 rgb(255 248 240 / 0.07)`): the inner top highlight on both glass grades.
+
+### The ember light
+
+The signature: ember light caught in the glass top bar, like orange light through the gaps between dark tiles.
+
+- **Pool:** a radial glow behind the solid search field, layered amber core → orange → deep red. On phones it is kept low and wide to the search row so it never sits under the nav; from `md` it is a tall, narrow pool centred under the field.
+- **Seam:** a 2px line of light along the bar's bottom edge (deep red at the ends, amber at the centre), blooming 12px upward into the bar's empty bottom padding, faded out at both ends by a horizontal mask.
+
+### Named Rules
+
+**The Solid Work Rule.** Glass is for chrome and overlays only. Anything that shows saved work (cards, rows, frames, panels on the page) is solid, with no border and no shadow, so screenshots keep their true colour.
+
+**The Light Stays Home Rule.** Ember light never sits under page text. It exists only in the top bar's pool and seam; any glow bright enough to see drops small grey text below 4.5:1.
+
+## Shapes
+
+The radius is binary: every control is a full pill, every container a gently rounded 14px card (cards, dialogs, popovers, menus, selects, textareas, toasts). Small steps exist only for parts inside those: 6px for keyboard hints and inline code, 8px for list-row thumbnails, 10px for option icon tiles, 12px for option rows. Two floating chrome pieces are rounder: the section panel (20px) and the selection bar (28px). Round (circular) buttons are the icon variants of the pill. Borders appear only as the glass edge and the rare divider.
 
 ## Components
 
-Each entry says what the component is for, what the caller provides and where it lives in the code (paths under `apps/web/src/` unless written out).
+Paths are under `apps/web/src/` unless written out.
 
-### Button — `apps/web/src/components/ui/button.tsx`
+### Buttons — `components/ui/button.tsx`
 
-Pill-shaped button in three roles.
+Pill-shaped, quiet by default.
 
-- `default` (lime `accent` fill, `on-accent` label): the **one** primary action on a screen — Add, Save, Export.
-- `secondary` (`surface` fill, `ink-secondary` label, hover `surface-raised`): everything else. `outline` renders the same; there are no outline-only buttons.
-- `ghost`: secondary actions inside a raised container (selection bar, menus).
-- `destructive` (`surface` fill, `danger` label): always with an explicit verb or icon ("Delete forever").
-- Sizes: `lg` 40px in the top bar, `default` 36px, `sm` 32px, `xs` 24px; `icon*` variants are round.
-- The caller provides a verb as the label and, optionally, a leading 16px Lucide icon. Icon-only buttons need `aria-label`.
+- **Primary (`default`):** ember fill, Kiln Black label; hover drops to 90% opacity. The one primary action on the screen.
+- **Secondary (`secondary`, `outline`):** surface fill, ink-secondary label; hover and open state surface-raised with ink. There are no outline-only buttons.
+- **Ghost:** transparent, ink-secondary; hover surface. For actions inside a glass container (selection bar, menus).
+- **Destructive:** surface fill, danger label, always with an explicit verb or icon ("Delete forever").
+- **Link:** accent-text, underline on hover.
+- **Sizes:** `lg` 40px (top bar), `default` 36px, `sm` 32px with a 13px label, `xs` 24px; `icon*` variants are round at the same heights.
+- **Focus:** 2px accent-text outline, 3px offset (on every interactive element). Disabled: 40% opacity, no pointer. Transitions 150ms ease-out.
 
-### Pill (section nav, tag filter, tags) — `components/app-shell.tsx` (`SectionNav`), `components/tag-pills.tsx`, `components/tags-editor.tsx`
+### Icons
 
-One shape, two states.
-
-- Inactive: `surface` fill, `ink-secondary` label; hover `surface-raised`.
-- Active: `inverse` fill, `on-inverse` label. Exactly one active section in the nav; the tag row may have several.
-- Heights: 36px section nav, tag filter and chips, 28px editable tags, 24px tags inside a card. Section nav labels are 15px.
-- **Section nav** (`components/section-nav.tsx`, Radix NavigationMenu): transparent when idle (hover or open: `surface`), so the top bar stays quiet. Sections with a panel (Library, Knowledge, Sources) end in a 14px chevron at 60% opacity that turns over (200ms) while the panel is open; phones (no hover) hide it so the nav fits.
-- **Type panel**, opened by hovering Library, Knowledge or Sources, or by pressing ↓ on them (Sources lists its seven categories instead of types, each with its own Lucide icon: lightbulb, app-window, swatch-book, blocks, orbit, type, shapes):
-  - A `surface-raised` panel, 20px radius, `shadow-overlay`, 8px padding, two columns up to 600px wide (one column on phones).
-  - Each option is a 12px-radius row: a 40px `surface` icon tile, the plural name in 15px `ink` with its count in `mono` on the right, and the type's one-line blurb in 14px `ink-muted`. Hover or focus fills it with `surface`; the current type stays filled.
-  - Clicking the section name itself goes to its landing page; there is no "All" option.
-- **Panel motion**, modelled on lovable.dev:
-  - Opening scales from 0.96 and fades in (180ms); closing reverses (140ms).
-  - Moving to another section glides the panel under it and resizes it to the new content (270ms, `cubic-bezier(.45,0,.25,1)`).
-  - The new content slides 32px in from the side the pointer came from, unblurring from 2px, while the old one slides out the other way.
-  - Reduced motion makes all of this instant.
-- Section nav labels are 15px with 16px side padding (12px on phones, so all four fit at 375px); the row wraps on anything narrower.
-- **Tag filter row**:
-  - "All" first (active when no tag is chosen), then the chosen tags (inverse, with a remove ×), then up to 12 tags by how many listed items carry them, each with its count.
-  - "+N more" opens a searchable popover grouped by tag kind.
-  - The row hides when nothing on screen has tags.
-- A "From <source>" chip (inverse pill with a clear button) sits in the filter row while the list is narrowed to one source.
-- An optional count follows the label at 70% opacity, `tabular-nums`.
-- Rows wrap onto new lines; never scroll a pill row horizontally.
-
-### Search field — `components/app-shell.tsx` (`SearchField`)
-
-The top-bar search, which also opens the ⌘K palette.
-
-- 44px tall, `radius-pill`, `surface` fill, no border, up to 560px wide, centred in the top bar (its own row below 1024px).
-- Leading search icon and placeholder in `ink-muted`; typed text `ink`; trailing `⌘K` button in `ink-subtle` (`mono`).
-- On library pages typing filters the grid (debounced 200ms, kept in the `?q=` URL param); elsewhere Enter jumps to `/?q=…`. `/` focuses it from anywhere.
-- Focus: 2px `accent-text` outline, 3px offset.
-
-### Resource card — `components/resource-card.tsx` (`ResourceCard`)
-
-A visual resource (reference, library, image, icon, animation, palette): the screenshot does the talking.
-
-- A 16:10 frame, `radius-card`, `surface` behind the image (`object-fit: cover; object-position: top`). No border, no shadow, no hover lift.
-- Under it, 12px apart: title (`title`, `ink`, one line) and meta `host · first tag` (`meta`, `ink-subtle`).
-- Hover reveals round `surface-raised` action buttons (open source, copy) in the frame's top-right and the select checkbox top-left.
-- Selected: 2px `accent-text` outline with 3px offset on the frame; the checkbox turns `inverse`.
-- Capturing: a pulsing frame with "Capturing…" in `ink-muted`. Failed capture: an image-off icon in `ink-subtle`.
-- **References scroll** (`ScrollShot`), like a screen recording:
-  - The frame shows the full-page screenshot's scroll preview, resting on the top of the page, instead of the cropped thumbnail.
-  - On hover or keyboard focus it scrolls linearly to the bottom at about one frame-height per second (1.5–30s, from the image's aspect ratio), and glides back in 500ms ease-out on leave.
-  - The frame is a size container, so the travel is `translateY(calc(-100% + 100cqh))`.
-  - Pages shorter than the frame don't move. With reduced motion the card stays still.
-- The caller provides the resource DTO, `selected`, `selecting` and `onToggle`, and may replace the meta line.
-
-### Note card — `components/resource-card.tsx` (`ResourceCard`, text types)
-
-A text resource (prompt, skill, snippet, rule, checklist, MCP config), shaped like a resource card so both share one grid.
-
-- Same 16:10 `surface` frame, padded 24px; hover `surface-raised`.
-- Prompts, rules, checklists and skills show an excerpt as a `title-lg` quote in `ink` (frontmatter and markdown syntax stripped; skills show their description). Snippets and MCP JSON show the first lines in `mono`, `ink-muted`.
-- A type chip at the bottom-left: `surface-raised`, `radius-pill`, `ink-secondary`.
-- Under the frame: title, then `Type · purpose` in `ink-subtle`. Skills show their invocation instead (`/name`, plus `· plugin` for plugin skills).
-
-### List row — `components/resource-card.tsx` (`ResourceRow`)
-
-The list-view alternative to cards.
-
-- 64px row, `radius-card`, transparent; hover and selected `surface`, selected adds the `accent-text` outline.
-- 64×40 thumbnail (`radius` 8px), title + meta, date in `mono`, actions and a round checkbox on hover.
-
-### Selection bar — `components/selection-bar.tsx`
-
-Appears at the bottom centre while resources are selected.
-
-- `surface-raised`, radius 28px, `shadow-overlay`; wraps on narrow screens.
-- Count in `mono` / `ink-subtle`, then `ghost` actions: Copy context, Export, Collection, Remove (in a collection), Trash; in Trash: Restore and Delete forever (`danger`, confirmed in a dialog).
+Lucide stroke icons at 16px, coloured ink-muted or the label colour inside a button. Icons sit beside a word; icon-only buttons carry an `aria-label`. The PIVOT mark is the archive glyph in canvas on a 26px ink disc, followed by "PIVOT" in Geist 500.
 
 ### Top bar — `components/app-shell.tsx` (`TopBar`)
 
-- Logo (archive glyph in `canvas` on an `ink` disc + "PIVOT" in Geist 500), the section nav, search field, then Collections menu, Trash and Settings round buttons (`inverse` when on that page), theme toggle, and the split `Add` button (the screen's primary action).
-- On phones the Collections button is icon-only and the primary button reads just "New" (its full name stays in `aria-label`), so the action row fits at 375px; the search field drops to its own row.
-- No sidebar anywhere. Sections are in the top bar; a section's types are in the Type select.
+- Logo, section nav, search field, then the Collections menu, round Trash and Settings buttons (inverse when on that page) and the split `Add` button (the screen's primary action).
+- Light glass layer behind the content, ember pool and seam (see Elevation & Depth); 16px padding, 40px side padding from `md`.
+- On phones the Collections button is icon-only and the primary button reads just "New" (its full name stays in `aria-label`), so the action row fits at 375px; the search field takes its own row.
+
+### Section nav — `components/section-nav.tsx`
+
+- Idle labels are ink on the light glass with no fill (only ink holds 4.5:1 there); hover or open fills surface. The current section is an inverse pill. 36px tall, 15px labels, 16px side padding (12px on phones so all four fit at 375px); the row wraps on anything narrower.
+- Sections with a panel (Library, Knowledge, Sources) end in a 14px chevron at 60% opacity that turns over (200ms) while open; phones hide it.
+- **Panel:** opened by hovering Library, Knowledge or Sources, or pressing ↓ on them. Strong glass, 20px radius, 8px padding, two columns up to 600px wide (one column on phones). Each option is a 12px-radius row: a 40px surface icon tile, the plural name in 15px ink with its count in mono on the right, and a one-line blurb in 14px ink-muted. Hover or focus fills it with surface; the current option stays filled. Sources lists its seven categories (lightbulb, app-window, swatch-book, blocks, orbit, type, shapes icons). Clicking the section name goes to its landing page; there is no "All" option.
+- **Motion** (modelled on lovable.dev): opening scales from 0.96 with a 4px drop and fades in (180ms); closing reverses (140ms, ease-in). Moving to another section glides the panel under it and resizes it to the new content (270ms, `cubic-bezier(.45,0,.25,1)`); the new content slides 32px in from the side the pointer came from, unblurring from 2px, while the old one leaves the other way. The first open appears in place. Reduced motion makes all of it instant.
+
+### Pills and tag filter — `components/tag-pills.tsx`, `components/tags-editor.tsx`
+
+- Inactive: surface, ink-secondary; hover surface-raised. Active: inverse. Heights: 36px filter pills and chips, 28px editable tags, 24px tags inside a card.
+- The filter row: "All" first, then chosen tags (inverse, with a remove ×), then up to 12 tags by frequency with counts at 70% opacity in `tabular-nums`; "+N more" opens a searchable popover grouped by kind. The row hides when nothing on screen has tags.
+- A "From <source>" chip (inverse pill, 13px, clear button) sits in the filter row while the list is narrowed to one source.
+
+### Search field — `components/app-shell.tsx` (`SearchField`)
+
+- 44px solid surface pill, no border, up to 560px, centred in the top bar; it is solid so the ember pool glows around it, not through it.
+- Leading search icon and placeholder in ink-muted, typed text ink at 15px, trailing `⌘K` hint in mono ink-subtle (hidden on phones) that opens the command palette.
+- Typing filters the library (debounced 200ms, kept in `?q=`); elsewhere Enter jumps to `/?q=…`. `/` focuses it from anywhere. Focus: the accent-text outline on the whole pill.
 
 ### Breadcrumbs — `components/breadcrumbs.tsx`
 
-- A row of 14px `ink-subtle` links separated by 14px chevrons; the last crumb (the current page) is `ink-secondary` and not a link. It truncates rather than wraps a long title.
-- Shown only when there are two or more steps: above the page title on a type page (Section › Type) and in a collection (Collections › Name), and beside the back button on a resource page (Section › Type › Title).
+- 14px ink-subtle links separated by 14px chevrons at 70%; hover ink. The last crumb is ink-secondary and not a link; it truncates rather than wraps.
+- Shown only with two or more steps: above the title on a type page (Section › Type) and in a collection, and beside the back button on a resource page.
+
+### Resource card — `components/resource-card.tsx`
+
+- A 16:10 solid surface frame, 14px radius, image `object-fit: cover; object-position: top`. No border, no shadow, no hover lift or scale.
+- Under it, 12px apart: title (title, ink, one line) and meta `host · first tag` (meta, ink-subtle).
+- Hover or focus reveals round 32px action buttons (open source, copy) top-right and the select checkbox top-left.
+- Selected: 2px accent-text outline with 3px offset on the frame.
+- Capturing: a pulsing frame (1.6s) with "Capturing…" in ink-muted. Failed capture: an image-off icon in ink-subtle.
+- **References scroll like a screen recording:** the frame shows the full-page shot resting at the top; on hover or keyboard focus it scrolls linearly to the bottom at about one frame-height per second (1.5–30s from the image's aspect ratio) and glides back in 500ms ease-out on leave. The frame is a size container, so the travel is `translateY(calc(-100% + 100cqh))`. Short pages don't move; reduced motion keeps it still.
+
+### Note card — `components/resource-card.tsx` (text types)
+
+- The same 16:10 surface frame, padded 24px. Prompts, rules, checklists and skills show an excerpt as a title-lg quote in ink; snippets and MCP JSON show the first lines in mono ink-muted. A type chip bottom-left (surface-raised pill, 12px, ink-secondary).
+- Under the frame: title, then `Type · purpose` in ink-subtle (skills show their invocation).
+
+### List row — `components/resource-card.tsx` (`ResourceRow`)
+
+64px row, 14px radius, transparent; hover and selected surface, selected adds the accent-text outline. 64×40 thumbnail at 8px radius, title + meta, date in mono, actions and a round checkbox on hover.
+
+### Inputs — `components/ui/input.tsx`, `textarea.tsx`
+
+Single-line inputs are 36px surface pills with no border, 15px ink text, ink-muted placeholder; hover and focus surface-raised, focus outline accent-text. Textareas and the content editor use the 14px card radius with the same fill. Labels above fields in 12px ink-subtle. The command palette input is a 40px surface pill.
+
+### Overlays — `components/ui/{dialog,alert-dialog,popover,select,dropdown-menu,command,sonner}.tsx`
+
+- Strong glass, 14px radius, overlay shadow. Dialogs pad 20px and open with a 100ms fade and zoom from 95%; their footer is separated by a divider line. Menus and popovers slide 8px in from their trigger side. Toasts (bottom-right) use strong glass with the glass edge.
+- The command palette is a dialog up to 672px wide.
+
+### Selection bar — `components/selection-bar.tsx`
+
+Appears bottom-centre while resources are selected: strong glass, 28px radius, 6px padding (16px on the left), wraps on narrow screens, enters with a 200ms fade and 8px rise. Count in mono ink-subtle (promoted to ink-muted by the glass), then ghost actions (Copy context, Export, Collection, Remove, Trash; in Trash: Restore and Delete forever in danger, confirmed in a dialog).
 
 ### Page header — `components/library-view.tsx`
 
-- `display` title (72px, clamps down to 44px on narrow screens), a `meta`-sized count line in `ink-muted` ("24 saved · 6 this week"), and optional actions aligned right (collections: Copy context, Export, Delete).
-- Then the tag filter row, then a row with the Type select (when the section has more than one type) and the "From …" chip on the left, sort select and grid/list toggle on the right.
-- The title is the section name, or the type's plural when one is chosen.
-- A section's landing page (no type chosen) shows a folder shelf above the grid: one glass folder per type, the type's items as sheets (cover thumbnails when they have one), with 40px before the grid.
-- Grid: `repeat(auto-fill, minmax(min(100%, 360px), 1fr))`, 40px between rows, 24px between columns.
+Display title (section name, or the type's plural), the count line ("24 saved · 6 this week"), optional actions aligned right, then the filter rows. A section's landing page shows the folder shelf above the grid.
 
 ### Skill pack group — `components/skill-pack-groups.tsx`
 
-The Skills page groups cards by pack (a GitHub repo, a Claude Code plugin, or an author) instead of one long grid.
+Header: a chevron toggle and the pack name in title-lg ink, then `author · kind · N skills` in 14px ink-subtle; Website and Repository as 32px surface pills (13px) on the right; description in ink-muted at a 3xl measure. Groups are 64px apart; collapsing hides the cards (`aria-expanded`/`aria-controls`).
 
-- Header: a chevron toggle and the pack name in `title-lg` (22px, `ink`), then `author · kind · N skills` in `ink-subtle`. Website and Repository links on the right are small `surface` pills (32px, 13px label).
-- The pack description follows in `ink-muted` at a 3xl measure.
-- Under the header sits the normal card grid or list. Groups are 64px apart; the header is 24px above its cards.
-- Collapsing a group hides its cards; the toggle carries `aria-expanded`/`aria-controls`.
+### Sources page — `components/source-groups.tsx`, `components/bookmark-import-dialog.tsx`
 
-### Folder shelf — `components/folder-shelf.tsx` (`FolderShelf`), `components/ui/glass-folder-cards.tsx`
+- Toolbar: a surface panel with a 40px search field and an "Import bookmarks" secondary pill; with a query typed, one row per category of surface-raised source pills that invert on hover.
+- One section per category in a fixed order, each with a title-lg heading plus hint and count in ink-subtle, then a grid of resource cards (300px minimum column).
+- Source info aside: a surface panel linking "Saved from this source · N →" and a small search form when the search URL has `{q}`.
+- Import dialog (max 3xl): a surface drop panel, then a review list (Suggested/All pill tabs, filter field, one row per bookmark with checkbox, title, mono URL, folder path and selects); already-saved rows dim to 50% and lock; the footer holds the single primary "Import N".
 
-The top of the Skills and Sources pages shows a row of glass folders as a visual index above the grouped sections. Skills get one folder per pack, with a paper sheet per skill. Sources get one folder per category, with each source's screenshot as its sheet (a paper sheet until the screenshot exists).
+### Skill guide — `components/skill-guide.tsx`
 
-- Each folder (300px wide) has generated liquid art on its back panel, picked from the folder id so it always keeps its look. At most four sheets are visible. A frosted front panel carries the name and `N skills` / `N sources` in `mono`. The folder follows its list in place (a screenshot arriving swaps the sheet), so it never replays its entrance.
-- Shelf folders open on hover (`openOn="hover"`): hovering, or focusing with the keyboard, opens the folder and fans its sheets out in place of the old lean. Leaving closes it. Choosing a sheet opens that resource.
-- Clicking the folder itself goes to its page: a type folder to `/?type=…`, a source category to `/?type=source&category=…`. A skill pack, which has no page, scrolls to its section. On touch screens a tap goes straight there.
-- The `···` key only appears when a folder has extra actions (skill packs: Open repository, Open website). The component's default `click` mode (click to open and close, hover leans) is unchanged for other uses.
-- Tone follows the theme: smoked glass in dark mode, milk glass in light mode. Folders assemble on first view, staggered 90ms each. Reduced motion turns every transition off.
-- **Deliberate exception:** the folder is drawn as an object, so it keeps its own soft shadow, glass rim and the component's system font. The no-shadow and no-border rules still apply to cards.
+A surface panel at card radius: title, the invocation as a mono chip that copies on click, Source and Edit guide as ghost pills. Usage renders as Markdown; examples are mono rows on surface-raised that copy their prompt. Plugin skills show a "Plugin skill · read-only" note.
 
-### Sources page — `components/source-groups.tsx` (`SourceToolbar`, `SourceGroups`, `SourceInfo`), `components/bookmark-import-dialog.tsx`
+### Folder shelf — `components/folder-shelf.tsx`, `components/ui/glass-folder-cards.tsx`
 
-- **Toolbar** (`surface` panel, top of the Sources tab): a 40px search field and an "Import bookmarks" secondary pill. With a query typed, one row per category appears: the category label in `ink-subtle`, then a `surface-raised` pill per searchable source. Each pill is a link to that site's results, and it inverts on hover.
-- **Groups**: one section per category in a fixed order (Inspiration → Assets, then Uncategorized). Each section has a `title-lg` heading plus the hint and count in `ink-subtle`, then a grid of normal resource cards (300px minimum column). The card meta line reads `host · N saved · searchable`.
-- **Source info** (detail aside): a `surface` panel. The top row "Saved from this source · N →" links to the filtered library. Below it is a small search form when the search URL has `{q}`, otherwise a hint.
-- **Import dialog** (max 3xl), in two steps:
-  1. A file picker drawn as a `surface` drop panel.
-  2. A review list: Suggested/All pill tabs, a filter field, and one row per bookmark with a checkbox, title, mono URL and folder path, a Source/Reference select and a category select.
-  - Already-saved rows are dimmed to 50% and locked.
-  - The footer holds the screenshot checkbox and the single primary "Import N" button.
+A row of glass folders as a visual index on section landing pages, Skills (one per pack) and Sources (one per category).
 
-### Skill guide — `components/skill-guide.tsx` (`SkillGuide`, `PackField`)
+- Each folder is 300px wide in a `minmax(300px, 1fr)` grid (32px × 48px gaps). Its back panel carries generated liquid art picked from the folder id (so it always keeps its look); at most four sheets show; a frosted front panel carries the name and `N sources` / `N skills` in mono.
+- Tone is always dark (smoked glass).
+- Folders open on hover or keyboard focus, fanning their sheets; leaving closes. Choosing a sheet opens that resource. Clicking the folder goes to its page (a skill pack scrolls to its section); on touch a tap goes straight there. The `···` key appears only when a folder has extra actions.
+- Folders assemble on first view, staggered 90ms each (capped at the sixth); they follow their list in place and never replay the entrance. Reduced motion turns every transition off.
+- **Owner exception:** the folder is drawn as an object, so it keeps its own soft shadow, glass rim and the component's system font, and its art uses the component's multi-colour presets (aurora, ember, dusk, glacier, verdant), a spot of colour in the ember world kept by the owner's call. The exception is scoped to this component; the solid-card, no-shadow and ember-palette rules still apply everywhere else.
 
-The "How to use" block on a skill's detail page, between the skill bar and the content.
+### Browser surfaces — `globals.css` base layer
 
-- A `surface` panel with `radius-card`. Header: the title, the invocation as a `mono` chip that copies on click, then Source and Edit guide as ghost pills.
-- Usage renders as Markdown. Examples are `mono` rows on `surface-raised`, and each row copies its prompt.
-- Edit mode swaps these for an Invocation input, a Usage textarea and an Examples textarea (one per line).
-- `PackField` in the aside is a Select listing "Detected · <pack>" first, then every pack.
-- Plugin skills replace the skill bar with a "Plugin skill · read-only" note, and their content shows as a preview only.
+Text selection is ember at 45% with ink text; the caret is accent-text; the scrollbar is a divider thumb on a transparent track; native controls take ember as `accent-color`.
 
-### Dialogs, popovers, menus — `components/ui/dialog.tsx`, `alert-dialog.tsx`, `popover.tsx`, `dropdown-menu.tsx`, `select.tsx`, `command.tsx`
+## Do's and Don'ts
 
-- `surface-raised` (`--popover`) background, `radius-card`, `shadow-overlay`, a 5% ink ring. Dialog footers are separated by a `divider` line.
-- Inputs inside are filled pills; the ⌘K palette input is a 40px `surface` pill.
+### Do:
 
-### Form fields — `components/ui/input.tsx`, `textarea.tsx`
+- **Do** keep one ember-orange filled button per screen, with dark (on-accent) text.
+- **Do** use accent-text for links, focus (2px outline, 3px offset) and the selected outline.
+- **Do** build hierarchy with canvas → surface → surface-raised; use divider only in dialog footers and tables.
+- **Do** put strong glass on every floating overlay (menus, popovers, selects, dialogs, palette, toasts, selection bar) and light glass on the top bar only.
+- **Do** use ink for any text placed directly on the top bar's glass.
+- **Do** keep every control a pill and every container at the 14px card radius.
+- **Do** check new text colours at 4.5:1 on canvas, surface, surface-raised and the white-backdrop glass composite.
+- **Do** keep motion at 150ms ease-out for hover and pill changes and make every transition instant under reduced motion.
 
-- Single-line inputs: 36px `surface` pills, no border, hover/focus `surface-raised`, focus outline `accent-text`.
-- Textareas and the content editor: `radius-card`, same fill. Labels above fields in `xs` / `ink-subtle`.
+### Don't:
 
-## Tokens
+- **Don't** add a light theme, a theme toggle, or any `prefers-color-scheme` branch, in the app or the extension.
+- **Don't** put white text on the ember fill (2.87:1).
+- **Don't** use orange for icons, hover states, badges or decoration, or ember light anywhere outside the top bar.
+- **Don't** put glass, borders or shadows on cards, rows or panels that show saved work.
+- **Don't** use weights above 500, sizes below 12px, or `font-size` on `html`.
+- **Don't** scale or lift thumbnails on hover.
+- **Don't** signal state by colour alone; danger, success and warning always carry a word or an icon.
 
-### Color
+### Copy in the UI
 
-Palette (2026-10-28): `#101010` near-black, `#C7FF35` acid lime, `#F4F4EF` warm paper, `#747474` grey. The surfaces and secondary inks are steps between `#101010` and `#F4F4EF`. Two tokens are nudged for contrast, both computed for ≥ 4.6:1 on canvas, surface and surface-raised:
-
-- `#747474` reads only 4.07:1 on `#101010` and 4.24:1 on `#F4F4EF`, so `ink-subtle` is it moved 18% toward the ink.
-- The lime is 1.07:1 on the paper canvas, so the light theme's `accent-text` is the lime darkened to `#556a1e`.
-
-| Token            | Dark      | Light     | Usage                                                                                                                           |
-| ---------------- | --------- | --------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `canvas`         | `#101010` | `#f4f4ef` | Page background behind everything. Sections are separated by empty canvas, never by lines.                                      |
-| `surface`        | `#1a1a1a` | `#ebebe6` | Thumbnail frames, note cards, search field, inactive pills and buttons.                                                         |
-| `surface-raised` | `#232323` | `#e1e1dc` | Hover state of surface, chips that sit on a surface, inputs inside cards, popovers.                                             |
-| `divider`        | `#323231` | `#d6d6d2` | Rare structural lines: dialog footers, table rows. Not for cards or section breaks.                                             |
-| `ink`            | `#f4f4ef` | `#101010` | Headings, card titles, primary text (14.2:1 or better on every surface).                                                        |
-| `ink-secondary`  | `#d4d4d0` | `#30302f` | Inactive pill labels, button labels on surface, body copy that should recede a step.                                            |
-| `ink-muted`      | `#aeaeab` | `#474747` | Helper text, placeholders, icons (7:1 or better).                                                                               |
-| `ink-subtle`     | `#8b8b8a` | `#626262` | Metadata: hosts, counts, timestamps, shortcut hints. The palette grey nudged to 4.6:1 or better on every surface.               |
-| `inverse`        | `#f4f4ef` | `#101010` | Fill of the active pill (current section or chosen tag).                                                                        |
-| `on-inverse`     | `#101010` | `#f4f4ef` | Label on an inverse fill.                                                                                                       |
-| `accent`         | `#c7ff35` | `#c7ff35` | Acid lime. Fill of the single primary action per screen (Add, Save, Export). Never text, icons or decoration.                   |
-| `on-accent`      | `#101010` | `#101010` | Label on an accent fill (16.1:1).                                                                                               |
-| `accent-text`    | `#c7ff35` | `#556a1e` | Links, the focus ring and the selected-card outline. Lime on dark (13.3:1 or better); darkened lime on light (4.6:1 or better). |
-| `danger`         | `#ff7a7a` | `#c21f1f` | Destructive labels and error text (Delete forever, failed capture). Always paired with a word or icon.                          |
-| `success`        | `#4cc38a` | `#17703d` | Saved / in sync states. Always pair with a word or icon.                                                                        |
-| `warning`        | `#f5b33f` | `#8a5600` | Duplicate URL and unsaved-skill notices, with an icon.                                                                          |
-
-`shadow-overlay` is the only shadow (dialogs, popovers, selection bar).
-
-### Type
-
-Families: `--font-sans` Geist, `--font-mono` Geist Mono (loaded with `next/font`).
-
-| Style      | Size / line-height · weight  | Usage                                                |
-| ---------- | ---------------------------- | ---------------------------------------------------- |
-| `display`  | 72px / 0.96 · 500 · -0.045em | The page title of a library view. One per screen.    |
-| `title-lg` | 22px / 1.2 · 500 · -0.02em   | The quote inside a note card; dialog titles.         |
-| `title`    | 16px / 1.4 · 500             | Card titles, list row titles.                        |
-| `body`     | 15px / 1.5 · 400             | Notes, descriptions, form fields, markdown previews. |
-| `label`    | 14px / 1.2 · 500             | Pills, buttons, tabs (13px in `sm` controls).        |
-| `meta`     | 14px / 1.4 · 400             | Host and tag line under a card title, in ink-subtle. |
-| `mono`     | 12–13px / 1.6 · 400          | Prompt and code previews, keyboard hints, counts.    |
-
-### Spacing & radius
-
-Spacing: `space-1` 4px · `space-2` 8px · `space-3` 12px · `space-4` 16px · `space-6` 24px · `space-10` 40px · `space-16` 64px
-
-Radius: `radius-sm` 6px · `radius-card` 14px · `radius-pill` 9999px
-
-## Implementation notes
-
-- shadcn/ui variables (`--background`, `--card`, `--primary`…) are mapped onto these tokens in `globals.css`; prefer the design-system names in new code.
-- Buttons (`components/ui/button.tsx`): `default` = the single lime primary action, `secondary` = surface pill, `ghost`, `destructive`. All pills.
-- Inputs are filled `surface` pills; textareas use `radius-card`. Focus is a 2px `accent-text` outline with 3px offset everywhere.
-- Contrast: every text token is ≥ 4.5:1 on `canvas`, `surface` and `surface-raised` in both themes (checked when the palette was chosen).
+- **Do** write in English, sentence case, from the user's side: buttons name the action ("Add", "Copy context", "Move to trash"), toasts confirm it in the past tense ("Context copied · ~1.9k tokens"), errors say what happened and what to do.
+- **Do** show counts as plain numbers in ink-subtle or mono.
+- **Don't** use "Submit", "OK", or emoji anywhere in the UI.
