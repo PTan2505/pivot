@@ -1,9 +1,17 @@
-import { assetSize, getAsset, streamAsset, streamThumbnail, updateAssetNotes } from "@stan-bag/core/assets";
+import {
+  assetSize,
+  getAsset,
+  streamAsset,
+  streamScrollPreview,
+  streamThumbnail,
+  updateAssetNotes,
+} from "@stan-bag/core/assets";
 import { body, HttpError, json, route, type IdParams } from "@/lib/server/http";
 
 // Assets are user files: never let one run script on this origin (e.g. a malicious SVG opened directly).
 const SAFE_HEADERS = {
-  "Content-Security-Policy": "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; media-src 'self'; sandbox",
+  "Content-Security-Policy":
+    "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; media-src 'self'; sandbox",
   "X-Content-Type-Options": "nosniff",
   "Cache-Control": "private, max-age=31536000, immutable",
 };
@@ -14,6 +22,14 @@ export const GET = route(async (req: Request, { params }: IdParams) => {
   if (!asset) throw new HttpError(404, "Asset not found.");
   const sp = new URL(req.url).searchParams;
 
+  if (sp.get("preview") === "1") {
+    const preview = await streamScrollPreview(asset);
+    if (preview) {
+      return new Response(preview.body, {
+        headers: { ...SAFE_HEADERS, "Content-Type": "image/webp", "Content-Length": String(preview.length) },
+      });
+    }
+  }
   if (sp.get("thumb") === "1") {
     const thumb = await streamThumbnail(asset);
     if (thumb) {

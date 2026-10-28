@@ -2,7 +2,7 @@
 
 import { Check, Copy, ExternalLink, ImageOff, Loader2 } from "lucide-react";
 import Link from "next/link";
-import type { MouseEvent } from "react";
+import type { CSSProperties, MouseEvent } from "react";
 import { TYPE_DEFS, type ResourceDTO } from "@stan-bag/core/types";
 import { TypeIcon } from "@/components/type-icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -170,11 +170,41 @@ function Cover({ resource }: { resource: ResourceDTO }) {
   );
 }
 
+type FullShot = NonNullable<ResourceDTO["fullShot"]>;
+
+/**
+ * A reference's full-page screenshot in the 16:10 frame: it rests on the top of the page and, on hover or
+ * keyboard focus, scrolls to the bottom at a steady pace like a screen recording, then glides back.
+ */
+function ScrollShot({ shot }: { shot: FullShot }) {
+  const ratio = shot.width && shot.height ? shot.height / shot.width : 0;
+  // The frame is 16:10, so the page is ratio / 0.625 frames tall; travel about one frame per second.
+  const frames = ratio / 0.625 - 1;
+  const scrolls = frames > 0.1;
+  const seconds = Math.min(30, Math.max(1.5, frames * 1.1));
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={assetUrl(shot.id, { preview: true })}
+      alt=""
+      loading="lazy"
+      style={{ "--scroll-duration": `${seconds.toFixed(1)}s` } as CSSProperties}
+      className={cn(
+        "absolute inset-x-0 top-0 h-auto w-full max-w-none transition-transform duration-500 ease-out",
+        scrolls &&
+          "motion-safe:group-hover:[transform:translateY(calc(-100%_+_100cqh))] motion-safe:group-hover:[transition:transform_var(--scroll-duration)_linear] motion-safe:group-focus-visible:[transform:translateY(calc(-100%_+_100cqh))] motion-safe:group-focus-visible:[transition:transform_var(--scroll-duration)_linear]",
+      )}
+    />
+  );
+}
+
 interface CardProps {
   resource: ResourceDTO;
   selected: boolean;
   selecting: boolean;
   onToggle: (e: MouseEvent) => void;
+  /** Replaces the line under the title. */
+  meta?: string;
 }
 
 function metaLine(r: ResourceDTO) {
@@ -186,7 +216,7 @@ function metaLine(r: ResourceDTO) {
   return [def.label, purpose].filter(Boolean).join(" · ");
 }
 
-export function ResourceCard({ resource, selected, selecting, onToggle }: CardProps) {
+export function ResourceCard({ resource, selected, selecting, onToggle, meta }: CardProps) {
   const def = TYPE_DEFS[resource.type];
   const onClick = (e: MouseEvent) => {
     if (selecting || e.shiftKey || e.metaKey) {
@@ -195,6 +225,7 @@ export function ResourceCard({ resource, selected, selecting, onToggle }: CardPr
     }
   };
   const isCode = def.content === "code" || def.content === "json";
+  const shot = resource.type === "reference" ? resource.fullShot : null;
 
   return (
     <Link href={`/r/${resource.id}`} onClick={onClick} className="group flex min-w-0 flex-col gap-3 outline-none">
@@ -204,9 +235,13 @@ export function ResourceCard({ resource, selected, selecting, onToggle }: CardPr
           "group-focus-visible:outline-2 group-focus-visible:outline-offset-3 group-focus-visible:outline-accent-text",
           selected && "outline-2 outline-offset-3 outline-accent-text",
           !def.visual && "group-hover:bg-surface-raised",
+          // the scroll distance is measured against the frame's own height (cqh)
+          shot && "[container-type:size]",
         )}
       >
-        {def.visual ? (
+        {shot ? (
+          <ScrollShot shot={shot} />
+        ) : def.visual ? (
           <Cover resource={resource} />
         ) : (
           <div className="flex size-full flex-col justify-between gap-3 p-6">
@@ -231,13 +266,13 @@ export function ResourceCard({ resource, selected, selecting, onToggle }: CardPr
         <h3 className="truncate text-[15px] leading-[1.4] font-medium text-ink" title={resource.title}>
           {resource.title}
         </h3>
-        <p className="truncate text-[13px] leading-[1.4] text-ink-subtle">{metaLine(resource)}</p>
+        <p className="truncate text-[13px] leading-[1.4] text-ink-subtle">{meta ?? metaLine(resource)}</p>
       </div>
     </Link>
   );
 }
 
-export function ResourceRow({ resource, selected, selecting, onToggle }: CardProps) {
+export function ResourceRow({ resource, selected, selecting, onToggle, meta }: CardProps) {
   return (
     <Link
       href={`/r/${resource.id}`}
@@ -270,7 +305,7 @@ export function ResourceRow({ resource, selected, selecting, onToggle }: CardPro
       </div>
       <div className="min-w-0 flex-1">
         <div className="truncate text-[15px] font-medium text-ink">{resource.title}</div>
-        <div className="truncate text-[13px] text-ink-subtle">{metaLine(resource)}</div>
+        <div className="truncate text-[13px] text-ink-subtle">{meta ?? metaLine(resource)}</div>
       </div>
       <time
         className="hidden w-20 shrink-0 text-right font-mono text-xs text-ink-subtle tabular-nums sm:block"

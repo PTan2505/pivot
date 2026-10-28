@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutGrid, List } from "lucide-react";
+import { LayoutGrid, List, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
@@ -10,13 +10,14 @@ import { ResourceCard, ResourceRow } from "@/components/resource-card";
 import { SelectionBar } from "@/components/selection-bar";
 import { SkillPackGroups } from "@/components/skill-pack-groups";
 import { SkillSyncPanel } from "@/components/skill-sync-panel";
+import { SourceGroups, SourceToolbar } from "@/components/source-groups";
 import { TypeIcon } from "@/components/type-icon";
 import { Kbd } from "@/components/ui/kbd";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useLibraryParams } from "@/hooks/use-library-params";
-import { useCounts, useResources } from "@/lib/api";
+import { useCounts, useResource, useResources } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const SHORT_LABEL: Partial<Record<ResourceType, string>> = {
@@ -75,6 +76,24 @@ function TypeTabs({ active, showCounts }: { active?: ResourceType; showCounts: b
   );
 }
 
+/** Shown while the list is narrowed to what was saved from one source. */
+function ViaChip({ sourceId, onClear }: { sourceId: string; onClear: () => void }) {
+  const { data: source } = useResource(sourceId);
+  return (
+    <span className="inline-flex h-[30px] items-center gap-1 rounded-full bg-inverse pr-1 pl-3 text-[12px] font-medium text-on-inverse">
+      From {source?.title ?? "source"}
+      <button
+        type="button"
+        onClick={onClear}
+        aria-label="Show everything, not just this source"
+        className="grid size-6 place-items-center rounded-full hover:bg-on-inverse/15"
+      >
+        <X className="size-3.5" aria-hidden />
+      </button>
+    </span>
+  );
+}
+
 export function LibraryView({
   collectionId,
   title,
@@ -106,6 +125,7 @@ export function LibraryView({
     // the library's "All" leaves skills to their own tab; collections and trash show everything
     exclude: mode === "library" && !collectionId && !params.type ? SEPARATE_TYPES : undefined,
     tags: params.tags,
+    via: params.via || undefined,
     sort: params.sort,
     collection: collectionId,
     trash: mode === "trash",
@@ -145,7 +165,8 @@ export function LibraryView({
   };
 
   const heading = title ?? (params.type ? TYPE_DEFS[params.type].plural : "Library");
-  const filtered = !!(params.q || params.tags.length);
+  const filtered = !!(params.q || params.tags.length || params.via);
+  const library = mode === "library" && !collectionId;
   const exportName = typeof heading === "string" ? heading : "ui-context";
   const thisWeek = items?.filter((i) => new Date(i.createdAt).getTime() > weekAgo).length ?? 0;
   const defaultSubtitle = items
@@ -165,6 +186,7 @@ export function LibraryView({
         {mode === "library" && <TypeTabs active={params.type} showCounts={!collectionId} />}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <FilterBar type={params.type} selected={params.tags} onChange={(tags) => set({ tags })} />
+          {params.via && <ViaChip sourceId={params.via} onClear={() => set({ via: "" })} />}
           <div className="ml-auto flex items-center gap-2">
             <Select value={params.sort} onValueChange={(v) => set({ sort: v as typeof params.sort })}>
               <SelectTrigger size="sm" className="w-[150px]" aria-label="Sort">
@@ -197,7 +219,8 @@ export function LibraryView({
       </section>
 
       <div className="flex-1 space-y-6 px-4 pt-6 pb-16 md:px-10">
-        {params.type === "skill" && mode === "library" && !collectionId && <SkillSyncPanel />}
+        {params.type === "skill" && library && <SkillSyncPanel />}
+        {params.type === "source" && library && <SourceToolbar />}
 
         {error && (
           <div role="alert" className="rounded-[14px] bg-surface p-4 text-sm text-danger">
@@ -232,7 +255,9 @@ export function LibraryView({
               ))
             )}
           </div>
-        ) : params.type === "skill" && mode === "library" && !collectionId && items ? (
+        ) : params.type === "source" && library && items ? (
+          <SourceGroups items={items} view={params.view} selection={selection} toggle={toggle} />
+        ) : params.type === "skill" && library && items ? (
           <SkillPackGroups items={items} view={params.view} selection={selection} toggle={toggle} />
         ) : params.view === "grid" ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] gap-x-6 gap-y-10">

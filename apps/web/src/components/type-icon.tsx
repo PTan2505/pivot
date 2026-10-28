@@ -1,5 +1,6 @@
 import {
   Code,
+  Compass,
   Globe,
   Image as ImageIcon,
   Library,
@@ -28,6 +29,7 @@ const ICONS: Record<string, LucideIcon> = {
   "scroll-text": ScrollText,
   "list-checks": ListChecks,
   plug: Plug,
+  compass: Compass,
 };
 
 export function TypeIcon({ type, className }: { type: ResourceType; className?: string }) {

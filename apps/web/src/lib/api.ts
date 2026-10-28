@@ -43,12 +43,15 @@ export const keys = {
   settings: ["settings"] as const,
   skills: ["skills-status"] as const,
   skillPacks: ["skill-packs"] as const,
+  sourceStats: ["source-stats"] as const,
 };
 
 export interface ResourceQuery {
   q?: string;
   type?: ResourceType;
   exclude?: readonly ResourceType[];
+  /** Only resources saved from this source. */
+  via?: string;
   tags?: string[];
   collection?: string;
   trash?: boolean;
@@ -60,6 +63,7 @@ function toParams(q: ResourceQuery): Record<string, string | undefined> {
     q: q.q || undefined,
     type: q.type,
     exclude: q.exclude?.length ? q.exclude.join(",") : undefined,
+    via: q.via,
     tags: q.tags?.length ? q.tags.join(",") : undefined,
     collection: q.collection,
     trash: q.trash ? "1" : undefined,
@@ -129,6 +133,15 @@ export function useSkillPacks(enabled = true) {
   return useQuery({ queryKey: keys.skillPacks, queryFn: () => api<SkillPackDTO[]>("/api/skill-packs"), enabled });
 }
 
+/** Saved resources per source id. */
+export function useSourceStats(enabled = true) {
+  return useQuery({
+    queryKey: keys.sourceStats,
+    queryFn: () => api<Record<string, number>>("/api/sources/stats"),
+    enabled,
+  });
+}
+
 /** Invalidate everything list-shaped after a write. */
 export function useInvalidate() {
   const qc = useQueryClient();
@@ -139,6 +152,7 @@ export function useInvalidate() {
     qc.invalidateQueries({ queryKey: keys.counts });
     qc.invalidateQueries({ queryKey: keys.skills });
     qc.invalidateQueries({ queryKey: keys.skillPacks });
+    qc.invalidateQueries({ queryKey: keys.sourceStats });
     if (resourceId) qc.invalidateQueries({ queryKey: keys.resource(resourceId) });
   };
 }
@@ -202,9 +216,10 @@ export async function uploadToResource(resourceId: string, files: File[]) {
   return api<{ assetIds: string[] }>(`/api/resources/${resourceId}/assets`, { method: "POST", body: form });
 }
 
-export function assetUrl(id: string, opts: { thumb?: boolean; download?: boolean } = {}) {
+export function assetUrl(id: string, opts: { thumb?: boolean; preview?: boolean; download?: boolean } = {}) {
   const sp = new URLSearchParams();
   if (opts.thumb) sp.set("thumb", "1");
+  if (opts.preview) sp.set("preview", "1");
   if (opts.download) sp.set("download", "1");
   const qs = sp.toString();
   return `/api/assets/${id}${qs ? `?${qs}` : ""}`;

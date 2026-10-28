@@ -13,6 +13,7 @@ export const RESOURCE_TYPES = [
   "rule",
   "checklist",
   "mcp",
+  "source",
 ] as const;
 
 export type ResourceType = (typeof RESOURCE_TYPES)[number];
@@ -125,7 +126,35 @@ export type MetaField =
   | { key: string; label: string; kind: "text"; placeholder?: string }
   | { key: string; label: string; kind: "textarea"; placeholder?: string }
   | { key: string; label: string; kind: "list"; placeholder?: string }
+  | { key: string; label: string; kind: "select"; options: readonly { value: string; label: string }[]; hint?: string }
   | { key: string; label: string; kind: "colors" };
+
+/** What you go to a source site to find. Sources are grouped by these on their tab. */
+export const SOURCE_CATEGORIES = [
+  { value: "inspiration", label: "Inspiration", hint: "Whole sites, landing pages and visual direction" },
+  { value: "product-ui", label: "Product UI", hint: "Screens and flows from real apps" },
+  {
+    value: "styles-systems",
+    label: "Styles & Systems",
+    hint: "Visual styles, design systems and how others build components",
+  },
+  { value: "components", label: "Components", hint: "Components with code you can copy" },
+  { value: "motion", label: "Motion", hint: "Animation, effects and micro-interactions" },
+  { value: "type-color", label: "Type & Color", hint: "Fonts, pairings and palettes" },
+  { value: "assets", label: "Assets", hint: "Icons and illustrations" },
+] as const;
+export type SourceCategory = (typeof SOURCE_CATEGORIES)[number]["value"];
+
+export const SOURCE_PRICING = [
+  { value: "free", label: "Free" },
+  { value: "freemium", label: "Freemium" },
+  { value: "paid", label: "Paid" },
+] as const;
+
+/** `searchUrl` holds a template where `{q}` stands for the URL-encoded query. */
+export function sourceSearchUrl(template: string, query: string) {
+  return template.replaceAll("{q}", encodeURIComponent(query.trim()));
+}
 
 const purpose: MetaField = { key: "purpose", label: "Purpose", kind: "text", placeholder: "What is this for?" };
 
@@ -296,10 +325,32 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
     fields: [{ key: "serverName", label: "Server name", kind: "text", placeholder: "figma" }],
     exportDir: "mcp",
   },
+  source: {
+    type: "source",
+    label: "Source",
+    plural: "Sources",
+    group: "visual",
+    icon: "compass",
+    visual: true,
+    url: "primary",
+    content: "none",
+    facets: [],
+    fields: [
+      { key: "category", label: "Category", kind: "select", options: SOURCE_CATEGORIES },
+      { key: "searchUrl", label: "Search URL", kind: "text", placeholder: "https://dribbble.com/search/{q}" },
+      { key: "pricing", label: "Pricing", kind: "select", options: SOURCE_PRICING },
+      { key: "platforms", label: "Covers", kind: "list", placeholder: "web, ios, android" },
+      { key: "whenToUse", label: "When to use", kind: "textarea", placeholder: "What do you come here for?" },
+    ],
+    exportDir: "sources",
+  },
 };
 
-/** Types that live in their own tab and stay out of the library's "All" view and count. */
-export const SEPARATE_TYPES: readonly ResourceType[] = ["skill"];
+/**
+ * Types that live in their own tab and stay out of the library's "All" view and count:
+ * sources are where references come from, skills are tools.
+ */
+export const SEPARATE_TYPES: readonly ResourceType[] = ["source", "skill"];
 
 export function isResourceType(v: unknown): v is ResourceType {
   return typeof v === "string" && (RESOURCE_TYPES as readonly string[]).includes(v);
@@ -349,6 +400,8 @@ export interface ResourceDTO {
   updatedAt: string;
   deletedAt: string | null;
   tags: TagDTO[];
+  /** The server's full-page screenshot, if any: reference cards scroll through it on hover. */
+  fullShot: { id: string; width: number | null; height: number | null } | null;
 }
 
 export interface ResourceDetailDTO extends ResourceDTO {

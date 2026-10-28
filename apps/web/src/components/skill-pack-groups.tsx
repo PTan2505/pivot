@@ -1,12 +1,10 @@
 "use client";
 
 import { ChevronDown, ExternalLink, Globe } from "lucide-react";
-import { useTheme } from "next-themes";
-import { useRouter } from "next/navigation";
 import { useState, type MouseEvent } from "react";
 import type { ResourceDTO, SkillPackDTO } from "@stan-bag/core/types";
 import { ResourceCard, ResourceRow } from "@/components/resource-card";
-import GlassFolder, { hashString, type ArtPreset } from "@/components/ui/glass-folder-cards";
+import { FolderShelf, scrollToSection } from "@/components/folder-shelf";
 import { useSkillPacks } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +13,6 @@ const packOf = (r: ResourceDTO) => {
   return m.packOverride || m.packId || "local";
 };
 
-const ARTS: ArtPreset[] = ["aurora", "ember", "dusk", "glacier", "verdant"];
 const sectionId = (packId: string) => `pack-${packId.replace(/[^a-z0-9]+/gi, "-")}`;
 
 const KIND_LABEL: Record<SkillPackDTO["kind"], string> = {
@@ -39,8 +36,6 @@ export function SkillPackGroups({
 }) {
   const { data: packs = [] } = useSkillPacks();
   const [collapsed, setCollapsed] = useState<string[]>([]);
-  const { resolvedTheme } = useTheme();
-  const router = useRouter();
 
   const byPack = new Map<string, ResourceDTO[]>();
   for (const r of items) byPack.set(packOf(r), [...(byPack.get(packOf(r)) ?? []), r]);
@@ -62,20 +57,37 @@ export function SkillPackGroups({
 
   const showPack = (id: string) => {
     setCollapsed((c) => c.filter((x) => x !== id));
-    document
-      .getElementById(`${sectionId(id)}-title`)
-      ?.closest("section")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToSection(`${sectionId(id)}-title`);
   };
 
   return (
     <div className="space-y-16">
-      <PackShelf
-        packs={ordered}
-        byPack={byPack}
-        tone={resolvedTheme === "light" ? "light" : "dark"}
-        onShow={showPack}
-        onOpenSkill={(id) => router.push(`/r/${id}`)}
+      <FolderShelf
+        label="Skill packs"
+        folders={ordered.map((pack) => {
+          const list = byPack.get(pack.id) ?? [];
+          const links = [
+            pack.repoUrl && { label: "Open repository", url: pack.repoUrl },
+            pack.homepage && { label: "Open website", url: pack.homepage },
+          ].filter((l): l is { label: string; url: string } => !!l);
+          return {
+            id: pack.id,
+            label: pack.name,
+            meta: `${list.length} skill${list.length === 1 ? "" : "s"}`,
+            items: list.map((r) => ({
+              id: r.id,
+              name: r.title,
+              meta: ((r.meta.invocation as string) || "").split(" ")[0] || undefined,
+            })),
+            menu: [
+              { label: `Show all ${list.length} skills`, onSelect: () => showPack(pack.id) },
+              ...links.map((l) => ({
+                label: l.label,
+                onSelect: () => window.open(l.url, "_blank", "noopener,noreferrer"),
+              })),
+            ],
+          };
+        })}
       />
       {ordered.map((pack) => {
         const list = byPack.get(pack.id) ?? [];
@@ -166,66 +178,6 @@ export function SkillPackGroups({
               </div>
             )}
           </section>
-        );
-      })}
-    </div>
-  );
-}
-
-/** One glass folder per pack: the skills are the files inside, and opening one fans them out. */
-function PackShelf({
-  packs,
-  byPack,
-  tone,
-  onShow,
-  onOpenSkill,
-}: {
-  packs: SkillPackDTO[];
-  byPack: Map<string, ResourceDTO[]>;
-  tone: "light" | "dark";
-  onShow: (packId: string) => void;
-  onOpenSkill: (resourceId: string) => void;
-}) {
-  return (
-    <div
-      role="list"
-      aria-label="Skill packs"
-      className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-x-8 gap-y-12"
-    >
-      {packs.map((pack, i) => {
-        const list = byPack.get(pack.id) ?? [];
-        const hash = hashString(pack.id);
-        const links = [
-          pack.repoUrl && { label: "Open repository", url: pack.repoUrl },
-          pack.homepage && { label: "Open website", url: pack.homepage },
-        ].filter((l): l is { label: string; url: string } => !!l);
-        return (
-          <div role="listitem" key={pack.id}>
-            <GlassFolder
-              // the folder reads its files once, so a changed list needs a fresh folder
-              key={`${pack.id}:${list.map((r) => r.id).join()}`}
-              width={300}
-              tone={tone}
-              label={pack.name}
-              meta={`${list.length} skill${list.length === 1 ? "" : "s"}`}
-              art={ARTS[hash % ARTS.length]}
-              seed={hash % 97}
-              files={list.map((r) => ({
-                name: r.title,
-                meta: ((r.meta.invocation as string) || "").split(" ")[0] || undefined,
-              }))}
-              onFileSelect={(_, index) => onOpenSkill(list[index].id)}
-              action="more"
-              menu={[
-                { label: `Show all ${list.length} skills`, onSelect: () => onShow(pack.id) },
-                ...links.map((l) => ({
-                  label: l.label,
-                  onSelect: () => window.open(l.url, "_blank", "noopener,noreferrer"),
-                })),
-              ]}
-              appearDelay={Math.min(i, 5) * 90}
-            />
-          </div>
         );
       })}
     </div>

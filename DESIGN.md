@@ -85,7 +85,8 @@ One shape, two states.
 - Inactive: `surface` fill, `ink-secondary` label; hover `surface-raised`.
 - Active: `inverse` fill, `on-inverse` label. Exactly one active pill in the type-tab row; filters may have several.
 - Heights: 36px type tabs, 30px filters, 28px editable tags, 24px tags inside a card.
-- The type-tab row ends with a 1px `surface-raised` divider, then the Skills tab with its wand icon. Skills have their own tab and are not part of All.
+- The type-tab row ends with a 1px `surface-raised` divider, then the separate tabs with their icons: Sources (compass), Skills (wand). These are not part of All.
+- A "From <source>" chip (inverse pill with a clear button) sits in the filter row while the list is narrowed to one source.
 - An optional count follows the label at 70% opacity, `tabular-nums`.
 - Rows wrap onto new lines; never scroll a pill row horizontally.
 
@@ -107,7 +108,12 @@ A visual resource (reference, library, image, icon, animation, palette): the scr
 - Hover reveals round `surface-raised` action buttons (open source, copy) in the frame's top-right and the select checkbox top-left.
 - Selected: 2px `accent-text` outline with 3px offset on the frame; the checkbox turns `inverse`.
 - Capturing: a pulsing frame with "Capturing…" in `ink-muted`. Failed capture: an image-off icon in `ink-subtle`.
-- The caller provides the resource DTO, `selected`, `selecting` and `onToggle`.
+- **References scroll** (`ScrollShot`), like a screen recording:
+  - The frame shows the full-page screenshot's scroll preview, resting on the top of the page, instead of the cropped thumbnail.
+  - On hover or keyboard focus it scrolls linearly to the bottom at about one frame-height per second (1.5–30s, from the image's aspect ratio), and glides back in 500ms ease-out on leave.
+  - The frame is a size container, so the travel is `translateY(calc(-100% + 100cqh))`.
+  - Pages shorter than the frame don't move. With reduced motion the card stays still.
+- The caller provides the resource DTO, `selected`, `selecting` and `onToggle`, and may replace the meta line.
 
 ### Note card — `components/resource-card.tsx` (`ResourceCard`, text types)
 
@@ -152,15 +158,26 @@ The Skills page groups cards by pack (a GitHub repo, a Claude Code plugin, or an
 - Under the header sits the normal card grid or list. Groups are 64px apart; the header is 24px above its cards.
 - Collapsing a group hides its cards; the toggle carries `aria-expanded`/`aria-controls`.
 
-### Pack shelf — `components/skill-pack-groups.tsx` (`PackShelf`), `components/ui/glass-folder-cards.tsx`
+### Folder shelf — `components/folder-shelf.tsx` (`FolderShelf`), `components/ui/glass-folder-cards.tsx`
 
-The top of the Skills page shows one glass folder per pack, as a visual index above the grouped sections.
+The top of the Skills and Sources pages shows a row of glass folders as a visual index above the grouped sections. Skills get one folder per pack, with a paper sheet per skill. Sources get one folder per category, with each source's screenshot as its sheet (a paper sheet until the screenshot exists).
 
-- Each folder (300px wide) has generated liquid art on its back panel, picked from the pack id so a pack always keeps its look. The skills are paper sheets inside the folder, at most four visible. A frosted front panel carries the pack name and `N skills` in `mono`.
-- Hover leans the glass forward. Click, Enter or Space opens the folder and fans the skills out. Choosing a sheet opens that skill. Escape or a click outside closes it.
-- The `···` key opens a frosted menu: Open folder, Show all N skills (scrolls to the pack's section and expands it), Open repository, Open website.
+- Each folder (300px wide) has generated liquid art on its back panel, picked from the folder id so it always keeps its look. At most four sheets are visible. A frosted front panel carries the name and `N skills` / `N sources` in `mono`. The folder follows its list in place (a screenshot arriving swaps the sheet), so it never replays its entrance.
+- Hover leans the glass forward. Click, Enter or Space opens the folder and fans the sheets out. Choosing a sheet opens that resource. Escape or a click outside closes it.
+- The `···` key opens a frosted menu: Open folder, Show all N … (scrolls to the group's section), and for skill packs Open repository and Open website.
 - Tone follows the theme: smoked glass in dark mode, milk glass in light mode. Folders assemble on first view, staggered 90ms each. Reduced motion turns every transition off.
 - **Deliberate exception:** the folder is drawn as an object, so it keeps its own soft shadow, glass rim and the component's system font. The no-shadow and no-border rules still apply to cards.
+
+### Sources page — `components/source-groups.tsx` (`SourceToolbar`, `SourceGroups`, `SourceInfo`), `components/bookmark-import-dialog.tsx`
+
+- **Toolbar** (`surface` panel, top of the Sources tab): a 40px search field and an "Import bookmarks" secondary pill. With a query typed, one row per category appears: the category label in `ink-subtle`, then a `surface-raised` pill per searchable source. Each pill is a link to that site's results, and it inverts on hover.
+- **Groups**: one section per category in a fixed order (Inspiration → Assets, then Uncategorized). Each section has a `title-lg` heading plus the hint and count in `ink-subtle`, then a grid of normal resource cards (300px minimum column). The card meta line reads `host · N saved · searchable`.
+- **Source info** (detail aside): a `surface` panel. The top row "Saved from this source · N →" links to the filtered library. Below it is a small search form when the search URL has `{q}`, otherwise a hint.
+- **Import dialog** (max 3xl), in two steps:
+  1. A file picker drawn as a `surface` drop panel.
+  2. A review list: Suggested/All pill tabs, a filter field, and one row per bookmark with a checkbox, title, mono URL and folder path, a Source/Reference select and a category select.
+  - Already-saved rows are dimmed to 50% and locked.
+  - The footer holds the screenshot checkbox and the single primary "Import N" button.
 
 ### Skill guide — `components/skill-guide.tsx` (`SkillGuide`, `PackField`)
 

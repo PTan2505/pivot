@@ -8,6 +8,8 @@ export interface LibraryParams {
   q: string;
   type: ResourceType | undefined;
   tags: string[];
+  /** Source id: only resources saved from that source. */
+  via: string;
   sort: "updated" | "created" | "title";
   view: "grid" | "list";
 }
@@ -23,6 +25,7 @@ export function useLibraryParams() {
     q: sp.get("q") ?? "",
     type: isResourceType(type) ? type : undefined,
     tags: sp.get("tags")?.split(",").filter(Boolean) ?? [],
+    via: sp.get("via") ?? "",
     sort: sort === "created" || sort === "title" ? sort : "updated",
     view: sp.get("view") === "list" ? "list" : "grid",
   };
