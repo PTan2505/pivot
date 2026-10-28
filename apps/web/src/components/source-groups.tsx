@@ -13,7 +13,7 @@ import { assetUrl, useResources, useSourceStats } from "@/lib/api";
 
 const CATEGORY_VALUES = new Set<string>(SOURCE_CATEGORIES.map((c) => c.value));
 /** The source's category, or "" when it has none (or one we no longer know). */
-const categoryOf = (r: ResourceDTO) =>
+export const categoryOf = (r: ResourceDTO) =>
   typeof r.meta.category === "string" && CATEGORY_VALUES.has(r.meta.category) ? r.meta.category : "";
 const searchTemplate = (r: ResourceDTO) =>
   typeof r.meta.searchUrl === "string" && r.meta.searchUrl.includes("{q}") ? r.meta.searchUrl : null;
@@ -63,14 +63,14 @@ export function SourceToolbar() {
             if (!list.length) return null;
             return (
               <div key={g.value} className="flex flex-wrap items-center gap-2">
-                <span className="w-32 shrink-0 text-[12px] text-ink-subtle">{g.label}</span>
+                <span className="w-32 shrink-0 text-[13px] text-ink-subtle">{g.label}</span>
                 {list.map((s) => (
                   <a
                     key={s.id}
                     href={sourceSearchUrl(searchTemplate(s)!, q)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex h-8 items-center rounded-full bg-surface-raised px-3 text-[12px] font-medium text-ink-secondary transition-colors hover:bg-inverse hover:text-on-inverse"
+                    className="inline-flex h-8 items-center rounded-full bg-surface-raised px-3 text-[13px] font-medium text-ink-secondary transition-colors hover:bg-inverse hover:text-on-inverse"
                   >
                     {s.title}
                   </a>
@@ -91,7 +91,10 @@ export function SourceGroups({
   view,
   selection,
   toggle,
+  shelf = true,
 }: {
+  /** The folder shelf above the groups; off when one category is chosen. */
+  shelf?: boolean;
   items: ResourceDTO[];
   view: "grid" | "list";
   selection: string[];
@@ -111,21 +114,23 @@ export function SourceGroups({
 
   return (
     <div className="space-y-16">
-      <FolderShelf
-        label="Source categories"
-        folders={groups.map((g) => ({
-          id: g.id,
-          label: g.label,
-          meta: `${g.list.length} source${g.list.length === 1 ? "" : "s"}`,
-          items: g.list.map((r) => ({
-            id: r.id,
-            name: r.title,
-            meta: hostOf(r.sourceUrl) ?? undefined,
-            image: r.coverAssetId ? assetUrl(r.coverAssetId, { thumb: true }) : undefined,
-          })),
-          menu: [{ label: `Show all ${g.list.length} sources`, onSelect: () => scrollToSection(g.id) }],
-        }))}
-      />
+      {shelf && (
+        <FolderShelf
+          label="Source categories"
+          folders={groups.map((g) => ({
+            id: g.id,
+            label: g.label,
+            meta: `${g.list.length} source${g.list.length === 1 ? "" : "s"}`,
+            items: g.list.map((r) => ({
+              id: r.id,
+              name: r.title,
+              meta: hostOf(r.sourceUrl) ?? undefined,
+              image: r.coverAssetId ? assetUrl(r.coverAssetId, { thumb: true }) : undefined,
+            })),
+            menu: [{ label: `Show all ${g.list.length} sources`, onSelect: () => scrollToSection(g.id) }],
+          }))}
+        />
+      )}
       {groups.map((g) => {
         const { list, id } = g;
         return (
@@ -134,7 +139,7 @@ export function SourceGroups({
               <h2 id={id} className="text-[22px] leading-[1.2] font-medium tracking-[-0.02em] text-ink">
                 {g.label}
               </h2>
-              <p className="text-[13px] text-ink-subtle">
+              <p className="text-[14px] text-ink-subtle">
                 {g.hint} · {list.length}
               </p>
             </header>
@@ -182,7 +187,7 @@ export function SourceInfo({ id, searchUrl }: { id: string; searchUrl: unknown }
     <div className="space-y-3 rounded-[14px] bg-surface p-4">
       <Link
         href={`/?via=${id}`}
-        className="flex items-center justify-between text-[13px] text-ink-secondary hover:text-ink"
+        className="flex items-center justify-between text-[14px] text-ink-secondary hover:text-ink"
       >
         <span>Saved from this source</span>
         <span className="font-mono text-xs tabular-nums">{count} →</span>
@@ -200,7 +205,7 @@ export function SourceInfo({ id, searchUrl }: { id: string; searchUrl: unknown }
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search this source"
             aria-label="Search this source"
-            className="h-8 text-[13px]"
+            className="h-8 text-[14px]"
           />
           <Button type="submit" variant="secondary" size="sm" disabled={!query.trim()}>
             Search

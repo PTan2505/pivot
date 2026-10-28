@@ -8,7 +8,15 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTags, type TagInput } from "@/lib/api";
 
-function KindPicker({ kind, value, onChange }: { kind: TagKind; value: TagInput[]; onChange: (v: TagInput[]) => void }) {
+function KindPicker({
+  kind,
+  value,
+  onChange,
+}: {
+  kind: TagKind;
+  value: TagInput[];
+  onChange: (v: TagInput[]) => void;
+}) {
   const { data: tags = [] } = useTags();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -16,7 +24,8 @@ function KindPicker({ kind, value, onChange }: { kind: TagKind; value: TagInput[
   const has = (name: string) => mine.some((t) => t.name.toLowerCase() === name.toLowerCase());
   const options = tags.filter((t) => t.kind === kind && !has(t.name));
   const trimmed = search.trim();
-  const canCreate = trimmed && !has(trimmed) && !tags.some((t) => t.kind === kind && t.name.toLowerCase() === trimmed.toLowerCase());
+  const canCreate =
+    trimmed && !has(trimmed) && !tags.some((t) => t.kind === kind && t.name.toLowerCase() === trimmed.toLowerCase());
 
   const add = (name: string) => {
     onChange([...value, { kind, name }]);
@@ -27,7 +36,10 @@ function KindPicker({ kind, value, onChange }: { kind: TagKind; value: TagInput[
   return (
     <div className="flex flex-wrap items-center gap-1">
       {mine.map((t) => (
-        <span key={t.name} className="flex h-7 items-center gap-1 rounded-full bg-surface-raised pr-1.5 pl-3 text-xs font-medium text-ink-secondary">
+        <span
+          key={t.name}
+          className="flex h-7 items-center gap-1 rounded-full bg-surface-raised pr-1.5 pl-3 text-xs font-medium text-ink-secondary"
+        >
           {t.name}
           <button
             type="button"
@@ -41,7 +53,13 @@ function KindPicker({ kind, value, onChange }: { kind: TagKind; value: TagInput[
       ))}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button type="button" variant="secondary" size="xs" className="h-7 text-ink-muted" aria-label={`Add ${TAG_KIND_LABELS[kind]}`}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="xs"
+            className="h-7 text-ink-muted"
+            aria-label={`Add ${TAG_KIND_LABELS[kind]}`}
+          >
             <Plus /> {mine.length ? "" : "Add"}
           </Button>
         </PopoverTrigger>
@@ -49,7 +67,9 @@ function KindPicker({ kind, value, onChange }: { kind: TagKind; value: TagInput[
           <Command>
             <CommandInput placeholder={`${TAG_KIND_LABELS[kind]}…`} value={search} onValueChange={setSearch} />
             <CommandList>
-              <CommandEmpty className="py-3 text-center text-xs text-muted-foreground">Type to create one.</CommandEmpty>
+              <CommandEmpty className="py-3 text-center text-xs text-muted-foreground">
+                Type to create one.
+              </CommandEmpty>
               {canCreate && (
                 <CommandGroup>
                   <CommandItem value={`__create__${trimmed}`} onSelect={() => add(trimmed)}>
@@ -61,7 +81,9 @@ function KindPicker({ kind, value, onChange }: { kind: TagKind; value: TagInput[
                 {options.map((t) => (
                   <CommandItem key={t.id} value={t.name} onSelect={() => add(t.name)}>
                     {t.name}
-                    {!!t.count && <span className="ml-auto font-mono text-[11px] text-muted-foreground">{t.count}</span>}
+                    {!!t.count && (
+                      <span className="ml-auto font-mono text-[12px] text-muted-foreground">{t.count}</span>
+                    )}
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -73,7 +95,15 @@ function KindPicker({ kind, value, onChange }: { kind: TagKind; value: TagInput[
   );
 }
 
-export function TagsEditor({ kinds, value, onChange }: { kinds: TagKind[]; value: TagInput[]; onChange: (v: TagInput[]) => void }) {
+export function TagsEditor({
+  kinds,
+  value,
+  onChange,
+}: {
+  kinds: TagKind[];
+  value: TagInput[];
+  onChange: (v: TagInput[]) => void;
+}) {
   return (
     <div className="space-y-2">
       {kinds.map((kind) => (

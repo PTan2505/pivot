@@ -1,20 +1,4 @@
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  exists,
-  ilike,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  ne,
-  notInArray,
-  or,
-  sql,
-  type SQL,
-} from "drizzle-orm";
+import { and, asc, desc, eq, exists, ilike, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import matter from "gray-matter";
 import { z } from "zod";
 import { deleteOrphanAssets, listResourceAssets } from "./assets";
@@ -25,7 +9,6 @@ import { hostOf, knownSourceFor, knownSourceMeta, matchHost } from "./source-mat
 import {
   FACET_SUGGESTIONS,
   RESOURCE_TYPES,
-  SEPARATE_TYPES,
   TAG_KINDS,
   type CaptureStatus,
   type ResourceDetailDTO,
@@ -59,8 +42,8 @@ export type ResourcePatch = z.infer<typeof resourcePatch>;
 export interface ListFilters {
   q?: string;
   type?: ResourceType;
-  /** Leave these types out; ignored when `type` is set. */
-  excludeTypes?: ResourceType[];
+  /** Any of these types (a section); ignored when `type` is set. */
+  types?: readonly ResourceType[];
   /** Only resources saved from this source (matched by host). */
   via?: string;
   tagIds?: string[];
@@ -134,7 +117,7 @@ export async function listResources(filters: ListFilters = {}): Promise<Resource
   const db = await getDb();
   const where: SQL[] = [filters.trash ? isNotNull(resources.deletedAt) : isNull(resources.deletedAt)];
   if (filters.type) where.push(eq(resources.type, filters.type));
-  else if (filters.excludeTypes?.length) where.push(notInArray(resources.type, filters.excludeTypes));
+  else if (filters.types?.length) where.push(inArray(resources.type, [...filters.types]));
   if (filters.via) {
     const ids = (await sourceAttribution()).get(filters.via) ?? [];
     where.push(ids.length ? inArray(resources.id, ids) : sql`false`);
@@ -460,7 +443,7 @@ export async function typeCounts(): Promise<Record<string, number>> {
   const counts: Record<string, number> = { trash: Number(trash[0]?.count ?? 0), all: 0 };
   for (const r of rows) {
     counts[r.type] = Number(r.count);
-    if (!SEPARATE_TYPES.includes(r.type as ResourceType)) counts.all += Number(r.count);
+    counts.all += Number(r.count);
   }
   return counts;
 }

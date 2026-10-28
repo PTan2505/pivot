@@ -126,13 +126,15 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* body text (DESIGN.md `body`); rem stays 16px so spacing and control sizes are true to the tokens */
+    font-size: 15px;
   }
-  button:not(:disabled), [role="button"]:not(:disabled) {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
     cursor: pointer;
   }
   html {
     @apply font-sans;
-    font-size: 14px;
   }
   ::selection {
     background: color-mix(in oklch, var(--accent-text) 35%, transparent);
@@ -144,27 +146,186 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
 }
 
 /* Markdown preview */
-.prose-sb { line-height: 1.6; font-size: 0.875rem; }
-.prose-sb > * + * { margin-top: 0.75em; }
-.prose-sb h1 { font-size: 1.25rem; font-weight: 500; letter-spacing: -0.012em; }
-.prose-sb h2 { font-size: 1.05rem; font-weight: 500; margin-top: 1.4em; }
-.prose-sb h3 { font-size: 0.95rem; font-weight: 500; margin-top: 1.2em; }
-.prose-sb ul { list-style: disc; padding-left: 1.25rem; }
-.prose-sb ol { list-style: decimal; padding-left: 1.25rem; }
-.prose-sb li + li { margin-top: 0.25em; }
-.prose-sb li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.25rem; }
-.prose-sb a { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
-.prose-sb code { font-family: var(--font-mono); font-size: 0.8em; background: var(--surface-raised); border-radius: 6px; padding: 0.1em 0.35em; }
-.prose-sb pre { background: var(--surface); border-radius: 14px; padding: 0.75rem 1rem; overflow-x: auto; }
-.prose-sb pre code { background: none; padding: 0; font-size: 0.78rem; }
-.prose-sb blockquote { border-left: 2px solid var(--border); padding-left: 0.75rem; color: var(--muted-foreground); }
-.prose-sb table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-.prose-sb th, .prose-sb td { border: 1px solid var(--border); padding: 0.35rem 0.5rem; text-align: left; }
-.prose-sb hr { border-color: var(--border); }
+.prose-sb {
+  line-height: 1.6;
+  font-size: 0.9375rem;
+}
+.prose-sb > * + * {
+  margin-top: 0.75em;
+}
+.prose-sb h1 {
+  font-size: 1.25rem;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+}
+.prose-sb h2 {
+  font-size: 1.05rem;
+  font-weight: 500;
+  margin-top: 1.4em;
+}
+.prose-sb h3 {
+  font-size: 0.95rem;
+  font-weight: 500;
+  margin-top: 1.2em;
+}
+.prose-sb ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+.prose-sb ol {
+  list-style: decimal;
+  padding-left: 1.25rem;
+}
+.prose-sb li + li {
+  margin-top: 0.25em;
+}
+.prose-sb li:has(> input[type="checkbox"]) {
+  list-style: none;
+  margin-left: -1.25rem;
+}
+.prose-sb a {
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.prose-sb code {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  background: var(--surface-raised);
+  border-radius: 6px;
+  padding: 0.1em 0.35em;
+}
+.prose-sb pre {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+}
+.prose-sb pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.78rem;
+}
+.prose-sb blockquote {
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  color: var(--muted-foreground);
+}
+.prose-sb table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+.prose-sb th,
+.prose-sb td {
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+}
+.prose-sb hr {
+  border-color: var(--border);
+}
+
+/* Navbar type panel (components/section-nav.tsx): opens with a small scale-in like a popover; moving between
+   sections glides the panel under the new one, resizes it to the new content, and slides the content in from the
+   side the pointer came from, with a touch of blur. Timing follows lovable.dev's menu (270ms, ease-in-out). */
+.section-panel-position {
+  transform: translateX(var(--section-panel-x, 0px));
+  transition: transform 270ms cubic-bezier(0.45, 0, 0.25, 1);
+}
+.section-panel-position[data-instant] {
+  transition: none;
+}
+.section-panel-viewport {
+  position: relative;
+  /* Radix measures the active content into these; until it has, the panel just fits its content */
+  width: var(--radix-navigation-menu-viewport-width, auto);
+  height: var(--radix-navigation-menu-viewport-height, auto);
+  transform-origin: top left;
+  transition:
+    width 270ms cubic-bezier(0.45, 0, 0.25, 1),
+    height 270ms cubic-bezier(0.45, 0, 0.25, 1);
+}
+.section-panel-viewport[data-state="open"] {
+  animation: section-panel-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.section-panel-viewport[data-state="closed"] {
+  animation: section-panel-out 140ms ease-in forwards;
+}
+/* the incoming content sizes the panel; the outgoing one floats over it while it leaves */
+.section-panel-content[data-motion^="to-"] {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+.section-panel-content[data-motion="from-start"] {
+  animation: section-content-from-start 270ms cubic-bezier(0.45, 0, 0.25, 1);
+}
+.section-panel-content[data-motion="from-end"] {
+  animation: section-content-from-end 270ms cubic-bezier(0.45, 0, 0.25, 1);
+}
+.section-panel-content[data-motion="to-start"] {
+  animation: section-content-to-start 270ms cubic-bezier(0.45, 0, 0.25, 1) forwards;
+}
+.section-panel-content[data-motion="to-end"] {
+  animation: section-content-to-end 270ms cubic-bezier(0.45, 0, 0.25, 1) forwards;
+}
+@keyframes section-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+}
+@keyframes section-panel-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+}
+@keyframes section-content-from-start {
+  from {
+    opacity: 0;
+    transform: translateX(-32px);
+    filter: blur(2px);
+  }
+}
+@keyframes section-content-from-end {
+  from {
+    opacity: 0;
+    transform: translateX(32px);
+    filter: blur(2px);
+  }
+}
+@keyframes section-content-to-start {
+  to {
+    opacity: 0;
+    transform: translateX(-32px);
+    filter: blur(2px);
+  }
+}
+@keyframes section-content-to-end {
+  to {
+    opacity: 0;
+    transform: translateX(32px);
+    filter: blur(2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .section-panel-position,
+  .section-panel-viewport {
+    transition: none;
+  }
+  .section-panel-viewport[data-state],
+  .section-panel-content[data-motion] {
+    animation: none;
+  }
+}

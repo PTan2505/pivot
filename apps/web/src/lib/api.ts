@@ -49,7 +49,8 @@ export const keys = {
 export interface ResourceQuery {
   q?: string;
   type?: ResourceType;
-  exclude?: readonly ResourceType[];
+  /** Any of these types (a navbar section); ignored when `type` is set. */
+  types?: readonly ResourceType[];
   /** Only resources saved from this source. */
   via?: string;
   tags?: string[];
@@ -62,7 +63,7 @@ function toParams(q: ResourceQuery): Record<string, string | undefined> {
   return {
     q: q.q || undefined,
     type: q.type,
-    exclude: q.exclude?.length ? q.exclude.join(",") : undefined,
+    types: q.types?.length ? q.types.join(",") : undefined,
     via: q.via,
     tags: q.tags?.length ? q.tags.join(",") : undefined,
     collection: q.collection,

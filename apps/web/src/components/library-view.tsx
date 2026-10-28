@@ -1,24 +1,31 @@
 "use client";
 
 import { LayoutGrid, List, X } from "lucide-react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { RESOURCE_TYPES, SEPARATE_TYPES, TYPE_DEFS, type ResourceType } from "@stan-bag/core/types";
-import { FilterBar } from "@/components/filter-bar";
+import {
+  RESOURCE_TYPES,
+  SOURCE_CATEGORIES,
+  TYPE_DEFS,
+  type ResourceDTO,
+  type ResourceType,
+} from "@stan-bag/core/types";
+import { Breadcrumbs, typeCrumbs, type Crumb } from "@/components/breadcrumbs";
+import { FolderShelf } from "@/components/folder-shelf";
 import { ResourceCard, ResourceRow } from "@/components/resource-card";
 import { SelectionBar } from "@/components/selection-bar";
 import { SkillPackGroups } from "@/components/skill-pack-groups";
 import { SkillSyncPanel } from "@/components/skill-sync-panel";
-import { SourceGroups, SourceToolbar } from "@/components/source-groups";
+import { categoryOf, SourceGroups, SourceToolbar } from "@/components/source-groups";
+import { TagPills } from "@/components/tag-pills";
 import { TypeIcon } from "@/components/type-icon";
 import { Kbd } from "@/components/ui/kbd";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useLibraryParams } from "@/hooks/use-library-params";
-import { useCounts, useResource, useResources } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { assetUrl, useCounts, useResource, useResources } from "@/lib/api";
+import { hostOf } from "@/components/resource-card";
 
 const SHORT_LABEL: Partial<Record<ResourceType, string>> = {
   media: "Images",
@@ -31,48 +38,62 @@ const SHORT_LABEL: Partial<Record<ResourceType, string>> = {
   mcp: "MCP",
 };
 
-/**
- * One row of pills: All + every resource type. The active one is inverse.
- * Separate types (skills) sit after a divider: they have their own tab and are not part of All.
- */
-function TypeTabs({ active, showCounts }: { active?: ResourceType; showCounts: boolean }) {
-  const pathname = usePathname();
+/** Narrows the list to one type of the current section (or of everything, in collections and the trash). */
+function TypeSelect({
+  types,
+  value,
+  onChange,
+  showCounts,
+}: {
+  types: readonly ResourceType[];
+  value: ResourceType | undefined;
+  onChange: (type: ResourceType | undefined) => void;
+  showCounts: boolean;
+}) {
   const { data: counts } = useCounts();
-  const tab = (href: string, label: ReactNode, isActive: boolean, count?: number) => (
-    <Link
-      key={href}
-      href={href}
-      aria-current={isActive ? "page" : undefined}
-      className={cn(
-        "inline-flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-medium transition-colors duration-150",
-        isActive
-          ? "bg-inverse text-on-inverse"
-          : "bg-surface text-ink-secondary hover:bg-surface-raised hover:text-ink",
-      )}
-    >
-      {label}
-      {showCounts && count !== undefined && <span className="font-normal tabular-nums opacity-70">{count}</span>}
-    </Link>
-  );
+  const count = (n: number | undefined) =>
+    showCounts && <span className="ml-auto pl-3 font-mono text-[12px] text-ink-subtle tabular-nums">{n ?? 0}</span>;
   return (
-    <nav aria-label="Resource types" className="flex flex-wrap gap-2">
-      {tab(pathname, "All", !active, counts?.all)}
-      {RESOURCE_TYPES.filter((t) => !SEPARATE_TYPES.includes(t)).map((t) =>
-        tab(`${pathname}?type=${t}`, SHORT_LABEL[t] ?? TYPE_DEFS[t].plural, active === t, counts?.[t] ?? 0),
-      )}
-      <span aria-hidden className="mx-1 my-1.5 w-px self-stretch bg-surface-raised" />
-      {SEPARATE_TYPES.map((t) =>
-        tab(
-          `${pathname}?type=${t}`,
-          <>
-            <TypeIcon type={t} className="size-3.5" />
-            {TYPE_DEFS[t].plural}
-          </>,
-          active === t,
-          counts?.[t] ?? 0,
-        ),
-      )}
-    </nav>
+    <Select value={value ?? "all"} onValueChange={(v) => onChange(v === "all" ? undefined : (v as ResourceType))}>
+      <SelectTrigger size="sm" className="w-[196px]" aria-label="Type">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all">All types {count(types.reduce((sum, t) => sum + (counts?.[t] ?? 0), 0))}</SelectItem>
+        {types.map((t) => (
+          <SelectItem key={t} value={t}>
+            <TypeIcon type={t} className="size-3.5 text-ink-subtle" />
+            {SHORT_LABEL[t] ?? TYPE_DEFS[t].plural} {count(counts?.[t])}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/** A section's landing page: one glass folder per type, holding what's listed below. */
+function TypeShelf({ types, items }: { types: readonly ResourceType[]; items: ResourceDTO[] }) {
+  const router = useRouter();
+  return (
+    <FolderShelf
+      label="Types"
+      folders={types.map((t) => {
+        const list = items.filter((r) => r.type === t);
+        const plural = TYPE_DEFS[t].plural;
+        return {
+          id: `type-${t}`,
+          label: plural,
+          meta: `${list.length} item${list.length === 1 ? "" : "s"}`,
+          items: list.map((r) => ({
+            id: r.id,
+            name: r.title,
+            meta: hostOf(r.sourceUrl) ?? undefined,
+            image: r.coverAssetId ? assetUrl(r.coverAssetId, { thumb: true }) : undefined,
+          })),
+          menu: [{ label: `Open ${plural}`, onSelect: () => router.push(`/?type=${t}`) }],
+        };
+      })}
+    />
   );
 }
 
@@ -80,7 +101,7 @@ function TypeTabs({ active, showCounts }: { active?: ResourceType; showCounts: b
 function ViaChip({ sourceId, onClear }: { sourceId: string; onClear: () => void }) {
   const { data: source } = useResource(sourceId);
   return (
-    <span className="inline-flex h-[30px] items-center gap-1 rounded-full bg-inverse pr-1 pl-3 text-[12px] font-medium text-on-inverse">
+    <span className="inline-flex h-9 items-center gap-1 rounded-full bg-inverse pr-1 pl-3 text-[13px] font-medium text-on-inverse">
       From {source?.title ?? "source"}
       <button
         type="button"
@@ -101,6 +122,7 @@ export function LibraryView({
   actions,
   mode = "library",
   emptyState,
+  crumbs,
 }: {
   collectionId?: string;
   title?: ReactNode;
@@ -108,28 +130,38 @@ export function LibraryView({
   actions?: ReactNode;
   mode?: "library" | "trash";
   emptyState?: ReactNode;
+  /** Breadcrumb trail; the library works out its own (Section › Type). Shown only when it has two or more steps. */
+  crumbs?: Crumb[];
 }) {
   const params = useLibraryParams();
   const [selected, setSelected] = useState<string[]>([]);
   const lastClicked = useRef<string | null>(null);
   const [weekAgo] = useState(() => Date.now() - 7 * 24 * 60 * 60 * 1000);
   const { set } = params;
+  // Sections only apply to the library itself; collections and the trash cover every type.
+  const library = mode === "library" && !collectionId;
+  const typeChoices = library ? params.section.types : RESOURCE_TYPES;
 
   const {
-    data: items,
+    data: listed,
     isLoading,
     error,
   } = useResources({
     q: params.q,
     type: params.type,
-    // the library's "All" leaves skills to their own tab; collections and trash show everything
-    exclude: mode === "library" && !collectionId && !params.type ? SEPARATE_TYPES : undefined,
+    types: library && !params.type ? params.section.types : undefined,
     tags: params.tags,
     via: params.via || undefined,
     sort: params.sort,
     collection: collectionId,
     trash: mode === "trash",
   });
+
+  // One source category: narrow here, the list of sources is small.
+  const items = useMemo(
+    () => (params.category ? listed?.filter((r) => categoryOf(r) === params.category) : listed),
+    [listed, params.category],
+  );
 
   // Escape clears the selection, ⌘A selects everything shown.
   useEffect(() => {
@@ -164,9 +196,15 @@ export function LibraryView({
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   };
 
-  const heading = title ?? (params.type ? TYPE_DEFS[params.type].plural : "Library");
+  const category = SOURCE_CATEGORIES.find((c) => c.value === params.category);
+  const heading =
+    title ??
+    category?.label ??
+    (params.type && params.section.types.length > 1 ? TYPE_DEFS[params.type].plural : params.section.label);
   const filtered = !!(params.q || params.tags.length || params.via);
-  const library = mode === "library" && !collectionId;
+  const trail =
+    crumbs ??
+    (library && params.type ? [...typeCrumbs(params.type), ...(category ? [{ label: category.label }] : [])] : []);
   const exportName = typeof heading === "string" ? heading : "ui-context";
   const thisWeek = items?.filter((i) => new Date(i.createdAt).getTime() > weekAgo).length ?? 0;
   const defaultSubtitle = items
@@ -176,6 +214,7 @@ export function LibraryView({
   return (
     <div className="flex min-h-full flex-col">
       <section className="flex flex-col gap-6 px-4 pt-8 pb-2 md:px-10 md:pt-10">
+        {trail.length > 1 && <Breadcrumbs items={trail} />}
         <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
           <h1 className="text-[clamp(44px,6vw,72px)] leading-[0.96] font-medium tracking-[-0.045em] text-balance text-ink">
             {heading}
@@ -183,13 +222,21 @@ export function LibraryView({
           <p className="pb-1.5 text-base text-ink-muted">{subtitle ?? defaultSubtitle}</p>
           {actions && <div className="ml-auto flex flex-wrap items-center gap-2 pb-1">{actions}</div>}
         </div>
-        {mode === "library" && <TypeTabs active={params.type} showCounts={!collectionId} />}
+        <TagPills items={items} selected={params.tags} onChange={(tags) => set({ tags })} />
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <FilterBar type={params.type} selected={params.tags} onChange={(tags) => set({ tags })} />
+          {typeChoices.length > 1 && (
+            <TypeSelect
+              types={typeChoices}
+              value={params.type}
+              showCounts={library}
+              // clearing the type keeps you in the section you were in
+              onChange={(type) => set({ type, section: type ? undefined : params.section.id })}
+            />
+          )}
           {params.via && <ViaChip sourceId={params.via} onClear={() => set({ via: "" })} />}
           <div className="ml-auto flex items-center gap-2">
             <Select value={params.sort} onValueChange={(v) => set({ sort: v as typeof params.sort })}>
-              <SelectTrigger size="sm" className="w-[150px]" aria-label="Sort">
+              <SelectTrigger size="sm" className="w-[176px]" aria-label="Sort">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -221,6 +268,11 @@ export function LibraryView({
       <div className="flex-1 space-y-6 px-4 pt-6 pb-16 md:px-10">
         {params.type === "skill" && library && <SkillSyncPanel />}
         {params.type === "source" && library && <SourceToolbar />}
+        {library && !params.type && params.section.types.length > 1 && items && (
+          <div className="pb-10">
+            <TypeShelf types={params.section.types} items={items} />
+          </div>
+        )}
 
         {error && (
           <div role="alert" className="rounded-[14px] bg-surface p-4 text-sm text-danger">
@@ -241,13 +293,13 @@ export function LibraryView({
           <div className="grid place-items-center py-24 text-center">
             {filtered ? (
               <div className="space-y-1">
-                <p className="text-[15px] font-medium">No matches</p>
+                <p className="text-[16px] font-medium">No matches</p>
                 <p className="text-sm text-ink-muted">Try fewer filters or a different search.</p>
               </div>
             ) : (
               (emptyState ?? (
                 <div className="max-w-sm space-y-2">
-                  <p className="text-[15px] font-medium">Nothing here yet</p>
+                  <p className="text-[16px] font-medium">Nothing here yet</p>
                   <p className="text-sm text-ink-muted">
                     Paste a URL or an image anywhere with <Kbd>⌘V</Kbd>, drop files on the window, or press Add.
                   </p>
@@ -256,7 +308,7 @@ export function LibraryView({
             )}
           </div>
         ) : params.type === "source" && library && items ? (
-          <SourceGroups items={items} view={params.view} selection={selection} toggle={toggle} />
+          <SourceGroups items={items} view={params.view} selection={selection} toggle={toggle} shelf={!category} />
         ) : params.type === "skill" && library && items ? (
           <SkillPackGroups items={items} view={params.view} selection={selection} toggle={toggle} />
         ) : params.view === "grid" ? (

@@ -35,12 +35,13 @@ Stan Bag is a personal library of UI references, assets, prompts and Claude Code
 - Card titles are `title`, meta lines `meta` in `ink-subtle`, pills and buttons `label`.
 - The note card shows its content as a `title-lg` quote, not as a code block.
 - Keep weights at 400 and 500. No bold (600+) anywhere.
-- This is an app, so body text is 14px, smaller than Savee's marketing pages. Never go below 12px.
+- Body text is 15px (set on `body`), labels and meta 14px. Never go below 12px. (Raised one step on 2026-10-28: 14 → 15 body, 13 → 14 labels and meta, 15 → 16 titles.)
+- The root size stays at the browser's 16px. Never set `font-size` on `html`: every rem-based size (control heights, spacing, `text-xs`/`text-sm`) is measured from it, and a 14px root once shrank the whole app by 12.5%.
 
 ## Layout
 
-- No sidebar. A top bar holds the logo, the search field (centered, up to 560px) and the account pills; the primary `Add` button sits at its right end.
-- Under it: the `display` page title with a `meta` count line, then a wrapping row of type pills (All, References, UI Libraries, … MCP).
+- No sidebar. A top bar holds the logo, the section nav (Library · Knowledge · Sources · Skills), the search field (up to 560px) and the account pills; the primary `Add` button sits at its right end.
+- Under it: the `display` page title with a `meta` count line, then a wrapping row of tag pills that filter the list.
 - The grid is `repeat(auto-fill, minmax(360px, 1fr))` with `space-10` between rows and `space-6` between columns. Thumbnails are 16:10.
 - Page side gutter is `space-10` on desktop and 16px on phones. Sections are separated by `space-16` of empty canvas.
 - Radius is binary: `radius-pill` for every control, `radius-card` for every container. `radius-sm` is only for keyboard hints and inline code.
@@ -78,14 +79,28 @@ Pill-shaped button in three roles.
 - Sizes: `lg` 40px in the top bar, `default` 36px, `sm` 32px, `xs` 24px; `icon*` variants are round.
 - The caller provides a verb as the label and, optionally, a leading 16px Lucide icon. Icon-only buttons need `aria-label`.
 
-### Pill (type tabs, filters, tags) — `components/library-view.tsx` (`TypeTabs`), `components/filter-bar.tsx`, `components/tags-editor.tsx`
+### Pill (section nav, tag filter, tags) — `components/app-shell.tsx` (`SectionNav`), `components/tag-pills.tsx`, `components/tags-editor.tsx`
 
 One shape, two states.
 
 - Inactive: `surface` fill, `ink-secondary` label; hover `surface-raised`.
-- Active: `inverse` fill, `on-inverse` label. Exactly one active pill in the type-tab row; filters may have several.
-- Heights: 36px type tabs, 30px filters, 28px editable tags, 24px tags inside a card.
-- The type-tab row ends with a 1px `surface-raised` divider, then the separate tabs with their icons: Sources (compass), Skills (wand). These are not part of All.
+- Active: `inverse` fill, `on-inverse` label. Exactly one active section in the nav; the tag row may have several.
+- Heights: 36px section nav, tag filter and chips, 28px editable tags, 24px tags inside a card. Section nav labels are 15px.
+- **Section nav** (`components/section-nav.tsx`, Radix NavigationMenu): transparent when idle (hover or open: `surface`), so the top bar stays quiet. Sections with a panel (Library, Knowledge, Sources) end in a 14px chevron at 60% opacity that turns over (200ms) while the panel is open; phones (no hover) hide it so the nav fits.
+- **Type panel**, opened by hovering Library, Knowledge or Sources, or by pressing ↓ on them (Sources lists its seven categories instead of types, each with its own Lucide icon: lightbulb, app-window, swatch-book, blocks, orbit, type, shapes):
+  - A `surface-raised` panel, 20px radius, `shadow-overlay`, 8px padding, two columns up to 600px wide (one column on phones).
+  - Each option is a 12px-radius row: a 40px `surface` icon tile, the plural name in 15px `ink` with its count in `mono` on the right, and the type's one-line blurb in 14px `ink-muted`. Hover or focus fills it with `surface`; the current type stays filled.
+  - Clicking the section name itself goes to its landing page; there is no "All" option.
+- **Panel motion**, modelled on lovable.dev:
+  - Opening scales from 0.96 and fades in (180ms); closing reverses (140ms).
+  - Moving to another section glides the panel under it and resizes it to the new content (270ms, `cubic-bezier(.45,0,.25,1)`).
+  - The new content slides 32px in from the side the pointer came from, unblurring from 2px, while the old one slides out the other way.
+  - Reduced motion makes all of this instant.
+- Section nav labels are 15px with 16px side padding (12px on phones, so all four fit at 375px); the row wraps on anything narrower.
+- **Tag filter row**:
+  - "All" first (active when no tag is chosen), then the chosen tags (inverse, with a remove ×), then up to 12 tags by how many listed items carry them, each with its count.
+  - "+N more" opens a searchable popover grouped by tag kind.
+  - The row hides when nothing on screen has tags.
 - A "From <source>" chip (inverse pill with a clear button) sits in the filter row while the list is narrowed to one source.
 - An optional count follows the label at 70% opacity, `tabular-nums`.
 - Rows wrap onto new lines; never scroll a pill row horizontally.
@@ -140,20 +155,28 @@ Appears at the bottom centre while resources are selected.
 
 ### Top bar — `components/app-shell.tsx` (`TopBar`)
 
-- Logo (archive glyph in `canvas` on an `ink` disc + "Stan Bag" in Geist 500), search field, then Collections menu, Trash and Settings round buttons (`inverse` when on that page), theme toggle, and the split `Add` button (the screen's primary action).
-- No sidebar anywhere; navigation between types happens through the type pills under the page title.
+- Logo (archive glyph in `canvas` on an `ink` disc + "Stan Bag" in Geist 500), the section nav, search field, then Collections menu, Trash and Settings round buttons (`inverse` when on that page), theme toggle, and the split `Add` button (the screen's primary action).
+- On phones the Collections button is icon-only so the action row fits; the search field drops to its own row.
+- No sidebar anywhere. Sections are in the top bar; a section's types are in the Type select.
+
+### Breadcrumbs — `components/breadcrumbs.tsx`
+
+- A row of 14px `ink-subtle` links separated by 14px chevrons; the last crumb (the current page) is `ink-secondary` and not a link. It truncates rather than wraps a long title.
+- Shown only when there are two or more steps: above the page title on a type page (Section › Type) and in a collection (Collections › Name), and beside the back button on a resource page (Section › Type › Title).
 
 ### Page header — `components/library-view.tsx`
 
 - `display` title (72px, clamps down to 44px on narrow screens), a `meta`-sized count line in `ink-muted` ("24 saved · 6 this week"), and optional actions aligned right (collections: Copy context, Export, Delete).
-- Then the type pills, then facet filter pills with sort select and grid/list toggle on the right.
+- Then the tag filter row, then a row with the Type select (when the section has more than one type) and the "From …" chip on the left, sort select and grid/list toggle on the right.
+- The title is the section name, or the type's plural when one is chosen.
+- A section's landing page (no type chosen) shows a folder shelf above the grid: one glass folder per type, the type's items as sheets (cover thumbnails when they have one), with 40px before the grid.
 - Grid: `repeat(auto-fill, minmax(min(100%, 360px), 1fr))`, 40px between rows, 24px between columns.
 
 ### Skill pack group — `components/skill-pack-groups.tsx`
 
 The Skills page groups cards by pack (a GitHub repo, a Claude Code plugin, or an author) instead of one long grid.
 
-- Header: a chevron toggle and the pack name in `title-lg` (22px, `ink`), then `author · kind · N skills` in `ink-subtle`. Website and Repository links on the right are small `surface` pills (32px, 12px label).
+- Header: a chevron toggle and the pack name in `title-lg` (22px, `ink`), then `author · kind · N skills` in `ink-subtle`. Website and Repository links on the right are small `surface` pills (32px, 13px label).
 - The pack description follows in `ink-muted` at a 3xl measure.
 - Under the header sits the normal card grid or list. Groups are 64px apart; the header is 24px above its cards.
 - Collapsing a group hides its cards; the toggle carries `aria-expanded`/`aria-controls`.
@@ -213,7 +236,7 @@ The "How to use" block on a skill's detail page, between the skill bar and the c
 | `ink-secondary`  | `#d4d4d4` | `#2e2e2e` | Inactive pill labels, button labels on surface, body copy that should recede a step.                                |
 | `ink-muted`      | `#a3a3a3` | `#545454` | Helper text, placeholders, icons on canvas, surface and surface-raised.                                             |
 | `ink-subtle`     | `#8a8a8a` | `#636363` | Metadata: hosts, counts, timestamps, shortcut hints. Reads 4.8:1 or better on canvas, surface and surface-raised.   |
-| `inverse`        | `#fdfdfd` | `#0a0a0a` | Fill of the active pill (current type tab or filter).                                                               |
+| `inverse`        | `#fdfdfd` | `#0a0a0a` | Fill of the active pill (current section or chosen tag).                                                            |
 | `on-inverse`     | `#050505` | `#ffffff` | Label on an inverse fill.                                                                                           |
 | `accent`         | `#1500ff` | `#1500ff` | Electric indigo. Fill of the single primary action per screen (Add, Save, Export). Never text, icons or decoration. |
 | `on-accent`      | `#ffffff` | `#ffffff` | Label on an accent fill (8.5:1).                                                                                    |
@@ -232,11 +255,11 @@ Families: `--font-sans` Geist, `--font-mono` Geist Mono (loaded with `next/font`
 | ---------- | ---------------------------- | ---------------------------------------------------- |
 | `display`  | 72px / 0.96 · 500 · -0.045em | The page title of a library view. One per screen.    |
 | `title-lg` | 22px / 1.2 · 500 · -0.02em   | The quote inside a note card; dialog titles.         |
-| `title`    | 15px / 1.4 · 500             | Card titles, list row titles.                        |
-| `body`     | 14px / 1.5 · 400             | Notes, descriptions, form fields.                    |
-| `label`    | 13px / 1.2 · 500             | Pills, buttons, tabs.                                |
-| `meta`     | 13px / 1.4 · 400             | Host and tag line under a card title, in ink-subtle. |
-| `mono`     | 12px / 1.6 · 400             | Prompt and code previews, keyboard hints, counts.    |
+| `title`    | 16px / 1.4 · 500             | Card titles, list row titles.                        |
+| `body`     | 15px / 1.5 · 400             | Notes, descriptions, form fields, markdown previews. |
+| `label`    | 14px / 1.2 · 500             | Pills, buttons, tabs (13px in `sm` controls).        |
+| `meta`     | 14px / 1.4 · 400             | Host and tag line under a card title, in ink-subtle. |
+| `mono`     | 12–13px / 1.6 · 400          | Prompt and code previews, keyboard hints, counts.    |
 
 ### Spacing & radius
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { RESOURCE_TYPES, sourceSearchUrl, TYPE_DEFS } from "@stan-bag/core/types";
+import { RESOURCE_TYPES, SECTIONS, sourceSearchUrl, TYPE_DEFS } from "@stan-bag/core/types";
 import { useCreateOfType } from "@/components/add-menu";
 import { hostOf } from "@/components/resource-card";
 import { TypeIcon } from "@/components/type-icon";
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/command";
 import { useUi } from "@/components/ui-store";
 import { useCopyResource } from "@/hooks/use-copy-resource";
+import { sectionHref } from "@/hooks/use-library-params";
 import { api, useCollections, useInvalidate, useResources } from "@/lib/api";
 
 export function CommandPalette() {
@@ -160,9 +161,11 @@ export function CommandPalette() {
           </CommandGroup>
           <CommandSeparator />
           <CommandGroup heading="Go to">
-            <CommandItem onSelect={() => run(() => router.push("/"))}>
-              <Layers /> All resources
-            </CommandItem>
+            {SECTIONS.filter((s) => s.types.length > 1).map((s) => (
+              <CommandItem key={s.id} value={`Go ${s.label}`} onSelect={() => run(() => router.push(sectionHref(s)))}>
+                <Layers /> {s.label}
+              </CommandItem>
+            ))}
             {RESOURCE_TYPES.map((t) => (
               <CommandItem
                 key={t}
@@ -190,7 +193,7 @@ export function CommandPalette() {
             </CommandItem>
           </CommandGroup>
         </CommandList>
-        <div className="flex items-center gap-3 border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-3 border-t border-border px-3 py-2 text-[12px] text-muted-foreground">
           <span>↵ open</span>
           <span>⌘↵ copy</span>
           <span>esc close</span>

@@ -118,7 +118,7 @@ export function SkillPackGroups({
                     {pack.name}
                   </h2>
                 </button>
-                <p className="pt-1 text-[13px] text-ink-subtle">
+                <p className="pt-1 text-[14px] text-ink-subtle">
                   {[pack.author, KIND_LABEL[pack.kind], `${list.length} skill${list.length === 1 ? "" : "s"}`]
                     .filter(Boolean)
                     .join(" · ")}
@@ -129,7 +129,7 @@ export function SkillPackGroups({
                       href={pack.homepage}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex h-8 items-center gap-1.5 rounded-full bg-surface px-3 text-[12px] font-medium text-ink-secondary hover:bg-surface-raised hover:text-ink"
+                      className="inline-flex h-8 items-center gap-1.5 rounded-full bg-surface px-3 text-[13px] font-medium text-ink-secondary hover:bg-surface-raised hover:text-ink"
                     >
                       <Globe className="size-3.5" aria-hidden /> Website
                     </a>
@@ -139,7 +139,7 @@ export function SkillPackGroups({
                       href={pack.repoUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex h-8 items-center gap-1.5 rounded-full bg-surface px-3 text-[12px] font-medium text-ink-secondary hover:bg-surface-raised hover:text-ink"
+                      className="inline-flex h-8 items-center gap-1.5 rounded-full bg-surface px-3 text-[13px] font-medium text-ink-secondary hover:bg-surface-raised hover:text-ink"
                     >
                       <ExternalLink className="size-3.5" aria-hidden /> Repository
                     </a>
