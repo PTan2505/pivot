@@ -1,15 +1,15 @@
 "use client";
 
-import { FileUp, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type MouseEvent } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import { SOURCE_CATEGORIES, sourceSearchUrl, type ResourceDTO } from "@pivot/core/types";
-import { BookmarkImportDialog } from "@/components/bookmark-import-dialog";
 import { FolderShelf } from "@/components/folder-shelf";
 import { hostOf, ResourceCard, ResourceRow } from "@/components/resource-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useLibraryParams } from "@/hooks/use-library-params";
 import { assetUrl, useResources, useSourceStats } from "@/lib/api";
 
 const CATEGORY_VALUES = new Set<string>(SOURCE_CATEGORIES.map((c) => c.value));
@@ -24,64 +24,39 @@ const GROUPS = [
   { value: "", label: "Uncategorized", hint: "Pick a category on the source's page" },
 ] as const;
 
-/** Search box over every source with a search URL, and the bookmark import. Always shown on the Sources tab. */
+/** Filter box over the saved sources. It shares `?q=` with the top bar search, so the view stays linkable. */
 export function SourceToolbar() {
-  const { data: sources = [] } = useResources({ type: "source", sort: "title" });
-  const [query, setQuery] = useState("");
-  const [importing, setImporting] = useState(false);
-  const searchable = sources.filter(searchTemplate);
-  const q = query.trim();
+  const { q, set } = useLibraryParams();
+  const { data: sources = [] } = useResources({ type: "source" });
+  const [value, setValue] = useState(q);
+  const [lastQ, setLastQ] = useState(q);
+
+  // Follow the URL when it changes from elsewhere (top bar search, back/forward, clearing filters).
+  if (q !== lastQ) {
+    setLastQ(q);
+    setValue(q);
+  }
+
+  useEffect(() => {
+    if (value === q) return;
+    const t = setTimeout(() => set({ q: value }), 200);
+    return () => clearTimeout(t);
+  }, [value, q, set]);
 
   return (
-    <div className="space-y-4 rounded-[14px] bg-surface p-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-0 flex-1 basis-64">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-ink-subtle"
-            aria-hidden
-          />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={
-              searchable.length
-                ? `Search ${searchable.length} sources for pricing pages, onboarding, buttons…`
-                : "Add a search URL to a source to search it from here"
-            }
-            aria-label="Search the sources"
-            className="h-10 pl-10"
-            disabled={!searchable.length}
-          />
-        </div>
-        <Button variant="secondary" onClick={() => setImporting(true)}>
-          <FileUp /> Import bookmarks
-        </Button>
-      </div>
-      {q && (
-        <div className="space-y-3" aria-live="polite">
-          {GROUPS.map((g) => {
-            const list = searchable.filter((s) => categoryOf(s) === g.value);
-            if (!list.length) return null;
-            return (
-              <div key={g.value} className="flex flex-wrap items-center gap-2">
-                <span className="w-32 shrink-0 text-[13px] text-ink-subtle">{g.label}</span>
-                {list.map((s) => (
-                  <a
-                    key={s.id}
-                    href={sourceSearchUrl(searchTemplate(s)!, q)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex h-8 items-center rounded-full bg-surface-raised px-3 text-[13px] font-medium text-ink-secondary transition-colors hover:bg-inverse hover:text-on-inverse"
-                  >
-                    {s.title}
-                  </a>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-      )}
-      <BookmarkImportDialog open={importing} onOpenChange={setImporting} />
+    <div className="relative max-w-[560px]">
+      <Search
+        className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-ink-muted"
+        aria-hidden
+      />
+      <Input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => e.key === "Escape" && setValue("")}
+        placeholder={`Filter ${sources.length ? `${sources.length} ` : ""}sources by name, site, notes or tag…`}
+        aria-label="Filter the sources"
+        className="h-10 pl-10"
+      />
     </div>
   );
 }

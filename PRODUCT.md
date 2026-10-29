@@ -34,7 +34,7 @@ PIVOT is not a public gallery or a team tool. It is one person's working bag, an
 
 - Runs locally (`npm start`, http://127.0.0.1:4321); the API answers only localhost and the paired extension.
 - Data lives in Neon Postgres, with PGlite as the offline fallback; files live in Cloudflare R2 (bucket `pivot`), or in `~/.pivot` without R2.
-- Captures pages with Playwright; imports browser bookmark files; syncs skills from `~/.claude/skills` and the installed plugins.
+- Captures pages with Playwright; syncs skills from `~/.claude/skills` and the installed plugins.
 - The navbar has four sections: Library (visual references), Knowledge (prompts, snippets, rules, checklists, MCP), Sources (aggregator sites) and Skills.
 
 ## Capabilities and Constraints
