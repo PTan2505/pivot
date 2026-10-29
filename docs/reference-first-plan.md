@@ -48,22 +48,22 @@ The current requirements document (`SPEC.md`, PIVOT Requirements v0.2) defines 1
 
 ### Phase 0 — Audit and baseline (first)
 
-- [ ] Locate relevant code paths for reference CRUD, screenshots, sources, collections, search, filters, and extension.
-- [ ] Record which checklist items below are already working; do not assume all are missing.
-- [ ] Run available baseline checks (typecheck, lint, tests, build) and record results.
-- [ ] Identify any data-loss or security risks before modifying persistence or screenshot code.
-- [ ] Produce a concise gap list, ordered by impact on the daily workflow.
+- [x] Locate relevant code paths for reference CRUD, screenshots, sources, collections, search, filters, and extension.
+- [x] Record which checklist items below are already working; do not assume all are missing.
+- [x] Run available baseline checks (typecheck, lint, tests, build) and record results.
+- [x] Identify any data-loss or security risks before modifying persistence or screenshot code.
+- [x] Produce a concise gap list, ordered by impact on the daily workflow.
 
 **Done when:** There is a grounded implementation inventory and a small, ordered list of changes.
 
 ### Phase 1 — Save references
 
-- [ ] Save a reference from a URL.
+- [x] Save a reference from a URL.
 - [ ] Capture or preserve source URL, title, and description when available.
-- [ ] Capture viewport screenshot at 1440×900 and full-page screenshot using existing Playwright behavior.
-- [ ] Respect SPEC limits: full-page max 12000px; bounded scrolling/expansion; keep viewport image if full-page fails.
+- [x] Capture viewport screenshot at 1440×900 and full-page screenshot using existing Playwright behavior.
+- [x] Respect SPEC limits: full-page max 12000px; bounded scrolling/expansion; keep viewport image if full-page fails.
 - [ ] Allow manual screenshot upload or replacement.
-- [ ] Show saved references as clear visual cards.
+- [x] Show saved references as clear visual cards.
 - [ ] Warn on duplicate URLs; avoid unintended duplicate creation.
 - [ ] Show actionable error states for blocked pages, screenshot failures, and invalid URLs.
 
@@ -71,18 +71,18 @@ The current requirements document (`SPEC.md`, PIVOT Requirements v0.2) defines 1
 
 ### Phase 2 — Organize references
 
-- [ ] Support reference facets: `pageType`, `domain`, `visualStyle`, `uiPattern`.
+- [x] Support reference facets: `pageType`, `domain`, `visualStyle`, `uiPattern`.
 - [ ] Support user-defined tags and editable metadata.
 - [ ] Create, rename, and use collections to group references.
 - [ ] Filter by type, facets/tags, and collection where applicable.
-- [ ] Preserve existing tag behavior and AND-combination semantics from SPEC.
+- [x] Preserve existing tag behavior and AND-combination semantics from SPEC.
 - [ ] Keep reference cards legible; do not apply glass styling to screenshot/card surfaces.
 
 **Done when:** 20 references can be grouped and filtered without confusion.
 
 ### Phase 3 — Find and reuse
 
-- [ ] Search saved references by title, URL, description, and tags as supported by the current data model.
+- [x] Search saved references by title, URL, description, and tags as supported by the current data model.
 - [ ] Open a useful detail view with readable screenshots and metadata.
 - [ ] Open the original website reliably.
 - [ ] Combine filters to narrow results.
@@ -94,8 +94,8 @@ The current requirements document (`SPEC.md`, PIVOT Requirements v0.2) defines 1
 ### Phase 4 — Sources and browser capture
 
 - [ ] Browse saved Sources by category and open a Source's original website.
-- [ ] Confirm Source uses viewport-only screenshots, per SPEC.
-- [ ] Verify search across saved Sources and `searchUrl` behavior where implemented.
+- [x] Confirm Source uses viewport-only screenshots, per SPEC.
+- [x] Verify search across saved Sources and `searchUrl` behavior where implemented.
 - [ ] Verify attribution/filtering of references via matching Source host (`via`).
 - [ ] Verify Chrome extension quick-save and screenshot capture with the local app running.
 - [ ] Check extension token/authentication flow; do not weaken security to make saving easier.
