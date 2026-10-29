@@ -14,7 +14,7 @@ Personal UI/UX resource library: pnpm monorepo with `apps/web` (Next.js 16 app +
   ```
   Prefixes: `feat/` new behaviour, `fix/` bug fix, `chore/` tooling, deps, config, `docs/` documentation only, `refactor/` no behaviour change. Slugs are lowercase-kebab and name the task (`feat/r2-storage`, `fix/capture-timeout`).
 - Keep a branch to its one task. Unrelated work found along the way gets its own branch (or a note to the user), not a drive-by change.
-- Finished work goes back to `dev` through a pull request into `dev` (`gh pr create --base dev`), never by merging locally into `dev` or `main`. Delete the branch after it is merged.
+- Finished work goes back to `dev` through a pull request into `dev` (`gh pr create --base dev`), never by merging locally into `dev` or `main`. Keep the branch after it is merged: don't delete it locally or on origin (merge without `--delete-branch`), so every task branch stays pushed for reference.
 - Urgent production fixes only: `hotfix/<slug>` from `main`, PR into `main`, then merge `main` back into `dev` so they don't drift.
 - Commit, push and open PRs only when the user asks. Never force-push `main` or `dev`.
 - Before committing, check that no secrets are staged: `.env` (Neon URL, R2 keys) and the extension's `*.pem` signing key are gitignored and must stay out of git.
