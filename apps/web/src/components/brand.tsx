@@ -11,21 +11,21 @@ const I = "M0 0H34V110A26 26 0 0 1 8 136H0Z";
 const V = "M0 0H36L64 94L92 0H128L84 136H44Z";
 const O = "M68 0A68 68 0 1 1 68 136A68 68 0 1 1 68 0ZM68 34A34 34 0 1 0 68 102A34 34 0 1 0 68 34Z";
 
-/** The PT monogram: the T's bar sits in the P's counter and closes its bowl. Drawn in currentColor. */
+/** The PT monogram: the T's bar sits in the P's counter and closes its bowl. The P is ember, the T currentColor. */
 export function PivotMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 232 170" fill="currentColor" aria-hidden className={cn("h-6 w-auto shrink-0", className)}>
-      <path d={P_HALVES} />
+      <path d={P_HALVES} fill="var(--ember)" />
       <path d={T} transform="translate(134 34)" />
     </svg>
   );
 }
 
-/** The PIVOT wordmark in one colour (currentColor); the ember O is kept for the icon and splash, not the UI. */
+/** The PIVOT wordmark: an ember P, then IVOT in currentColor. The ember O is kept for the icon and splash, not the UI. */
 export function PivotWordmark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 586 136" fill="currentColor" aria-hidden className={cn("h-3.5 w-auto shrink-0", className)}>
-      <path d={P_HALVES + P_BRIDGE} />
+      <path d={P_HALVES + P_BRIDGE} fill="var(--ember)" />
       <path d={I} transform="translate(154 0)" />
       <path d={V} transform="translate(206 0)" />
       <path d={O} transform="translate(342 0)" fillRule="evenodd" />
