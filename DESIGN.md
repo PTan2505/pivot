@@ -217,7 +217,7 @@ Contrast on glass is measured against the worst backdrop, a white screenshot blu
 
 ### Named Rules
 
-**The One Ember Rule.** Exactly one ember-orange filled button per screen, with dark text. Orange never appears as a link, icon, hover state, badge or decoration; links and focus use Amber Signal.
+**The One Ember Rule.** Exactly one ember-orange filled button per screen, with dark text. Orange never appears as a link, icon, hover state, badge or decoration; links and focus use Amber Signal. The one exception is the brand mark's P (see Brand mark), which is part of the logo, not the interface.
 
 **The Glass Promotion Rule.** Glass raises its faint inks so nothing drops below 4.5:1 over a white screenshot: inside light glass, ink-secondary, ink-muted and ink-subtle all resolve to ink; inside strong glass, ink-subtle resolves to ink-muted. Text sitting directly on the top bar is ink.
 
@@ -316,9 +316,9 @@ PT is the core, PIVOT the expansion: the mark starts from the first and last let
 - **Letterforms:** 34-unit strokes on a 136-unit cap height, drawn as SVG paths (never set in Geist). The P is two halves turned 180° on each other: the top bar rounds off at its top-right corner, the hook below rounds off at its bottom-right corner and carries the stem. Its counter is as tall as a stroke and open to the left. Stems end in a rounded bottom-right corner.
 - **PT monogram** (`PivotMark`, 232 × 170): the T's bar sits in the P's counter and closes the bowl; the T's stem is set left of the bar's centre. It is the app icon, the favicon and the extension's mark.
 - **PIVOT wordmark** (`PivotWordmark`, 586 × 136): the same P with a bridge closing the bowl, then I, V, a ring O and the T.
-- **Colour:** one colour, Warm White (`currentColor` on ink) in the app. The ember O (amber core → ember → ember deep) and the ember seam belong to the app icon and splash or landing use only, so the One Ember Rule still holds in the UI.
+- **Colour:** the P is solid Ember (`--ember`, #ff6a13; 6.9:1 on canvas), everything else Warm White (`currentColor` on ink), in the monogram and the wordmark alike (owner's call, 2026-10-29). The ember O (amber core → ember → ember deep) and the ember seam belong to the app icon and splash or landing use only.
 - **In the top bar:** the monogram at 22px high, then the wordmark at 13px high, 10px apart, inside the home link (`aria-label="PIVOT — library"`).
-- **App icon** (`docs/brand/pivot-app-icon.svg`, copied to `apps/web/src/app/icon.svg`): the monogram in Warm White on a kiln tile (22% radius, a faint warm top light) with the ember seam along its bottom edge. The extension's toolbar PNGs are rendered from it (`pnpm --filter extension icons`).
+- **App icon** (`docs/brand/pivot-app-icon.svg`, copied to `apps/web/src/app/icon.svg`): the monogram (ember P, Warm White T) on a kiln tile (22% radius, a faint warm top light) with the ember seam along its bottom edge. The extension's toolbar PNGs are rendered from it (`pnpm --filter extension icons`).
 - **Tagline** (brand use, not the UI): "Your creative compass" in Geist Mono 500, upper case, 0.62em tracking, Smoke. No ® until the name is registered.
 
 ### Top bar — `components/app-shell.tsx` (`TopBar`)
