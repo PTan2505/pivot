@@ -2,6 +2,15 @@
 
 Personal UI/UX resource library: pnpm monorepo with `apps/web` (Next.js 16 app + API), `apps/extension` (Chrome MV3) and `packages/core` (schema, migrations, library logic). Decisions: [docs/SPEC.md](docs/SPEC.md). Visual rules: [DESIGN.md](DESIGN.md). Talk to the user in Vietnamese; code, UI copy and commits in English.
 
+## Current focus: reference first
+
+Work follows [docs/reference-first-plan.md](docs/reference-first-plan.md): one daily workflow, **discover UI → save reference → organize → find → reuse**.
+
+- In scope: references, sources, collections, search and filters, the extension's quick save. Skills, prompts, workflows, MCP, snippets, rules and checklists are frozen: keep them working, don't extend them.
+- Go phase by phase (0 → 5): audit → gaps → implement → test → report. Tick the plan's checklist as items are verified, not when they're written.
+- Log each phase in [docs/reference-first-progress.md](docs/reference-first-progress.md) using the plan's §6 report format.
+- Never delete or migrate away existing data, routes or APIs to simplify; stop and ask before destructive migrations, big architectural changes, or anything that conflicts with SPEC.
+
 ## Git workflow
 
 - **`main` is production.** It is what gets deployed. Never commit to it directly and never base work on it.
