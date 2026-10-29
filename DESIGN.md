@@ -390,12 +390,11 @@ Display title (section name, or the type's plural), the count line ("24 saved ·
 
 Header: a chevron toggle and the pack name in title-lg ink, then `author · kind · N skills` in 14px ink-subtle; Website and Repository as 32px surface pills (13px) on the right; description in ink-muted at a 3xl measure. Groups are 64px apart; collapsing hides the cards (`aria-expanded`/`aria-controls`).
 
-### Sources page — `components/source-groups.tsx`, `components/bookmark-import-dialog.tsx`
+### Sources page — `components/source-groups.tsx`
 
-- Toolbar: a surface panel with a 40px search field and an "Import bookmarks" secondary pill; with a query typed, one row per category of surface-raised source pills that invert on hover.
+- Filter field: a 40px surface pill up to 560px wide with a leading search icon, sitting straight on the canvas (no panel). It filters the saved sources and shares `?q=` with the top bar search; Escape clears it.
 - One section per category in a fixed order, each with a title-lg heading plus hint and count in ink-subtle, then a grid of resource cards (300px minimum column).
 - Source info aside: a surface panel linking "Saved from this source · N →" and a small search form when the search URL has `{q}`.
-- Import dialog (max 3xl): a surface drop panel, then a review list (Suggested/All pill tabs, filter field, one row per bookmark with checkbox, title, mono URL, folder path and selects); already-saved rows dim to 50% and lock; the footer holds the single primary "Import N".
 
 ### Skill guide — `components/skill-guide.tsx`
 

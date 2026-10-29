@@ -1,4 +1,4 @@
-// Well-known design source sites, used to fill in a source's details when it is saved or imported.
+// Well-known design source sites, used to fill in a source's details when it is saved.
 // Search URL templates were checked against each site (2026-10-27); `{q}` is the URL-encoded query.
 // `searchUrl` is null where the site has no URL-based search (⌘K palettes, overlays) or it could not be checked.
 import type { SourceCategory } from "./types";
@@ -6,7 +6,7 @@ import type { SourceCategory } from "./types";
 export interface KnownSource {
   /** Lowercase, without "www.". */
   host: string;
-  /** Old domains that now redirect here, so older bookmarks still match. */
+  /** Old domains that now redirect here, so older links still match. */
   aliases?: string[];
   name: string;
   url: string;
