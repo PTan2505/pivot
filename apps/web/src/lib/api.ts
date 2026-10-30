@@ -1,6 +1,6 @@
 "use client";
 
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CollectionDTO,
   ResourceDetailDTO,
@@ -72,6 +72,9 @@ function toParams(q: ResourceQuery): Record<string, string | undefined> {
   };
 }
 
+/** What makes a list a different list: another type, section, collection or the trash. */
+const LIST_SCOPE = ["type", "types", "collection", "trash"] as const;
+
 export function useResources(query: ResourceQuery, { enabled = true } = {}) {
   const params = toParams(query);
   return useQuery({
@@ -80,7 +83,13 @@ export function useResources(query: ResourceQuery, { enabled = true } = {}) {
       const sp = new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]);
       return api<ResourceDTO[]>(`/api/resources?${sp}`);
     },
-    placeholderData: keepPreviousData,
+    // While a search, tag or sort change loads, keep showing the current list so it doesn't flash empty. A new scope
+    // waits for its own data instead: the old list would be drawn in the new page's layout (Library references
+    // grouped as one "Uncategorized" source folder, Knowledge folders counting references).
+    placeholderData: (previous, previousQuery) => {
+      const before = previousQuery?.queryKey[1] as Record<string, string | undefined> | undefined;
+      return before && LIST_SCOPE.every((k) => before[k] === params[k]) ? previous : undefined;
+    },
     enabled,
     // Keep polling while screenshots are being captured.
     refetchInterval: (q) => (q.state.data?.some((r) => r.captureStatus === "pending") ? 2000 : false),
