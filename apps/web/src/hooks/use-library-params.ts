@@ -23,7 +23,7 @@ export interface LibraryParams {
   via: string;
   /** Sources only: one source category. */
   category: SourceCategory | undefined;
-  sort: "updated" | "created" | "title";
+  sort: "updated" | "created" | "oldest" | "title";
   view: "grid" | "list";
 }
 
@@ -56,7 +56,7 @@ export function useLibraryParams() {
     tags: sp.get("tags")?.split(",").filter(Boolean) ?? [],
     via: sp.get("via") ?? "",
     category: type === "source" ? SOURCE_CATEGORIES.find((c) => c.value === sp.get("category"))?.value : undefined,
-    sort: sort === "created" || sort === "title" ? sort : "updated",
+    sort: sort === "created" || sort === "oldest" || sort === "title" ? sort : "updated",
     view: sp.get("view") === "list" ? "list" : "grid",
   };
 

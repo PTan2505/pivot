@@ -8,6 +8,7 @@ import { TypeIcon } from "@/components/type-icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCopyResource } from "@/hooks/use-copy-resource";
 import { assetUrl, faviconUrl } from "@/lib/api";
+import { openableUrl } from "@/lib/url";
 import { cn } from "@/lib/utils";
 
 export function hostOf(url: string | null) {
@@ -72,6 +73,7 @@ export function SelectBox({
 function CardActions({ resource, glass, className }: { resource: ResourceDTO; glass?: boolean; className?: string }) {
   const copy = useCopyResource();
   const def = TYPE_DEFS[resource.type];
+  const href = openableUrl(resource.sourceUrl);
   const pill = glass
     ? "grid size-7 place-items-center rounded-full bg-ink/10 text-ink transition-colors hover:bg-ink/16"
     : "grid size-8 place-items-center rounded-full bg-surface-raised text-ink-secondary transition-colors hover:text-ink";
@@ -82,7 +84,7 @@ function CardActions({ resource, glass, className }: { resource: ResourceDTO; gl
         className,
       )}
     >
-      {resource.sourceUrl && (
+      {href && (
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -91,7 +93,7 @@ function CardActions({ resource, glass, className }: { resource: ResourceDTO; gl
               aria-label="Open source URL"
               onClick={(e) => {
                 stop(e);
-                window.open(resource.sourceUrl!, "_blank", "noopener,noreferrer");
+                window.open(href, "_blank", "noopener,noreferrer");
               }}
             >
               <ExternalLink className="size-3.5" />

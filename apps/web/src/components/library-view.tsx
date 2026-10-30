@@ -13,6 +13,7 @@ import { SkillSyncPanel } from "@/components/skill-sync-panel";
 import { categoryOf, SourceGroups, SourceToolbar } from "@/components/source-groups";
 import { TagPills } from "@/components/tag-pills";
 import { TypeIcon } from "@/components/type-icon";
+import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -190,6 +191,8 @@ export function LibraryView({
     category?.label ??
     (params.type && params.section.types.length > 1 ? TYPE_DEFS[params.type].plural : params.section.label);
   const filtered = !!(params.q || params.tags.length || params.via);
+  // Search, tags and source; the type, section and category are where you are, not filters.
+  const clearFilters = () => set({ q: "", tags: [], via: "" });
   const trail =
     crumbs ??
     (library && params.type ? [...typeCrumbs(params.type), ...(category ? [{ label: category.label }] : [])] : []);
@@ -226,6 +229,11 @@ export function LibraryView({
             <TypeSelect types={typeChoices} value={params.type} onChange={(type) => set({ type })} />
           )}
           {params.via && <ViaChip sourceId={params.via} onClear={() => set({ via: "" })} />}
+          {filtered && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <X aria-hidden /> Clear filters
+            </Button>
+          )}
           <div className="ml-auto flex items-center gap-2">
             <Select value={params.sort} onValueChange={(v) => set({ sort: v as typeof params.sort })}>
               <SelectTrigger size="sm" className="w-[176px]" aria-label="Sort">
@@ -233,7 +241,8 @@ export function LibraryView({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="updated">Recently edited</SelectItem>
-                <SelectItem value="created">Recently added</SelectItem>
+                <SelectItem value="created">Newest first</SelectItem>
+                <SelectItem value="oldest">Oldest first</SelectItem>
                 <SelectItem value="title">Title A–Z</SelectItem>
               </SelectContent>
             </Select>
@@ -284,14 +293,27 @@ export function LibraryView({
         ) : items?.length === 0 ? (
           <div className="grid place-items-center py-24 text-center">
             {filtered ? (
-              <div className="space-y-1">
-                <p className="text-[16px] font-medium">No matches</p>
-                <p className="text-sm text-ink-muted">Try fewer filters or a different search.</p>
+              <div className="flex max-w-sm flex-col items-center gap-3">
+                <div className="space-y-1">
+                  <p className="text-[16px] font-medium">
+                    {params.q ? `Nothing matches “${params.q}”` : "Nothing matches these filters"}
+                  </p>
+                  <p className="text-sm text-ink-muted">
+                    {params.q && (params.tags.length || params.via)
+                      ? "The search and the filters apply together. Try fewer filters or a different search."
+                      : "Try fewer filters or a different search."}
+                  </p>
+                </div>
+                <Button variant="secondary" onClick={clearFilters}>
+                  <X aria-hidden /> Clear filters
+                </Button>
               </div>
             ) : (
               (emptyState ?? (
                 <div className="max-w-sm space-y-2">
-                  <p className="text-[16px] font-medium">Nothing here yet</p>
+                  <p className="text-[16px] font-medium">
+                    {typeof heading === "string" && library ? `Nothing in ${heading} yet` : "Nothing here yet"}
+                  </p>
                   <p className="text-sm text-ink-muted">
                     Paste a URL or an image anywhere with <Kbd>⌘V</Kbd>, drop files on the window, or press Add.
                   </p>

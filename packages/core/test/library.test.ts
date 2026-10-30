@@ -87,6 +87,56 @@ describe("resources", () => {
     expect(sectionOf("source").id).toBe("sources");
   });
 
+  it("sorts by creation date both ways, and combines search, tags, type and source", async () => {
+    const { createResource, listResources } = core.resources;
+    const source = await createResource({ type: "source", title: "Mobbin", sourceUrl: "https://mobbin.com/" });
+    const first = await createResource({
+      type: "reference",
+      title: "Sortcheck onboarding one",
+      sourceUrl: "https://mobbin.com/screens/1",
+      tags: [{ kind: "pageType", name: "Onboarding" }],
+    });
+    await createResource({
+      type: "reference",
+      title: "Sortcheck onboarding two",
+      sourceUrl: "https://mobbin.com/screens/2",
+      tags: [{ kind: "pageType", name: "Onboarding" }],
+    });
+    await createResource({
+      type: "reference",
+      title: "Sortcheck onboarding elsewhere",
+      sourceUrl: "https://dribbble.com/shots/3",
+      tags: [{ kind: "pageType", name: "Onboarding" }],
+    });
+    await createResource({ type: "prompt", title: "Sortcheck onboarding prompt", content: "" });
+
+    const titles = (r: { title: string }[]) => r.map((x) => x.title);
+    expect(titles(await listResources({ q: "Sortcheck", type: "reference", sort: "oldest" }))).toEqual([
+      "Sortcheck onboarding one",
+      "Sortcheck onboarding two",
+      "Sortcheck onboarding elsewhere",
+    ]);
+    expect(titles(await listResources({ q: "Sortcheck", type: "reference", sort: "created" }))).toEqual([
+      "Sortcheck onboarding elsewhere",
+      "Sortcheck onboarding two",
+      "Sortcheck onboarding one",
+    ]);
+    // every filter narrows: search + facet + type + saved from this source
+    const onboarding = first.tags[0].id;
+    expect(
+      titles(
+        await listResources({
+          q: "sortcheck",
+          tagIds: [onboarding],
+          type: "reference",
+          via: source.id,
+          sort: "oldest",
+        }),
+      ),
+    ).toEqual(["Sortcheck onboarding one", "Sortcheck onboarding two"]);
+    expect(await listResources({ q: "sortcheck nothing", tagIds: [onboarding], via: source.id })).toEqual([]);
+  });
+
   it("detects duplicate URLs", async () => {
     const dupes = await core.resources.findByUrl("http://www.linear.app");
     expect(dupes.map((d) => d.title)).toEqual(["Linear dashboard"]);

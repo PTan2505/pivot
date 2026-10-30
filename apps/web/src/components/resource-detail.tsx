@@ -55,6 +55,7 @@ import {
   type TagInput,
 } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
+import { openableUrl } from "@/lib/url";
 import { cn } from "@/lib/utils";
 
 interface Draft {
@@ -573,9 +574,9 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
           <Breadcrumbs items={[...typeCrumbs(draft.type), { label: draft.title || "Untitled" }]} />
           <SaveIndicator state={state} />
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            {draft.sourceUrl && (
+            {openableUrl(draft.sourceUrl) && (
               <Button variant="secondary" asChild>
-                <a href={draft.sourceUrl} target="_blank" rel="noopener noreferrer">
+                <a href={openableUrl(draft.sourceUrl)!} target="_blank" rel="noopener noreferrer">
                   <ExternalLink /> Open
                 </a>
               </Button>
