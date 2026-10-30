@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useLibraryParams } from "@/hooks/use-library-params";
-import { assetUrl, useCounts, useResource, useResources } from "@/lib/api";
+import { assetUrl, useResource, useResources } from "@/lib/api";
 import { hostOf } from "@/components/resource-card";
 
 const SHORT_LABEL: Partial<Record<ResourceType, string>> = {
@@ -32,32 +32,27 @@ const SHORT_LABEL: Partial<Record<ResourceType, string>> = {
   mcp: "MCP",
 };
 
-/** Narrows the list to one type of the current section (or of everything, in collections and the trash). */
+/** Narrows a collection or the trash to one type. */
 function TypeSelect({
   types,
   value,
   onChange,
-  showCounts,
 }: {
   types: readonly ResourceType[];
   value: ResourceType | undefined;
   onChange: (type: ResourceType | undefined) => void;
-  showCounts: boolean;
 }) {
-  const { data: counts } = useCounts();
-  const count = (n: number | undefined) =>
-    showCounts && <span className="ml-auto pl-3 font-mono text-[12px] text-ink-subtle tabular-nums">{n ?? 0}</span>;
   return (
     <Select value={value ?? "all"} onValueChange={(v) => onChange(v === "all" ? undefined : (v as ResourceType))}>
       <SelectTrigger size="sm" className="w-[196px]" aria-label="Type">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="all">All types {count(types.reduce((sum, t) => sum + (counts?.[t] ?? 0), 0))}</SelectItem>
+        <SelectItem value="all">All types</SelectItem>
         {types.map((t) => (
           <SelectItem key={t} value={t}>
             <TypeIcon type={t} className="size-3.5 text-ink-subtle" />
-            {SHORT_LABEL[t] ?? TYPE_DEFS[t].plural} {count(counts?.[t])}
+            {SHORT_LABEL[t] ?? TYPE_DEFS[t].plural}
           </SelectItem>
         ))}
       </SelectContent>
@@ -130,7 +125,6 @@ export function LibraryView({
   const params = useLibraryParams();
   const [selected, setSelected] = useState<string[]>([]);
   const lastClicked = useRef<string | null>(null);
-  const [weekAgo] = useState(() => Date.now() - 7 * 24 * 60 * 60 * 1000);
   const { set } = params;
   // Sections only apply to the library itself; collections and the trash cover every type.
   const library = mode === "library" && !collectionId;
@@ -200,10 +194,9 @@ export function LibraryView({
     crumbs ??
     (library && params.type ? [...typeCrumbs(params.type), ...(category ? [{ label: category.label }] : [])] : []);
   const exportName = typeof heading === "string" ? heading : "ui-context";
-  const thisWeek = items?.filter((i) => new Date(i.createdAt).getTime() > weekAgo).length ?? 0;
-  const defaultSubtitle = items
-    ? `${items.length} ${mode === "trash" ? "in trash" : "saved"}${params.q ? ` matching “${params.q}”` : ""}${!params.q && thisWeek && mode !== "trash" ? ` · ${thisWeek} this week` : ""}`
-    : " ";
+  const countLabel = items
+    ? `${items.length} ${mode === "trash" ? "in trash" : items.length === 1 ? "item" : "items"}${params.q ? ` matching “${params.q}”` : ""}`
+    : undefined;
 
   return (
     <div className="flex min-h-full flex-col">
@@ -213,19 +206,24 @@ export function LibraryView({
           <h1 className="text-[clamp(44px,6vw,72px)] leading-[0.96] font-medium tracking-[-0.045em] text-balance text-ink">
             {heading}
           </h1>
-          <p className="pb-1.5 text-base text-ink-muted">{subtitle ?? defaultSubtitle}</p>
+          {/* Just the number: what's listed right now (it follows search and filters). */}
+          {items && (
+            <span
+              aria-label={countLabel}
+              title={countLabel}
+              className="mb-2 inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-surface px-3 font-mono text-[14px] text-ink-secondary tabular-nums"
+            >
+              {items.length}
+            </span>
+          )}
+          {subtitle && <p className="pb-2.5 text-base text-ink-muted">{subtitle}</p>}
           {actions && <div className="ml-auto flex flex-wrap items-center gap-2 pb-1">{actions}</div>}
         </div>
         <TagPills items={items} selected={params.tags} onChange={(tags) => set({ tags })} />
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          {typeChoices.length > 1 && (
-            <TypeSelect
-              types={typeChoices}
-              value={params.type}
-              showCounts={library}
-              // clearing the type keeps you in the section you were in
-              onChange={(type) => set({ type, section: type ? undefined : params.section.id })}
-            />
+          {/* In the library the navbar menus pick the type; collections and the trash keep the select. */}
+          {!library && typeChoices.length > 1 && (
+            <TypeSelect types={typeChoices} value={params.type} onChange={(type) => set({ type })} />
           )}
           {params.via && <ViaChip sourceId={params.via} onClear={() => set({ via: "" })} />}
           <div className="ml-auto flex items-center gap-2">

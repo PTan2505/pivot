@@ -199,7 +199,7 @@ A warm, near-monochrome brown-black ramp with a single orange voice and three st
 - **Scorched Seam** (divider): rare structural lines (dialog footers, table rows) and the scrollbar thumb. Not for cards or section breaks.
 - **Warm White** (ink): headings, card titles, primary text; the only text colour allowed directly on the top bar's light glass. 15.83:1 or better on every solid surface.
 - **Ash** (ink-secondary): inactive pill and button labels, the current breadcrumb, copy that recedes a step (11.85:1 or better).
-- **Smoke** (ink-muted): helper text, placeholders, icons, page count lines, option blurbs (7.34:1 or better).
+- **Smoke** (ink-muted): helper text, placeholders, icons, page notes beside the title, option blurbs (7.34:1 or better).
 - **Cinder** (ink-subtle): metadata (hosts, counts, timestamps, shortcut hints). 4.62:1 at worst, on surface-raised.
 - **Inverse / on-inverse**: the active pill (current section, chosen tag, current Trash or Settings page) is Warm White with Kiln Black text.
 
@@ -238,7 +238,7 @@ Contrast on glass is measured against the worst backdrop, a white screenshot blu
 - **Title** (500, 16px, 1.4): card titles, list row titles, empty-state headings.
 - **Body** (400, 15px, 1.5): set on `body`; notes, descriptions, form fields, Markdown previews, the search input.
 - **Label** (500, 14px): pills, buttons, tabs (13px in `sm` controls). Section-nav labels are 15px.
-- **Meta** (400, 14px, 1.4): the `host · tag` line under a card title and breadcrumbs, in ink-subtle. The page count line under the display title is 16px in ink-muted.
+- **Meta** (400, 14px, 1.4): the `host · tag` line under a card title and breadcrumbs, in ink-subtle. The count beside the display title is a badge: a 32px surface pill with the number in 14px mono ink-secondary.
 - **Mono** (400, 12–13px, 1.6): code and prompt previews, keyboard hints, counts (`tabular-nums`).
 
 The extension popup runs at a 13px body with the same families.
@@ -254,7 +254,7 @@ The extension popup runs at a 13px body with the same families.
 - **No sidebar.** A single top bar holds the logo, the section nav (Library · Knowledge · Sources · Skills), the search field (up to 560px, centred) and the action pills, with the primary `Add` at its right end. Between `md` and `lg` it wraps to two rows; below `lg` the search drops to its own row.
 - **Pinned bar.** From `md` (48rem) up the top bar is fixed to the top edge across the full width. The app shell measures its height live (a ResizeObserver writes `--topbar-h`, 76px until measured) and `main` is padded by it, so the page itself scrolls and the work passes under the glass. `html` has `overscroll-behavior-y: none` so the bar never rubber-bands. On phones the bar stays in the flow, because its several rows would take too much of the screen.
 - **Scroll targets** that jump to a section (skill packs, source categories) use `scroll-margin-top: calc(var(--topbar-h) + 1rem)` from `md`, 32px below it.
-- **Page head:** the display title with its count line, then the tag pill row, then the Type select / source chip on the left and Sort / grid-list toggle on the right.
+- **Page head:** the display title with its count badge, then the tag pill row, then the source chip on the left and Sort / grid-list toggle on the right (a Type select on the left only in collections and the trash).
 - **Grid:** `repeat(auto-fill, minmax(min(100%, 360px), 1fr))`, 40px between rows, 24px between columns. Thumbnails are 16:10.
 - **Gutters and rhythm:** page side gutter 40px on desktop, 16px on phones. Groups are separated by 64px of empty canvas; a group header sits 24px above its cards; the folder shelf sits 40px above the grid.
 - Rows of pills wrap onto new lines; a pill row never scrolls horizontally.
@@ -396,7 +396,7 @@ Appears bottom-centre while resources are selected: strong glass, 28px radius, 6
 
 ### Page header — `components/library-view.tsx`
 
-Display title (section name, or the type's plural), the count line ("24 saved · 6 this week"), optional actions aligned right, then the filter rows. A section's landing page shows the folder shelf above the grid.
+Display title (section name, or the type's plural), a count badge beside it (the number of items listed now, `tabular-nums`, with "24 items matching “…”" as its accessible name), an optional note in 16px ink-muted (the trash: "Deleted for good after 30 days."), optional actions aligned right, then the filter rows. The library has no Type select: the navbar menus pick the type. A section's landing page shows the folder shelf above the grid.
 
 ### Skill pack group — `components/skill-pack-groups.tsx`
 
