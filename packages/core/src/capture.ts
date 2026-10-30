@@ -180,17 +180,19 @@ const scrollToY = (y: number) => `(() => {
 })()`;
 
 /**
- * Hides wide fixed or sticky bars at the top or bottom edge (headers, cookie and promo bars, chat launchers), so they
- * appear once, in the first frame, instead of over every screen. Narrow ones such as a docs sidebar stay.
+ * Hides fixed or sticky pieces that would repeat over every screen, so they appear once, in the first frame: wide bars at
+ * the top edge (headers), and anything floating at the bottom edge (cookie and promo bars, "start a project" pills, chat
+ * launchers), however narrow. Tall narrow ones such as a docs sidebar stay.
  */
 const HIDE_REPEATING_BARS = `(() => {
   for (const el of document.querySelectorAll("body *")) {
     const position = getComputedStyle(el).position;
     if (position !== "fixed" && position !== "sticky") continue;
     const r = el.getBoundingClientRect();
-    if (r.width < innerWidth * 0.6 || r.height === 0 || r.height > innerHeight * 0.5) continue;
-    if (r.top > 120 && r.bottom < innerHeight - 120) continue;
-    el.style.setProperty("visibility", "hidden", "important");
+    if (r.height === 0 || r.height > innerHeight * 0.5) continue;
+    const header = r.top <= 120 && r.width >= innerWidth * 0.6;
+    const floatingAtBottom = r.bottom >= innerHeight - 120;
+    if (header || floatingAtBottom) el.style.setProperty("visibility", "hidden", "important");
   }
 })()`;
 
