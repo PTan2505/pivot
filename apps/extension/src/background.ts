@@ -1,5 +1,6 @@
 import { api, ApiError, getConfig, type ClipData } from "./lib/api";
-import { captureTab, getPageInfo, isSavable } from "./lib/page";
+import { knownSourceFor } from "@pivot/core/source-match";
+import { captureTab, getPageInfo, isHomePage, isSavable } from "./lib/page";
 
 const MENU = {
   page: "pivot-page",
@@ -58,12 +59,15 @@ async function run(label: string, task: () => Promise<{ path: string; title: str
 async function savePage(tab: chrome.tabs.Tab) {
   if (!isSavable(tab.url)) throw new Error("Only http(s) pages can be saved.");
   const [info, shot] = await Promise.all([getPageInfo(tab), captureTab(tab.windowId)]);
+  // A known site's home page is saved as a Source, with its curated description; the view is its screenshot.
+  const source = isHomePage(info.url) && !!knownSourceFor(info.url);
   const data: ClipData = {
     kind: "page",
     url: info.url,
+    type: source ? "source" : "reference",
     title: info.title,
-    description: info.description,
-    serverCapture: true,
+    description: source ? undefined : info.description,
+    serverCapture: !(source && shot),
     ifExists: "skip",
   };
   const res = await api.clip(data, { screenshot: shot ?? undefined });

@@ -33,8 +33,9 @@ import {
   type TagDTO,
   type TagKind,
 } from "@pivot/core/types";
+import { knownSourceFor } from "@pivot/core/source-match";
 import { api, ApiError, openInApp } from "../lib/api";
-import { captureTab, getPageInfo, isSavable, type PageInfo } from "../lib/page";
+import { captureTab, getPageInfo, isHomePage, isSavable, type PageInfo } from "../lib/page";
 import { Button, cx, Field, Input, Logo, Textarea } from "../ui";
 
 type Status = "loading" | "ready" | "offline" | "unauthorized" | "unsupported";
@@ -295,6 +296,11 @@ export function Popup() {
   const [textType, setTextType] = useState<ResourceType>("snippet");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  // The page's own description is sent only once edited, so a known source keeps its curated one.
+  const [descriptionEdited, setDescriptionEdited] = useState(false);
+  // A known site's home page: saved as a Source unless you pick something else.
+  const [knownSource, setKnownSource] = useState<string | null>(null);
+  const [tokenRejected, setTokenRejected] = useState(false);
   const [notes, setNotes] = useState("");
   const [text, setText] = useState("");
   const [chosen, setChosen] = useState<TagValue[]>([]);
@@ -322,19 +328,25 @@ export function Popup() {
       if (info.selection) setMode("selection");
       const { lastType } = await chrome.storage.local.get("lastType");
       const last = PAGE_TYPES.find((t) => t === lastType);
-      if (last) {
+      const known = knownSourceFor(info.url);
+      if (known && isHomePage(info.url)) {
+        setType("source");
+        setKnownSource(known.name);
+      } else if (last) {
         setType(last);
         if (!MAIN_TYPES.includes(last)) setMoreTypes(true);
       }
       try {
-        const [t, c, d] = await Promise.all([api.tags(), api.collections(), api.lookup(info.url)]);
+        // the ping checks the token now, so a wrong one never costs what you typed
+        const [t, c, d] = await Promise.all([api.tags(), api.collections(), api.lookup(info.url), api.ping()]);
         setTags(t);
         setCollections(c);
         setDuplicates(d.duplicates);
         setStatus("ready");
       } catch (err) {
-        setStatus(err instanceof ApiError && err.status === 0 ? "offline" : "ready");
-        if (!(err instanceof ApiError && err.status === 0)) setError(err instanceof Error ? err.message : String(err));
+        const status = err instanceof ApiError ? err.status : -1;
+        setStatus(status === 0 ? "offline" : status === 403 ? "unauthorized" : "ready");
+        if (status !== 0) setError(err instanceof Error ? err.message : String(err));
       }
     })();
   }, []);
@@ -345,6 +357,7 @@ export function Popup() {
     if (!page || saving || (mode === "page" && step === "type")) return;
     setSaving(true);
     setError(null);
+    setTokenRejected(false);
     try {
       // Only the kinds on screen: facets picked under a type you switched away from are dropped.
       const tags = chosen.filter((t) => facets.includes(t.kind));
@@ -357,22 +370,27 @@ export function Popup() {
                 kind: "page",
                 type,
                 title,
-                description,
-                serverCapture: TYPE_DEFS[type].visual && serverCapture,
+                description: descriptionEdited || !(type === "source" && knownSource) ? description : undefined,
+                serverCapture: willServerCapture,
               },
               { screenshot: attachShot && shot ? shot : undefined },
             )
           : await api.clip({ ...common, kind: "selection", type: textType, title, text });
       setSaved(res.path);
     } catch (err) {
+      // keep the form: a token fixed in the settings tab can be retried with everything still filled in
       setError(err instanceof Error ? err.message : String(err));
-      if (err instanceof ApiError && err.status === 403) setStatus("unauthorized");
+      setTokenRejected(err instanceof ApiError && err.status === 403);
     } finally {
       setSaving(false);
     }
   };
 
   const facets: TagKind[] = mode === "page" ? [...quickFacets(type), "tag"] : ["technology", "tag"];
+  // Sources only ever get a first-screen shot, and the attached view already is one.
+  const attachingView = attachShot && !!shot;
+  const offerServerCapture = TYPE_DEFS[type].visual && !(type === "source" && attachingView);
+  const willServerCapture = offerServerCapture && serverCapture;
 
   const chooseType = (t: ResourceType) => {
     setType(t);
@@ -414,8 +432,10 @@ export function Popup() {
         </span>
         <p className="font-medium">Saved</p>
         <p className="text-xs text-ink-muted">
-          {mode === "page" && serverCapture && TYPE_DEFS[type].visual
-            ? "A full-page screenshot is being captured in the background."
+          {mode === "page" && willServerCapture
+            ? type === "source"
+              ? "PIVOT is taking a screenshot in the background."
+              : "A full-page screenshot is being captured in the background."
             : "It’s in your library."}
         </p>
         <div className="flex gap-2 pt-1">
@@ -502,6 +522,9 @@ export function Popup() {
               </p>
             )}
             <p className="text-[13px] font-medium text-ink">What are you saving?</p>
+            {knownSource && (
+              <p className="text-xs text-ink-muted">This is {knownSource}’s home page, so Source is picked.</p>
+            )}
             <div className="grid grid-cols-2 gap-1">
               {(moreTypes ? [...MAIN_TYPES, ...OTHER_TYPES] : MAIN_TYPES).map((t) => (
                 <TypeOption key={t} type={t} last={t === type} onChoose={chooseType} />
@@ -532,7 +555,8 @@ export function Popup() {
                 <img
                   src={shotUrl}
                   alt="Screenshot of the current tab"
-                  className={cx("h-28 w-full object-cover object-top", !attachShot && "opacity-30")}
+                  // The tab as captured, at its own aspect ratio: no crop, no stretch; a tall window is fitted, not cut.
+                  className={cx("mx-auto block h-auto max-h-64 w-auto max-w-full", !attachShot && "opacity-30")}
                 />
                 <label className="absolute right-2.5 bottom-2.5 flex cursor-pointer items-center gap-1.5 rounded-full bg-surface-raised px-3 py-1.5 text-[11px] font-medium text-ink">
                   <input
@@ -573,7 +597,15 @@ export function Popup() {
               </summary>
               <div className="space-y-4 pt-1">
                 <Field label="Description" htmlFor="desc">
-                  <Textarea id="desc" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+                  <Textarea
+                    id="desc"
+                    value={description}
+                    onChange={(e) => {
+                      setDescription(e.target.value);
+                      setDescriptionEdited(true);
+                    }}
+                    rows={2}
+                  />
                 </Field>
                 <FacetPicker kind="tag" tags={tags} value={chosen} onChange={setChosen} />
                 <Field label="Notes" htmlFor="notes">
@@ -602,7 +634,7 @@ export function Popup() {
                     </select>
                   </Field>
                 )}
-                {TYPE_DEFS[type].visual && (
+                {offerServerCapture && (
                   <label className="flex cursor-pointer items-start gap-2 text-xs">
                     <input
                       type="checkbox"
@@ -611,7 +643,7 @@ export function Popup() {
                       className="mt-0.5 accent-[var(--accent-fill)]"
                     />
                     <span>
-                      {type === "source" ? "Also take a screenshot in PIVOT" : "Also capture a full-page screenshot"}
+                      {type === "source" ? "Take a screenshot in PIVOT" : "Also capture a full-page screenshot"}
                       <span className="block text-ink-subtle">
                         Taken by PIVOT, so logged-in pages show their logged-out version.
                       </span>
@@ -702,9 +734,21 @@ export function Popup() {
         )}
 
         {error && (
-          <p role="alert" className="flex items-start gap-1.5 text-xs text-danger">
-            <X className="mt-px size-3.5 shrink-0" /> {error}
-          </p>
+          <div role="alert" className="flex items-start gap-1.5 text-xs text-danger">
+            <X className="mt-px size-3.5 shrink-0" />
+            <span className="min-w-0 flex-1">
+              {error}
+              {tokenRejected && (
+                <button
+                  type="button"
+                  onClick={() => chrome.runtime.openOptionsPage()}
+                  className="ml-1 cursor-pointer text-ink underline underline-offset-2"
+                >
+                  Open extension settings
+                </button>
+              )}
+            </span>
+          </div>
         )}
       </div>
       <footer className="flex items-center gap-2 px-4 py-3">

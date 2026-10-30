@@ -5,7 +5,7 @@ import { attachAsset, deleteOrphanAssets, saveAsset } from "./assets";
 import { getDb } from "./db/client";
 import { resourceAssets, resources } from "./db/schema";
 import { fetchUrlMetadata } from "./metadata";
-import { assertPublicUrl, safeFetch } from "./net-guard";
+import { assertPublicUrl, safeFetch, UnsafeUrlError } from "./net-guard";
 import { setResourceFields } from "./resources";
 
 const VIEWPORT = { width: 1440, height: 900 };
@@ -167,6 +167,29 @@ const CLICK_LOAD_MORE = `(() => {
 })()`;
 
 /**
+ * Where a URL's server redirects end up, checking every hop, so the browser starts at the final page and a redirect to a
+ * private address is refused before the browser ever requests it. Falls back to the URL itself when the site doesn't
+ * answer a plain request (the browser may still get through).
+ */
+async function followRedirects(url: string) {
+  let current = url;
+  for (let hop = 0; hop < 5; hop++) {
+    await assertPublicUrl(current);
+    let location: string | null;
+    try {
+      const res = await fetch(current, { redirect: "manual", signal: AbortSignal.timeout(5_000) });
+      await res.body?.cancel().catch(() => {});
+      location = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+    } catch {
+      return current;
+    }
+    if (!location) return current;
+    current = new URL(location, current).toString();
+  }
+  return current;
+}
+
+/**
  * Screenshots a URL: the first screen, and (unless `fullPage` is false) the whole page after walking it so
  * scroll-loaded content is included.
  */
@@ -175,28 +198,58 @@ export async function screenshotUrl(
   { fullPage = true, timeoutMs = CAPTURE_TIMEOUT_MS }: { fullPage?: boolean; timeoutMs?: number } = {},
 ) {
   await assertPublicUrl(url);
+  const start = await followRedirects(url);
   const b = await browser();
-  const context = await b.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1, colorScheme: "dark" });
+  // Service workers would answer requests the route below never sees.
+  const context = await b.newContext({
+    viewport: VIEWPORT,
+    deviceScaleFactor: 1,
+    colorScheme: "dark",
+    serviceWorkers: "block",
+  });
   // Closing the context makes every pending page call reject, including a page.evaluate on a frozen page.
   let timedOut = false;
   const deadline = setTimeout(() => {
     timedOut = true;
     void context.close().catch(() => {});
   }, timeoutMs);
-  // Re-check every navigation and subresource the page makes, so redirects can't reach private hosts.
+  // The first private address the page reached or tried to open; nothing is captured once there is one.
+  let privateUrl: string | null = null;
+  const checks: Promise<void>[] = [];
+  const refuse = (target: string) => {
+    privateUrl ??= target;
+    void context.close().catch(() => {});
+  };
+  // Check every navigation and subresource the page makes before it goes out.
   await context.route("**/*", async (route) => {
+    const request = route.request();
     try {
-      const reqUrl = route.request().url();
-      if (/^https?:/.test(reqUrl)) await assertPublicUrl(reqUrl);
+      if (/^https?:/.test(request.url())) await assertPublicUrl(request.url());
       await route.continue();
     } catch {
-      await route.abort("blockedbyclient");
+      // a page or frame heading for a private address is refused outright, not just left on the old page
+      if (request.isNavigationRequest()) refuse(request.url());
+      await route.abort("blockedbyclient").catch(() => {});
     }
   });
+  // Playwright routes only the first request of a redirect chain, so each redirect hop is checked as it is made.
+  context.on("request", (request) => {
+    if (!request.redirectedFrom() || !/^https?:/.test(request.url())) return;
+    checks.push(
+      assertPublicUrl(request.url()).then(
+        () => {},
+        () => refuse(request.url()),
+      ),
+    );
+  });
+  const assertStayedPublic = async () => {
+    await Promise.all(checks);
+    if (privateUrl) throw new UnsafeUrlError("The page sent the browser to a private address, so it wasn't captured.");
+  };
   try {
     const page = await context.newPage();
     const settle = networkQuiet(page);
-    const response = await page.goto(url, { waitUntil: "load", timeout: 30_000 });
+    const response = await page.goto(start, { waitUntil: "load", timeout: 30_000 });
     await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
     await page.waitForTimeout(800);
     // A block or error page is not a picture of the site; fail so the old screenshots stay.
@@ -207,6 +260,7 @@ export async function screenshotUrl(
       );
     }
     if (status >= 400) throw new Error(`The page answered with HTTP ${status}.`);
+    await assertStayedPublic();
     const viewport = await page.screenshot({ type: "png" });
     let full: Buffer | null = null;
     if (fullPage) {
@@ -222,8 +276,12 @@ export async function screenshotUrl(
         .then((png) => sharp(png, { limitInputPixels: FULL_PAGE_PIXEL_LIMIT }).webp({ quality: 80 }).toBuffer())
         .catch(() => null);
     }
+    // a redirect made while walking the page counts too
+    await assertStayedPublic();
     return { viewport: await sharp(viewport).webp({ quality: 85 }).toBuffer(), full };
   } catch (err) {
+    await Promise.all(checks);
+    if (privateUrl) throw new UnsafeUrlError("The page sent the browser to a private address, so it wasn't captured.");
     if (timedOut) throw new Error(`The page took longer than ${Math.round(timeoutMs / 1000)}s to capture.`);
     throw err;
   } finally {

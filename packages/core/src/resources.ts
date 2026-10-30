@@ -410,11 +410,17 @@ export async function sourceAttribution(): Promise<Map<string, string[]>> {
   const rows = await db
     .select({ id: resources.id, type: resources.type, sourceUrl: resources.sourceUrl })
     .from(resources)
-    .where(and(isNull(resources.deletedAt), isNotNull(resources.sourceUrl)));
+    .where(and(isNull(resources.deletedAt), isNotNull(resources.sourceUrl)))
+    // two sources on one host: the one saved first owns it, every time
+    .orderBy(asc(resources.createdAt), asc(resources.id));
   const sourceByHost = new Map<string, string>();
   for (const r of rows) {
     const host = r.type === "source" ? hostOf(r.sourceUrl) : null;
-    if (host && !sourceByHost.has(host)) sourceByHost.set(host, r.id);
+    if (!host) continue;
+    // a known site's old domains (godly.website for recent.design) belong to the same source
+    const known = knownSourceFor(r.sourceUrl);
+    const hosts = known?.host === host ? [host, ...(known.aliases ?? [])] : [host];
+    for (const h of hosts) if (!sourceByHost.has(h)) sourceByHost.set(h, r.id);
   }
   const out = new Map<string, string[]>();
   for (const r of rows) {

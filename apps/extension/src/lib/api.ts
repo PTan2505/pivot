@@ -47,6 +47,8 @@ export const api = {
     await request("/api/counts", {}, config);
     await request("/api/ping", { method: "POST" }, config);
   },
+  /** Throws a 403 ApiError when the token is wrong, before anything is typed. */
+  ping: () => request("/api/ping", { method: "POST" }),
   tags: () => request<TagDTO[]>("/api/tags"),
   collections: () => request<CollectionDTO[]>("/api/collections"),
   lookup: (url: string) =>

@@ -31,13 +31,14 @@ beforeAll(async () => {
   });
   delete process.env.DATABASE_URL;
   for (const k of ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"]) delete process.env[k];
-  server = http.createServer((_req, res) => {
+  server = http.createServer((req, res) => {
     res.setHeader("content-type", "text/html");
     if (mode === "blocked") {
       res.statusCode = 403;
       return res.end("<title>Access denied</title><body>Sorry, you have been blocked</body>");
     }
-    hits++;
+    // the capture first asks where redirects lead with a plain request; only the browser's load counts as a capture
+    if (req.headers["user-agent"]?.includes("Chrome")) hits++;
     res.end(`<body style="margin:0;background:#${hits % 2 ? "234" : "543"}"><div style="height:1200px"></div></body>`);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
