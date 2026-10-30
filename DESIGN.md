@@ -337,7 +337,8 @@ PT is the core, PIVOT the expansion: the mark starts from the first and last let
 ### Pills and tag filter — `components/tag-pills.tsx`, `components/tags-editor.tsx`
 
 - Inactive: surface, ink-secondary; hover surface-raised. Active: inverse. Heights: 36px filter pills and chips, 28px editable tags, 24px tags inside a card.
-- The filter row: "All" first, then chosen tags (inverse, with a remove ×), then up to 12 tags by frequency with counts at 70% opacity in `tabular-nums`; "+N more" opens a searchable popover grouped by kind. The row hides when nothing on screen has tags.
+- The filter row: "All" first, then chosen tags (inverse, with a remove ×; a facet shows its kind first at 70% opacity, "Page type Pricing"), then up to 12 tags by frequency with counts at 70% opacity in `tabular-nums`; "+N more" opens a searchable popover grouped by kind. The row hides when nothing on screen has tags.
+- The visible tags are grouped by kind, each group led by its kind in 13px ink-subtle (Tags, Page type, Domain, Style, Pattern, Technology); groups sit 20px apart, pills 8px apart. With plain tags only, the labels are left out.
 - A "From <source>" chip (inverse pill, 13px, clear button) sits in the filter row while the list is narrowed to one source.
 
 ### Search field — `components/app-shell.tsx` (`SearchField`)
@@ -355,7 +356,7 @@ PT is the core, PIVOT the expansion: the mark starts from the first and last let
 
 - A 16:10 solid surface frame, 14px radius, image `object-fit: cover; object-position: top`. No border, no shadow, no hover lift or scale.
 - Under it, 12px apart: title (title, ink, one line) and meta `host · first tag` (meta, ink-subtle).
-- Hover or focus reveals round 32px action buttons (open source, copy) top-right and the select checkbox top-left.
+- Hover or focus reveals round 32px action buttons (open source, copy) top-right and the select checkbox top-left. Both are solid surface-raised, with no translucency or blur, so nothing see-through sits on the screenshot; the empty checkbox has an ink-muted ring.
 - Selected: 2px accent-text outline with 3px offset on the frame.
 - Capturing: a pulsing frame (1.6s) with "Capturing…" in ink-muted. Failed capture: an image-off icon in ink-subtle.
 - **References scroll like a screen recording:** the frame shows the full-page shot resting at the top; on hover or keyboard focus it scrolls linearly to the bottom at about one frame-height per second (1.5–30s from the image's aspect ratio) and glides back in 500ms ease-out on leave. The frame is a size container, so the travel is `translateY(calc(-100% + 100cqh))`. Short pages don't move; reduced motion keeps it still.
@@ -390,6 +391,8 @@ Single-line inputs are 36px surface pills with no border, 15px ink text, ink-mut
 ### Selection bar — `components/selection-bar.tsx`
 
 Appears bottom-centre while resources are selected: strong glass, 28px radius, 6px padding (16px on the left), wraps on narrow screens, enters with a 200ms fade and 8px rise. Count in mono ink-subtle (promoted to ink-muted by the glass), then ghost actions (Copy context, Export, Collection, Remove, Trash; in Trash: Restore and Delete forever in danger, confirmed in a dialog).
+
+- **Add to collection** popover (strong glass, 256px): a "Find or create a collection…" field, the collections with their counts, and, when the typed name is new, a "Create “name”" row with a folder-plus icon that creates the collection and adds the selection to it.
 
 ### Page header — `components/library-view.tsx`
 
