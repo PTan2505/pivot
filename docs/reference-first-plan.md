@@ -72,11 +72,11 @@ The current requirements document (`SPEC.md`, PIVOT Requirements v0.2) defines 1
 ### Phase 2 — Organize references
 
 - [x] Support reference facets: `pageType`, `domain`, `visualStyle`, `uiPattern`.
-- [ ] Support user-defined tags and editable metadata.
-- [ ] Create, rename, and use collections to group references.
-- [ ] Filter by type, facets/tags, and collection where applicable.
+- [x] Support user-defined tags and editable metadata.
+- [x] Create, rename, and use collections to group references.
+- [x] Filter by type, facets/tags, and collection where applicable.
 - [x] Preserve existing tag behavior and AND-combination semantics from SPEC.
-- [ ] Keep reference cards legible; do not apply glass styling to screenshot/card surfaces.
+- [x] Keep reference cards legible; do not apply glass styling to screenshot/card surfaces.
 
 **Done when:** 20 references can be grouped and filtered without confusion.
 

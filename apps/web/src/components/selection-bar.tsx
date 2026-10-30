@@ -1,6 +1,7 @@
 "use client";
 
-import { ClipboardCopy, FolderInput, FolderMinus, PackageOpen, RotateCcw, Trash2, X } from "lucide-react";
+import { ClipboardCopy, FolderInput, FolderMinus, FolderPlus, PackageOpen, RotateCcw, Trash2, X } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -8,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ConfirmButton } from "@/components/confirm-button";
 import { useUi } from "@/components/ui-store";
 import { copyContext } from "@/hooks/use-copy-resource";
-import { useBulk, useCollections } from "@/lib/api";
+import { api, useBulk, useCollections, useInvalidate } from "@/lib/api";
 
 export function AddToCollection({
   ids,
@@ -21,30 +22,51 @@ export function AddToCollection({
 }) {
   const { data: collections = [] } = useCollections();
   const bulk = useBulk();
+  const invalidate = useInvalidate();
+  const [query, setQuery] = useState("");
+  const name = query.trim();
+  const exists = collections.some((c) => c.name.toLowerCase() === name.toLowerCase());
+
+  const addTo = async (collection: { id: string; name: string }) => {
+    await bulk.mutateAsync({ action: "addToCollection", ids, collectionId: collection.id });
+    toast.success(`Added to ${collection.name}`);
+    setQuery("");
+    onDone?.();
+  };
+  const createAndAdd = async () => {
+    try {
+      const created = await api<{ id: string; name: string }>("/api/collections", { method: "POST", json: { name } });
+      invalidate();
+      await addTo(created);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not create the collection");
+    }
+  };
+
   return (
-    <Popover>
+    <Popover onOpenChange={(open) => !open && setQuery("")}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
-      <PopoverContent align="center" side="top" className="w-60 p-0">
+      <PopoverContent align="center" side="top" className="w-64 p-0">
         <Command>
-          <CommandInput placeholder="Add to collection…" />
+          <CommandInput placeholder="Find or create a collection…" value={query} onValueChange={setQuery} />
           <CommandList>
-            <CommandEmpty>No collections yet — create one in the sidebar.</CommandEmpty>
+            {/* With a name typed, the Create row below is the answer. */}
+            {!name && <CommandEmpty>No collections yet. Type a name to create one.</CommandEmpty>}
             <CommandGroup>
               {collections.map((c) => (
-                <CommandItem
-                  key={c.id}
-                  value={c.name}
-                  onSelect={async () => {
-                    await bulk.mutateAsync({ action: "addToCollection", ids, collectionId: c.id });
-                    toast.success(`Added to ${c.name}`);
-                    onDone?.();
-                  }}
-                >
+                <CommandItem key={c.id} value={c.name} onSelect={() => addTo(c)}>
                   {c.name}
-                  <span className="ml-auto font-mono text-[12px] text-muted-foreground">{c.count}</span>
+                  <span className="ml-auto font-mono text-[12px] text-ink-subtle">{c.count}</span>
                 </CommandItem>
               ))}
             </CommandGroup>
+            {name && !exists && (
+              <CommandGroup forceMount>
+                <CommandItem forceMount value={`create ${name}`} onSelect={createAndAdd}>
+                  <FolderPlus /> Create “{name}”
+                </CommandItem>
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

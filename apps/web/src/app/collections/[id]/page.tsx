@@ -3,7 +3,7 @@
 import { ClipboardCopy, PackageOpen, Trash2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ConfirmButton } from "@/components/confirm-button";
 import { LibraryView } from "@/components/library-view";
@@ -16,10 +16,13 @@ import type { CollectionDTO } from "@pivot/core/types";
 function NameInput({ id, initial }: { id: string; initial: string }) {
   const [name, setName] = useState(initial);
   const invalidate = useInvalidate();
+  const qc = useQueryClient();
   const rename = async () => {
     if (!name.trim() || name === initial) return setName(initial);
     await api(`/api/collections/${id}`, { method: "PATCH", json: { name } });
     invalidate();
+    // The breadcrumb and title read this collection's own query.
+    qc.invalidateQueries({ queryKey: ["collection", id] });
   };
   return (
     <input
