@@ -58,6 +58,15 @@ export function isSavable(url: string | undefined) {
   return !!url && /^https?:\/\//.test(url);
 }
 
+/** A page of the PIVOT app itself: saving it would only add an entry pointing back at the library. */
+export function isPivotPage(url: string | undefined, serverUrl: string) {
+  try {
+    return new URL(url ?? "").origin === new URL(serverUrl).origin;
+  } catch {
+    return false;
+  }
+}
+
 /** A site's front page (no path, no query): saving it most likely means saving the site itself. */
 export function isHomePage(url: string) {
   try {

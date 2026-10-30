@@ -97,20 +97,20 @@ The current requirements document (`SPEC.md`, PIVOT Requirements v0.2) defines 1
 - [x] Confirm Source uses viewport-only screenshots, per SPEC.
 - [x] Verify search across saved Sources and `searchUrl` behavior where implemented.
 - [x] Verify attribution/filtering of references via matching Source host (`via`).
-- [ ] Verify Chrome extension quick-save and screenshot capture with the local app running.
+- [x] Verify Chrome extension quick-save and screenshot capture with the local app running.
 - [x] Check extension token/authentication flow; do not weaken security to make saving easier.
 
 **Done when:** A user can discover a site from Sources and save a useful reference with minimal friction.
 
 ### Phase 5 — Real-use validation
 
-- [ ] Save 20 actual UI references from different sites.
-- [ ] Create 3 practical collections (e.g., Landing Pages, Dashboards, Components).
-- [ ] Find 5 references using search and filters, without browsing the full library.
-- [ ] Try extension-based saving from a normal browsing session.
-- [ ] Record friction, bugs, and any repeated manual steps.
-- [ ] Fix only high-impact issues that block save → organize → find → reuse.
-- [ ] Re-run relevant checks and report remaining issues.
+- [x] Save 20 actual UI references from different sites.
+- [x] Create 3 practical collections (e.g., Landing Pages, Dashboards, Components).
+- [x] Find 5 references using search and filters, without browsing the full library.
+- [x] Try extension-based saving from a normal browsing session.
+- [x] Record friction, bugs, and any repeated manual steps.
+- [x] Fix only high-impact issues that block save → organize → find → reuse.
+- [x] Re-run relevant checks and report remaining issues.
 
 **Done when:** The core reference workflow works end to end and is usable in daily design work.
 
