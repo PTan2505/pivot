@@ -2,12 +2,12 @@
 
 import { Check, Copy, ExternalLink, ImageOff, Loader2 } from "lucide-react";
 import Link from "next/link";
-import type { CSSProperties, MouseEvent } from "react";
-import { TYPE_DEFS, type ResourceDTO } from "@pivot/core/types";
+import { useState, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
+import { TAG_KIND_LABELS, TYPE_DEFS, type ResourceDTO } from "@pivot/core/types";
 import { TypeIcon } from "@/components/type-icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCopyResource } from "@/hooks/use-copy-resource";
-import { assetUrl } from "@/lib/api";
+import { assetUrl, faviconUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export function hostOf(url: string | null) {
@@ -69,11 +69,12 @@ export function SelectBox({
   );
 }
 
-function CardActions({ resource, className }: { resource: ResourceDTO; className?: string }) {
+function CardActions({ resource, glass, className }: { resource: ResourceDTO; glass?: boolean; className?: string }) {
   const copy = useCopyResource();
   const def = TYPE_DEFS[resource.type];
-  const pill =
-    "grid size-8 place-items-center rounded-full bg-surface-raised text-ink-secondary transition-colors hover:text-ink";
+  const pill = glass
+    ? "grid size-7 place-items-center rounded-full bg-ink/10 text-ink transition-colors hover:bg-ink/16"
+    : "grid size-8 place-items-center rounded-full bg-surface-raised text-ink-secondary transition-colors hover:text-ink";
   return (
     <div
       className={cn(
@@ -209,11 +210,82 @@ interface CardProps {
 
 function metaLine(r: ResourceDTO) {
   const def = TYPE_DEFS[r.type];
-  if (def.visual) return [hostOf(r.sourceUrl) ?? def.label, r.tags[0]?.name].filter(Boolean).join(" · ");
+  if (def.visual) return hostOf(r.sourceUrl) ?? def.label;
   if (r.type === "skill")
     return [(r.meta.invocation as string) || def.label, r.meta.readonly ? "plugin" : ""].filter(Boolean).join(" · ");
   const purpose = (r.meta.whenToUse as string) || (r.meta.purpose as string) || r.description;
   return [def.label, purpose].filter(Boolean).join(" · ");
+}
+
+/** The site's icon on a 20px tile; a letter when the site has none, the type's icon when there is no site. */
+function SiteIcon({ resource }: { resource: ResourceDTO }) {
+  const host = /^https?:/i.test(resource.sourceUrl ?? "") ? hostOf(resource.sourceUrl) : null;
+  const [failed, setFailed] = useState(false);
+  return (
+    <span
+      aria-hidden
+      className="grid size-5 shrink-0 place-items-center overflow-hidden rounded-[6px] bg-surface-raised text-ink-secondary"
+    >
+      {host && !failed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={faviconUrl(host)} alt="" loading="lazy" className="size-3.5" onError={() => setFailed(true)} />
+      ) : host ? (
+        <span className="text-[11px] font-medium">{host[0].toUpperCase()}</span>
+      ) : (
+        <TypeIcon type={resource.type} className="size-3" />
+      )}
+    </span>
+  );
+}
+
+const MAX_CHIPS = 3;
+
+/** Facets and tags with their kind, so "SaaS" reads as a domain; a linked card without any shows its type. */
+function Chips({ resource }: { resource: ResourceDTO }) {
+  const def = TYPE_DEFS[resource.type];
+  const tags = [...resource.tags].sort((a, b) => Number(a.kind === "tag") - Number(b.kind === "tag"));
+  const chip = "inline-flex h-6 items-center gap-1 rounded-full bg-ink/8 px-2.5 text-xs font-medium text-ink";
+  if (!tags.length) {
+    // a note card already shows its type inside the frame
+    return resource.sourceUrl ? (
+      <div className="flex">
+        <span className={chip}>{def.label}</span>
+      </div>
+    ) : null;
+  }
+  const rest = tags.slice(MAX_CHIPS);
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {tags.slice(0, MAX_CHIPS).map((t) => (
+        <span key={t.id} className={chip}>
+          {t.kind !== "tag" && <span className="font-normal text-ink-secondary">{TAG_KIND_LABELS[t.kind]}</span>}
+          {t.name}
+        </span>
+      ))}
+      {rest.length > 0 && (
+        <span className={chip} title={rest.map((t) => t.name).join(", ")}>
+          +{rest.length}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Feeds the pointer to the glass: the art drifts, the highlight and the ember edge follow it. */
+function trackPointer(e: PointerEvent<HTMLElement>) {
+  const el = e.currentTarget;
+  const r = el.getBoundingClientRect();
+  const x = e.clientX - r.left;
+  const y = e.clientY - r.top;
+  el.style.setProperty("--mx", `${x}px`);
+  el.style.setProperty("--my", `${y}px`);
+  el.style.setProperty("--px", (x / r.width - 0.5).toFixed(3));
+  el.style.setProperty("--py", (y / r.height - 0.5).toFixed(3));
+}
+
+function releasePointer(e: PointerEvent<HTMLElement>) {
+  e.currentTarget.style.setProperty("--px", "0");
+  e.currentTarget.style.setProperty("--py", "0");
 }
 
 export function ResourceCard({ resource, selected, selecting, onToggle, meta }: CardProps) {
@@ -226,15 +298,25 @@ export function ResourceCard({ resource, selected, selecting, onToggle, meta }: 
   };
   const isCode = def.content === "code" || def.content === "json";
   const shot = resource.type === "reference" ? resource.fullShot : null;
+  const art = resource.coverAssetId ? assetUrl(resource.coverAssetId, { thumb: true }) : null;
 
   return (
-    <Link href={`/r/${resource.id}`} onClick={onClick} className="group flex min-w-0 flex-col gap-3 outline-none">
+    <Link
+      href={`/r/${resource.id}`}
+      onClick={onClick}
+      onPointerMove={trackPointer}
+      onPointerLeave={releasePointer}
+      style={art ? ({ "--card-art": `url("${art}")` } as CSSProperties) : undefined}
+      className={cn(
+        "glass-card group flex min-w-0 flex-col gap-3 p-2 pb-3.5",
+        selected && "outline-2 outline-offset-3 outline-accent-text",
+      )}
+    >
+      {art && <span aria-hidden className="glass-card-art" />}
+      <span aria-hidden className="glass-card-tint" />
       <div
         className={cn(
-          "relative aspect-[16/10] max-w-full overflow-hidden rounded-[14px] bg-surface transition-colors duration-150",
-          "group-focus-visible:outline-2 group-focus-visible:outline-offset-3 group-focus-visible:outline-accent-text",
-          selected && "outline-2 outline-offset-3 outline-accent-text",
-          !def.visual && "group-hover:bg-surface-raised",
+          "relative aspect-[16/10] max-w-full overflow-hidden rounded-[11px] bg-canvas",
           // the scroll distance is measured against the frame's own height (cqh)
           shot && "[container-type:size]",
         )}
@@ -254,19 +336,23 @@ export function ResourceCard({ resource, selected, selecting, onToggle, meta }: 
                 {excerpt(resource) || <span className="text-ink-subtle">Empty</span>}
               </p>
             )}
-            <span className="self-start rounded-full bg-surface-raised px-3 py-1 text-xs font-medium text-ink-secondary group-hover:bg-surface">
+            <span className="self-start rounded-full bg-surface-raised px-3 py-1 text-xs font-medium text-ink-secondary">
               {def.label}
             </span>
           </div>
         )}
         <SelectBox selected={selected} onToggle={onToggle} visible={selecting} />
-        <CardActions resource={resource} className="absolute top-3 right-3" />
       </div>
-      <div className="flex min-w-0 flex-col gap-0.5 px-0.5">
-        <h3 className="truncate text-[16px] leading-[1.4] font-medium text-ink" title={resource.title}>
-          {resource.title}
-        </h3>
-        <p className="truncate text-[14px] leading-[1.4] text-ink-subtle">{meta ?? metaLine(resource)}</p>
+      <div className="flex min-w-0 flex-col gap-1.5 px-1.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <SiteIcon resource={resource} />
+          <h3 className="min-w-0 flex-1 truncate text-[16px] leading-[1.4] font-medium text-ink" title={resource.title}>
+            {resource.title}
+          </h3>
+          <CardActions resource={resource} glass />
+        </div>
+        <p className="truncate text-[14px] leading-[1.4] text-ink-muted">{meta ?? metaLine(resource)}</p>
+        <Chips resource={resource} />
       </div>
     </Link>
   );

@@ -326,10 +326,10 @@
     {
       "name": "Resource Card",
       "kind": "card",
-      "refersTo": "card-frame",
-      "description": "Solid 16:10 surface frame, no border or shadow; title and meta below.",
-      "html": "<a class=\"ds-card\" href=\"#\"><div class=\"ds-card-frame\"></div><div class=\"ds-card-title\">Linear — Issues board</div><div class=\"ds-card-meta\">linear.app · Dashboard</div></a>",
-      "css": ".ds-card{display:flex;flex-direction:column;gap:12px;width:360px;text-decoration:none;outline:none;} .ds-card-frame{aspect-ratio:16/10;border-radius:14px;background:var(--surface, #18110d);} .ds-card:focus-visible .ds-card-frame{outline:2px solid var(--accent-text, #ff8c42);outline-offset:3px;} .ds-card-title{font:500 16px/1.4 Geist,sans-serif;color:var(--ink, #fbf3ea);margin-bottom:-12px;} .ds-card-meta{font:400 14px/1.4 Geist,sans-serif;color:var(--ink-subtle, #94806f);}"
+      "refersTo": "glass-card",
+      "description": "Glass tile (owner exception): a blurred copy of the card's own picture behind a tint that deepens toward the caption, a top sheen, a 16% ember highlight that follows the pointer and a white rim; a sharp 16:10 canvas frame inside, then favicon, title, host and facet chips. Hover adds an ember edge and Open/Copy.",
+      "html": "<a class=\"ds-card\" href=\"#\"><div class=\"ds-card-frame\"></div><div class=\"ds-card-row\"><span class=\"ds-card-fav\">L</span><span class=\"ds-card-title\">Linear — Issues board</span></div><div class=\"ds-card-meta\">linear.app</div><div class=\"ds-card-chips\"><span class=\"ds-card-chip\"><i>Page type</i>Dashboard</span></div></a>",
+      "css": ".ds-card{position:relative;isolation:isolate;overflow:hidden;display:flex;flex-direction:column;gap:12px;width:360px;padding:8px 8px 14px;border-radius:18px;text-decoration:none;background:linear-gradient(180deg,rgb(255 248 240/.1),rgb(255 248 240/0) 22%),linear-gradient(180deg,rgb(18 12 9/.25),rgb(14 10 8/.62) 46%,rgb(10 7 5/.92)),#120c09;box-shadow:inset 0 1px 0 rgb(255 255 255/.42);} .ds-card:focus-visible{outline:2px solid var(--accent-text, #ff8c42);outline-offset:3px;} .ds-card-frame{aspect-ratio:16/10;border-radius:11px;background:var(--canvas, #0c0806);} .ds-card-row{display:flex;align-items:center;gap:8px;padding:0 6px;} .ds-card-fav{display:grid;place-items:center;width:20px;height:20px;border-radius:6px;background:var(--surface-raised, #221812);color:var(--ink-secondary, #e0d3c7);font:500 11px Geist,sans-serif;} .ds-card-title{font:500 16px/1.4 Geist,sans-serif;color:var(--ink, #fbf3ea);} .ds-card-meta{padding:0 6px;margin-top:-6px;font:400 14px/1.4 Geist,sans-serif;color:var(--ink-muted, #b8a596);} .ds-card-chips{display:flex;gap:6px;padding:0 6px;margin-top:-6px;} .ds-card-chip{height:24px;display:inline-flex;align-items:center;gap:4px;padding:0 10px;border-radius:999px;background:rgb(251 243 234/.08);color:var(--ink, #fbf3ea);font:500 12px Geist,sans-serif;} .ds-card-chip i{font-style:normal;font-weight:400;color:var(--ink-secondary, #e0d3c7);}"
     },
     {
       "name": "Glass Overlay Menu",
@@ -353,7 +353,7 @@
     "keyCharacteristics": [
       "Warm black canvas, surfaces stepped in oxblood brown, warm white ink.",
       "One ember-orange filled button per screen; everything else is a quiet surface pill.",
-      "Frosted glass only on chrome and overlays; cards stay solid with no border and no shadow.",
+      "Frosted glass on chrome and overlays, plus the folders and record cards (owner exceptions); the screenshot inside a card is never covered.",
       "Ember light pooled in the top bar and a glowing seam along its lower edge, never under page text.",
       "Binary radius: pills for controls, 14px for containers.",
       "Geist at 400 and 500 only; one display title per view."
@@ -386,7 +386,7 @@
       },
       {
         "name": "The Solid Work Rule",
-        "body": "Glass is for chrome and overlays only. Anything that shows saved work (cards, rows, frames, panels on the page) is solid, with no border and no shadow, so screenshots keep their true colour.",
+        "body": "Glass is for chrome and overlays. The saved work itself (screenshots, frames, rows, panels on the page) is solid, with no border and no shadow, so screenshots keep their true colour. Two owner exceptions wrap the work in glass without covering it: the folder shelf and the record card, whose glass sits behind the screenshot.",
         "section": "elevation"
       },
       {
@@ -411,7 +411,7 @@
       "**Don't** add a light theme, a theme toggle, or any `prefers-color-scheme` branch, in the app or the extension.",
       "**Don't** put white text on the ember fill (2.87:1).",
       "**Don't** use orange for icons, hover states, badges or decoration, or ember light anywhere outside the top bar.",
-      "**Don't** put glass, borders or shadows on cards, rows or panels that show saved work.",
+      "**Don't** put glass, borders or shadows over saved work, or on rows and panels that show it; the folder and the record card are the only glass that holds work, and their glass sits behind it.",
       "**Don't** use weights above 500, sizes below 12px, or `font-size` on `html`.",
       "**Don't** scale or lift thumbnails on hover.",
       "**Don't** signal state by colour alone; danger, success and warning always carry a word or an icon.",

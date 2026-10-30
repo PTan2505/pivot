@@ -66,6 +66,8 @@ rounded:
   sm: "6px"
   md: "10px"
   card: "14px"
+  glass-card: "18px"
+  frame: "11px"
   panel: "20px"
   bar: "28px"
   pill: "9999px"
@@ -141,9 +143,14 @@ components:
     rounded: "{rounded.pill}"
     padding: "4px 16px"
     height: "36px"
+  glass-card:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.glass-card}"
+    padding: "8px 8px 14px"
   card-frame:
-    backgroundColor: "{colors.surface}"
-    rounded: "{rounded.card}"
+    backgroundColor: "{colors.canvas}"
+    rounded: "{rounded.frame}"
   overlay:
     backgroundColor: "{colors.glass-strong}"
     textColor: "{colors.ink}"
@@ -163,9 +170,9 @@ Tokens are CSS variables in `apps/web/src/app/globals.css` (`:root`), exposed to
 
 **Creative North Star: "The Kiln"**
 
-The saved work is the light source. The chrome is a dark kiln that screenshots glow out of: a warm black ground with oxblood-brown surface steps, warm white ink, and orange light pooled behind frosted glass at the top of the screen. It refuses the category default of a neutral grey gallery with one blue accent. Saved screenshots keep their true colour because nothing tinted or translucent ever sits on them.
+The saved work is the light source. The chrome is a dark kiln that screenshots glow out of: a warm black ground with oxblood-brown surface steps, warm white ink, and orange light pooled behind frosted glass at the top of the screen. It refuses the category default of a neutral grey gallery with one blue accent. Saved screenshots keep their true colour because nothing tinted or translucent ever sits on them; where glass meets the work (the record cards), it sits behind the picture, never over it.
 
-The interface is dense and quiet. There is no sidebar; one top bar carries the sections, the search and the single primary action, and everything below it is the work. Hierarchy comes from surface steps, not lines or shadows. Two materials exist: solid surfaces for everything that holds saved work, and frosted warm glass for the chrome and the things that float over the work (menus, dialogs, toasts, the selection bar). The one moment of light, the ember, lives only inside the top bar.
+The interface is dense and quiet. There is no sidebar; one top bar carries the sections, the search and the single primary action, and everything below it is the work. Hierarchy comes from surface steps, not lines or shadows. Two materials exist: solid surfaces for the work itself and the page around it, and frosted warm glass for the chrome, the things that float over the work (menus, dialogs, toasts, the selection bar), and, by the owner's call, the folders and the record cards that hold the work. The ember lives in the top bar; on a card it is a faint highlight and, on hover, an edge.
 
 PIVOT is dark only, in the app and the extension. There is no light theme and no theme toggle; `color-scheme: dark` is set on the root and the theme provider forces `dark`.
 
@@ -173,8 +180,8 @@ PIVOT is dark only, in the app and the extension. There is no light theme and no
 
 - Warm black canvas, surfaces stepped in oxblood brown, warm white ink.
 - One ember-orange filled button per screen; everything else is a quiet surface pill.
-- Frosted glass only on chrome and overlays; cards stay solid with no border and no shadow.
-- Ember light pooled in the top bar and a glowing seam along its lower edge, never under page text.
+- Frosted glass on chrome and overlays, plus the folders and record cards (owner exceptions); the screenshot inside a card is never covered.
+- Ember light pooled in the top bar and a glowing seam along its lower edge; on cards only a faint highlight and a hover edge, measured so caption text keeps 4.5:1.
 - Binary radius: pills for controls, 14px for containers.
 - Geist at 400 and 500 only; one display title per view.
 
@@ -189,7 +196,7 @@ A warm, near-monochrome brown-black ramp with a single orange voice and three st
 
 ### Tertiary (ember light)
 
-- **Ember Core** (ember-core), **Ember** (ember), **Ember Deep** (ember-deep): the three stops of the light in the top bar (amber core, orange body, deep-red falloff). They are light, not paint: used only in the top bar's pool and seam, plus the text selection highlight (ember at 45%) and native controls (`accent-color`). Never as a fill, text or icon colour.
+- **Ember Core** (ember-core), **Ember** (ember), **Ember Deep** (ember-deep): the three stops of the light in the top bar (amber core, orange body, deep-red falloff). They are light, not paint: used in the top bar's pool and seam, the record card's highlight (ember at 16%) and hover edge, the text selection highlight (ember at 45%) and native controls (`accent-color`). Never as a fill, text or icon colour.
 
 ### Neutral
 
@@ -212,6 +219,7 @@ A warm, near-monochrome brown-black ramp with a single orange voice and three st
 - **Light glass** (glass, 65%): the top bar only.
 - **Strong glass** (glass-strong, 86%): menus, popovers, selects, the section panel, dialogs, the command palette, toasts, the selection bar.
 - **Glass edge** (glass-edge): the 1px rim of both.
+- **Card glass** (record cards, owner exception, 2026-10-30): the folder's recipe on a tile. See Resource card.
 
 Contrast on glass is measured against the worst backdrop, a white screenshot blurred behind it. On strong glass: ink 10.36:1, ink-secondary 7.76:1, ink-muted 4.80:1, accent-text 4.92:1; ink-subtle would fall to 3.02:1. On light glass only ink holds (4.92:1 over white, 17.20:1 over black).
 
@@ -238,7 +246,7 @@ Contrast on glass is measured against the worst backdrop, a white screenshot blu
 - **Title** (500, 16px, 1.4): card titles, list row titles, empty-state headings.
 - **Body** (400, 15px, 1.5): set on `body`; notes, descriptions, form fields, Markdown previews, the search input.
 - **Label** (500, 14px): pills, buttons, tabs (13px in `sm` controls). Section-nav labels are 15px.
-- **Meta** (400, 14px, 1.4): the `host · tag` line under a card title and breadcrumbs, in ink-subtle. The count beside the display title is a badge: a 32px surface pill with the number in 14px mono ink-secondary.
+- **Meta** (400, 14px, 1.4): the host line under a card title (ink-muted on the card's glass) and breadcrumbs (ink-subtle). The count beside the display title is a badge: a 32px surface pill with the number in 14px mono ink-secondary.
 - **Mono** (400, 12–13px, 1.6): code and prompt previews, keyboard hints, counts (`tabular-nums`).
 
 The extension popup runs at a 13px body with the same families.
@@ -281,9 +289,9 @@ The signature: ember light caught in the glass top bar, like orange light throug
 
 ### Named Rules
 
-**The Solid Work Rule.** Glass is for chrome and overlays only. Anything that shows saved work (cards, rows, frames, panels on the page) is solid, with no border and no shadow, so screenshots keep their true colour.
+**The Solid Work Rule.** Glass is for chrome and overlays. The saved work itself (screenshots, frames, rows, panels on the page) is solid, with no border and no shadow, so screenshots keep their true colour. Two owner exceptions wrap the work in glass without covering it: the folder shelf and the record card, whose glass sits behind the screenshot.
 
-**The Light Stays Home Rule.** Ember light never sits under page text. It exists only in the top bar's pool and seam; any glow bright enough to see drops small grey text below 4.5:1.
+**The Light Stays Home Rule.** Ember light never sits under page text. It lives in the top bar's pool and seam; any glow bright enough to see drops small grey text below 4.5:1. The record card's highlight is the measured exception: 16% ember on a tint that deepens toward the caption, and caption text stays ≥ 5.1:1 with a white screenshot behind and the highlight at full strength.
 
 ## Shapes
 
@@ -354,10 +362,15 @@ PT is the core, PIVOT the expansion: the mark starts from the first and last let
 
 ### Resource card — `components/resource-card.tsx`
 
-- A 16:10 solid surface frame, 14px radius, image `object-fit: cover; object-position: top`. No border, no shadow, no hover lift or scale.
-- Under it, 12px apart: title (title, ink, one line) and meta `host · first tag` (meta, ink-subtle).
-- Hover or focus reveals round 32px action buttons (open source, copy) top-right and the select checkbox top-left. Both are solid surface-raised, with no translucency or blur, so nothing see-through sits on the screenshot; the empty checkbox has an ink-muted ring.
-- Selected: 2px accent-text outline with 3px offset on the frame.
+"Option A in glass", picked by the owner on 2026-10-30. The card is a tile of the folder's frosted glass that holds the picture and its caption; styles live in `globals.css` (`.glass-card`).
+
+- **Tile:** 18px radius, 8px padding (14px at the bottom), base halfway between canvas and surface. Layers, back to front: a copy of the card's own thumbnail blurred 36px and saturated 1.5× at 50% (62% on hover), so each card takes a soft tint from its page; a dark tint that deepens toward the caption (25% → 62% at 46% → 92%); a 10% top sheen; a 16% ember highlight that follows the pointer; a 1px white rim, brightest at the top (42% → 12% → 5%).
+- **Frame:** a 16:10 canvas frame at 11px radius inside the tile, image `object-fit: cover; object-position: top`. Nothing translucent sits on it: the glass is behind it. No hover lift or scale.
+- **Caption** (inside the tile, 6px side inset): a 20px site icon tile (surface-raised, 6px radius; the host's favicon, its first letter when the site has none, the type icon when there is no URL), the title (title, ink, one line) and, at the end of that row, Open source and Copy as 28px round buttons (ink at 10%, ink icon) that appear on hover or focus. Then the host in meta (ink-muted), then up to three chips (24px, ink at 8%): facets first, each with its kind in ink-secondary regular before the name in ink medium ("Domain SaaS"), then plain tags, then a `+N` chip whose tooltip lists the rest. A linked card without tags shows its type as the chip.
+- **Hover:** a 1.5px ember edge (amber core → ember → ember deep) traces the rim around the pointer, the blurred art drifts a few pixels against it, and the actions appear. Reduced motion keeps the art still.
+- **Contrast:** inside the tile, ink-subtle resolves to ink-muted. Worst case (white screenshot behind, highlight at full strength): title ink ≥ 9.8:1, meta ink-muted ≥ 5.1:1, chip names ink ≥ 9.7:1 and kinds ink-secondary ≥ 7.3:1.
+- **Select checkbox:** top-left of the frame on hover or focus, solid surface-raised with an ink-muted ring.
+- **Selected and focus:** 2px accent-text outline with 3px offset around the tile.
 - Capturing: a pulsing frame (1.6s) with "Capturing…" in ink-muted. Failed capture: an image-off icon in ink-subtle.
 - **References scroll like a screen recording:** the frame shows the full-page shot resting at the top; on hover or keyboard focus it scrolls linearly to the bottom at about one frame-height per second (1.5–30s from the image's aspect ratio) and glides back in 500ms ease-out on leave. The frame is a size container, so the travel is `translateY(calc(-100% + 100cqh))`. Short pages don't move; reduced motion keeps it still.
 
@@ -372,8 +385,8 @@ PT is the core, PIVOT the expansion: the mark starts from the first and last let
 
 ### Note card — `components/resource-card.tsx` (text types)
 
-- The same 16:10 surface frame, padded 24px. Prompts, rules, checklists and skills show an excerpt as a title-lg quote in ink; snippets and MCP JSON show the first lines in mono ink-muted. A type chip bottom-left (surface-raised pill, 12px, ink-secondary).
-- Under the frame: title, then `Type · purpose` in ink-subtle (skills show their invocation).
+- The same glass tile with no art behind it, and the same 16:10 canvas frame, padded 24px. Prompts, rules, checklists and skills show an excerpt as a title-lg quote in ink; snippets and MCP JSON show the first lines in mono ink-muted. A type chip bottom-left (surface-raised pill, 12px, ink-secondary).
+- Caption: the type icon in the icon tile, the title, then `Type · purpose` in ink-muted (skills show their invocation), then its tags as chips.
 
 ### List row — `components/resource-card.tsx` (`ResourceRow`)
 
@@ -451,8 +464,8 @@ Text selection is ember at 45% with ink text; the caret is accent-text; the scro
 
 - **Don't** add a light theme, a theme toggle, or any `prefers-color-scheme` branch, in the app or the extension.
 - **Don't** put white text on the ember fill (2.87:1).
-- **Don't** use orange for icons, hover states, badges or decoration, or ember light anywhere outside the top bar.
-- **Don't** put glass, borders or shadows on cards, rows or panels that show saved work.
+- **Don't** use orange for icons, hover states, badges or decoration, or ember light outside the top bar and the record card's highlight and edge.
+- **Don't** put glass, borders or shadows over saved work, or on rows and panels that show it; the folder and the record card are the only glass that holds work, and their glass sits behind it.
 - **Don't** use weights above 500, sizes below 12px, or `font-size` on `html`.
 - **Don't** scale or lift thumbnails on hover.
 - **Don't** signal state by colour alone; danger, success and warning always carry a word or an icon.

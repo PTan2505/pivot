@@ -218,6 +218,11 @@ export async function uploadToResource(resourceId: string, files: File[], { as }
   return api<{ assetIds: string[] }>(`/api/resources/${resourceId}/assets`, { method: "POST", body: form });
 }
 
+/** A site's icon by host; the server keeps one per host (404 when the site has none). */
+export function faviconUrl(host: string) {
+  return `/api/favicon?host=${encodeURIComponent(host)}`;
+}
+
 export function assetUrl(id: string, opts: { thumb?: boolean; preview?: boolean; download?: boolean } = {}) {
   const sp = new URLSearchParams();
   if (opts.thumb) sp.set("thumb", "1");
