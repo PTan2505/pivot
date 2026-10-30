@@ -46,6 +46,7 @@ const PAGES: Record<string, string> = {
   // catches the sections faded out.
   "/reveal": `<body style="margin:0;font:16px sans-serif">
 <header style="position:fixed;top:0;left:0;right:0;height:80px;background:rgb(200,0,0);z-index:9"></header>
+<div style="position:fixed;bottom:24px;left:520px;width:400px;height:48px;border-radius:24px;background:rgb(240,0,240);z-index:9"></div>
 <section style="height:100vh;background:rgb(0,0,200)"></section>
 ${[1, 2, 3, 4]
   .map(
@@ -109,13 +110,15 @@ describe.skipIf(!chromium.installed)("full-page capture loads the whole page", (
     };
     const near = (c: number[], want: number[]) => c.every((v, k) => Math.abs(v - want[k]) < 40);
     // the hero keeps its 900px instead of stretching to the page
-    expect(near(at(720, 850), [0, 0, 200])).toBe(true);
+    expect(near(at(100, 850), [0, 0, 200])).toBe(true);
     expect(near(at(720, 960), [255, 255, 255])).toBe(true);
     // every section shows its revealed card
     for (let i = 0; i < 4; i++) expect(near(at(720, 900 + i * 700 + 350), [0, 160, 0])).toBe(true);
-    // the fixed bar shows once, at the top, not over every screen
+    // the fixed bar and the narrow pill floating at the bottom show once, in the first screen, not over every screen
     expect(near(at(720, 20), [200, 0, 0])).toBe(true);
     expect(near(at(720, 900 + 20), [200, 0, 0])).toBe(false);
+    expect(near(at(720, 900 - 48), [240, 0, 240])).toBe(true);
+    expect(near(at(720, 2 * 900 - 48), [240, 0, 240])).toBe(false);
   });
 
   it("skips the full page when asked (sources)", { timeout: 60_000 }, async () => {

@@ -71,6 +71,7 @@ Not a plan phase: two problems the owner hit while saving references.
   - Real pages, compared against their earlier captures: the AirPods page went from mostly blank sections to every section shown. Linear, PostHog, Framer pricing, Raycast and Vercel are the same height with more content rendered. About 20 s per page.
   - File: `packages/core/src/capture.ts`.
 
+- **Follow-up:** the owner's first save from a Dribbble modal after the fix had the right URL (`/shots/27019826-…`) and the shot page as its full screenshot. But Dribbble's narrow "Start a Project Brief" pill, fixed at the bottom, repeated over every screen, because only wide bars were hidden. Anything floating at the bottom edge is now hidden after the first screen, whatever its width. The `capture-scroll` test gained a narrow bottom pill (it fails without the change), and the same shot re-captured shows the pill once.
 - **Known limit:** an element cut by a screen boundary is shot half in one screen and half in the next, so an animation that depends on being mostly visible can show half revealed.
 
 ### 2026-10-31 — Phase 5: Real-use validation
