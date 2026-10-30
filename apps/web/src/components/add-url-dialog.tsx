@@ -76,6 +76,8 @@ function AddUrlForm({
   const [saving, setSaving] = useState(false);
 
   const urls = useMemo(() => parseUrls(text), [text]);
+  // Entries in the box that aren't links, so Save never just stays grey without a reason.
+  const notLinks = text.split(/[\s,]+/).filter(Boolean).length - urls.length;
   const single = urls.length === 1 ? urls[0] : null;
   const [debounced, setDebounced] = useState<string | null>(null);
   useEffect(() => {
@@ -157,6 +159,14 @@ function AddUrlForm({
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
             }}
           />
+          {notLinks > 0 && (
+            <p role="status" className="flex items-center gap-2 text-xs text-warning">
+              <AlertTriangle className="size-3 shrink-0" />
+              {urls.length === 0
+                ? "That doesn’t look like a link. Paste a full address, like https://linear.app."
+                : `${notLinks} ${notLinks === 1 ? "entry isn’t a link" : "entries aren’t links"} and will be skipped.`}
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3">

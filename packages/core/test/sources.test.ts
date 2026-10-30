@@ -45,6 +45,14 @@ describe("sources", () => {
       sourceUrl: "https://dribbble.com/",
     });
     expect(dribbble.meta).toMatchObject({ category: "inspiration", searchUrl: expect.stringContaining("{q}") });
+    // A blank description from a form still gets the known one.
+    const mobbin = await resources.createResource({
+      type: "source",
+      title: "Mobbin",
+      description: "",
+      sourceUrl: "https://mobbin.com/",
+    });
+    expect(mobbin.description).not.toBe("");
     const foundry = await resources.createResource({
       type: "source",
       title: "A foundry",

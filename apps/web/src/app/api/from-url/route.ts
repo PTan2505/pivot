@@ -3,6 +3,7 @@ import { enqueueCapture } from "@pivot/core/capture";
 import { fetchUrlMetadata } from "@pivot/core/metadata";
 import { normalizeUrl } from "@pivot/core/net-guard";
 import { createResource, findByUrl } from "@pivot/core/resources";
+import { knownSourceFor } from "@pivot/core/source-match";
 import { RESOURCE_TYPES, TAG_KINDS } from "@pivot/core/types";
 import { body, json, route } from "@/lib/server/http";
 
@@ -42,11 +43,14 @@ export const POST = route(async (req: Request) => {
       continue;
     }
     let title = item.title?.trim();
-    let description = item.description;
-    if (!title) {
+    let description = item.description?.trim();
+    // A known source brings its own description (see createResource); otherwise read the page's.
+    const wantsDescription = !description && !(input.type === "source" && knownSourceFor(url));
+    if (!title || wantsDescription) {
+      // Also when Save was pressed before the dialog finished reading the page.
       const meta = await fetchUrlMetadata(url).catch(() => null);
-      title = meta?.title || new URL(url).hostname.replace(/^www\./, "");
-      description ??= meta?.description ?? "";
+      title ||= meta?.title || new URL(url).hostname.replace(/^www\./, "");
+      if (wantsDescription) description = meta?.description ?? "";
     }
     const r = await createResource({
       type: input.type,

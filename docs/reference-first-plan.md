@@ -59,13 +59,13 @@ The current requirements document (`SPEC.md`, PIVOT Requirements v0.2) defines 1
 ### Phase 1 — Save references
 
 - [x] Save a reference from a URL.
-- [ ] Capture or preserve source URL, title, and description when available.
+- [x] Capture or preserve source URL, title, and description when available.
 - [x] Capture viewport screenshot at 1440×900 and full-page screenshot using existing Playwright behavior.
 - [x] Respect SPEC limits: full-page max 12000px; bounded scrolling/expansion; keep viewport image if full-page fails.
-- [ ] Allow manual screenshot upload or replacement.
+- [x] Allow manual screenshot upload or replacement.
 - [x] Show saved references as clear visual cards.
-- [ ] Warn on duplicate URLs; avoid unintended duplicate creation.
-- [ ] Show actionable error states for blocked pages, screenshot failures, and invalid URLs.
+- [x] Warn on duplicate URLs; avoid unintended duplicate creation.
+- [x] Show actionable error states for blocked pages, screenshot failures, and invalid URLs.
 
 **Done when:** A user can save and reopen several real websites without losing the URL or usable screenshot.
 

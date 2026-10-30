@@ -1,6 +1,7 @@
 "use client";
 
 import { Upload } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -9,6 +10,7 @@ import { CommandPalette } from "@/components/command-palette";
 import { ExportDialog } from "@/components/export-dialog";
 import { PromptCopyDialog } from "@/components/prompt-copy-dialog";
 import { useUi } from "@/components/ui-store";
+import type { ResourceDTO } from "@pivot/core/types";
 import { uploadFiles, useInvalidate } from "@/lib/api";
 
 function isEditable(el: EventTarget | null) {
@@ -16,11 +18,37 @@ function isEditable(el: EventTarget | null) {
   return !!node && (node.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(node.tagName));
 }
 
+/** Toasts once when a screenshot this tab watched while pending ends as failed. */
+function useCaptureFailureToasts() {
+  const qc = useQueryClient();
+  const router = useRouter();
+  useEffect(() => {
+    const pending = new Set<string>();
+    const check = (r: ResourceDTO) => {
+      if (r.captureStatus === "pending") pending.add(r.id);
+      else if (pending.delete(r.id) && r.captureStatus === "failed") {
+        toast.error(`Couldn’t screenshot “${r.title}”`, {
+          description: r.captureError ?? undefined,
+          action: { label: "Open", onClick: () => router.push(`/r/${r.id}`) },
+        });
+      }
+    };
+    return qc.getQueryCache().subscribe((event) => {
+      if (event.type !== "updated" || event.action.type !== "success") return;
+      const [key] = event.query.queryKey;
+      const data = event.query.state.data as ResourceDTO[] | ResourceDTO | undefined;
+      if (key === "resources" && Array.isArray(data)) data.forEach(check);
+      else if (key === "resource" && data && !Array.isArray(data)) check(data);
+    });
+  }, [qc, router]);
+}
+
 /** Dialogs, ⌘K, and the "paste or drop anywhere" capture flow. */
 export function GlobalLayer() {
   const { openAddUrl } = useUi();
   const router = useRouter();
   const invalidate = useInvalidate();
+  useCaptureFailureToasts();
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
 

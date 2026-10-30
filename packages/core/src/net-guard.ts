@@ -38,21 +38,50 @@ function isPrivateIPv4(ip: string): boolean {
   );
 }
 
+/** The 16 bytes of an IPv6 address; `ip` must pass `net.isIPv6`. */
+function ipv6Bytes(ip: string): number[] {
+  let s = ip.toLowerCase().split("%")[0];
+  // A trailing dotted IPv4 part (::ffff:127.0.0.1) becomes two hex groups.
+  const v4 = /(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(s);
+  if (v4) {
+    const [a, b, c, d] = v4.slice(1).map(Number);
+    s = `${s.slice(0, v4.index)}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const [head, tail] = s.split("::");
+  const groups = (part: string | undefined) => (part ? part.split(":") : []);
+  const h = groups(head);
+  const t = groups(tail);
+  const all = s.includes("::") ? [...h, ...Array<string>(8 - h.length - t.length).fill("0"), ...t] : h;
+  return all.flatMap((g) => {
+    const n = parseInt(g, 16);
+    return [n >> 8, n & 0xff];
+  });
+}
+
+const zeros = (bytes: number[], from: number, to: number) => bytes.slice(from, to).every((b) => b === 0);
+const embeddedIPv4 = (bytes: number[], at: number) => bytes.slice(at, at + 4).join(".");
+
+function isPrivateIPv6(ip: string): boolean {
+  const b = ipv6Bytes(ip);
+  // Forms that carry an IPv4 address: the IPv4 rules decide.
+  if (zeros(b, 0, 10) && b[10] === 0xff && b[11] === 0xff) return isPrivateIPv4(embeddedIPv4(b, 12)); // ::ffff:0:0/96
+  if (zeros(b, 0, 12)) return isPrivateIPv4(embeddedIPv4(b, 12)); // ::/96, also :: and ::1
+  if (b[0] === 0 && b[1] === 0x64 && b[2] === 0xff && b[3] === 0x9b && zeros(b, 4, 12)) {
+    return isPrivateIPv4(embeddedIPv4(b, 12)); // 64:ff9b::/96 (NAT64)
+  }
+  if (b[0] === 0x20 && b[1] === 0x02) return isPrivateIPv4(embeddedIPv4(b, 2)); // 2002::/16 (6to4)
+  return (
+    (b[0] & 0xfe) === 0xfc || // fc00::/7 unique local
+    (b[0] === 0xfe && (b[1] & 0x80) === 0x80) || // fe80::/10 link-local, fec0::/10 site-local
+    b[0] === 0xff // ff00::/8 multicast
+  );
+}
+
 export function isPrivateAddress(ip: string): boolean {
   if (net.isIPv4(ip)) return isPrivateIPv4(ip);
-  const v6 = ip.toLowerCase();
-  if (v6.startsWith("::ffff:")) {
-    const mapped = v6.slice(7);
-    if (net.isIPv4(mapped)) return isPrivateIPv4(mapped);
-  }
-  return (
-    v6 === "::" ||
-    v6 === "::1" ||
-    v6.startsWith("fc") ||
-    v6.startsWith("fd") ||
-    v6.startsWith("fe80") ||
-    v6.startsWith("ff")
-  );
+  if (net.isIPv6(ip.split("%")[0])) return isPrivateIPv6(ip);
+  // Not an IP address at all: refuse rather than guess.
+  return true;
 }
 
 /** Throws unless the URL is http(s) and every address it resolves to is public. */

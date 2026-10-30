@@ -5,7 +5,7 @@ import { attachAsset, saveAsset } from "@pivot/core/assets";
 import { enqueueCapture } from "@pivot/core/capture";
 import { fetchUrlMetadata } from "@pivot/core/metadata";
 import { normalizeUrl, safeFetch } from "@pivot/core/net-guard";
-import { addToCollection, createResource, setResourceFields } from "@pivot/core/resources";
+import { addToCollection, createResource, findByUrl, setResourceFields } from "@pivot/core/resources";
 import { RESOURCE_TYPES, TAG_KINDS } from "@pivot/core/types";
 import { HttpError, json, route } from "@/lib/server/http";
 
@@ -21,6 +21,8 @@ const fields = z.object({
   tags: z.array(z.object({ kind: z.enum(TAG_KINDS), name: z.string().trim().min(1) })).optional(),
   collectionId: z.string().optional(),
   serverCapture: z.boolean().optional(),
+  /** Page saves without a form to review (quick-save, context menu): keep the saved one instead of a duplicate. */
+  ifExists: z.enum(["create", "skip"]).default("create"),
 });
 
 function hostOf(url: string) {
@@ -42,11 +44,18 @@ export const POST = route(async (req: Request) => {
   let id: string;
 
   if (input.kind === "page") {
+    if (input.ifExists === "skip") {
+      const existing = (await findByUrl(pageUrl)).find((r) => r.type === (input.type ?? "reference"));
+      if (existing) {
+        if (input.collectionId) await addToCollection(input.collectionId, [existing.id]);
+        return json({ id: existing.id, path: `/r/${existing.id}`, existing: true, title: existing.title });
+      }
+    }
     let { title, description } = input;
-    if (!title?.trim()) {
+    if (!title?.trim() || !description?.trim()) {
       const meta = await fetchUrlMetadata(pageUrl).catch(() => null);
-      title = meta?.title || hostOf(pageUrl);
-      description ??= meta?.description;
+      if (!title?.trim()) title = meta?.title || hostOf(pageUrl);
+      if (!description?.trim()) description = meta?.description;
     }
     const r = await createResource({
       type: input.type ?? "reference",
