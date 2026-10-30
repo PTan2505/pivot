@@ -1,11 +1,12 @@
 "use client";
 
-import { Camera, Download, ExternalLink, ImageUp, Loader2, Plus, Star, Trash2 } from "lucide-react";
+import { Camera, Download, ExternalLink, ImageUp, Loader2, Maximize2, Plus, Star, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import type { AssetDTO, ResourceDetailDTO } from "@pivot/core/types";
 import { AssetPreview, formatBytes } from "@/components/asset-preview";
 import { ConfirmButton } from "@/components/confirm-button";
+import { ScreenshotViewer } from "@/components/screenshot-viewer";
 import { TypeIcon } from "@/components/type-icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,7 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
   const invalidate = useInvalidate();
   const update = useUpdateResource(resource.id);
   const [over, setOver] = useState(false);
+  const [viewing, setViewing] = useState(false);
 
   const recapture = async () => {
     try {
@@ -144,10 +146,38 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
       )}
 
       {selected ? (
-        <div className={cn("overflow-auto rounded-[14px] bg-surface", compact ? "max-h-80" : "max-h-[75vh]")}>
-          <div className="grid min-h-48 place-items-center">
-            <AssetPreview asset={selected} />
+        <div className="relative">
+          <div className={cn("overflow-auto rounded-[14px] bg-surface", compact ? "max-h-80" : "max-h-[75vh]")}>
+            <div className="grid min-h-48 place-items-center">
+              {selected.kind === "image" && !selected.missing ? (
+                <button
+                  type="button"
+                  onClick={() => setViewing(true)}
+                  aria-label="View at full size"
+                  className="block w-full cursor-zoom-in"
+                >
+                  <AssetPreview asset={selected} />
+                </button>
+              ) : (
+                <AssetPreview asset={selected} />
+              )}
+            </div>
           </div>
+          {selected.kind === "image" && !selected.missing && (
+            <>
+              {/* solid, like the card controls: nothing see-through on the screenshot */}
+              <Button
+                variant="secondary"
+                size="icon"
+                aria-label="View at full size"
+                className="absolute top-3 right-3 bg-surface-raised"
+                onClick={() => setViewing(true)}
+              >
+                <Maximize2 />
+              </Button>
+              <ScreenshotViewer asset={selected} open={viewing} onOpenChange={setViewing} />
+            </>
+          )}
         </div>
       ) : (
         !compact && (

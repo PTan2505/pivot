@@ -83,11 +83,11 @@ The current requirements document (`SPEC.md`, PIVOT Requirements v0.2) defines 1
 ### Phase 3 — Find and reuse
 
 - [x] Search saved references by title, URL, description, and tags as supported by the current data model.
-- [ ] Open a useful detail view with readable screenshots and metadata.
-- [ ] Open the original website reliably.
-- [ ] Combine filters to narrow results.
-- [ ] Sort by creation date (newest/oldest).
-- [ ] Verify search empty states, no-match states, and clearing filters.
+- [x] Open a useful detail view with readable screenshots and metadata.
+- [x] Open the original website reliably.
+- [x] Combine filters to narrow results.
+- [x] Sort by creation date (newest/oldest).
+- [x] Verify search empty states, no-match states, and clearing filters.
 
 **Done when:** A previously saved reference can be retrieved quickly by name or category.
 

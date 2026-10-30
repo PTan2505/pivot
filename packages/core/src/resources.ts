@@ -49,7 +49,8 @@ export interface ListFilters {
   tagIds?: string[];
   collectionId?: string;
   trash?: boolean;
-  sort?: "updated" | "created" | "title";
+  /** `created` is newest first, `oldest` is by creation date the other way. */
+  sort?: "updated" | "created" | "oldest" | "title";
   limit?: number;
 }
 
@@ -185,9 +186,11 @@ export async function listResources(filters: ListFilters = {}): Promise<Resource
       ? [asc(sql`lower(${resources.title})`)]
       : filters.sort === "created"
         ? [desc(resources.createdAt)]
-        : filters.trash
-          ? [desc(resources.deletedAt)]
-          : [desc(resources.updatedAt)];
+        : filters.sort === "oldest"
+          ? [asc(resources.createdAt)]
+          : filters.trash
+            ? [desc(resources.deletedAt)]
+            : [desc(resources.updatedAt)];
 
   const rows = await db
     .select()

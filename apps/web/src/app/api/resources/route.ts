@@ -14,7 +14,7 @@ export const GET = route(async (req: Request) => {
     tagIds: sp.get("tags")?.split(",").filter(Boolean),
     collectionId: sp.get("collection") ?? undefined,
     trash: sp.get("trash") === "1",
-    sort: sort === "created" || sort === "title" ? sort : "updated",
+    sort: sort === "created" || sort === "oldest" || sort === "title" ? sort : "updated",
     limit: sp.get("limit") ? Number(sp.get("limit")) : undefined,
   };
   return json(await listResources(filters));
