@@ -135,6 +135,37 @@ describe("resources", () => {
     expect(await collectionResourceIds(c.id)).toEqual(all.map((r) => r.id));
     expect((await listCollections()).find((x) => x.id === c.id)!.count).toBe(all.length);
   });
+
+  it("renames collections, filters inside them, and keeps resources when one is removed or deleted", async () => {
+    const r = core.resources;
+    const pricing = await r.createResource({
+      type: "reference",
+      title: "Pricing page",
+      sourceUrl: "https://a.example/pricing",
+      tags: [{ kind: "pageType", name: "Pricing" }],
+    });
+    const hero = await r.createResource({
+      type: "reference",
+      title: "Hero",
+      sourceUrl: "https://b.example/",
+      tags: [{ kind: "pageType", name: "Landing" }],
+    });
+    const c = await r.createCollection({ name: "Landing pages" });
+    await r.addToCollection(c.id, [pricing.id, hero.id]);
+    await r.updateCollection(c.id, { name: "Landing pages · 2026" });
+    expect((await r.getCollection(c.id))!.name).toBe("Landing pages · 2026");
+
+    // A collection combines with the other filters.
+    const inside = await r.listResources({ collectionId: c.id, tagIds: [pricing.tags[0].id] });
+    expect(inside.map((x) => x.id)).toEqual([pricing.id]);
+
+    await r.removeFromCollection(c.id, [hero.id]);
+    expect(await r.collectionResourceIds(c.id)).toEqual([pricing.id]);
+    await r.deleteCollection(c.id);
+    expect(await r.getCollection(c.id)).toBeFalsy();
+    expect(await r.getResource(pricing.id)).not.toBeNull();
+    expect(await r.getResource(hero.id)).not.toBeNull();
+  });
 });
 
 describe("context & export", () => {
