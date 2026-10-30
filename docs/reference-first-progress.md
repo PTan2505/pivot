@@ -4,14 +4,14 @@ Tracks [reference-first-plan.md](reference-first-plan.md). The checklist lives i
 
 ## Status
 
-| Phase | Name                        | Status      |
-| ----- | --------------------------- | ----------- |
-| 0     | Audit and baseline          | Done        |
-| 1     | Save references             | Done        |
-| 2     | Organize references         | Done        |
-| 3     | Find and reuse              | Done        |
-| 4     | Sources and browser capture | Partial     |
-| 5     | Real-use validation         | Not started |
+| Phase | Name                        | Status |
+| ----- | --------------------------- | ------ |
+| 0     | Audit and baseline          | Done   |
+| 1     | Save references             | Done   |
+| 2     | Organize references         | Done   |
+| 3     | Find and reuse              | Done   |
+| 4     | Sources and browser capture | Done   |
+| 5     | Real-use validation         | Done   |
 
 ## Open issues
 
@@ -37,6 +37,9 @@ Ordered by impact on save → organize → find → reuse. IDs are used in later
 | G16 | 2     | **Fixed in Phase 2.** **Facets can only be filtered through the mixed pill row**; pills don't show their kind (tooltip only).                                                                                                                                                                                                                                                                         | `tag-pills.tsx:70-82`                                                         |
 | G17 | 2     | **Fixed in Phase 2.** Small translucent blurred controls sit on card screenshots on hover (select box, action buttons), against DESIGN.md's "nothing translucent on saved work". Low.                                                                                                                                                                                                                 | `resource-card.tsx:63, 76`                                                    |
 | G18 | 0     | `pnpm format:check` fails: 6 files in the repo were never formatted, and `.claude/worktrees/` (another session's checkout) isn't in `.prettierignore` (34 files).                                                                                                                                                                                                                                     | `apps/web/src/lib/utils.ts`, `packages/core/src/metadata.ts` and 4 more       |
+| G19 | 5     | **Generic page titles.** `og:title` often drops the brand: 5 of the 20 Phase 5 saves were titled "Documentation", "Pricing & Fees", "Build software better, together" (GitHub sign-in), "Supabase", "Installing with Vite - Installation". Search still finds them by URL, but cards and MCP results read poorly. Renamed by hand. A fix could append the site name when the title lacks it.          | Phase 5 log                                                                   |
+| G20 | 5     | **Cookie and region banners in screenshots** (Stripe pricing, Stripe Docs, Notion, Framer, PostHog, Apple). The banner covers part of the first screen. Auto-dismissing would have to decline non-essential cookies, never accept them.                                                                                                                                                               | Phase 5 contact sheet                                                         |
+| G21 | 5     | Tag filters put tag UUIDs in the URL (`?tags=e509…,2360…`), so a filtered view's link isn't readable. Low.                                                                                                                                                                                                                                                                                            | `use-library-params.ts`                                                       |
 
 ### Security and data-loss risks
 
@@ -51,6 +54,73 @@ Ordered by impact on save → organize → find → reuse. IDs are used in later
 | S7  | Low      | Uploads: type is checked by extension only (served with `nosniff` and a sandbox CSP); the 200 MB limit runs after buffering; `safeFetch` truncates oversized downloads silently.                                                                                                                                                                                                                                 | `assets.ts:16-61, 133`; `net-guard.ts:111-114` |
 
 ## Log
+
+### 2026-10-31 — Phase 5: Real-use validation
+
+- **Status:** Done. The owner rebuilt and reloaded the extension and ran the live checks, which also closes the last Phase 4 item. Results (read from the library afterwards):
+  - **⌥⇧D on figma.com/pricing** → reference "Plans & Pricing | Figma", page description kept. The cover is the attached view (3600×2018); the server added only the full page (1440×9231).
+  - **Popup on dribbble.com** → nothing extra saved; only the existing Dribbble source matches the URL.
+  - **Popup on a PIVOT page** → nothing saved.
+- **Existing functionality reused:** Add URL (`/api/from-url` with facets and `skipDuplicates`), the capture queue, facets, collections and bulk add, the tag pill filters, search, the extension popup and quick-save.
+- **What was done in the real library** (Neon + R2, through the app at :4321, rebuilt from `dev` first):
+  - Moved the owner's 4 extension test saves from 2026-10-30 to the trash (2× "Recent — Design Inspiration" saved as references 30 s apart, 2× the PIVOT app page itself), with the owner's OK.
+  - Saved 20 references chosen with the owner, each with page type, domain, style and pattern facets. All 20 captured (viewport + full page) in 255 s through the serial queue, about 13 s each. No bot walls.
+  - Renamed 5 generic titles (G19).
+  - Created 3 collections: Pricing pages (5), Developer tool landings (4), Docs & changelogs (5).
+  - IDs, so the run can be undone:
+    - References:
+    - `1696819d-add7-4bb2-8db6-d038deb4849c` https://linear.app/
+    - `17816718-b2de-4f1a-bfb0-fc6cfd1e8f03` https://vercel.com/
+    - `cc1ec132-3a6a-4f5c-9947-037f38f49cbb` https://www.raycast.com/
+    - `3a7c490b-5bc1-4150-8645-7eec4a66e809` https://posthog.com/
+    - `cedcc989-348d-4a1f-a37d-e6bdf20f40c1` https://resend.com/
+    - `a1a5853f-16bb-49b0-89f2-53e6e6d9dcb7` https://cal.com/
+    - `0817a2a5-7a55-497e-bd8e-52e1cd8b999f` https://stripe.com/pricing
+    - `100fbdf7-e811-4e54-bdd0-2e9c814b7923` https://linear.app/pricing
+    - `b75a1c2f-3508-4722-ba74-02cf88a73187` https://www.notion.com/pricing
+    - `d0304cd5-6fbd-42bc-8228-480b7c607783` https://www.framer.com/pricing
+    - `b7f948b8-6bc5-4bdc-ad90-10a04db28642` https://supabase.com/pricing
+    - `8dc4881b-dec4-43c9-80b9-58f125594135` https://docs.stripe.com/
+    - `8ef1d88c-0341-472c-a10b-46e88c70ff85` https://tailwindcss.com/docs/installation
+    - `fed7b732-9068-4087-81b0-4f3766fab5a7` https://nextjs.org/docs
+    - `0a0d9d6e-3fe6-4020-9ef3-e4be75ea2bc0` https://linear.app/changelog
+    - `1cc67203-ad9c-442f-9a79-ffbd7c32ce34` https://vercel.com/blog
+    - `ab088199-506f-4c43-a24a-3e74dd28f073` https://www.apple.com/airpods-pro/
+    - `f380e224-3979-41d3-8f21-08172393108a` https://github.com/login
+    - `f424eef5-84e9-4571-8362-b615b417a4b3` https://supabase.com/dashboard/sign-in
+    - `b5a1e272-85c7-48ce-8f5b-dfb1f88f3ad4` https://rauno.me/
+    - Collections:
+    - `3d0b2a47-afea-4ee1-9f80-493f25287d96` Pricing pages
+    - `6d651e3d-6be7-4a7b-9519-f3566b7da100` Developer tool landings
+    - `7dacd116-85fd-4c38-ac1f-9f297e571dc9` Docs & changelogs
+- **Finding 5 references** without browsing (References page, by pills or the top search; each took 1–2 actions, and results showed in about 1 s):
+  - Pricing + Dark → Supabase, Framer and Linear pricing.
+  - Docs + Sidebar → Tailwind, Stripe and Next.js docs.
+  - Auth → GitHub and Supabase sign-in.
+  - "stripe pricing" → Stripe pricing.
+  - "changelog" → Linear's changelog.
+- **Extension in a normal session:**
+  - The owner's own session (2026-10-30, the build before Phase 4) saved pages through the popup and quick-save. Captures worked, but it produced the duplicates and self-saves above.
+  - Driving the extension from Claude in Chrome isn't possible: key presses reach the page, not the browser, so ⌥⇧D never fired, and `chrome://` pages can't be opened.
+- **Friction found and what happened to it:**
+  - The popup created a second copy despite its "Already saved" warning. **Fixed:** the button now reads "Save again" when the page is already saved as that type.
+  - The extension saved PIVOT's own pages, which then fail to capture. **Fixed:** the popup and quick-save refuse pages on the PIVOT server's origin.
+  - A known site's home page was saved as a reference. Already fixed in Phase 4 (Source is preselected); the owner needs to rebuild and reload the extension.
+  - Generic titles → G19. Cookie banners in screenshots → G20. UUIDs in filter URLs → G21. All open, none blocks the workflow.
+- **Acceptance (plan §4):**
+  - A URL is saved at once and its capture finishes in about 13 s, under the 30 s target.
+  - Known references are found in 1–2 actions, under the 10 s target.
+  - 23 real references are saved, classified, viewable and reopenable.
+  - Failed captures keep the reference (Phase 1).
+  - Existing resources and collections are intact; the 4 trashed test saves can be restored for 30 days.
+  - No security control was weakened.
+- **Files changed:** `apps/extension/src/lib/page.ts` (`isPivotPage`), `popup/popup.tsx` (PIVOT-page refusal, "Save again"), `background.ts` (quick-save refuses PIVOT pages); SPEC §4; DESIGN.md (extension popup).
+- **Checks run and results:** `pnpm typecheck`, `pnpm lint` pass; `pnpm test` 53/53 (50 s). The built extension was checked in headless Chromium against a scratch app:
+  - a PIVOT page shows "This is PIVOT itself…";
+  - stripe.com/pricing as Reference reads "Save again";
+  - the same URL as UI Library reads "Save".
+- **Remaining issues:** G11 (saves while the app is down), G19–G21, G18, S4.
+- **Next step:** the search and MCP initiative (`docs/SEARCH_MCP_IMPLEMENTATION_PLAN.md`), which now has a real corpus for its evaluation set.
 
 ### 2026-10-30 — Phase 4: Sources and browser capture
 
