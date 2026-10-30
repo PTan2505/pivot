@@ -55,6 +55,24 @@ Ordered by impact on save → organize → find → reuse. IDs are used in later
 
 ## Log
 
+### 2026-10-31 — Capture fixes after real use
+
+Not a plan phase: two problems the owner hit while saving references.
+
+- **A shot saved from a Dribbble modal got the search page's full screenshot.** The extension preferred `<link rel="canonical">`, which a modal leaves pointing at the page underneath (the saved URL was `https://dribbble.com/search/filter`). It now uses the address bar's URL unless the canonical names the same page, and in that case takes the live title and leaves the description to the server.
+  - Checked live on dribbble.com/search/filter with the "Table Filters" shot open: the canonical stayed `/search/filter`; the page reader returned `https://dribbble.com/shots/15005862-Table-Filters` and the shot's title.
+  - File: `apps/extension/src/lib/page.ts`.
+- **Full-page screenshots missed content and broke layouts.** Two causes:
+  - the page was walked with `scrollBy` jumps;
+  - the shot was one screenshot as tall as the page, which stretches `100vh` sections and catches scroll-revealed content still hidden.
+
+  Now the page is walked with mouse-wheel scrolling, and the full page is stitched from 1440×900 screens shot top to bottom, each after its images load and animations settle (0.5 s). Wide fixed bars at the top or bottom appear only in the first screen.
+  - New test in `capture-scroll.test.ts`: a 100vh hero, reveal-on-scroll sections and a fixed bar. It failed before the change and passes after.
+  - Real pages, compared against their earlier captures: the AirPods page went from mostly blank sections to every section shown. Linear, PostHog, Framer pricing, Raycast and Vercel are the same height with more content rendered. About 20 s per page.
+  - File: `packages/core/src/capture.ts`.
+
+- **Known limit:** an element cut by a screen boundary is shot half in one screen and half in the next, so an animation that depends on being mostly visible can show half revealed.
+
 ### 2026-10-31 — Phase 5: Real-use validation
 
 - **Status:** Done. The owner rebuilt and reloaded the extension and ran the live checks, which also closes the last Phase 4 item. Results (read from the library afterwards):
