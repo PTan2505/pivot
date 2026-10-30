@@ -114,6 +114,30 @@ describe.skipIf(!(await (await import("../src/capture")).playwrightStatus()).ins
     },
   );
 
+  it(
+    "adds only the full page when the extension's view of the page is already the cover",
+    { timeout: 60_000 },
+    async () => {
+      mode = "page";
+      const sharp = (await import("sharp")).default;
+      const view = await sharp({ create: { width: 1440, height: 900, channels: 3, background: "#0a7" } })
+        .webp()
+        .toBuffer();
+      const r = await resources.createResource({ type: "reference", title: "Clipped", sourceUrl: `${baseUrl}?clip` });
+      // What /api/clip does with the screenshot the extension took.
+      const shot = await assets.saveAsset({ data: view, fileName: "page-view.webp" });
+      await assets.attachAsset(r.id, shot.id, "attachment");
+      await resources.setResourceFields(r.id, { coverAssetId: shot.id });
+
+      await capture.enqueueCapture(r.id);
+      const done = await settled(r.id);
+      expect(done.captureStatus).toBe("done");
+      const roles = (await assets.listResourceAssets(r.id)).map((a) => a.role).sort();
+      expect(roles).toEqual(["attachment", "screenshot-full"]);
+      expect(done.coverAssetId).toBe(shot.id);
+    },
+  );
+
   it("marks a resource without a usable URL as failed instead of leaving it pending", { timeout: 30_000 }, async () => {
     const r = await resources.createResource({ type: "reference", title: "No URL" });
     await capture.enqueueCapture(r.id);

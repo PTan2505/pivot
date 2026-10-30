@@ -274,32 +274,37 @@ async function captureOne(resourceId: string) {
     const stamp = new Date().toISOString().slice(0, 10);
     // A source is a site you browse, not a page to study: its first screen is enough.
     const shots = await screenshotUrl(row.sourceUrl, { fullPage: row.type !== "source" });
-    const viewport = await saveAsset({
-      data: shots.viewport,
-      fileName: `${host}-${stamp}.webp`,
-      sourceUrl: row.sourceUrl,
-    });
+
+    // Read the cover now, not before the capture: the user may have picked one meanwhile.
+    const before = await currentCover(resourceId);
+    if (!before) return; // deleted while capturing
+    const previous = await screenshotIds(resourceId);
+    // A cover you chose, or the view the extension took of the page, already shows the first screen; a
+    // server viewport shot would repeat it, so only the full page is added.
+    const ownCover = !!before.coverAssetId && !previous.includes(before.coverAssetId);
+    const viewport = ownCover
+      ? null
+      : await saveAsset({ data: shots.viewport, fileName: `${host}-${stamp}.webp`, sourceUrl: row.sourceUrl });
     const full =
       shots.full &&
       (await saveAsset({ data: shots.full, fileName: `${host}-${stamp}-full.webp`, sourceUrl: row.sourceUrl }));
-    const newIds = [viewport.id, ...(full ? [full.id] : [])];
+    const newIds = [viewport?.id, full?.id].filter((id): id is string => !!id);
 
-    // Read the cover now, not before the capture: the user may have picked one meanwhile.
     const now = await currentCover(resourceId);
     if (!now) {
-      // Deleted while capturing.
+      // Deleted while saving.
       await deleteOrphanAssets(newIds);
       return;
     }
     // Link the new shots before unlinking the old ones, so a failure never leaves the resource without any.
-    const oldIds = (await screenshotIds(resourceId)).filter((id) => !newIds.includes(id));
-    await attachAsset(resourceId, viewport.id, "screenshot");
+    const oldIds = previous.filter((id) => !newIds.includes(id));
+    if (viewport) await attachAsset(resourceId, viewport.id, "screenshot");
     if (full) await attachAsset(resourceId, full.id, "screenshot-full");
     await detachAssets(resourceId, oldIds);
     // Keep a cover the user chose (or one clipped by the extension); replace only a previous server shot.
     const keepCover = now.coverAssetId && !oldIds.includes(now.coverAssetId);
     await setResourceFields(resourceId, {
-      coverAssetId: keepCover ? now.coverAssetId : viewport.id,
+      coverAssetId: keepCover ? now.coverAssetId : (viewport?.id ?? now.coverAssetId),
       captureStatus: "done",
       captureError: null,
     });
