@@ -34,8 +34,8 @@ import {
   type TagKind,
 } from "@pivot/core/types";
 import { knownSourceFor } from "@pivot/core/source-match";
-import { api, ApiError, openInApp } from "../lib/api";
-import { captureTab, getPageInfo, isHomePage, isSavable, type PageInfo } from "../lib/page";
+import { api, ApiError, getConfig, openInApp } from "../lib/api";
+import { captureTab, getPageInfo, isHomePage, isPivotPage, isSavable, type PageInfo } from "../lib/page";
 import { Button, cx, Field, Input, Logo, Textarea } from "../ui";
 
 type Status = "loading" | "ready" | "offline" | "unauthorized" | "unsupported";
@@ -287,7 +287,8 @@ export function Popup() {
   const shotUrl = useMemo(() => (shot ? URL.createObjectURL(shot) : null), [shot]);
   const [tags, setTags] = useState<TagDTO[]>([]);
   const [collections, setCollections] = useState<CollectionDTO[]>([]);
-  const [duplicates, setDuplicates] = useState<{ id: string; title: string }[]>([]);
+  const [duplicates, setDuplicates] = useState<{ id: string; title: string; type: ResourceType }[]>([]);
+  const [ownPage, setOwnPage] = useState(false);
 
   const [mode, setMode] = useState<Mode>("page");
   const [step, setStep] = useState<Step>("type");
@@ -315,6 +316,11 @@ export function Popup() {
       const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
       setTab(active ?? null);
       if (!active || !isSavable(active.url)) {
+        setStatus("unsupported");
+        return;
+      }
+      if (isPivotPage(active.url, (await getConfig()).serverUrl)) {
+        setOwnPage(true);
         setStatus("unsupported");
         return;
       }
@@ -448,7 +454,11 @@ export function Popup() {
         </div>
       </>
     ) : status === "unsupported" ? (
-      <p className="text-ink-muted">This page can’t be saved. Open a regular http(s) page and try again.</p>
+      <p className="text-ink-muted">
+        {ownPage
+          ? "This is PIVOT itself. Open the page you want to save, then try again."
+          : "This page can’t be saved. Open a regular http(s) page and try again."}
+      </p>
     ) : status === "offline" ? (
       <>
         <p className="font-medium">PIVOT isn’t running</p>
@@ -760,7 +770,9 @@ export function Popup() {
         ) : (
           <Button type="submit" className="ml-auto" disabled={saving || (mode === "selection" && !text.trim())}>
             {saving && <Loader2 className="animate-spin" />}
-            Save <span className="font-mono text-[10px] opacity-70">⌘↵</span>
+            {/* the warning above already says it's saved; saving again is a choice, not a slip */}
+            {mode === "page" && duplicates.some((d) => d.type === type) ? "Save again" : "Save"}{" "}
+            <span className="font-mono text-[10px] opacity-70">⌘↵</span>
           </Button>
         )}
       </footer>
