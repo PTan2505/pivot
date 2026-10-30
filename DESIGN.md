@@ -360,6 +360,15 @@ PT is the core, PIVOT the expansion: the mark starts from the first and last let
 - Capturing: a pulsing frame (1.6s) with "Capturing…" in ink-muted. Failed capture: an image-off icon in ink-subtle.
 - **References scroll like a screen recording:** the frame shows the full-page shot resting at the top; on hover or keyboard focus it scrolls linearly to the bottom at about one frame-height per second (1.5–30s from the image's aspect ratio) and glides back in 500ms ease-out on leave. The frame is a size container, so the travel is `translateY(calc(-100% + 100cqh))`. Short pages don't move; reduced motion keeps it still.
 
+### Screenshot gallery — `components/asset-gallery.tsx`
+
+- The main preview, then a row of 56px thumbnails (10px radius, the cover marked with a star) and, at the right of that row, secondary pills **Replace screenshot** (uploads one image that replaces the captured shots and becomes the cover) and **Retake screenshot** for types that are captured (reference, UI library, animation, source).
+- While capturing, a surface status pill with a spinner reads "Capturing screenshots…". A failed capture turns it into a danger line "Screenshot failed: <reason>" with two small pills, **Upload one** and **Retry**.
+
+### Add from URL — `components/add-url-dialog.tsx`
+
+- Under the URL box, a warning line (12px, warning colour, triangle icon) says why Save is unavailable: "That doesn’t look like a link…", or how many entries will be skipped in a bulk paste. Already-saved URLs get the same line with a link to the saved resource.
+
 ### Note card — `components/resource-card.tsx` (text types)
 
 - The same 16:10 surface frame, padded 24px. Prompts, rules, checklists and skills show an excerpt as a title-lg quote in ink; snippets and MCP JSON show the first lines in mono ink-muted. A type chip bottom-left (surface-raised pill, 12px, ink-secondary).
@@ -375,7 +384,7 @@ Single-line inputs are 36px surface pills with no border, 15px ink text, ink-mut
 
 ### Overlays — `components/ui/{dialog,alert-dialog,popover,select,dropdown-menu,command,sonner}.tsx`
 
-- Strong glass, 14px radius, overlay shadow. Dialogs pad 20px and open with a 100ms fade and zoom from 95%; their footer is separated by a divider line. Menus and popovers slide 8px in from their trigger side. Toasts (bottom-right) use strong glass with the glass edge.
+- Strong glass, 14px radius, overlay shadow. Dialogs pad 20px and open with a 100ms fade and zoom from 95%; their footer is separated by a divider line. Menus and popovers slide 8px in from their trigger side. Toasts (bottom-right) use strong glass with the glass edge; they are always dark (never follow the OS theme), the title is ink and the description ink-muted. A failed screenshot raises an error toast naming the page and the reason, with an Open action.
 - The command palette is a dialog up to 672px wide.
 
 ### Selection bar — `components/selection-bar.tsx`

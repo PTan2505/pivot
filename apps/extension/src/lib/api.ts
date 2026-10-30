@@ -58,7 +58,10 @@ export const api = {
     form.set("data", JSON.stringify(data));
     if (files.screenshot) form.set("screenshot", files.screenshot, "view.jpg");
     if (files.image) form.set("image", files.image, files.imageName ?? "image.png");
-    return request<{ id: string; path: string }>("/api/clip", { method: "POST", body: form });
+    return request<{ id: string; path: string; existing?: boolean; title?: string }>("/api/clip", {
+      method: "POST",
+      body: form,
+    });
   },
 };
 
@@ -74,6 +77,8 @@ export interface ClipData {
   tags?: { kind: TagKind; name: string }[];
   collectionId?: string;
   serverCapture?: boolean;
+  /** "skip": when the page is already saved, return that one instead of saving it again. */
+  ifExists?: "create" | "skip";
 }
 
 export async function openInApp(path: string) {

@@ -43,10 +43,11 @@ chrome.notifications.onClicked.addListener(async (id) => {
   openTargets.delete(id);
 });
 
-async function run(label: string, task: () => Promise<{ path: string; title: string }>) {
+async function run(label: string, task: () => Promise<{ path: string; title: string; existing?: boolean }>) {
   try {
-    const { path, title } = await task();
-    await notify("Saved to PIVOT", `${label}: ${title}`, path);
+    const { path, title, existing } = await task();
+    if (existing) await notify("Already in PIVOT", `${title} was saved before. Click to open it.`, path);
+    else await notify("Saved to PIVOT", `${label}: ${title}`, path);
   } catch (err) {
     const message = err instanceof ApiError || err instanceof Error ? err.message : String(err);
     if (err instanceof ApiError && err.status === 403) chrome.runtime.openOptionsPage();
@@ -63,9 +64,10 @@ async function savePage(tab: chrome.tabs.Tab) {
     title: info.title,
     description: info.description,
     serverCapture: true,
+    ifExists: "skip",
   };
   const res = await api.clip(data, { screenshot: shot ?? undefined });
-  return { path: res.path, title: info.title || info.url };
+  return { path: res.path, title: res.title || info.title || info.url, existing: res.existing };
 }
 
 async function saveImage(srcUrl: string, pageUrl: string) {
@@ -93,8 +95,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
       return run("Page", () => savePage(tab));
     case MENU.link:
       return run("Link", async () => {
-        const res = await api.clip({ kind: "page", url: info.linkUrl!, serverCapture: true });
-        return { path: res.path, title: info.linkUrl! };
+        const res = await api.clip({ kind: "page", url: info.linkUrl!, serverCapture: true, ifExists: "skip" });
+        return { path: res.path, title: res.title || info.linkUrl!, existing: res.existing };
       });
     case MENU.image:
       return run("Image", () => saveImage(info.srcUrl!, pageUrl));

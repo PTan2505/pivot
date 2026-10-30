@@ -292,7 +292,8 @@ export async function createResource(input: ResourceInput): Promise<ResourceDeta
     .values({
       type: data.type,
       title: data.title || derived.title || "Untitled",
-      description: data.description ?? derived.description ?? "",
+      // An empty description (a form left blank) still takes the derived one.
+      description: data.description || derived.description || "",
       sourceUrl: cleanUrl(data.sourceUrl),
       notes: data.notes ?? "",
       content: data.content ?? "",
