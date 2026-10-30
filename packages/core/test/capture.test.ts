@@ -17,8 +17,20 @@ let baseUrl: string;
 
 beforeAll(async () => {
   server = http.createServer((req, res) => {
-    const height = Number(new URL(req.url!, "http://x").searchParams.get("h"));
+    const url = new URL(req.url!, "http://x");
+    // Never answers, like a page that hangs.
+    if (url.pathname === "/hang") return;
     res.setHeader("content-type", "text/html");
+    if (url.pathname === "/blocked") {
+      res.statusCode = 403;
+      return res.end("<title>Access denied</title><body>Sorry, you have been blocked</body>");
+    }
+    if (url.pathname === "/challenge") return res.end("<title>Just a moment...</title><body>Checking</body>");
+    if (url.pathname === "/missing") {
+      res.statusCode = 404;
+      return res.end("<body>Not found</body>");
+    }
+    const height = Number(url.searchParams.get("h"));
     res.end(
       `<body style="margin:0"><div style="height:${height}px;background:linear-gradient(#123,#abc)"></div></body>`,
     );
@@ -44,5 +56,15 @@ describe.skipIf(!chromium.installed)("screenshotUrl", () => {
   it("keeps short pages at their real height", { timeout: 60_000 }, async () => {
     const shots = await screenshotUrl(`${baseUrl}?h=2000`);
     expect(await sharp(shots.full!).metadata()).toMatchObject({ width: 1440, height: 2000 });
+  });
+
+  it("fails on block, bot-check and error pages instead of saving them", { timeout: 60_000 }, async () => {
+    await expect(screenshotUrl(`${baseUrl}blocked`)).rejects.toThrow(/blocked the screenshot \(HTTP 403\)/);
+    await expect(screenshotUrl(`${baseUrl}challenge`)).rejects.toThrow(/blocked the screenshot/);
+    await expect(screenshotUrl(`${baseUrl}missing`)).rejects.toThrow(/HTTP 404/);
+  });
+
+  it("gives up on a page that never loads", { timeout: 60_000 }, async () => {
+    await expect(screenshotUrl(`${baseUrl}hang`, { timeoutMs: 3_000 })).rejects.toThrow(/longer than 3s/);
   });
 });

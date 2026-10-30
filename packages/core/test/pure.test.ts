@@ -30,10 +30,50 @@ describe("urls", () => {
   });
 
   it("flags private and loopback addresses", () => {
-    for (const ip of ["127.0.0.1", "10.1.2.3", "192.168.1.1", "172.20.0.1", "169.254.169.254", "::1", "fd00::1", "::ffff:127.0.0.1"]) {
+    for (const ip of [
+      "127.0.0.1",
+      "10.1.2.3",
+      "192.168.1.1",
+      "172.20.0.1",
+      "169.254.169.254",
+      "::1",
+      "fd00::1",
+      "::ffff:127.0.0.1",
+    ]) {
       expect(isPrivateAddress(ip), ip).toBe(true);
     }
     for (const ip of ["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"]) {
+      expect(isPrivateAddress(ip), ip).toBe(false);
+    }
+  });
+
+  it("flags every IPv6 form that carries a private IPv4 address or a local range", () => {
+    // What the URL parser turns [::ffff:127.0.0.1] and friends into.
+    for (const ip of [
+      "::",
+      "::ffff:7f00:1",
+      "::ffff:a9fe:a9fe",
+      "::7f00:1",
+      "::127.0.0.1",
+      "64:ff9b::a00:1",
+      "2002:c0a8:101::1",
+      "fe80::1",
+      "fe90::1",
+      "febf::1",
+      "fec0::1",
+      "fc00::1",
+      "ff02::1",
+      "fe80::1%en0",
+    ]) {
+      expect(isPrivateAddress(ip), ip).toBe(true);
+    }
+    for (const ip of [
+      "::ffff:808:808",
+      "::ffff:8.8.8.8",
+      "64:ff9b::808:808",
+      "2002:808:808::1",
+      "2a00:1450:4001::200e",
+    ]) {
       expect(isPrivateAddress(ip), ip).toBe(false);
     }
   });
@@ -42,6 +82,14 @@ describe("urls", () => {
     await expect(assertPublicUrl("file:///etc/passwd")).rejects.toThrow(/http/);
     await expect(assertPublicUrl("http://127.0.0.1:4321/api")).rejects.toThrow(/private/);
     await expect(assertPublicUrl("http://localhost/")).rejects.toThrow(/private/);
+    for (const url of [
+      "http://[::ffff:127.0.0.1]:4321/",
+      "http://[::ffff:a9fe:a9fe]/",
+      "http://[::127.0.0.1]/",
+      "http://[fe90::1]/",
+    ]) {
+      await expect(assertPublicUrl(url), url).rejects.toThrow(/private/);
+    }
   });
 });
 

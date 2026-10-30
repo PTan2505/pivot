@@ -211,9 +211,10 @@ export async function uploadFiles(files: File[], extra: Record<string, string> =
   return api<{ created: string[] }>("/api/upload", { method: "POST", body: form });
 }
 
-export async function uploadToResource(resourceId: string, files: File[]) {
+export async function uploadToResource(resourceId: string, files: File[], { as }: { as?: "screenshot" } = {}) {
   const form = new FormData();
   files.forEach((f) => form.append("file", f));
+  if (as) form.append("as", as);
   return api<{ assetIds: string[] }>(`/api/resources/${resourceId}/assets`, { method: "POST", body: form });
 }
 

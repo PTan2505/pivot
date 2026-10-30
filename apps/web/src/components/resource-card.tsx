@@ -60,7 +60,7 @@ export function SelectBox({
         "absolute top-3 left-3 grid size-6 place-items-center rounded-full border-2 transition-opacity duration-150",
         selected
           ? "border-inverse bg-inverse text-on-inverse opacity-100"
-          : "border-white/70 bg-black/40 text-white backdrop-blur group-hover:opacity-100 focus-visible:opacity-100",
+          : "border-ink-muted bg-surface-raised text-ink group-hover:opacity-100 focus-visible:opacity-100",
         !selected && (visible ? "opacity-100" : "opacity-0"),
       )}
     >
@@ -73,7 +73,7 @@ function CardActions({ resource, className }: { resource: ResourceDTO; className
   const copy = useCopyResource();
   const def = TYPE_DEFS[resource.type];
   const pill =
-    "grid size-8 place-items-center rounded-full bg-surface-raised/90 text-ink-secondary backdrop-blur transition-colors hover:text-ink";
+    "grid size-8 place-items-center rounded-full bg-surface-raised text-ink-secondary transition-colors hover:text-ink";
   return (
     <div
       className={cn(

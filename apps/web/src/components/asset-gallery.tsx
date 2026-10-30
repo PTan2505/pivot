@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, Download, ExternalLink, Loader2, Plus, Star, Trash2 } from "lucide-react";
+import { Camera, Download, ExternalLink, ImageUp, Loader2, Plus, Star, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import type { AssetDTO, ResourceDetailDTO } from "@pivot/core/types";
@@ -42,6 +42,7 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
   const selected =
     assets.find((a) => a.id === selectedId) ?? assets.find((a) => a.id === resource.coverAssetId) ?? assets[0];
   const fileRef = useRef<HTMLInputElement>(null);
+  const shotRef = useRef<HTMLInputElement>(null);
   const attach = useAttach(resource.id);
   const invalidate = useInvalidate();
   const update = useUpdateResource(resource.id);
@@ -62,7 +63,21 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
     invalidate(resource.id);
   };
 
+  const replaceShot = async (file: File | undefined) => {
+    if (!file) return;
+    const id = toast.loading("Replacing the screenshot…");
+    try {
+      await uploadToResource(resource.id, [file], { as: "screenshot" });
+      setSelectedId(null);
+      invalidate(resource.id);
+      toast.success("Screenshot replaced", { id });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not replace the screenshot", { id });
+    }
+  };
+
   const capturing = resource.captureStatus === "pending";
+  const capturable = !!resource.sourceUrl && ["reference", "library", "animation", "source"].includes(resource.type);
 
   return (
     <section
@@ -90,6 +105,13 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
         className="hidden"
         onChange={(e) => (attach([...(e.target.files ?? [])]), (e.target.value = ""))}
       />
+      <input
+        ref={shotRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => (replaceShot(e.target.files?.[0]), (e.target.value = ""))}
+      />
 
       {(capturing || resource.captureStatus === "failed") && (
         <div
@@ -104,9 +126,19 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
             {capturing ? "Capturing screenshots…" : `Screenshot failed: ${resource.captureError ?? "unknown error"}`}
           </span>
           {!capturing && (
-            <Button size="xs" variant="secondary" className="bg-surface-raised" onClick={recapture}>
-              Retry
-            </Button>
+            <>
+              <Button
+                size="xs"
+                variant="secondary"
+                className="bg-surface-raised"
+                onClick={() => shotRef.current?.click()}
+              >
+                Upload one
+              </Button>
+              <Button size="xs" variant="secondary" className="bg-surface-raised" onClick={recapture}>
+                Retry
+              </Button>
+            </>
           )}
         </div>
       )}
@@ -171,10 +203,15 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
         >
           <Plus />
         </Button>
-        {resource.sourceUrl && ["reference", "library", "animation"].includes(resource.type) && (
-          <Button variant="secondary" onClick={recapture} disabled={capturing} className="ml-auto">
-            <Camera /> {resource.captureStatus === "done" ? "Retake screenshot" : "Capture screenshot"}
-          </Button>
+        {capturable && (
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => shotRef.current?.click()} disabled={capturing}>
+              <ImageUp /> Replace screenshot
+            </Button>
+            <Button variant="secondary" onClick={recapture} disabled={capturing}>
+              <Camera /> {resource.captureStatus === "done" ? "Retake screenshot" : "Capture screenshot"}
+            </Button>
+          </div>
         )}
       </div>
 

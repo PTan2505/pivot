@@ -17,6 +17,10 @@ const FULL_PAGE_PIXEL_LIMIT = VIEWPORT.width * MAX_FULL_PAGE_HEIGHT;
 const MAX_SCROLL_STEPS = 60;
 const MAX_LOAD_MORE_CLICKS = 8;
 const SCROLL_BUDGET_MS = 45_000;
+/** A whole capture (load, walk, shots) is abandoned after this, so one frozen page can't stall the queue. */
+const CAPTURE_TIMEOUT_MS = 120_000;
+/** Titles of bot-check and block pages, which are served in place of the site. */
+const CHALLENGE_TITLE = /^(just a moment|attention required|access denied|security check|verifying you are human)/i;
 const IDLE_CLOSE_MS = 2 * 60 * 1000;
 
 interface CaptureState {
@@ -166,10 +170,19 @@ const CLICK_LOAD_MORE = `(() => {
  * Screenshots a URL: the first screen, and (unless `fullPage` is false) the whole page after walking it so
  * scroll-loaded content is included.
  */
-export async function screenshotUrl(url: string, { fullPage = true }: { fullPage?: boolean } = {}) {
+export async function screenshotUrl(
+  url: string,
+  { fullPage = true, timeoutMs = CAPTURE_TIMEOUT_MS }: { fullPage?: boolean; timeoutMs?: number } = {},
+) {
   await assertPublicUrl(url);
   const b = await browser();
   const context = await b.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1, colorScheme: "dark" });
+  // Closing the context makes every pending page call reject, including a page.evaluate on a frozen page.
+  let timedOut = false;
+  const deadline = setTimeout(() => {
+    timedOut = true;
+    void context.close().catch(() => {});
+  }, timeoutMs);
   // Re-check every navigation and subresource the page makes, so redirects can't reach private hosts.
   await context.route("**/*", async (route) => {
     try {
@@ -183,9 +196,17 @@ export async function screenshotUrl(url: string, { fullPage = true }: { fullPage
   try {
     const page = await context.newPage();
     const settle = networkQuiet(page);
-    await page.goto(url, { waitUntil: "load", timeout: 30_000 });
+    const response = await page.goto(url, { waitUntil: "load", timeout: 30_000 });
     await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
     await page.waitForTimeout(800);
+    // A block or error page is not a picture of the site; fail so the old screenshots stay.
+    const status = response?.status() ?? 200;
+    if ([401, 403, 429].includes(status) || CHALLENGE_TITLE.test((await page.title()).trim())) {
+      throw new Error(
+        `The site blocked the screenshot${status >= 400 ? ` (HTTP ${status})` : ""}. Try again later, or add a screenshot yourself.`,
+      );
+    }
+    if (status >= 400) throw new Error(`The page answered with HTTP ${status}.`);
     const viewport = await page.screenshot({ type: "png" });
     let full: Buffer | null = null;
     if (fullPage) {
@@ -202,63 +223,113 @@ export async function screenshotUrl(url: string, { fullPage = true }: { fullPage
         .catch(() => null);
     }
     return { viewport: await sharp(viewport).webp({ quality: 85 }).toBuffer(), full };
+  } catch (err) {
+    if (timedOut) throw new Error(`The page took longer than ${Math.round(timeoutMs / 1000)}s to capture.`);
+    throw err;
   } finally {
-    await context.close();
+    clearTimeout(deadline);
+    await context.close().catch(() => {});
     scheduleIdleClose();
   }
 }
 
-/** Detaches previous server screenshots and returns their asset ids. */
-async function detachScreenshots(resourceId: string) {
+/** Asset ids of the server screenshots currently linked to a resource. */
+async function screenshotIds(resourceId: string) {
   const db = await getDb();
-  const old = await db
-    .delete(resourceAssets)
+  const rows = await db
+    .select({ assetId: resourceAssets.assetId })
+    .from(resourceAssets)
     .where(
       and(eq(resourceAssets.resourceId, resourceId), inArray(resourceAssets.role, ["screenshot", "screenshot-full"])),
-    )
-    .returning({ assetId: resourceAssets.assetId });
-  return old.map((o) => o.assetId);
+    );
+  return rows.map((r) => r.assetId);
+}
+
+async function detachAssets(resourceId: string, assetIds: string[]) {
+  if (!assetIds.length) return;
+  const db = await getDb();
+  await db
+    .delete(resourceAssets)
+    .where(and(eq(resourceAssets.resourceId, resourceId), inArray(resourceAssets.assetId, assetIds)));
+}
+
+async function currentCover(resourceId: string) {
+  const db = await getDb();
+  const [now] = await db
+    .select({ coverAssetId: resources.coverAssetId })
+    .from(resources)
+    .where(eq(resources.id, resourceId))
+    .limit(1);
+  return now;
 }
 
 async function captureOne(resourceId: string) {
   const db = await getDb();
   const [row] = await db.select().from(resources).where(eq(resources.id, resourceId)).limit(1);
-  if (!row?.sourceUrl) return;
-  const host = new URL(row.sourceUrl).hostname.replace(/^www\./, "");
-  const stamp = new Date().toISOString().slice(0, 10);
+  if (!row) return;
 
   try {
+    if (!row.sourceUrl) throw new Error("There is no URL to capture.");
+    const host = new URL(row.sourceUrl).hostname.replace(/^www\./, "");
+    const stamp = new Date().toISOString().slice(0, 10);
     // A source is a site you browse, not a page to study: its first screen is enough.
     const shots = await screenshotUrl(row.sourceUrl, { fullPage: row.type !== "source" });
-    const oldIds = await detachScreenshots(resourceId);
-    const viewport = await saveAsset({
-      data: shots.viewport,
-      fileName: `${host}-${stamp}.webp`,
-      sourceUrl: row.sourceUrl,
-    });
+
+    // Read the cover now, not before the capture: the user may have picked one meanwhile.
+    const before = await currentCover(resourceId);
+    if (!before) return; // deleted while capturing
+    const previous = await screenshotIds(resourceId);
+    // A cover you chose, or the view the extension took of the page, already shows the first screen; a
+    // server viewport shot would repeat it, so only the full page is added.
+    const ownCover = !!before.coverAssetId && !previous.includes(before.coverAssetId);
+    const viewport = ownCover
+      ? null
+      : await saveAsset({ data: shots.viewport, fileName: `${host}-${stamp}.webp`, sourceUrl: row.sourceUrl });
     const full =
       shots.full &&
       (await saveAsset({ data: shots.full, fileName: `${host}-${stamp}-full.webp`, sourceUrl: row.sourceUrl }));
-    await attachAsset(resourceId, viewport.id, "screenshot");
+    const newIds = [viewport?.id, full?.id].filter((id): id is string => !!id);
+
+    const now = await currentCover(resourceId);
+    if (!now) {
+      // Deleted while saving.
+      await deleteOrphanAssets(newIds);
+      return;
+    }
+    // Link the new shots before unlinking the old ones, so a failure never leaves the resource without any.
+    const oldIds = previous.filter((id) => !newIds.includes(id));
+    if (viewport) await attachAsset(resourceId, viewport.id, "screenshot");
     if (full) await attachAsset(resourceId, full.id, "screenshot-full");
+    await detachAssets(resourceId, oldIds);
     // Keep a cover the user chose (or one clipped by the extension); replace only a previous server shot.
-    const keepCover = row.coverAssetId && !oldIds.includes(row.coverAssetId);
+    const keepCover = now.coverAssetId && !oldIds.includes(now.coverAssetId);
     await setResourceFields(resourceId, {
-      coverAssetId: keepCover ? row.coverAssetId : viewport.id,
+      coverAssetId: keepCover ? now.coverAssetId : (viewport?.id ?? now.coverAssetId),
       captureStatus: "done",
       captureError: null,
     });
-    await deleteOrphanAssets(oldIds.filter((id) => id !== viewport.id && id !== full?.id));
+    await deleteOrphanAssets(oldIds);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    // Fall back to the page's Open Graph image so the card still has a picture.
-    const ogCover = await ogImageFallback(row.sourceUrl).catch(() => null);
-    if (ogCover && !row.coverAssetId) {
-      await attachAsset(resourceId, ogCover.id, "attachment");
+    // Fall back to the page's Open Graph image so the card still has a picture. It stands in for the
+    // screenshot (same role), so the next successful capture replaces it.
+    const ogCover = row.sourceUrl ? await ogImageFallback(row.sourceUrl).catch(() => null) : null;
+    const now = await currentCover(resourceId);
+    if (ogCover && now && !now.coverAssetId) {
+      await attachAsset(resourceId, ogCover.id, "screenshot");
       await setResourceFields(resourceId, { coverAssetId: ogCover.id });
     }
-    await setResourceFields(resourceId, { captureStatus: "failed", captureError: message.slice(0, 500) });
+    if (now) await setResourceFields(resourceId, { captureStatus: "failed", captureError: message.slice(0, 500) });
   }
+}
+
+/** Makes an uploaded image the resource's screenshot: it replaces the captured shots and becomes the cover. */
+export async function replaceScreenshot(resourceId: string, assetId: string) {
+  const oldIds = (await screenshotIds(resourceId)).filter((id) => id !== assetId);
+  await attachAsset(resourceId, assetId, "screenshot");
+  await detachAssets(resourceId, oldIds);
+  await setResourceFields(resourceId, { coverAssetId: assetId, captureStatus: "done", captureError: null });
+  await deleteOrphanAssets(oldIds);
 }
 
 async function ogImageFallback(url: string) {

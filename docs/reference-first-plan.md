@@ -59,24 +59,24 @@ The current requirements document (`SPEC.md`, PIVOT Requirements v0.2) defines 1
 ### Phase 1 — Save references
 
 - [x] Save a reference from a URL.
-- [ ] Capture or preserve source URL, title, and description when available.
+- [x] Capture or preserve source URL, title, and description when available.
 - [x] Capture viewport screenshot at 1440×900 and full-page screenshot using existing Playwright behavior.
 - [x] Respect SPEC limits: full-page max 12000px; bounded scrolling/expansion; keep viewport image if full-page fails.
-- [ ] Allow manual screenshot upload or replacement.
+- [x] Allow manual screenshot upload or replacement.
 - [x] Show saved references as clear visual cards.
-- [ ] Warn on duplicate URLs; avoid unintended duplicate creation.
-- [ ] Show actionable error states for blocked pages, screenshot failures, and invalid URLs.
+- [x] Warn on duplicate URLs; avoid unintended duplicate creation.
+- [x] Show actionable error states for blocked pages, screenshot failures, and invalid URLs.
 
 **Done when:** A user can save and reopen several real websites without losing the URL or usable screenshot.
 
 ### Phase 2 — Organize references
 
 - [x] Support reference facets: `pageType`, `domain`, `visualStyle`, `uiPattern`.
-- [ ] Support user-defined tags and editable metadata.
-- [ ] Create, rename, and use collections to group references.
-- [ ] Filter by type, facets/tags, and collection where applicable.
+- [x] Support user-defined tags and editable metadata.
+- [x] Create, rename, and use collections to group references.
+- [x] Filter by type, facets/tags, and collection where applicable.
 - [x] Preserve existing tag behavior and AND-combination semantics from SPEC.
-- [ ] Keep reference cards legible; do not apply glass styling to screenshot/card surfaces.
+- [x] Keep reference cards legible; do not apply glass styling to screenshot/card surfaces.
 
 **Done when:** 20 references can be grouped and filtered without confusion.
 

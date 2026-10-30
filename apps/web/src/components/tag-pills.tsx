@@ -49,36 +49,49 @@ export function TagPills({
 
   if (!chosen.length && !ranked.length) return null;
 
+  // Facets (page type, style…) and plain tags look alike, so the visible pills are grouped under their kind.
+  const groups = TAG_KINDS.map((kind) => ({ kind, list: visible.filter((x) => x.tag.kind === kind) })).filter(
+    (g) => g.list.length,
+  );
+  const labelled = groups.some((g) => g.kind !== "tag");
+
   return (
-    <div role="group" aria-label="Filter by tag" className="flex flex-wrap gap-2">
-      <button type="button" className={cn(pill, chosen.length ? idle : on)} onClick={() => onChange([])}>
-        All
-      </button>
-      {chosen.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          aria-pressed
-          className={cn(pill, on, "pr-3")}
-          onClick={() => toggle(t.id)}
-          title={`${TAG_KIND_LABELS[t.kind]} · click to remove`}
-        >
-          {t.name}
-          <X className="size-3.5 opacity-70" aria-label="Remove" />
+    <div role="group" aria-label="Filter by tag" className="flex flex-wrap items-center gap-x-5 gap-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className={cn(pill, chosen.length ? idle : on)} onClick={() => onChange([])}>
+          All
         </button>
-      ))}
-      {visible.map(({ tag, count }) => (
-        <button
-          key={tag.id}
-          type="button"
-          aria-pressed={false}
-          className={cn(pill, idle)}
-          onClick={() => toggle(tag.id)}
-          title={TAG_KIND_LABELS[tag.kind]}
-        >
-          {tag.name}
-          <span className="font-normal tabular-nums opacity-70">{count}</span>
-        </button>
+        {chosen.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            aria-pressed
+            className={cn(pill, on, "pr-3")}
+            onClick={() => toggle(t.id)}
+            title="Click to remove"
+          >
+            {t.kind !== "tag" && <span className="font-normal opacity-70">{TAG_KIND_LABELS[t.kind]}</span>}
+            {t.name}
+            <X className="size-3.5 opacity-70" aria-label="Remove" />
+          </button>
+        ))}
+      </div>
+      {groups.map(({ kind, list }) => (
+        <div key={kind} role="group" aria-label={TAG_KIND_LABELS[kind]} className="flex flex-wrap items-center gap-2">
+          {labelled && <span className="pr-1 text-[13px] text-ink-subtle">{TAG_KIND_LABELS[kind]}</span>}
+          {list.map(({ tag, count }) => (
+            <button
+              key={tag.id}
+              type="button"
+              aria-pressed={false}
+              className={cn(pill, idle)}
+              onClick={() => toggle(tag.id)}
+            >
+              {tag.name}
+              <span className="font-normal tabular-nums opacity-70">{count}</span>
+            </button>
+          ))}
+        </div>
       ))}
       {rest.length > 0 && <MoreTags tags={rest} onToggle={toggle} />}
     </div>

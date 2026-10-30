@@ -337,7 +337,8 @@ PT is the core, PIVOT the expansion: the mark starts from the first and last let
 ### Pills and tag filter — `components/tag-pills.tsx`, `components/tags-editor.tsx`
 
 - Inactive: surface, ink-secondary; hover surface-raised. Active: inverse. Heights: 36px filter pills and chips, 28px editable tags, 24px tags inside a card.
-- The filter row: "All" first, then chosen tags (inverse, with a remove ×), then up to 12 tags by frequency with counts at 70% opacity in `tabular-nums`; "+N more" opens a searchable popover grouped by kind. The row hides when nothing on screen has tags.
+- The filter row: "All" first, then chosen tags (inverse, with a remove ×; a facet shows its kind first at 70% opacity, "Page type Pricing"), then up to 12 tags by frequency with counts at 70% opacity in `tabular-nums`; "+N more" opens a searchable popover grouped by kind. The row hides when nothing on screen has tags.
+- The visible tags are grouped by kind, each group led by its kind in 13px ink-subtle (Tags, Page type, Domain, Style, Pattern, Technology); groups sit 20px apart, pills 8px apart. With plain tags only, the labels are left out.
 - A "From <source>" chip (inverse pill, 13px, clear button) sits in the filter row while the list is narrowed to one source.
 
 ### Search field — `components/app-shell.tsx` (`SearchField`)
@@ -355,10 +356,19 @@ PT is the core, PIVOT the expansion: the mark starts from the first and last let
 
 - A 16:10 solid surface frame, 14px radius, image `object-fit: cover; object-position: top`. No border, no shadow, no hover lift or scale.
 - Under it, 12px apart: title (title, ink, one line) and meta `host · first tag` (meta, ink-subtle).
-- Hover or focus reveals round 32px action buttons (open source, copy) top-right and the select checkbox top-left.
+- Hover or focus reveals round 32px action buttons (open source, copy) top-right and the select checkbox top-left. Both are solid surface-raised, with no translucency or blur, so nothing see-through sits on the screenshot; the empty checkbox has an ink-muted ring.
 - Selected: 2px accent-text outline with 3px offset on the frame.
 - Capturing: a pulsing frame (1.6s) with "Capturing…" in ink-muted. Failed capture: an image-off icon in ink-subtle.
 - **References scroll like a screen recording:** the frame shows the full-page shot resting at the top; on hover or keyboard focus it scrolls linearly to the bottom at about one frame-height per second (1.5–30s from the image's aspect ratio) and glides back in 500ms ease-out on leave. The frame is a size container, so the travel is `translateY(calc(-100% + 100cqh))`. Short pages don't move; reduced motion keeps it still.
+
+### Screenshot gallery — `components/asset-gallery.tsx`
+
+- The main preview, then a row of 56px thumbnails (10px radius, the cover marked with a star) and, at the right of that row, secondary pills **Replace screenshot** (uploads one image that replaces the captured shots and becomes the cover) and **Retake screenshot** for types that are captured (reference, UI library, animation, source).
+- While capturing, a surface status pill with a spinner reads "Capturing screenshots…". A failed capture turns it into a danger line "Screenshot failed: <reason>" with two small pills, **Upload one** and **Retry**.
+
+### Add from URL — `components/add-url-dialog.tsx`
+
+- Under the URL box, a warning line (12px, warning colour, triangle icon) says why Save is unavailable: "That doesn’t look like a link…", or how many entries will be skipped in a bulk paste. Already-saved URLs get the same line with a link to the saved resource.
 
 ### Note card — `components/resource-card.tsx` (text types)
 
@@ -375,12 +385,14 @@ Single-line inputs are 36px surface pills with no border, 15px ink text, ink-mut
 
 ### Overlays — `components/ui/{dialog,alert-dialog,popover,select,dropdown-menu,command,sonner}.tsx`
 
-- Strong glass, 14px radius, overlay shadow. Dialogs pad 20px and open with a 100ms fade and zoom from 95%; their footer is separated by a divider line. Menus and popovers slide 8px in from their trigger side. Toasts (bottom-right) use strong glass with the glass edge.
+- Strong glass, 14px radius, overlay shadow. Dialogs pad 20px and open with a 100ms fade and zoom from 95%; their footer is separated by a divider line. Menus and popovers slide 8px in from their trigger side. Toasts (bottom-right) use strong glass with the glass edge; they are always dark (never follow the OS theme), the title is ink and the description ink-muted. A failed screenshot raises an error toast naming the page and the reason, with an Open action.
 - The command palette is a dialog up to 672px wide.
 
 ### Selection bar — `components/selection-bar.tsx`
 
 Appears bottom-centre while resources are selected: strong glass, 28px radius, 6px padding (16px on the left), wraps on narrow screens, enters with a 200ms fade and 8px rise. Count in mono ink-subtle (promoted to ink-muted by the glass), then ghost actions (Copy context, Export, Collection, Remove, Trash; in Trash: Restore and Delete forever in danger, confirmed in a dialog).
+
+- **Add to collection** popover (strong glass, 256px): a "Find or create a collection…" field, the collections with their counts, and, when the typed name is new, a "Create “name”" row with a folder-plus icon that creates the collection and adds the selection to it.
 
 ### Page header — `components/library-view.tsx`
 
