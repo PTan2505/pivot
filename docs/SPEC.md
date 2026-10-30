@@ -60,7 +60,10 @@ Mọi loại đều có các trường chung: `title`, `description`, `sourceUrl
 
 ## 4. Chrome extension (bổ sung 2026-10-26, chuyển từ P2)
 
-- Popup (⌥⇧S): chụp phần đang hiển thị của tab (thấy được trang đã đăng nhập), đọc tiêu đề/mô tả từ DOM trang, chọn type, facet, ghi chú, collection; tuỳ chọn để server chụp thêm full-page.
+- Popup (⌥⇧S): chụp phần đang hiển thị của tab (thấy được trang đã đăng nhập), đọc tiêu đề/mô tả từ DOM trang. Lưu một trang đi theo hai bước (cập nhật 2026-10-30):
+  1. **Chọn type**: lưới các type hay dùng (Reference, Source, UI Library, Image & Video, Animation, Font & Palette), các type còn lại sau "More types". Type chọn lần trước được tô sẵn và focus, Enter là đi tiếp. Ở bước này chưa lưu được.
+  2. **Chi tiết**: ảnh tab thu nhỏ (bật/tắt "Attach this view"), tiêu đề, rồi chỉ các facet hợp với type. Mỗi facet là một ô nhập có dropdown gợi ý (autocomplete): bấm vào thì hiện các giá trị đã dùng, nhiều nhất trước; gõ để lọc; ↑↓ và Enter để chọn, hoặc tạo giá trị mới bằng dòng Create "…"; giá trị đã chọn hiện thành chip có nút bỏ. Reference chỉ hỏi Page type, Domain, Style (không hỏi Pattern, vì Pattern hợp với component hơn; vẫn thêm được trong app). Mô tả, tag thường, ghi chú, collection và tuỳ chọn để server chụp thêm nằm trong "More details", đóng sẵn. Nút quay lại mang tên type để đổi type; facet đã chọn của type cũ không được gửi.
+  - Lưu đoạn text đang chọn vẫn là một form như cũ.
 - Lưu nhanh (⌥⇧D), menu chuột phải cho trang, link, ảnh và đoạn text được chọn (lưu thành snippet/prompt). Lưu nhanh và lưu link không tạo bản trùng: nếu URL đã có reference thì mở lại bản cũ và báo "Already in PIVOT" (`/api/clip` nhận `ifExists: "skip"`; mặc định vẫn tạo mới) (cập nhật 2026-10-29).
 - Ghép nối bằng API token (`~/.pivot/api-token`, xem/đổi trong Settings). Request ghi từ origin khác phải có `Authorization: Bearer <token>`.
 - Endpoint: `POST /api/clip`, `GET /api/lookup`, `POST /api/ping`, `GET|POST /api/settings/token`.

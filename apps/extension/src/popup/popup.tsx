@@ -1,5 +1,29 @@
-import { AlertTriangle, Check, ExternalLink, Loader2, Settings, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  Code,
+  Compass,
+  ExternalLink,
+  Globe,
+  Image as ImageIcon,
+  Library,
+  ListChecks,
+  Loader2,
+  MessageSquareText,
+  Palette,
+  Plug,
+  Plus,
+  ScrollText,
+  Settings,
+  Shapes,
+  Sparkles,
+  Wand,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   RESOURCE_TYPES,
   TAG_KIND_LABELS,
@@ -15,11 +39,76 @@ import { Button, cx, Field, Input, Logo, Textarea } from "../ui";
 
 type Status = "loading" | "ready" | "offline" | "unauthorized" | "unsupported";
 type Mode = "page" | "selection";
+type Step = "type" | "details";
 type TagValue = { kind: TagKind; name: string };
 
 const PAGE_TYPES = RESOURCE_TYPES.filter((t) => t !== "skill");
 const TEXT_TYPES: ResourceType[] = ["snippet", "prompt", "rule", "checklist"];
+/** Offered first when saving a page; the rest sit behind "More types". */
+const MAIN_TYPES: ResourceType[] = ["reference", "source", "library", "media", "animation", "typography"];
+const OTHER_TYPES = PAGE_TYPES.filter((t) => !MAIN_TYPES.includes(t));
+/**
+ * Facets asked for when saving a page, so the form stays short; everything else can be added in PIVOT.
+ * A reference skips Pattern: patterns describe components more than whole pages.
+ */
+const QUICK_FACETS: Partial<Record<ResourceType, Exclude<TagKind, "tag">[]>> = {
+  reference: ["pageType", "domain", "visualStyle"],
+};
+const quickFacets = (t: ResourceType) => QUICK_FACETS[t] ?? TYPE_DEFS[t].facets;
 
+const ICONS: Record<string, LucideIcon> = {
+  globe: Globe,
+  library: Library,
+  image: ImageIcon,
+  shapes: Shapes,
+  sparkles: Sparkles,
+  palette: Palette,
+  "message-square-text": MessageSquareText,
+  wand: Wand,
+  code: Code,
+  "scroll-text": ScrollText,
+  "list-checks": ListChecks,
+  plug: Plug,
+  compass: Compass,
+};
+
+function TypeOption({
+  type,
+  last,
+  onChoose,
+}: {
+  type: ResourceType;
+  /** The type picked last time: focused, so Enter continues with it. */
+  last: boolean;
+  onChoose: (t: ResourceType) => void;
+}) {
+  const def = TYPE_DEFS[type];
+  const Icon = ICONS[def.icon] ?? Globe;
+  return (
+    <button
+      type="button"
+      autoFocus={last}
+      onClick={() => onChoose(type)}
+      className={cx(
+        "flex cursor-pointer items-start gap-2.5 rounded-[12px] p-2 text-left transition-colors duration-150 hover:bg-surface focus-visible:bg-surface",
+        last && "bg-surface",
+      )}
+    >
+      <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-surface text-ink-secondary">
+        <Icon className="size-4" aria-hidden />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[13px] font-medium text-ink">{def.label}</span>
+        <span className="block text-xs leading-snug text-ink-muted">{def.blurb}</span>
+      </span>
+    </button>
+  );
+}
+
+/**
+ * One facet (or the plain tags) as a combobox: chosen values sit as chips in the field, typing filters the
+ * values already used (most used first), ↑↓ and Enter pick one, and a new name can be created from the list.
+ */
 function FacetPicker({
   kind,
   tags,
@@ -31,70 +120,158 @@ function FacetPicker({
   value: TagValue[];
   onChange: (v: TagValue[]) => void;
 }) {
-  const [draft, setDraft] = useState("");
-  const [expanded, setExpanded] = useState(false);
-  const mine = value.filter((t) => t.kind === kind).map((t) => t.name.toLowerCase());
-  const options = tags
-    .filter((t) => t.kind === kind)
-    .sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.name.localeCompare(b.name));
-  const shown = expanded ? options : options.slice(0, 8);
-  const extra = value.filter(
-    (t) => t.kind === kind && !options.some((o) => o.name.toLowerCase() === t.name.toLowerCase()),
-  );
+  const id = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  // -1: nothing highlighted, so Enter in an empty field still saves the form.
+  const [active, setActive] = useState(-1);
+  const label = TAG_KIND_LABELS[kind];
+  const chosen = value.filter((t) => t.kind === kind);
+  const isChosen = (name: string) => chosen.some((t) => t.name.toLowerCase() === name.toLowerCase());
+  const q = query.trim().toLowerCase();
 
-  const toggle = (name: string) =>
-    onChange(
-      mine.includes(name.toLowerCase())
-        ? value.filter((t) => !(t.kind === kind && t.name.toLowerCase() === name.toLowerCase()))
-        : [...value, { kind, name }],
-    );
+  const matches = tags
+    .filter((t) => t.kind === kind && !isChosen(t.name) && t.name.toLowerCase().includes(q))
+    // Names that start with what you typed first, then the most used.
+    .sort(
+      (a, b) =>
+        Number(b.name.toLowerCase().startsWith(q)) - Number(a.name.toLowerCase().startsWith(q)) ||
+        (b.count ?? 0) - (a.count ?? 0) ||
+        a.name.localeCompare(b.name),
+    )
+    .slice(0, 8);
+  const canCreate = !!q && !isChosen(q) && !tags.some((t) => t.kind === kind && t.name.toLowerCase() === q);
+  const options = [
+    ...matches.map((t) => ({ name: t.name, count: t.count, create: false })),
+    ...(canCreate ? [{ name: query.trim(), count: undefined, create: true }] : []),
+  ];
+  const current = Math.min(active, options.length - 1);
+  const highlighted = current >= 0 ? options[current] : undefined;
+
+  const add = (name: string) => {
+    if (!isChosen(name)) onChange([...value, { kind, name }]);
+    setQuery("");
+    setActive(-1);
+  };
+  const remove = (name: string) =>
+    onChange(value.filter((t) => !(t.kind === kind && t.name.toLowerCase() === name.toLowerCase())));
 
   return (
     <div className="space-y-1">
-      <div className="text-xs text-ink-subtle">{TAG_KIND_LABELS[kind]}</div>
-      <div className="flex flex-wrap gap-1">
-        {[...shown.map((o) => o.name), ...extra.map((e) => e.name)].map((name) => {
-          const on = mine.includes(name.toLowerCase());
-          return (
-            <button
-              key={name}
-              type="button"
-              aria-pressed={on}
-              onClick={() => toggle(name)}
-              className={cx(
-                "h-7 cursor-pointer rounded-full px-3 text-xs font-medium transition-colors duration-150",
-                on
-                  ? "bg-inverse text-on-inverse"
-                  : "bg-surface text-ink-secondary hover:bg-surface-raised hover:text-ink",
-              )}
+      <label htmlFor={id} className="block text-xs text-ink-subtle">
+        {label}
+      </label>
+      <div className="relative">
+        <div
+          onClick={() => inputRef.current?.focus()}
+          // The ring goes on the rounded field, not the bare input inside it.
+          className="flex min-h-9 cursor-text flex-wrap items-center gap-1 rounded-[18px] bg-surface px-1.5 py-1.5 focus-within:bg-surface-raised focus-within:outline-2 focus-within:outline-offset-3 focus-within:outline-accent-text hover:bg-surface-raised"
+        >
+          {chosen.map((t) => (
+            <span
+              key={t.name}
+              className="inline-flex h-6 items-center gap-1 rounded-full bg-inverse pr-1 pl-2.5 text-xs font-medium text-on-inverse"
             >
-              {name}
-            </button>
-          );
-        })}
-        {options.length > 8 && (
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            className="h-6 cursor-pointer px-1.5 text-xs text-ink-muted hover:text-foreground"
+              {t.name}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  remove(t.name);
+                }}
+                className="grid size-4 cursor-pointer place-items-center rounded-full hover:bg-on-inverse/10"
+                aria-label={`Remove ${t.name}`}
+              >
+                <X className="size-3" aria-hidden />
+              </button>
+            </span>
+          ))}
+          <input
+            ref={inputRef}
+            id={id}
+            role="combobox"
+            aria-expanded={open && options.length > 0}
+            aria-controls={`${id}-list`}
+            aria-autocomplete="list"
+            aria-activedescendant={open && highlighted ? `${id}-${current}` : undefined}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setActive(e.target.value.trim() ? 0 : -1);
+              setOpen(true);
+            }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => {
+              setOpen(false);
+              setActive(-1);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                e.preventDefault();
+                setOpen(true);
+                if (!options.length) return;
+                const step = e.key === "ArrowDown" ? 1 : -1;
+                setActive(
+                  current < 0
+                    ? step > 0
+                      ? 0
+                      : options.length - 1
+                    : (current + step + options.length) % options.length,
+                );
+              } else if (e.key === "Enter" && !e.metaKey && !e.ctrlKey && open && highlighted) {
+                // Pick the highlighted value instead of submitting the form.
+                e.preventDefault();
+                add(highlighted.name);
+              } else if (e.key === "Escape" && open) {
+                e.preventDefault();
+                setOpen(false);
+              } else if (e.key === "Backspace" && !query && chosen.length) {
+                remove(chosen[chosen.length - 1].name);
+              }
+            }}
+            placeholder={chosen.length ? "" : `Add ${label.toLowerCase()}…`}
+            className="h-6 min-w-24 flex-1 bg-transparent px-1.5 text-[13px] text-ink !outline-none placeholder:text-ink-muted"
+          />
+        </div>
+        {open && options.length > 0 && (
+          <ul
+            id={`${id}-list`}
+            role="listbox"
+            aria-label={label}
+            // A highlight left by the mouse would turn the next Enter into a pick instead of Save.
+            onMouseLeave={() => setActive(-1)}
+            className="absolute inset-x-0 top-full z-20 mt-1 max-h-44 overflow-y-auto rounded-[14px] bg-surface-raised p-1 shadow-[0_12px_32px_rgb(0_0_0/0.55)]"
           >
-            {expanded ? "less" : `+${options.length - 8}`}
-          </button>
+            {options.map((o, i) => (
+              <li
+                key={`${o.create}-${o.name}`}
+                id={`${id}-${i}`}
+                role="option"
+                aria-selected={i === current}
+                // Keep focus in the input so the click lands before blur closes the list.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => add(o.name)}
+                onMouseEnter={() => setActive(i)}
+                className={cx(
+                  "flex h-8 cursor-pointer items-center gap-2 rounded-[10px] px-3 text-[13px] text-ink",
+                  i === current && "bg-surface",
+                )}
+              >
+                {o.create ? (
+                  <>
+                    <Plus className="size-3.5 text-ink-muted" aria-hidden /> Create “{o.name}”
+                  </>
+                ) : (
+                  <>
+                    <span className="truncate">{o.name}</span>
+                    {!!o.count && <span className="ml-auto font-mono text-[11px] text-ink-subtle">{o.count}</span>}
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && draft.trim()) {
-              e.preventDefault();
-              if (!mine.includes(draft.trim().toLowerCase())) onChange([...value, { kind, name: draft.trim() }]);
-              setDraft("");
-            }
-          }}
-          placeholder="+ new"
-          aria-label={`Add ${TAG_KIND_LABELS[kind]}`}
-          className="h-7 w-24 rounded-full bg-surface px-3 text-xs text-ink transition-[width] placeholder:text-ink-muted focus:w-36 focus:bg-surface-raised"
-        />
       </div>
     </div>
   );
@@ -112,6 +289,8 @@ export function Popup() {
   const [duplicates, setDuplicates] = useState<{ id: string; title: string }[]>([]);
 
   const [mode, setMode] = useState<Mode>("page");
+  const [step, setStep] = useState<Step>("type");
+  const [moreTypes, setMoreTypes] = useState(false);
   const [type, setType] = useState<ResourceType>("reference");
   const [textType, setTextType] = useState<ResourceType>("snippet");
   const [title, setTitle] = useState("");
@@ -141,6 +320,12 @@ export function Popup() {
       setDescription(info.description);
       setText(info.selection);
       if (info.selection) setMode("selection");
+      const { lastType } = await chrome.storage.local.get("lastType");
+      const last = PAGE_TYPES.find((t) => t === lastType);
+      if (last) {
+        setType(last);
+        if (!MAIN_TYPES.includes(last)) setMoreTypes(true);
+      }
       try {
         const [t, c, d] = await Promise.all([api.tags(), api.collections(), api.lookup(info.url)]);
         setTags(t);
@@ -157,11 +342,13 @@ export function Popup() {
   useEffect(() => () => void (shotUrl && URL.revokeObjectURL(shotUrl)), [shotUrl]);
 
   const save = async () => {
-    if (!page || saving) return;
+    if (!page || saving || (mode === "page" && step === "type")) return;
     setSaving(true);
     setError(null);
     try {
-      const common = { url: page.url, notes, tags: chosen, collectionId: collectionId || undefined };
+      // Only the kinds on screen: facets picked under a type you switched away from are dropped.
+      const tags = chosen.filter((t) => facets.includes(t.kind));
+      const common = { url: page.url, notes, tags, collectionId: collectionId || undefined };
       const res =
         mode === "page"
           ? await api.clip(
@@ -185,7 +372,13 @@ export function Popup() {
     }
   };
 
-  const facets: TagKind[] = mode === "page" ? [...TYPE_DEFS[type].facets, "tag"] : ["technology", "tag"];
+  const facets: TagKind[] = mode === "page" ? [...quickFacets(type), "tag"] : ["technology", "tag"];
+
+  const chooseType = (t: ResourceType) => {
+    setType(t);
+    setStep("details");
+    void chrome.storage.local.set({ lastType: t });
+  };
 
   const header = (
     <header className="flex h-14 items-center gap-2.5 px-4">
@@ -294,16 +487,54 @@ export function Popup() {
           </div>
         )}
 
-        {mode === "page" ? (
+        {mode === "page" && step === "type" ? (
+          <div className="space-y-2">
+            {duplicates.length > 0 && (
+              <p className="flex items-center gap-1.5 pb-1 text-xs text-warning">
+                <AlertTriangle className="size-3.5 shrink-0" /> Already saved as
+                <button
+                  type="button"
+                  onClick={() => openInApp(`/r/${duplicates[0].id}`)}
+                  className="cursor-pointer truncate underline"
+                >
+                  {duplicates[0].title}
+                </button>
+              </p>
+            )}
+            <p className="text-[13px] font-medium text-ink">What are you saving?</p>
+            <div className="grid grid-cols-2 gap-1">
+              {(moreTypes ? [...MAIN_TYPES, ...OTHER_TYPES] : MAIN_TYPES).map((t) => (
+                <TypeOption key={t} type={t} last={t === type} onChoose={chooseType} />
+              ))}
+            </div>
+            {!moreTypes && (
+              <button
+                type="button"
+                onClick={() => setMoreTypes(true)}
+                className="flex h-8 cursor-pointer items-center gap-1 rounded-full px-2 text-xs text-ink-muted hover:text-ink"
+              >
+                More types <ChevronDown className="size-3.5" aria-hidden />
+              </button>
+            )}
+          </div>
+        ) : mode === "page" ? (
           <>
+            <button
+              type="button"
+              onClick={() => setStep("type")}
+              className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full bg-surface pr-3.5 pl-2.5 text-xs font-medium text-ink-secondary hover:bg-surface-raised hover:text-ink"
+              aria-label={`Type: ${TYPE_DEFS[type].label}. Change type`}
+            >
+              <ArrowLeft className="size-3.5" aria-hidden /> {TYPE_DEFS[type].label}
+            </button>
             {shotUrl && (
               <div className="relative overflow-hidden rounded-[14px] bg-surface">
                 <img
                   src={shotUrl}
                   alt="Screenshot of the current tab"
-                  className={cx("aspect-[16/10] w-full object-cover object-top", !attachShot && "opacity-30")}
+                  className={cx("h-28 w-full object-cover object-top", !attachShot && "opacity-30")}
                 />
-                <label className="absolute right-2.5 bottom-2.5 flex cursor-pointer items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-[11px] font-medium text-white backdrop-blur">
+                <label className="absolute right-2.5 bottom-2.5 flex cursor-pointer items-center gap-1.5 rounded-full bg-surface-raised px-3 py-1.5 text-[11px] font-medium text-ink">
                   <input
                     type="checkbox"
                     checked={attachShot}
@@ -327,25 +558,68 @@ export function Popup() {
               </p>
             )}
             <Field label="Title" htmlFor="title">
-              <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
+              <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
             </Field>
-            <Field label="Description" htmlFor="desc">
-              <Textarea id="desc" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
-            </Field>
-            <Field label="Type" htmlFor="type">
-              <select
-                id="type"
-                value={type}
-                onChange={(e) => setType(e.target.value as ResourceType)}
-                className="h-9 w-full rounded-full border-0 bg-surface px-4 text-[13px] text-ink hover:bg-surface-raised"
-              >
-                {PAGE_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {TYPE_DEFS[t].label}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <div className="space-y-3">
+              {quickFacets(type).map((k) => (
+                <FacetPicker key={k} kind={k} tags={tags} value={chosen} onChange={setChosen} />
+              ))}
+            </div>
+            <details className="group space-y-3 [&_summary::-webkit-details-marker]:hidden">
+              <summary className="flex h-8 cursor-pointer list-none items-center gap-1 text-xs text-ink-muted hover:text-ink">
+                More details
+                <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" aria-hidden />
+                <span className="ml-1 text-ink-subtle">description, tags, notes, collection</span>
+              </summary>
+              <div className="space-y-4 pt-1">
+                <Field label="Description" htmlFor="desc">
+                  <Textarea id="desc" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+                </Field>
+                <FacetPicker kind="tag" tags={tags} value={chosen} onChange={setChosen} />
+                <Field label="Notes" htmlFor="notes">
+                  <Textarea
+                    id="notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={2}
+                    placeholder="What’s worth stealing here?"
+                  />
+                </Field>
+                {collections.length > 0 && (
+                  <Field label="Collection" htmlFor="collection">
+                    <select
+                      id="collection"
+                      value={collectionId}
+                      onChange={(e) => setCollectionId(e.target.value)}
+                      className="h-9 w-full rounded-full border-0 bg-surface px-4 text-[13px] text-ink hover:bg-surface-raised"
+                    >
+                      <option value="">None</option>
+                      {collections.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+                {TYPE_DEFS[type].visual && (
+                  <label className="flex cursor-pointer items-start gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={serverCapture}
+                      onChange={(e) => setServerCapture(e.target.checked)}
+                      className="mt-0.5 accent-[var(--accent-fill)]"
+                    />
+                    <span>
+                      {type === "source" ? "Also take a screenshot in PIVOT" : "Also capture a full-page screenshot"}
+                      <span className="block text-ink-subtle">
+                        Taken by PIVOT, so logged-in pages show their logged-out version.
+                      </span>
+                    </span>
+                  </label>
+                )}
+              </div>
+            </details>
           </>
         ) : (
           <>
@@ -389,55 +663,42 @@ export function Popup() {
           </>
         )}
 
-        <div className="space-y-3 pt-1">
-          {facets.map((k) => (
-            <FacetPicker key={k} kind={k} tags={tags} value={chosen} onChange={setChosen} />
-          ))}
-        </div>
-
-        <Field label="Notes" htmlFor="notes">
-          <Textarea
-            id="notes"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            placeholder="What’s worth stealing here?"
-          />
-        </Field>
-
-        {collections.length > 0 && (
-          <Field label="Collection" htmlFor="collection">
-            <select
-              id="collection"
-              value={collectionId}
-              onChange={(e) => setCollectionId(e.target.value)}
-              className="h-9 w-full rounded-full border-0 bg-surface px-4 text-[13px] text-ink hover:bg-surface-raised"
-            >
-              <option value="">None</option>
-              {collections.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
+        {mode === "selection" && (
+          <>
+            <div className="space-y-3 pt-1">
+              {facets.map((k) => (
+                <FacetPicker key={k} kind={k} tags={tags} value={chosen} onChange={setChosen} />
               ))}
-            </select>
-          </Field>
-        )}
+            </div>
 
-        {mode === "page" && TYPE_DEFS[type].visual && (
-          <label className="flex cursor-pointer items-start gap-2 text-xs">
-            <input
-              type="checkbox"
-              checked={serverCapture}
-              onChange={(e) => setServerCapture(e.target.checked)}
-              className="mt-0.5 accent-[var(--accent-fill)]"
-            />
-            <span>
-              Also capture a full-page screenshot
-              <span className="block text-ink-subtle">
-                Taken by PIVOT, so logged-in pages show their logged-out version.
-              </span>
-            </span>
-          </label>
+            <Field label="Notes" htmlFor="notes">
+              <Textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                placeholder="What’s worth stealing here?"
+              />
+            </Field>
+
+            {collections.length > 0 && (
+              <Field label="Collection" htmlFor="collection">
+                <select
+                  id="collection"
+                  value={collectionId}
+                  onChange={(e) => setCollectionId(e.target.value)}
+                  className="h-9 w-full rounded-full border-0 bg-surface px-4 text-[13px] text-ink hover:bg-surface-raised"
+                >
+                  <option value="">None</option>
+                  {collections.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+          </>
         )}
 
         {error && (
@@ -450,10 +711,14 @@ export function Popup() {
         <span className="truncate text-xs text-ink-subtle" title={page?.url}>
           {page ? new URL(page.url).hostname.replace(/^www\./, "") : tab?.url}
         </span>
-        <Button type="submit" className="ml-auto" disabled={saving || (mode === "selection" && !text.trim())}>
-          {saving && <Loader2 className="animate-spin" />}
-          Save <span className="font-mono text-[10px] opacity-70">⌘↵</span>
-        </Button>
+        {mode === "page" && step === "type" ? (
+          <span className="ml-auto text-xs text-ink-subtle">Pick a type to continue</span>
+        ) : (
+          <Button type="submit" className="ml-auto" disabled={saving || (mode === "selection" && !text.trim())}>
+            {saving && <Loader2 className="animate-spin" />}
+            Save <span className="font-mono text-[10px] opacity-70">⌘↵</span>
+          </Button>
+        )}
       </footer>
     </form>
   );

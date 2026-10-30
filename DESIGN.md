@@ -422,6 +422,14 @@ A row of glass folders as a visual index on section landing pages, Skills (one p
 - Folders assemble on first view, staggered 90ms each (capped at the sixth); they follow their list in place and never replay the entrance. Reduced motion turns every transition off.
 - **Owner exception:** the folder is drawn as an object, so it keeps its own soft shadow, glass rim and the component's system font, and its art uses the component's multi-colour presets (aurora, ember, dusk, glacier, verdant), a spot of colour in the ember world kept by the owner's call. The exception is scoped to this component; the solid-card, no-shadow and ember-palette rules still apply everywhere else.
 
+### Extension popup — `apps/extension/src/popup/popup.tsx`
+
+400px wide, 13px body, the same tokens; saving a page takes two steps.
+
+- **Type step:** "What are you saving?" in 13px ink, then a two-column grid of option rows (12px radius, 8px padding): a 32px surface icon tile, the type name in 13px ink and its blurb in 12px ink-muted. Hover and focus fill the row with surface; the type used last time starts filled and focused, with the accent-text focus ring. Six common types, the rest behind a "More types" text button. The footer says "Pick a type to continue" in place of Save.
+- **Details step:** a back pill (surface, arrow and the type name) to change type, the tab preview as a 112px strip (object-position top) with a solid surface-raised "Attach this view" toggle, the title field, then only that type's quick facets, each a combobox (see below). "More details" (12px ink-muted, chevron, with a hint of what's inside in ink-subtle) opens description, tags, notes, collection and the server-capture option. Save stays the one ember button in the footer.
+- **Facet combobox:** a rounded surface field (18px radius, min 36px) holding the chosen values as 24px inverse chips with a remove ×, then a borderless input ("Add page type…"). The accent-text focus ring sits on the field, not the input. Focusing it opens a list right under it (surface-raised, 14px radius, soft drop shadow, up to 176px): the values already used, most used first, with their count in mono ink-subtle; typing filters them (names starting with the text first) and adds a "+ Create “text”" row. ↑↓ move the highlight (surface), Enter picks it, Backspace in an empty field removes the last chip. Nothing is highlighted until you type or press ↓, so Enter in an empty field still saves.
+
 ### Browser surfaces — `globals.css` base layer
 
 Text selection is ember at 45% with ink text; the caret is accent-text; the scrollbar is a divider thumb on a transparent track; native controls take ember as `accent-color`.
