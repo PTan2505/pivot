@@ -249,7 +249,10 @@
 }
 .section-panel-viewport {
   position: relative;
-  /* Radix measures the active content into these; until it has, the panel just fits its content */
+  /* Radix measures the active content into these; until it has, the panel just fits its content.
+     content-box: the sizes are the content's, and the glass border goes around them. With border-box the
+     content was 2px narrower than the measured size, Radix measured again, and the panel shrank forever. */
+  box-sizing: content-box;
   width: var(--radix-navigation-menu-viewport-width, auto);
   height: var(--radix-navigation-menu-viewport-height, auto);
   transform-origin: top left;
@@ -262,6 +265,10 @@
 }
 .section-panel-viewport[data-state="closed"] {
   animation: section-panel-out 140ms ease-in forwards;
+}
+/* Sized by its own options, never by the panel around it, so measuring it can't feed back into the panel. */
+.section-panel-content {
+  width: max-content;
 }
 /* the incoming content sizes the panel; the outgoing one floats over it while it leaves */
 .section-panel-content[data-motion^="to-"] {
