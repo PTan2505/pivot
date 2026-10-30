@@ -48,3 +48,13 @@ export async function captureTab(windowId: number): Promise<Blob | null> {
 export function isSavable(url: string | undefined) {
   return !!url && /^https?:\/\//.test(url);
 }
+
+/** A site's front page (no path, no query): saving it most likely means saving the site itself. */
+export function isHomePage(url: string) {
+  try {
+    const u = new URL(url);
+    return u.pathname === "/" && !u.search;
+  } catch {
+    return false;
+  }
+}

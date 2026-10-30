@@ -138,7 +138,8 @@ export function LibraryView({
   } = useResources({
     q: params.q,
     type: params.type,
-    types: library && !params.type ? params.section.types : undefined,
+    // "Saved from this source" counts every type, so the list it opens doesn't stop at the section's types.
+    types: library && !params.type && !params.via ? params.section.types : undefined,
     tags: params.tags,
     via: params.via || undefined,
     sort: params.sort,
@@ -186,9 +187,11 @@ export function LibraryView({
   };
 
   const category = SOURCE_CATEGORIES.find((c) => c.value === params.category);
+  const { data: viaSource } = useResource(library && !params.type ? params.via : "");
   const heading =
     title ??
     category?.label ??
+    viaSource?.title ??
     (params.type && params.section.types.length > 1 ? TYPE_DEFS[params.type].plural : params.section.label);
   const filtered = !!(params.q || params.tags.length || params.via);
   // Search, tags and source; the type, section and category are where you are, not filters.
@@ -269,7 +272,7 @@ export function LibraryView({
       <div className="flex-1 space-y-6 px-4 pt-6 pb-16 md:px-10">
         {params.type === "skill" && library && <SkillSyncPanel />}
         {params.type === "source" && library && <SourceToolbar />}
-        {library && !params.type && params.section.types.length > 1 && items && (
+        {library && !params.type && !params.via && params.section.types.length > 1 && items && (
           <div className="pb-10">
             <TypeShelf types={params.section.types} items={items} />
           </div>

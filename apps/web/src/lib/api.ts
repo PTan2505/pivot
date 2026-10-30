@@ -100,6 +100,7 @@ export function useResource(id: string) {
   return useQuery({
     queryKey: keys.resource(id),
     queryFn: () => api<ResourceDetailDTO>(`/api/resources/${id}`),
+    enabled: !!id,
     refetchInterval: (q) => (q.state.data?.captureStatus === "pending" ? 2000 : false),
   });
 }

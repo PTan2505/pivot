@@ -6,6 +6,7 @@ import { enqueueCapture } from "@pivot/core/capture";
 import { fetchUrlMetadata } from "@pivot/core/metadata";
 import { normalizeUrl, safeFetch } from "@pivot/core/net-guard";
 import { addToCollection, createResource, findByUrl, setResourceFields } from "@pivot/core/resources";
+import { knownSourceFor } from "@pivot/core/source-match";
 import { RESOURCE_TYPES, TAG_KINDS } from "@pivot/core/types";
 import { HttpError, json, route } from "@/lib/server/http";
 
@@ -52,10 +53,12 @@ export const POST = route(async (req: Request) => {
       }
     }
     let { title, description } = input;
-    if (!title?.trim() || !description?.trim()) {
+    // A known source brings its own description (see createResource); otherwise read the page's.
+    const wantsDescription = !description?.trim() && !(input.type === "source" && knownSourceFor(pageUrl));
+    if (!title?.trim() || wantsDescription) {
       const meta = await fetchUrlMetadata(pageUrl).catch(() => null);
       if (!title?.trim()) title = meta?.title || hostOf(pageUrl);
-      if (!description?.trim()) description = meta?.description;
+      if (wantsDescription) description = meta?.description;
     }
     const r = await createResource({
       type: input.type ?? "reference",

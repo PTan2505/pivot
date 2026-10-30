@@ -93,12 +93,12 @@ The current requirements document (`SPEC.md`, PIVOT Requirements v0.2) defines 1
 
 ### Phase 4 — Sources and browser capture
 
-- [ ] Browse saved Sources by category and open a Source's original website.
+- [x] Browse saved Sources by category and open a Source's original website.
 - [x] Confirm Source uses viewport-only screenshots, per SPEC.
 - [x] Verify search across saved Sources and `searchUrl` behavior where implemented.
-- [ ] Verify attribution/filtering of references via matching Source host (`via`).
+- [x] Verify attribution/filtering of references via matching Source host (`via`).
 - [ ] Verify Chrome extension quick-save and screenshot capture with the local app running.
-- [ ] Check extension token/authentication flow; do not weaken security to make saving easier.
+- [x] Check extension token/authentication flow; do not weaken security to make saving easier.
 
 **Done when:** A user can discover a site from Sources and save a useful reference with minimal friction.
 

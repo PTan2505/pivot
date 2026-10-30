@@ -71,4 +71,26 @@ describe("sources", () => {
     const via = await resources.listResources({ via: dribbble.id });
     expect(via.map((r) => r.title).sort()).toEqual(["Another shot", "Pricing shot"]);
   });
+
+  it("counts a known site's old domain, and gives a shared host to the source saved first", async () => {
+    const recent = await resources.createResource({
+      type: "source",
+      title: "Recent",
+      sourceUrl: "https://recent.design/",
+    });
+    await resources.createResource({ type: "reference", title: "Godly site", sourceUrl: "https://godly.website/w/1" });
+    expect((await resources.sourceStats())[recent.id]).toBe(1);
+
+    const first = await resources.createResource({ type: "source", title: "Lab", sourceUrl: "https://lab.example/" });
+    const second = await resources.createResource({
+      type: "source",
+      title: "Lab again",
+      sourceUrl: "https://lab.example/tools",
+    });
+    await resources.createResource({ type: "reference", title: "Lab page", sourceUrl: "https://lab.example/p/1" });
+    for (let i = 0; i < 3; i++) {
+      const stats = await resources.sourceStats();
+      expect([stats[first.id], stats[second.id]]).toEqual([1, undefined]);
+    }
+  });
 });
