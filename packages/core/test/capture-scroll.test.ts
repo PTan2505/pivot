@@ -41,6 +41,22 @@ const PAGES: Record<string, string> = {
     if (n === 3) document.getElementById("more").remove();
   };
 </script></body>`,
+  // A 100vh hero, then sections that fade in when they enter the viewport and fade out when they leave (the common
+  // "reveal on scroll"), under a fixed top bar. A one-shot full-page screenshot stretches the hero to the page height and
+  // catches the sections faded out.
+  "/reveal": `<body style="margin:0;font:16px sans-serif">
+<header style="position:fixed;top:0;left:0;right:0;height:80px;background:rgb(200,0,0);z-index:9"></header>
+<section style="height:100vh;background:rgb(0,0,200)"></section>
+${[1, 2, 3, 4]
+  .map(
+    (i) =>
+      `<section style="height:700px;background:rgb(255,255,255);display:grid;place-items:center"><div class="r" style="width:600px;height:300px;background:rgb(0,160,0);opacity:0;transition:opacity .3s"></div></section>`,
+  )
+  .join("")}
+<script>
+  const io = new IntersectionObserver((es) => es.forEach((e) => (e.target.style.opacity = e.isIntersecting ? 1 : 0)), { threshold: 0.6 });
+  document.querySelectorAll(".r").forEach((el) => io.observe(el));
+</script></body>`,
   // App-like layout: the document never scrolls, an inner panel does.
   "/inner": `<body style="margin:0;height:100vh;overflow:hidden">
 <main style="height:100vh;overflow-y:auto"><div style="height:3000px;background:linear-gradient(#000,#fff)"></div></main></body>`,
@@ -79,6 +95,27 @@ describe.skipIf(!chromium.installed)("full-page capture loads the whole page", (
 
   it("captures a page that scrolls an inner panel", { timeout: 60_000 }, async () => {
     expect(await fullHeight("/inner")).toBeGreaterThanOrEqual(3000);
+  });
+
+  it("captures each part of the page the way a visitor scrolling through sees it", { timeout: 90_000 }, async () => {
+    const shots = await screenshotUrl(`${baseUrl}/reveal`);
+    const img = sharp(shots.full!);
+    const { width, height } = await img.metadata();
+    expect([width, height]).toEqual([1440, 900 + 4 * 700]);
+    const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
+    const at = (x: number, y: number) => {
+      const i = (y * info.width + x) * info.channels;
+      return [data[i], data[i + 1], data[i + 2]];
+    };
+    const near = (c: number[], want: number[]) => c.every((v, k) => Math.abs(v - want[k]) < 40);
+    // the hero keeps its 900px instead of stretching to the page
+    expect(near(at(720, 850), [0, 0, 200])).toBe(true);
+    expect(near(at(720, 960), [255, 255, 255])).toBe(true);
+    // every section shows its revealed card
+    for (let i = 0; i < 4; i++) expect(near(at(720, 900 + i * 700 + 350), [0, 160, 0])).toBe(true);
+    // the fixed bar shows once, at the top, not over every screen
+    expect(near(at(720, 20), [200, 0, 0])).toBe(true);
+    expect(near(at(720, 900 + 20), [200, 0, 0])).toBe(false);
   });
 
   it("skips the full page when asked (sources)", { timeout: 60_000 }, async () => {

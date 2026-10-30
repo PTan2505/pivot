@@ -14,11 +14,20 @@ function readPage(): PageInfo {
     }
     return "";
   };
+  // The canonical link drops tracking parameters, but only when it names the page on screen: a shot opened as a modal
+  // (Dribbble, Behance) changes the address bar while the canonical still names the page underneath.
   const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href;
+  const samePage = (a: string, b: string) => {
+    const [x, y] = [new URL(a), new URL(b)];
+    return x.host === y.host && x.pathname.replace(/\/+$/, "") === y.pathname.replace(/\/+$/, "");
+  };
+  // In that case the page's meta tags still describe the page underneath too: take the live title, and leave the
+  // description to the server, which reads it from the modal's own URL.
+  const underneath = !!canonical && !samePage(canonical, location.href);
   return {
-    url: canonical && new URL(canonical).host === location.host ? canonical : location.href,
-    title: meta("og:title", "twitter:title") || document.title,
-    description: meta("og:description", "twitter:description", "description"),
+    url: canonical && !underneath ? canonical : location.href,
+    title: underneath ? document.title : meta("og:title", "twitter:title") || document.title,
+    description: underneath ? "" : meta("og:description", "twitter:description", "description"),
     selection: String(window.getSelection() ?? "").trim(),
   };
 }

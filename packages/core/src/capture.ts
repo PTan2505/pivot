@@ -9,10 +9,8 @@ import { assertPublicUrl, safeFetch, UnsafeUrlError } from "./net-guard";
 import { setResourceFields } from "./resources";
 
 const VIEWPORT = { width: 1440, height: 900 };
-/** Full-page shots keep only the top 12000px; Chromium never renders below the clip. */
+/** Full-page shots keep only the top 12000px: frames below it are never shot. */
 export const MAX_FULL_PAGE_HEIGHT = 12_000;
-// sharp rejects inputs above ~268 MP by default; size its limit to the clipped full-page shot.
-const FULL_PAGE_PIXEL_LIMIT = VIEWPORT.width * MAX_FULL_PAGE_HEIGHT;
 /** Upper bounds for walking a page before the full-page shot, so endless feeds still finish. */
 const MAX_SCROLL_STEPS = 60;
 const MAX_LOAD_MORE_CLICKS = 8;
@@ -99,10 +97,19 @@ async function loadWholePage(page: Page, settle: ReturnType<typeof networkQuiet>
   let lastHeight = 0;
   let stableAtBottom = 0;
   let clicks = 0;
+  // Scroll the way a visitor does, with the wheel, so pages that react to wheel or scroll events (reveals, lazy
+  // sections, scroll-linked effects) load as they would for a person. The pointer sits mid-page.
+  await page.mouse.move(VIEWPORT.width / 2, VIEWPORT.height / 2);
   for (let step = 0; step < MAX_SCROLL_STEPS && Date.now() - started < SCROLL_BUDGET_MS; step++) {
-    const { bottom, height } = await page.evaluate<{ bottom: number; height: number }>(
-      scrollStep(Math.round(VIEWPORT.height * 0.85)),
-    );
+    const before = await page.evaluate<{ bottom: number; height: number }>(SCROLL_POSITION);
+    await page.mouse.wheel(0, Math.round(VIEWPORT.height * 0.85));
+    await page.waitForTimeout(150);
+    let { bottom, height } = await page.evaluate<{ bottom: number; height: number }>(SCROLL_POSITION);
+    // the wheel landed on something that swallows it (a map, an iframe): scroll the page directly
+    if (bottom <= before.bottom && bottom < height - 2)
+      ({ bottom, height } = await page.evaluate<{ bottom: number; height: number }>(
+        scrollStep(Math.round(VIEWPORT.height * 0.85)),
+      ));
     await settle(250, 2500);
     if (height >= MAX_FULL_PAGE_HEIGHT) break;
     if (bottom < height - 2) {
@@ -145,12 +152,94 @@ const UNLOCK_INNER_SCROLL = `(() => {
 
 const EAGER_IMAGES = `document.querySelectorAll("img[loading=lazy]").forEach((img) => { img.loading = "eager"; })`;
 
+const SCROLL_POSITION = `(() => {
+  const el = document.scrollingElement || document.documentElement;
+  return { bottom: el.scrollTop + innerHeight, height: el.scrollHeight };
+})()`;
+
 /** Scrolls down by a step; returns how far down the page we are and how tall it is. */
 const scrollStep = (by: number) => `(() => {
   scrollBy(0, ${by});
   const el = document.scrollingElement || document.documentElement;
   return { bottom: el.scrollTop + innerHeight, height: el.scrollHeight };
 })()`;
+
+/** Instant scrolling, so a frame is never shot halfway through a smooth scroll. */
+const NO_SMOOTH_SCROLL = `for (const el of [document.documentElement, document.body])
+  el && el.style.setProperty("scroll-behavior", "auto", "important")`;
+
+const PAGE_HEIGHT = `Math.max(
+  (document.scrollingElement || document.documentElement).scrollHeight,
+  document.body ? document.body.scrollHeight : 0
+)`;
+
+/** Jumps to a position and returns where the page actually is (it may stop short at the bottom). */
+const scrollToY = (y: number) => `(() => {
+  scrollTo(0, ${y});
+  return (document.scrollingElement || document.documentElement).scrollTop;
+})()`;
+
+/**
+ * Hides wide fixed or sticky bars at the top or bottom edge (headers, cookie and promo bars, chat launchers), so they
+ * appear once, in the first frame, instead of over every screen. Narrow ones such as a docs sidebar stay.
+ */
+const HIDE_REPEATING_BARS = `(() => {
+  for (const el of document.querySelectorAll("body *")) {
+    const position = getComputedStyle(el).position;
+    if (position !== "fixed" && position !== "sticky") continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < innerWidth * 0.6 || r.height === 0 || r.height > innerHeight * 0.5) continue;
+    if (r.top > 120 && r.bottom < innerHeight - 120) continue;
+    el.style.setProperty("visibility", "hidden", "important");
+  }
+})()`;
+
+/** Waits (up to 1.5s) for the images on screen to finish loading. */
+const IMAGES_ON_SCREEN = `Promise.race([
+  Promise.all([...document.images]
+    .filter((img) => { const r = img.getBoundingClientRect(); return !img.complete && r.bottom > 0 && r.top < innerHeight; })
+    .map((img) => new Promise((done) => { img.addEventListener("load", done, { once: true }); img.addEventListener("error", done, { once: true }); }))),
+  new Promise((done) => setTimeout(done, 1500)),
+])`;
+
+/** How long each screen gets to finish its entrance animations before it is shot. */
+const FRAME_SETTLE_MS = 500;
+
+/**
+ * The whole page as a visitor scrolling down sees it: one 1440×900 screen at a time, each shot after it has settled,
+ * stitched top to bottom. A one-shot full-page screenshot resizes the window to the page's height instead, which
+ * stretches 100vh sections and catches scroll-revealed content before it appears.
+ */
+async function stitchedFullPage(page: Page, settle: ReturnType<typeof networkQuiet>) {
+  await page.evaluate(NO_SMOOTH_SCROLL).catch(() => {});
+  const total = Math.min(MAX_FULL_PAGE_HEIGHT, await page.evaluate<number>(PAGE_HEIGHT));
+  const frames: { input: Buffer; top: number; left: number }[] = [];
+  for (let y = 0; y < total; y += VIEWPORT.height) {
+    const at = await page.evaluate<number>(scrollToY(Math.min(y, Math.max(0, total - VIEWPORT.height))));
+    // a page that won't scroll this far is done
+    if (at < y - VIEWPORT.height + 1) break;
+    if (y > 0) await page.evaluate(HIDE_REPEATING_BARS).catch(() => {});
+    await settle(200, 1500);
+    await page.evaluate(IMAGES_ON_SCREEN).catch(() => {});
+    await page.waitForTimeout(FRAME_SETTLE_MS);
+    const shot = await page.screenshot({ type: "png" });
+    // The last screen stops at the bottom and overlaps the one before it: keep only what's new.
+    const skip = Math.max(0, y - at);
+    const height = Math.min(VIEWPORT.height - skip, total - y);
+    if (height <= 0) break;
+    frames.push({
+      input: await sharp(shot).extract({ left: 0, top: skip, width: VIEWPORT.width, height }).toBuffer(),
+      top: y,
+      left: 0,
+    });
+  }
+  const bottom = frames.length ? frames.at(-1)!.top + (await sharp(frames.at(-1)!.input).metadata()).height! : 0;
+  if (!bottom) return null;
+  return sharp({ create: { width: VIEWPORT.width, height: bottom, channels: 3, background: "#ffffff" } })
+    .composite(frames)
+    .webp({ quality: 80 })
+    .toBuffer();
+}
 
 /** Clicks one visible "Load more"-style button. Buttons only, never links or form submits, so it can't navigate. */
 const CLICK_LOAD_MORE = `(() => {
@@ -265,16 +354,8 @@ export async function screenshotUrl(
     let full: Buffer | null = null;
     if (fullPage) {
       await loadWholePage(page, settle).catch(() => {});
-      // A too-tall or broken full-page shot must not cost us the viewport shot.
-      full = await page
-        .screenshot({
-          type: "png",
-          fullPage: true,
-          // Playwright trims the clip to the document, so short pages keep their real height.
-          clip: { x: 0, y: 0, width: VIEWPORT.width, height: MAX_FULL_PAGE_HEIGHT },
-        })
-        .then((png) => sharp(png, { limitInputPixels: FULL_PAGE_PIXEL_LIMIT }).webp({ quality: 80 }).toBuffer())
-        .catch(() => null);
+      // A broken full-page shot must not cost us the viewport shot.
+      full = await stitchedFullPage(page, settle).catch(() => null);
     }
     // a redirect made while walking the page counts too
     await assertStayedPublic();
