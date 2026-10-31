@@ -42,13 +42,24 @@ const ROLE_LABEL: Record<AssetDTO["role"], string> = {
   "screenshot-full-original": "Original full page",
   "screenshot-variant": "Other theme",
   "screenshot-full-variant": "Other theme, full page",
+  "screenshot-responsive": "Viewport",
+  "screenshot-full-responsive": "Full page",
+  "motion-video": "Motion",
+  "motion-keyframe": "Keyframe",
+  state: "State",
   attachment: "File",
 };
 
 /** "Screenshot · dark": the role, plus the colour scheme it was captured in when known. */
 function labelOf(asset: AssetDTO) {
-  const scheme = typeof asset.meta?.colorScheme === "string" ? asset.meta.colorScheme : null;
-  return scheme && asset.role !== "attachment" ? `${ROLE_LABEL[asset.role]} · ${scheme}` : ROLE_LABEL[asset.role];
+  const m = asset.meta ?? {};
+  if (asset.role === "state" && typeof m.state === "string") return `State · ${m.state}`;
+  if (asset.role === "motion-keyframe" && typeof m.keyframe === "number") return `Keyframe ${m.keyframe}`;
+  const parts = [ROLE_LABEL[asset.role]];
+  if (typeof m.viewportName === "string") parts.push(m.viewportName);
+  if (typeof m.colorScheme === "string" && asset.role !== "attachment" && asset.role !== "state")
+    parts.push(m.colorScheme);
+  return parts.join(" · ");
 }
 
 const ACCEPT = "image/*,video/*,.svg,.json,.lottie,.woff,.woff2,.ttf,.otf,.txt,.md,.css,.ts,.tsx,.js,.jsx,.html";
@@ -85,10 +96,11 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
   const [over, setOver] = useState(false);
   const [viewing, setViewing] = useState(false);
 
-  const recapture = async (options: CaptureOptions = {}) => {
+  const recapture = async (options: CaptureOptions & { defer?: boolean } = {}) => {
     try {
       await api(`/api/resources/${resource.id}/capture`, { method: "POST", json: options });
       invalidate(resource.id);
+      if (options.defer) toast.success("Saved as a request. Start it from the capture queue when you want.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not start capture");
     }
@@ -329,6 +341,15 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
                   <DropdownMenuItem onSelect={() => recapture({ theme: "light" })}>Light theme</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => recapture({ theme: "dark" })}>Dark theme</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => recapture({ theme: "both" })}>Both themes</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => recapture({ viewports: ["tablet", "mobile"] })}>
+                    Tablet and mobile too
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => recapture({ motion: true })}>
+                    Record motion (video and keyframes)
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => recapture({ defer: true })}>Capture later…</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -387,12 +408,23 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
         </div>
       )}
 
-      {capturable && <CaptureHistory resourceId={resource.id} status={resource.captureStatus} />}
+      {capturable && assets.some((a) => a.role === "screenshot-original") && (
+        <CompareOriginal resourceId={resource.id} />
+      )}
+      {capturable && (
+        <CaptureHistory
+          resourceId={resource.id}
+          status={resource.captureStatus}
+          hasMotion={assets.some((a) => a.role === "motion-video")}
+          onRecordMotion={() => recapture({ motion: true })}
+        />
+      )}
     </section>
   );
 }
 
 const ATTEMPT_STATUS: Record<CaptureAttemptDTO["status"], string> = {
+  deferred: "Requested for later",
   queued: "Queued",
   capturing: "Capturing",
   completed: "Completed",
@@ -402,46 +434,69 @@ const ATTEMPT_STATUS: Record<CaptureAttemptDTO["status"], string> = {
 };
 
 /** Every capture of this resource: when, how, what came out. Collapsed by default. */
-function CaptureHistory({ resourceId, status }: { resourceId: string; status: string | null }) {
+function CaptureHistory({
+  resourceId,
+  status,
+  hasMotion,
+  onRecordMotion,
+}: {
+  resourceId: string;
+  status: string | null;
+  /** A recording is already there: no need to suggest one. */
+  hasMotion: boolean;
+  onRecordMotion: () => void;
+}) {
   const { data } = useQuery({
     queryKey: ["capture-attempts", resourceId, status],
     queryFn: () => api<{ attempts: CaptureAttemptDTO[] }>(`/api/resources/${resourceId}/capture`),
   });
   const attempts = data?.attempts ?? [];
   if (!attempts.length) return null;
+  const latestDone = attempts.find((a) => a.status === "completed" || a.status === "partial");
+  const suggestMotion = latestDone?.context.motionLikely === true && !latestDone.context.motion && !hasMotion;
   return (
-    <details className="text-xs text-ink-muted">
-      <summary className="w-fit cursor-pointer rounded-full px-2 py-1 hover:text-ink">
-        Capture history ({attempts.length})
-      </summary>
-      <ol className="mt-2 space-y-1.5">
-        {attempts.map((a) => {
-          const ctx = a.context as {
-            theme?: string;
-            colorScheme?: string;
-            variantColorScheme?: string;
-            expandContent?: boolean;
-            retries?: number;
-          };
-          const details = [
-            [ctx.colorScheme ?? ctx.theme, ctx.variantColorScheme].filter(Boolean).join(" + "),
-            ctx.expandContent ? "expanded content" : null,
-            ctx.retries ? `${ctx.retries} retr${ctx.retries > 1 ? "ies" : "y"}` : null,
-            a.quality === "needs_review" ? "needs review" : null,
-          ].filter(Boolean);
-          return (
-            <li key={a.id} className="flex flex-wrap gap-x-2 rounded-[10px] bg-surface px-3 py-2">
-              <span className="text-ink-secondary">{ATTEMPT_STATUS[a.status]}</span>
-              <time className="font-mono tabular-nums" dateTime={a.requestedAt}>
-                {new Date(a.requestedAt).toLocaleString()}
-              </time>
-              {details.length > 0 && <span>{details.join(" · ")}</span>}
-              {a.error && <span className="basis-full">{a.error}</span>}
-            </li>
-          );
-        })}
-      </ol>
-    </details>
+    <>
+      {suggestMotion && (
+        <p className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+          The last capture saw animation on this page; a still image may miss it.
+          <Button size="xs" variant="secondary" onClick={onRecordMotion}>
+            Record motion
+          </Button>
+        </p>
+      )}
+      <details className="text-xs text-ink-muted">
+        <summary className="w-fit cursor-pointer rounded-full px-2 py-1 hover:text-ink">
+          Capture history ({attempts.length})
+        </summary>
+        <ol className="mt-2 space-y-1.5">
+          {attempts.map((a) => {
+            const ctx = a.context as {
+              theme?: string;
+              colorScheme?: string;
+              variantColorScheme?: string;
+              expandContent?: boolean;
+              retries?: number;
+            };
+            const details = [
+              [ctx.colorScheme ?? ctx.theme, ctx.variantColorScheme].filter(Boolean).join(" + "),
+              ctx.expandContent ? "expanded content" : null,
+              ctx.retries ? `${ctx.retries} retr${ctx.retries > 1 ? "ies" : "y"}` : null,
+              a.quality === "needs_review" ? "needs review" : null,
+            ].filter(Boolean);
+            return (
+              <li key={a.id} className="flex flex-wrap gap-x-2 rounded-[10px] bg-surface px-3 py-2">
+                <span className="text-ink-secondary">{ATTEMPT_STATUS[a.status]}</span>
+                <time className="font-mono tabular-nums" dateTime={a.requestedAt}>
+                  {new Date(a.requestedAt).toLocaleString()}
+                </time>
+                {details.length > 0 && <span>{details.join(" · ")}</span>}
+                {a.error && <span className="basis-full">{a.error}</span>}
+              </li>
+            );
+          })}
+        </ol>
+      </details>
+    </>
   );
 }
 
@@ -462,5 +517,82 @@ function AssetNotes({ asset, resourceId }: { asset: AssetDTO; resourceId: string
       aria-label="File note"
       className="h-8 basis-full text-xs"
     />
+  );
+}
+
+interface CompareSide {
+  capturedAt: string | null;
+  createdAt: string;
+  colorScheme: string | null;
+}
+
+/**
+ * Original against Latest: how much changed, a picture of where, and when each was taken. A big change can be kept as
+ * a new design version instead of replacing the old one.
+ */
+function CompareOriginal({ resourceId }: { resourceId: string }) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const { data, error, isLoading } = useQuery({
+    queryKey: ["compare", resourceId],
+    queryFn: () =>
+      api<{ changedRatio: number; redesignHint: boolean; a: CompareSide; b: CompareSide }>(
+        `/api/resources/${resourceId}/compare`,
+      ),
+    enabled: open,
+  });
+  const saveVersion = async () => {
+    setSaving(true);
+    try {
+      const res = await api<{ path: string }>(`/api/resources/${resourceId}/versions`, { method: "POST" });
+      toast.success("Saved as a new design version", {
+        action: { label: "Open", onClick: () => (location.href = res.path) },
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save the version");
+    } finally {
+      setSaving(false);
+    }
+  };
+  const when = (x: CompareSide) =>
+    `${new Date(x.capturedAt ?? x.createdAt).toLocaleString()}${x.colorScheme ? ` · ${x.colorScheme}` : ""}`;
+  return (
+    <details className="text-xs text-ink-muted" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary className="w-fit cursor-pointer rounded-full px-2 py-1 hover:text-ink">
+        Compare Original and Latest
+      </summary>
+      <div className="mt-2 space-y-2 rounded-[14px] bg-surface p-3">
+        {isLoading && <Loader2 className="size-3.5 animate-spin" aria-label="Comparing" />}
+        {error && <p className="text-danger">{error.message}</p>}
+        {data && (
+          <>
+            <p className="text-ink">
+              {(data.changedRatio * 100).toFixed(1)}% of the pixels changed.{" "}
+              <span className="text-ink-muted">
+                Original {when(data.a)}; Latest {when(data.b)}. Dates, carousels and ads count as change too.
+              </span>
+            </p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`/api/resources/${resourceId}/compare/image`}
+              alt="The Latest screenshot dimmed, with the pixels that changed since the Original in orange"
+              className="max-h-[60vh] w-full rounded-[10px] object-contain object-top"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              {data.redesignHint && <span className="text-ink">This looks like a redesign.</span>}
+              <Button
+                size="xs"
+                variant={data.redesignHint ? "secondary" : "ghost"}
+                className={data.redesignHint ? "bg-surface-raised" : undefined}
+                disabled={saving}
+                onClick={saveVersion}
+              >
+                Save Latest as a new design version
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </details>
   );
 }

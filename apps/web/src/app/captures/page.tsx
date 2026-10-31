@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 type Attempt = CaptureAttemptDTO & { title: string; type: string };
 
 const STATUS: Record<CaptureAttemptDTO["status"], string> = {
+  deferred: "Requested for later",
   queued: "Queued",
   capturing: "Capturing",
   completed: "Completed",
@@ -23,6 +24,7 @@ const STATUS: Record<CaptureAttemptDTO["status"], string> = {
 
 const FILTERS = [
   { id: "all", label: "All", statuses: "" },
+  { id: "requested", label: "Requested for later", statuses: "deferred" },
   { id: "active", label: "Queued & capturing", statuses: "queued,capturing" },
   { id: "problems", label: "Failed & partial", statuses: "failed,partial" },
 ] as const;
@@ -51,6 +53,27 @@ export default function CapturesPage() {
     }
   };
 
+  const runLater = async (a: Attempt, what: "run" | "drop") => {
+    try {
+      await api(what === "run" ? `/api/captures/${a.id}/run` : `/api/captures/${a.id}`, {
+        method: what === "run" ? "POST" : "DELETE",
+      });
+      toast.success(what === "run" ? "Capturing now" : "Request dropped");
+      invalidate(a.resourceId);
+      await refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong");
+    }
+  };
+  const { data: health } = useQuery({
+    queryKey: ["capture-health"],
+    queryFn: () =>
+      api<{
+        failingSites: { host: string; failures: number; lastError: string | null }[];
+        regressions: { resourceId: string; title: string; reasons: string[] }[];
+      }>("/api/captures/health"),
+  });
+
   const attempts = data?.attempts ?? [];
   return (
     <div className="mx-auto max-w-4xl space-y-8 px-4 pt-10 pb-16 md:px-10">
@@ -61,6 +84,26 @@ export default function CapturesPage() {
           as a status, not a percentage.
         </p>
       </div>
+      {health && (health.failingSites.length > 0 || health.regressions.length > 0) && (
+        <section role="status" aria-label="Worth a look" className="space-y-1.5 rounded-[14px] bg-surface p-4 text-sm">
+          <h2 className="text-ink">Worth a look</h2>
+          {health.failingSites.map((h) => (
+            <p key={h.host} className="text-ink-muted">
+              <span className="text-warning">{h.host}</span> failed {h.failures} times this week with no success since
+              {h.lastError ? `: ${h.lastError}` : "."} Retrying won’t help until that changes; upload a screenshot or
+              use the extension.
+            </p>
+          ))}
+          {health.regressions.map((r) => (
+            <p key={r.resourceId} className="text-ink-muted">
+              <Link href={`/r/${r.resourceId}`} className="text-ink hover:underline">
+                {r.title}
+              </Link>
+              : the newest capture looks worse than an earlier one ({r.reasons.join(", ")}).
+            </p>
+          ))}
+        </section>
+      )}
       <div role="radiogroup" aria-label="Show" className="flex flex-wrap gap-2">
         {FILTERS.map((f) => (
           <Button
@@ -114,7 +157,21 @@ export default function CapturesPage() {
                 <time className="font-mono text-xs text-ink-subtle tabular-nums" dateTime={a.requestedAt}>
                   {new Date(a.requestedAt).toLocaleString()}
                 </time>
-                {running ? (
+                {a.status === "deferred" ? (
+                  <span className="flex gap-1.5">
+                    <Button
+                      size="xs"
+                      variant="secondary"
+                      className="bg-surface-raised"
+                      onClick={() => runLater(a, "run")}
+                    >
+                      Capture now
+                    </Button>
+                    <Button size="xs" variant="ghost" onClick={() => runLater(a, "drop")}>
+                      Drop
+                    </Button>
+                  </span>
+                ) : running ? (
                   <Button size="xs" variant="secondary" className="bg-surface-raised" onClick={() => act(a, "DELETE")}>
                     Cancel
                   </Button>

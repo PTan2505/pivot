@@ -86,14 +86,14 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 18  | Original / Latest                   | Conflict | 1         | [x]  |
 | 19  | Collection suggestions              | Missing  | 3, 5      | [x]  |
 | 20  | Motion: suggest and record          | Missing  | 6         | [ ]  |
-| 21  | Scroll animation, keyframes         | Partial  | 6         | [ ]  |
+| 21  | Scroll animation, keyframes         | Partial  | 6         | [x]  |
 | 22  | Section context                     | Missing  | 4         | [x]  |
-| 23  | Responsive capture                  | Missing  | 6         | [ ]  |
+| 23  | Responsive capture                  | Missing  | 6         | [x]  |
 | 24  | Signed-in pages                     | Partial  | 4         | [x]  |
 | 25  | Redaction                           | Missing  | 4         | [x]  |
 | 26  | Status vs quality vs review         | Partial  | 1         | [x]  |
 | 27  | Relationships                       | Missing  | 4         | [x]  |
-| 28  | Design Versions                     | Missing  | 6         | [ ]  |
+| 28  | Design Versions                     | Missing  | 6         | [x]  |
 | 29  | Annotations                         | Partial  | 6         | [ ]  |
 | 30  | Layered metadata                    | Partial  | 5         | [x]  |
 | 31  | Provenance                          | Partial  | 3         | [x]  |
@@ -121,10 +121,10 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 53  | Lifecycle and recovery              | Partial  | 1, 2      | [ ]  |
 | 54  | Activity log                        | Missing  | 1, 3      | [x]  |
 | 55  | Cancel / Undo / Discard             | Partial  | 1, 3      | [x]  |
-| 56  | Deferred capture                    | Missing  | 6         | [ ]  |
+| 56  | Deferred capture                    | Missing  | 6         | [x]  |
 | 57  | Capture context snapshot            | Missing  | 1         | [x]  |
-| 58  | Capture comparison                  | Missing  | 6         | [ ]  |
-| 59  | Health signals                      | Missing  | 6         | [ ]  |
+| 58  | Capture comparison                  | Missing  | 6         | [x]  |
+| 59  | Health signals                      | Missing  | 6         | [x]  |
 | 60  | Progressive disclosure              | Partial  | 3         | [x]  |
 | 61  | Lightweight extension               | Exists   | all       | [ ]  |
 | 62  | Secure defaults                     | Partial  | 2         | [x]  |
@@ -230,13 +230,13 @@ Files: `packages/mcp-tools/src/tools.ts`, `apps/mcp/src/http-source.ts`, new rou
 
 ### Phase 6 — Later (one PR each, when wanted)
 
-- [ ] Motion: server video with Playwright `recordVideo` on request, plus keyframes; extension tab recording through `tabCapture` or an offscreen document; never restarted automatically (#20, #21).
-- [ ] Responsive: Desktop / Tablet / Mobile server shots on request, in the same reference (#23).
+- [ ] Motion: server video with Playwright `recordVideo` on request, plus keyframes (done in 6.1, with a "Record motion" hint when the page animates); extension tab recording through `tabCapture` or an offscreen document; never restarted automatically (#20, #21).
+- [x] Responsive: Desktop / Tablet / Mobile server shots on request, in the same reference (#23).
 - [ ] Interaction states (#33) and pin or region annotations (#29).
-- [ ] Design Versions and visual diff (#28, #58).
+- [x] Design Versions and visual diff (#28, #58).
 - [ ] Export / import / backup and device transfer, reusing `exportBundle` in `context.ts` (#39, #40, #51).
 - [ ] Share Package as a file (#41).
-- [ ] Selective asset extraction (#32), deferred capture (#56), health alerts (#59).
+- [ ] Selective asset extraction (#32). Deferred capture (#56) and health alerts (#59): done in 6.1.
 
 ### Optional
 

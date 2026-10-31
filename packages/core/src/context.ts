@@ -76,12 +76,12 @@ function fence(content: string, lang = "") {
 }
 
 function relevantAssets(assets: AssetDTO[], opts: ContextOptions) {
-  // Exports carry the Latest capture; the kept Original and the other colour scheme stay in PIVOT.
+  // Exports carry the Latest capture, states and attachments; the kept Original, the other colour scheme, the tablet
+  // and mobile shots and motion recordings stay in PIVOT.
   return assets.filter(
     (a) =>
       !a.missing &&
-      !a.role.endsWith("-original") &&
-      !a.role.endsWith("-variant") &&
+      ["screenshot", "screenshot-full", "state", "attachment"].includes(a.role) &&
       (a.role !== "screenshot-full" || opts.includeFullScreenshots) &&
       a.kind !== "font",
   );

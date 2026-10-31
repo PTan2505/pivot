@@ -1,17 +1,29 @@
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Browser, Page } from "playwright";
 import sharp from "sharp";
 import { attachAsset, deleteOrphanAssets, saveAsset } from "./assets";
 import { getDb } from "./db/client";
-import { captureAttempts, resourceAssets, resources } from "./db/schema";
+import { assets, captureAttempts, resourceAssets, resources } from "./db/schema";
 import { fetchUrlMetadata } from "./metadata";
 import { assertPublicUrl, safeFetch, UnsafeUrlError } from "./net-guard";
 import { setResourceFields } from "./resources";
 import { getCaptureSettings } from "./settings";
-import type { AssetRole, CaptureAttemptDTO, CaptureOptions, CaptureQuality, CaptureTheme } from "./types";
+import {
+  RESPONSIVE_VIEWPORTS,
+  type AssetRole,
+  type CaptureAttemptDTO,
+  type CaptureOptions,
+  type CaptureQuality,
+  type CaptureTheme,
+  type ResponsiveViewport,
+} from "./types";
 
-const VIEWPORT = { width: 1440, height: 900 };
+const DESKTOP = { width: 1440, height: 900 };
+const VIEWPORT = DESKTOP;
 /** Full-page shots keep only the top 12000px: frames below it are never shot. */
 export const MAX_FULL_PAGE_HEIGHT = 12_000;
 /** Upper bounds for walking a page before the full-page shot, so endless feeds still finish. */
@@ -150,16 +162,17 @@ async function loadWholePage(page: Page, settle: ReturnType<typeof networkQuiet>
   let clicks = 0;
   // Scroll the way a visitor does, with the wheel, so pages that react to wheel or scroll events (reveals, lazy
   // sections, scroll-linked effects) load as they would for a person. The pointer sits mid-page.
-  await page.mouse.move(VIEWPORT.width / 2, VIEWPORT.height / 2);
+  const vp = page.viewportSize() ?? VIEWPORT;
+  await page.mouse.move(vp.width / 2, vp.height / 2);
   for (let step = 0; step < MAX_SCROLL_STEPS && Date.now() - started < SCROLL_BUDGET_MS; step++) {
     const before = await page.evaluate<{ bottom: number; height: number }>(SCROLL_POSITION);
-    await page.mouse.wheel(0, Math.round(VIEWPORT.height * 0.85));
+    await page.mouse.wheel(0, Math.round(vp.height * 0.85));
     await page.waitForTimeout(150);
     let { bottom, height } = await page.evaluate<{ bottom: number; height: number }>(SCROLL_POSITION);
     // the wheel landed on something that swallows it (a map, an iframe): scroll the page directly
     if (bottom <= before.bottom && bottom < height - 2)
       ({ bottom, height } = await page.evaluate<{ bottom: number; height: number }>(
-        scrollStep(Math.round(VIEWPORT.height * 0.85)),
+        scrollStep(Math.round(vp.height * 0.85)),
       ));
     await settle(250, 2500);
     if (height >= MAX_FULL_PAGE_HEIGHT) break;
@@ -268,6 +281,7 @@ const FRAME_SETTLE_MS = 500;
  * stretches 100vh sections and catches scroll-revealed content before it appears.
  */
 async function stitchedFullPage(page: Page, settle: ReturnType<typeof networkQuiet>) {
+  const VIEWPORT = page.viewportSize() ?? DESKTOP;
   await page.evaluate(NO_SMOOTH_SCROLL).catch(() => {});
   const total = Math.min(MAX_FULL_PAGE_HEIGHT, await page.evaluate<number>(PAGE_HEIGHT));
   const frames: { input: Buffer; top: number; left: number }[] = [];
@@ -323,6 +337,10 @@ const PAGE_ISSUES = `(() => {
     images: images.length,
     fonts: document.fonts ? document.fonts.status : "loaded",
     text: (document.body ? document.body.innerText : "").trim().length,
+    // running CSS/Web animations, videos and canvases: the page probably moves, so a recording may say more
+    moving:
+      (document.getAnimations ? document.getAnimations().filter((a) => a.playState === "running").length : 0) +
+      document.querySelectorAll("video, canvas").length,
   };
 })()`;
 
@@ -330,14 +348,16 @@ const PAGE_ISSUES = `(() => {
 async function qualityIssues(page: Page, viewport: Buffer) {
   const issues: string[] = [];
   const info = await page
-    .evaluate<{ password: boolean; broken: number; images: number; fonts: string; text: number }>(PAGE_ISSUES)
+    .evaluate<{ password: boolean; broken: number; images: number; fonts: string; text: number; moving: number }>(
+      PAGE_ISSUES,
+    )
     .catch(() => null);
   if (info?.password && info.text < 3000) issues.push("sign_in_page");
   if (info && (info.broken >= 3 || (info.broken > 0 && info.broken / info.images > 0.3))) issues.push("broken_images");
   if (info && info.fonts !== "loaded") issues.push("fonts_not_loaded");
   const stats = await sharp(viewport).stats();
   if (stats.channels.slice(0, 3).every((c) => c.stdev < 3)) issues.push("blank");
-  return issues;
+  return { issues, motionLikely: (info?.moving ?? 0) >= 2 };
 }
 
 /** Seconds or an HTTP date, as in a Retry-After header. */
@@ -347,6 +367,40 @@ function parseRetryAfter(value: string | undefined) {
   if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
   const at = Date.parse(value);
   return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now());
+}
+
+/** A phone's user agent, so sites that pick a layout by device serve their mobile one. */
+const MOBILE_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+const MAX_MOTION_MS = 12_000;
+const MAX_KEYFRAMES = 8;
+
+/**
+ * Scrolls down the page the way a visitor reads it (wheel steps, short pauses) while the video records, and keeps a
+ * still frame every so often: scroll-driven effects, sticky parts and canvases show in the video and the keyframes
+ * even when a stitched image can't represent them.
+ */
+async function walkWithKeyframes(page: Page) {
+  const vp = page.viewportSize() ?? DESKTOP;
+  const frames: { data: Buffer; scrollY: number }[] = [];
+  const started = Date.now();
+  await page.mouse.move(vp.width / 2, vp.height / 2);
+  await page.waitForTimeout(600);
+  let lastFrameAt = -Infinity;
+  while (Date.now() - started < MAX_MOTION_MS) {
+    const { bottom, height } = await page.evaluate<{ bottom: number; height: number }>(SCROLL_POSITION);
+    const y = await page.evaluate<number>("scrollY");
+    if (y - lastFrameAt >= vp.height * 0.8 && frames.length < MAX_KEYFRAMES) {
+      const shot = await page.screenshot({ type: "png" });
+      frames.push({ data: await sharp(shot).webp({ quality: 80 }).toBuffer(), scrollY: Math.round(y) });
+      lastFrameAt = y;
+    }
+    if (bottom >= height - 2) break;
+    await page.mouse.wheel(0, Math.round(vp.height * 0.25));
+    await page.waitForTimeout(250);
+  }
+  await page.waitForTimeout(500);
+  return frames;
 }
 
 /** Clicks one visible "Load more"-style button. Buttons only, never links or form submits, so it can't navigate. */
@@ -398,6 +452,9 @@ export async function screenshotUrl(
     expandContent = false,
     colorScheme = "dark",
     signal,
+    viewport = DESKTOP,
+    mobile = false,
+    motion = false,
   }: {
     fullPage?: boolean;
     timeoutMs?: number;
@@ -405,6 +462,12 @@ export async function screenshotUrl(
     colorScheme?: "light" | "dark";
     /** Aborting it stops the capture as soon as the browser can be closed. */
     signal?: AbortSignal;
+    /** The browser window size; 1440×900 by default. */
+    viewport?: { width: number; height: number };
+    /** A phone or tablet: touch, mobile layout rules and a mobile user agent, not a shrunk desktop. */
+    mobile?: boolean;
+    /** Record the page scrolling as a video, with keyframes, instead of the full-page shot. */
+    motion?: boolean;
   } = {},
 ) {
   if (signal?.aborted) throw new CaptureError("The capture was cancelled.", "cancelled");
@@ -412,11 +475,14 @@ export async function screenshotUrl(
   const start = await followRedirects(url);
   const b = await browser();
   // Service workers would answer requests the route below never sees.
+  const videoDir = motion ? await fs.mkdtemp(path.join(os.tmpdir(), "pivot-motion-")) : null;
   const context = await b.newContext({
-    viewport: VIEWPORT,
+    viewport,
     deviceScaleFactor: 1,
     colorScheme,
     serviceWorkers: "block",
+    ...(mobile ? { isMobile: true, hasTouch: true, userAgent: MOBILE_UA } : {}),
+    ...(videoDir ? { recordVideo: { dir: videoDir, size: viewport } } : {}),
   });
   let cancelled = false;
   const onAbort = () => {
@@ -489,10 +555,17 @@ export async function screenshotUrl(
     await page
       .evaluate("document.fonts ? Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 2000))]) : 0")
       .catch(() => {});
-    const viewport = await page.screenshot({ type: "png" });
-    const issues = await qualityIssues(page, viewport);
+    const first = await page.screenshot({ type: "png" });
+    const { issues, motionLikely } = await qualityIssues(page, first);
     let full: Buffer | null = null;
-    if (fullPage) {
+    let video: Buffer | null = null;
+    let keyframes: { data: Buffer; scrollY: number }[] = [];
+    if (motion) {
+      keyframes = await walkWithKeyframes(page);
+      const file = await page.video()?.path();
+      await context.close();
+      video = file ? await fs.readFile(file).catch(() => null) : null;
+    } else if (fullPage) {
       await loadWholePage(page, settle, expandContent).catch(() => {});
       // A broken full-page shot must not cost us the viewport shot.
       const stitched = await stitchedFullPage(page, settle).catch(() => null);
@@ -503,11 +576,14 @@ export async function screenshotUrl(
     await assertStayedPublic();
     if (cancelled) throw new CaptureError("The capture was cancelled.", "cancelled");
     return {
-      viewport: await sharp(viewport).webp({ quality: 85 }).toBuffer(),
+      viewport: await sharp(first).webp({ quality: 85 }).toBuffer(),
       full,
       issues,
       finalUrl: page.url(),
       colorScheme,
+      video,
+      keyframes,
+      motionLikely,
     };
   } catch (err) {
     await Promise.all(checks);
@@ -528,6 +604,10 @@ export async function screenshotUrl(
   } finally {
     signal?.removeEventListener("abort", onAbort);
     clearTimeout(deadline);
+    if (videoDir) {
+      await context.close().catch(() => {});
+      await fs.rm(videoDir, { recursive: true, force: true }).catch(() => {});
+    }
     await context.close().catch(() => {});
     scheduleIdleClose();
   }
@@ -604,6 +684,8 @@ type Shots = Awaited<ReturnType<typeof screenshotUrl>>;
 interface AttemptContext {
   expandContent?: boolean;
   theme?: CaptureTheme;
+  viewports?: ResponsiveViewport[];
+  motion?: boolean;
   retries?: number;
   retryAt?: string;
   previousStatus?: string | null;
@@ -728,6 +810,7 @@ async function applyShots(
       finalUrl: shots.finalUrl,
       colorScheme: shots.colorScheme,
       viewport: VIEWPORT,
+      ...(shots.motionLikely ? { motionLikely: true } : {}),
       ...(variant ? { variantColorScheme: variant.colorScheme } : {}),
     },
   });
@@ -795,10 +878,15 @@ async function captureOne(job: Job) {
         return null;
       });
     }
+    // Extras first: the resource stays "pending" until everything asked for is done.
+    const extras =
+      context.viewports?.length || context.motion
+        ? await captureExtras(resourceId, row.sourceUrl, context, wantFull, primary, abort.signal)
+        : undefined;
     await applyShots(
       resourceId,
       attemptId,
-      variantError ? { ...context, variantError } : context,
+      { ...context, ...(variantError ? { variantError } : {}), ...(extras ? { extras } : {}) },
       wantFull,
       shots,
       variant,
@@ -838,6 +926,113 @@ async function captureOne(job: Job) {
   } finally {
     state.current = undefined;
   }
+}
+
+/**
+ * The extras asked for with one capture: tablet and mobile screenshots (real sizes, not a shrunk desktop) and a
+ * motion recording with keyframes. Each replaces the earlier one of its kind; a failure is noted but doesn't fail the
+ * capture, whose main shots are already saved.
+ */
+async function captureExtras(
+  resourceId: string,
+  sourceUrl: string,
+  context: AttemptContext,
+  wantFull: boolean,
+  colorScheme: "light" | "dark",
+  signal: AbortSignal,
+) {
+  const host = new URL(sourceUrl).hostname.replace(/^www\./, "");
+  const stamp = new Date().toISOString().slice(0, 10);
+  const db = await getDb();
+  const extras: Record<string, string> = {};
+  const replace = async (roles: AssetRole[], match: (meta: Record<string, unknown>) => boolean, keep: string[]) => {
+    const rows = await db
+      .select({ assetId: resourceAssets.assetId, meta: assets.meta })
+      .from(resourceAssets)
+      .innerJoin(assets, eq(assets.id, resourceAssets.assetId))
+      .where(and(eq(resourceAssets.resourceId, resourceId), inArray(resourceAssets.role, roles)));
+    const old = rows.filter((r) => match(r.meta ?? {}) && !keep.includes(r.assetId)).map((r) => r.assetId);
+    await detachAssets(resourceId, old);
+    await deleteOrphanAssets(old);
+  };
+  const meta = (extra: Record<string, unknown>) => ({
+    method: "server",
+    colorScheme,
+    capturedAt: new Date().toISOString(),
+    ...extra,
+  });
+
+  for (const name of context.viewports ?? []) {
+    const size = RESPONSIVE_VIEWPORTS[name];
+    try {
+      const shots = await screenshotUrl(sourceUrl, {
+        fullPage: wantFull,
+        expandContent: !!context.expandContent,
+        colorScheme,
+        signal,
+        viewport: { width: size.width, height: size.height },
+        mobile: size.mobile,
+      });
+      const m = meta({
+        viewportName: name,
+        viewport: { width: size.width, height: size.height },
+        finalUrl: shots.finalUrl,
+      });
+      const first = await saveAsset({
+        data: shots.viewport,
+        fileName: `${host}-${stamp}-${name}.webp`,
+        sourceUrl,
+        meta: m,
+      });
+      const full =
+        shots.full &&
+        (await saveAsset({ data: shots.full, fileName: `${host}-${stamp}-${name}-full.webp`, sourceUrl, meta: m }));
+      await attachAsset(resourceId, first.id, "screenshot-responsive");
+      if (full) await attachAsset(resourceId, full.id, "screenshot-full-responsive");
+      await replace(["screenshot-responsive", "screenshot-full-responsive"], (x) => x.viewportName === name, [
+        first.id,
+        ...(full ? [full.id] : []),
+      ]);
+      extras[name] = shots.issues.length ? `needs review (${describeQuality(shots.issues)})` : "done";
+    } catch (err) {
+      if (err instanceof CaptureError && err.kind === "cancelled") throw err;
+      extras[name] = `failed: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+
+  if (context.motion) {
+    try {
+      const shots = await screenshotUrl(sourceUrl, { colorScheme, signal, motion: true });
+      const kept: string[] = [];
+      if (shots.video) {
+        const video = await saveAsset({
+          data: shots.video,
+          fileName: `${host}-${stamp}-motion.webm`,
+          mimeType: "video/webm",
+          sourceUrl,
+          meta: meta({ viewport: DESKTOP, finalUrl: shots.finalUrl }),
+        });
+        await attachAsset(resourceId, video.id, "motion-video");
+        kept.push(video.id);
+      }
+      for (const [i, frame] of shots.keyframes.entries()) {
+        const asset = await saveAsset({
+          data: frame.data,
+          fileName: `${host}-${stamp}-keyframe-${i + 1}.webp`,
+          sourceUrl,
+          meta: meta({ keyframe: i + 1, scrollY: frame.scrollY, viewport: DESKTOP }),
+        });
+        await attachAsset(resourceId, asset.id, "motion-keyframe");
+        kept.push(asset.id);
+      }
+      await replace(["motion-video", "motion-keyframe"], () => true, kept);
+      extras.motion = shots.video ? `done (${shots.keyframes.length} keyframes)` : "no video was recorded";
+    } catch (err) {
+      if (err instanceof CaptureError && err.kind === "cancelled") throw err;
+      extras.motion = `failed: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+  return extras;
 }
 
 /** Makes an uploaded image the resource's screenshot: it replaces the Latest shots and becomes the cover. */
@@ -894,7 +1089,11 @@ async function drain() {
  * Queues a background screenshot and returns the attempt's id. Progress is visible through resources.capture_status
  * and the attempt. Options left out use the capture settings.
  */
-export async function enqueueCapture(resourceId: string, options: CaptureOptions = {}) {
+export async function enqueueCapture(
+  resourceId: string,
+  options: CaptureOptions = {},
+  { defer = false }: { defer?: boolean } = {},
+) {
   const busy =
     state.current?.job.resourceId === resourceId
       ? state.current.job
@@ -923,18 +1122,46 @@ export async function enqueueCapture(resourceId: string, options: CaptureOptions
     .values({
       resourceId,
       method: "server",
-      status: "queued",
+      status: defer ? "deferred" : "queued",
       context: {
         expandContent: options.expandContent ?? settings.expandContent,
         theme: options.theme ?? settings.theme,
+        ...(options.viewports?.length ? { viewports: options.viewports } : {}),
+        ...(options.motion ? { motion: true } : {}),
         previousStatus: row?.captureStatus ?? null,
       },
     })
     .returning({ id: captureAttempts.id });
+  // "Capture later" is only a request: it waits, untouched, until you run it.
+  if (defer) return attempt.id;
   await setResourceFields(resourceId, { captureStatus: "pending", captureError: null });
   state.queue.push({ resourceId, attemptId: attempt.id });
   void drain();
   return attempt.id;
+}
+
+/** Starts a "capture later" request now. Returns false when there is no such waiting request. */
+export async function runDeferredCapture(attemptId: string) {
+  const db = await getDb();
+  const [a] = await db.select().from(captureAttempts).where(eq(captureAttempts.id, attemptId)).limit(1);
+  if (!a || a.status !== "deferred") return false;
+  if (state.current?.job.resourceId === a.resourceId || state.queue.some((j) => j.resourceId === a.resourceId)) {
+    return false;
+  }
+  await updateAttempt(attemptId, { status: "queued", requestedAt: a.requestedAt });
+  await setResourceFields(a.resourceId, { captureStatus: "pending", captureError: null });
+  state.queue.push({ resourceId: a.resourceId, attemptId });
+  void drain();
+  return true;
+}
+
+/** Drops a "capture later" request. */
+export async function cancelDeferredCapture(attemptId: string) {
+  const db = await getDb();
+  const [a] = await db.select().from(captureAttempts).where(eq(captureAttempts.id, attemptId)).limit(1);
+  if (!a || a.status !== "deferred") return false;
+  await updateAttempt(attemptId, { status: "cancelled", finishedAt: new Date() });
+  return true;
 }
 
 /** Stops a queued, waiting or running capture. Shots already saved stay. Returns whether anything was stopped. */

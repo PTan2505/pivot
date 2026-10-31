@@ -13,7 +13,17 @@ Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 | 3     | Popup and library                  | Done        |
 | 4     | Sections, links, private pages     | Done        |
 | 5     | Design track: sessions, MCP writes | Done        |
-| 6     | Later                              | Not started |
+| 6     | Later                              | In progress |
+
+### Phase 6.1 — Capture variants, comparison, versions, requests, health
+
+- Status: Done
+- Existing functionality reused: `screenshotUrl` (now takes a viewport, a mobile mode and a motion mode), the scroll walk and stitching (now sized from the page's viewport), `capture_attempts` (a `deferred` status), asset roles and `saveAsset` dedupe, `createResource`/`createLink` for design versions.
+- Files changed: core `capture.ts` (extras before the status is final, motion walk with keyframes, real mobile/tablet contexts, deferred requests, `motionLikely`), new `compare.ts` (pixel diff, design versions, capture health), `settings.ts` (`cleanCaptureOptions`), `types.ts`, `context.ts` (exports keep to Latest, states and attachments); routes `api/resources/[id]/capture` (viewports, motion, defer), `api/resources/[id]/compare` (+ `/image`), `api/resources/[id]/versions`, `api/captures/health`, `api/captures/[id]` (+ `/run`); web `asset-gallery.tsx` (labels, Retake menu, compare panel, Record motion hint), `app/captures/page.tsx` (requests, Worth a look); MCP role labels; SPEC §12, DESIGN.md.
+- Checks run and results: capture tests 24/24, including 4 new ones (tablet 820 and mobile 390 in one reference and replaced per size; motion video webm + keyframes; a deferred request untouched by time and restarts until run, then done; Original vs Latest diff over 50% on the colour-swapping test page, a new design version sharing the Latest assets and linked `newer_version_of`, the old one keeping its Original; three blocked captures reported as a failing site). A real race found and fixed: the resource turned "done" before the extras were saved.
+- Manual verification: scratch app, the real linear.app/pricing retaken with tablet, mobile and motion: tablet 820×1180 (+ 820×6854 full), mobile 390×844 (+ 390×7605 full), a 13.7 s 1440×900 webm that plays in the detail page, 7 keyframes; the gallery labels them "Viewport · mobile · dark" and "Motion".
+- Remaining issues: extension-side tab recording (signed-in motion, #20) isn't built. The diff compares from the top at one width, so a page that grew at the top shifts everything below.
+- Next step: Phase 6.2 (annotations, states, asset extraction).
 
 ### Phase 5 — Design track: sessions and MCP writes (5a proposal, 5b build)
 
