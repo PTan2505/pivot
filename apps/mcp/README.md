@@ -51,6 +51,14 @@ Pass them with `claude mcp add … -e PIVOT_URL=http://127.0.0.1:4400 -- node �
 claude mcp remove pivot --scope user
 ```
 
+## Design skill
+
+The `pivot-design` skill (`.claude/skills/pivot-design/SKILL.md`) tells Claude how to use these tools when designing: search → look → brief with attributed references → 2–3 mockups → build after you pick. Make it available in every project with:
+
+```bash
+pnpm skill:install
+```
+
 ## Develop
 
 - Tool definitions and their tests: `packages/mcp-tools` (`pnpm --filter @pivot/mcp-tools test`). They're written against the `PivotSource` interface, so a later remote server (Streamable HTTP) can reuse them unchanged; see `docs/SEARCH_MCP_IMPLEMENTATION_PLAN.md`.
