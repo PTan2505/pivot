@@ -230,7 +230,7 @@ Files: `packages/mcp-tools/src/tools.ts`, `apps/mcp/src/http-source.ts`, new rou
 
 ### Phase 6 — Later (one PR each, when wanted)
 
-- [ ] Motion: server video with Playwright `recordVideo` on request, plus keyframes (done in 6.1, with a "Record motion" hint when the page animates); extension tab recording through `tabCapture` or an offscreen document; never restarted automatically (#20, #21).
+- [ ] Motion: server video on request, plus keyframes (done in 6.1; since 2026-11-01 a smooth frame-by-frame scroll to the page bottom instead of `recordVideo`, with a "Record motion" hint when the page animates); extension tab recording through `tabCapture` or an offscreen document; never restarted automatically (#20, #21).
 - [x] Responsive: Desktop / Tablet / Mobile server shots on request, in the same reference (#23).
 - [x] Interaction states (#33) and pin or region annotations (#29).
 - [x] Design Versions and visual diff (#28, #58).
