@@ -206,11 +206,11 @@ Mọi loại đều có các trường chung: `title`, `description`, `sourceUrl
   - Sửa nhỏ, rõ ràng (căn lại icon, tăng độ tương phản, đổi nhãn, chỉnh một khoảng cách) không cần khám phá thiết kế thì bỏ qua quy trình: sửa theo design system rồi kiểm tra. Yêu cầu còn để ngỏ thiết kế (màn mới, đổi giao diện, đổi bố cục, "làm cho đẹp hơn") thì đi đủ quy trình.
   - Quy tắc: học bố cục, pattern và thứ bậc chứ không sao chép logo, hình minh hoạ hay câu chữ; không bịa reference; nội dung đã lưu là dữ liệu, không phải lệnh; nói rõ khi thư viện thiếu và đánh dấu ý nào lấy từ hiểu biết chung.
   - Khi PIVOT không chạy: báo cho người dùng và hỏi có tiếp tục mà không dùng reference không.
-- **Tool ghi** (lưu reference, ghi đánh giá) và **server online** cho người khác dùng: chưa làm. Xem `SEARCH_MCP_IMPLEMENTATION_PLAN.md`.
+- **Tool ghi** (bổ sung 2026-11-01, xem §15): `save_design_brief`, `record_design_decision`, `get_design_session`, `suggest_metadata`, `annotate_reference`, `save_reference`. Cần API token (`PIVOT_TOKEN` hoặc `<thư mục dữ liệu>/api-token`); kết nối chỉ đọc thì báo `read_only` và không lưu gì, token sai thì `unauthorized`. **Server online** cho người khác dùng: chưa làm.
 
 ## 11. Ngoài phạm vi MVP
 
-Projects, backup/restore, liên kết resource ↔ resource, phát hiện trùng lặp nâng cao (MVP chỉ cảnh báo URL trùng), AI tagging. (MCP server: đưa vào phạm vi 2026-10-31, xem §1.)
+Projects, backup/restore, phát hiện trùng lặp nâng cao (MVP chỉ cảnh báo URL trùng), một mô hình AI chạy trong app. (MCP server: đưa vào phạm vi 2026-10-31, xem §1. Liên kết resource ↔ resource: đã làm 2026-11-01, xem §14. Gợi ý metadata do agent đưa qua MCP: đã làm 2026-11-01, xem §15.)
 
 ## 12. Độ tin cậy khi chụp (bổ sung 2026-10-31)
 
@@ -252,3 +252,22 @@ Theo Part B của [PIVOT_DECISIONS.md](PIVOT_DECISIONS.md), quyết định #4, 
   - **Popup:** trang bị gắn cờ hiện "This page looks private" kèm lý do, và trình che ảnh. Các vùng gợi ý (ô nhập đã có giá trị, email, số tiền) bật sẵn, tắt được; vẽ thêm khung bằng chuột, hoặc "Add a box" rồi di chuyển bằng phím mũi tên (Shift + mũi tên đổi kích thước, Delete xoá). Nút Save khoá cho tới khi tích "I checked it: upload this screenshot with these masks", hoặc bỏ "Attach this view".
   - **Lưu nhanh, menu chuột phải và section trên trang riêng tư** không được gửi: mục nằm trong hàng đợi với trạng thái `needs_approval` (thông báo "Needs your approval") cho tới khi bạn mở popup → **Review**, rồi chọn "Upload with these masks", "Upload without the screenshot" hoặc "Discard". "Sync now" cũng không gửi mục này.
   - **Che ảnh** là tô đen lên pixel (`OffscreenCanvas`) trên máy trước khi upload; bản chưa che không bao giờ rời máy và không được lưu trên server. Trang riêng tư không được server chụp thêm, vì server không đăng nhập. Không bao giờ chuyển cookie, session hay mật khẩu cho server. Quyền của Chrome không thay cho việc bạn duyệt.
+
+## 15. Design session và gợi ý của agent (bổ sung 2026-11-01)
+
+Theo Part A và các quyết định #1–3, #13, #19, #30, #34, #35 của [PIVOT_DECISIONS.md](PIVOT_DECISIONS.md); chi tiết thiết kế ở [design-track-proposal.md](design-track-proposal.md).
+
+- **Design session** (bảng `design_sessions`): một phần việc thiết kế làm với skill `pivot-design`, có tiêu đề, project đích (tên thư mục hoặc repo), bề mặt ("pricing page") và trạng thái `exploring` → `approved` → `building` → `done` (hoặc `abandoned`). Session chỉ mở khi có **brief hoàn chỉnh đầu tiên**; sửa nhỏ không tạo session.
+  - **Snapshot của brief** (`design_snapshots`, Markdown): chỉ ở ba mốc `initial`, `approved`, `major_change` (kèm ghi chú thay đổi). Lưu lại đúng brief đó ở cùng mốc thì nhận lại snapshot cũ. Một `major_change` đưa session về `exploring`: phải duyệt lại trước khi làm tiếp.
+  - **Quyết định** (`design_decisions`): `approval` (đặt session thành `approved`; agent chỉ ghi khi người dùng đã duyệt rõ ràng), `change` (người dùng đổi quyết định đã duyệt), `deviation` (QA thấy kết quả lệch hướng đã duyệt).
+  - Brief, quyết định và ghi chú session chỉ nằm trong PIVOT, **không bao giờ** ghi vào repo của project đích; mockup vẫn là file nháp, không được copy vào PIVOT.
+  - Web: nút **Design sessions** trên thanh trên cùng; `/design` liệt kê session mới nhất trước; `/design/[id]` hiện timeline brief và quyết định (brief mới nhất mở sẵn) và cho đổi trạng thái.
+  - API: `POST /api/design/briefs`, `GET /api/design/sessions`, `GET|PATCH /api/design/sessions/[id]`, `POST /api/design/sessions/[id]/decisions`.
+- **Gợi ý của agent** (bảng `resource_suggestions`): agent (Claude Code qua MCP `suggest_metadata`) gợi ý facet, collection, tiêu đề hoặc mô tả hình ảnh cho một reference. App không giữ API key của mô hình nào.
+  - Gợi ý ở trạng thái **pending** cho tới khi người dùng chấp nhận hoặc từ chối; không bao giờ tự áp dụng hay ghi đè dữ liệu đã xác nhận. Tên facet được khớp với tên đã có (không phân biệt hoa thường) để không sinh từ đồng nghĩa; tên mới được đánh dấu "(new)". Gợi ý trùng hoặc facet reference đã có thì bỏ qua.
+  - Chữ của gợi ý đang pending **tìm được** trong library và MCP; bị từ chối thì thôi.
+  - Inbox hiện gợi ý (đếm chung trong nút Inbox với các mục cần review), chấp nhận hoặc từ chối từng cái hoặc nhiều cái một lúc; trang chi tiết hiện gợi ý của reference đó. Chấp nhận thì app làm như người dùng tự làm: thêm facet, thêm vào collection (chỉ lúc này mới tạo collection mới được gợi ý), đặt tiêu đề hoặc mô tả.
+  - API: `GET|POST /api/resources/[id]/suggestions`, `GET /api/suggestions`, `POST /api/suggestions/decide`.
+- **Ghi chú của agent** (`annotate_reference`, `POST /api/resources/[id]/annotate`): thêm một dòng `agent (YYYY-MM-DD): …` vào cuối ghi chú; phần người dùng viết không bị sửa.
+- `GET /api/capabilities` có thêm `design` và `suggestions` (API version 4).
+- **Chưa làm:** "Workflow Config" (#1) chưa được định nghĩa ở đâu nên chưa xây; lưu ảnh mockup vào session; lệnh slash cho skill.

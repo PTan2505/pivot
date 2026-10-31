@@ -291,8 +291,8 @@ As built: `.claude/skills/pivot-design/SKILL.md`, linked into `~/.claude/skills`
 
 ### Step 5 — Write tools (P2), only after P0 has been used (2 d)
 
-- [ ] `save_reference` and `annotate_reference` as in §5.3, with tests for idempotency and append-only notes.
-- [ ] SPEC update for MCP writes.
+- [x] `save_reference` and `annotate_reference` as in §5.3, with tests for idempotency and append-only notes. Built in the design track (2026-11-01) with `save_design_brief`, `record_design_decision`, `get_design_session` and `suggest_metadata`; see [design-track-proposal.md](design-track-proposal.md).
+- [x] SPEC update for MCP writes (§10, §15).
 
 ## 7. Test strategy and acceptance
 

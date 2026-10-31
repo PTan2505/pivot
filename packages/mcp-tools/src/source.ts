@@ -1,5 +1,12 @@
 import type {
   CollectionDTO,
+  DesignDecisionKind,
+  DesignMilestone,
+  DesignSessionDetailDTO,
+  DesignSessionDTO,
+  SuggestionDTO,
+  SuggestionKind,
+  TagKind,
   ResourceDetailDTO,
   ResourceType,
   SearchPage,
@@ -26,7 +33,48 @@ export interface PivotSource {
   getImage(assetId: string, variant: "thumb" | "original"): Promise<{ data: Buffer; mimeType: string }>;
 }
 
-export type ToolErrorCode = "not_found" | "invalid_input" | "invalid_cursor" | "app_unreachable" | "no_images";
+/**
+ * Writes, kept apart from reads: briefs and decisions of a design session, suggestions, notes and new references.
+ * None of them overwrites what the user confirmed. A source without them makes the write tools say so.
+ */
+export interface PivotWriter {
+  saveDesignBrief(input: {
+    sessionId?: string;
+    title: string;
+    targetProject?: string;
+    surface?: string;
+    milestone: DesignMilestone;
+    markdown: string;
+    referenceIds?: string[];
+    note?: string;
+  }): Promise<{ sessionId: string; snapshotId: string; created: boolean; duplicate: boolean }>;
+  recordDesignDecision(
+    sessionId: string,
+    input: { kind: DesignDecisionKind; summary: string; direction?: string; details?: string },
+  ): Promise<{ id: string }>;
+  getDesignSession(id: string): Promise<DesignSessionDetailDTO | null>;
+  listDesignSessions(targetProject?: string): Promise<DesignSessionDTO[]>;
+  addSuggestions(
+    resourceId: string,
+    suggestions: { kind: SuggestionKind; value: Record<string, unknown>; reason?: string }[],
+  ): Promise<{ added: SuggestionDTO[]; skipped: { kind: string; value: Record<string, unknown>; why: string }[] }>;
+  annotate(resourceId: string, note: string): Promise<{ line: string }>;
+  saveReference(input: {
+    url: string;
+    type?: string;
+    title?: string;
+    notes?: string;
+    tags?: { kind: TagKind; name: string }[];
+    collectionIds?: string[];
+  }): Promise<{ id: string; path: string; existing?: boolean; title?: string }>;
+}
+
+export function canWrite(source: PivotSource): source is PivotSource & PivotWriter {
+  return typeof (source as Partial<PivotWriter>).saveDesignBrief === "function";
+}
+
+export type ToolErrorCode =
+  "not_found" | "invalid_input" | "invalid_cursor" | "app_unreachable" | "no_images" | "read_only" | "unauthorized";
 
 /** An error the agent can act on: the code says what kind, the message says what to do. */
 export class ToolError extends Error {

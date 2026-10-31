@@ -12,8 +12,20 @@ Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 | 2     | Extension that survives offline    | Done        |
 | 3     | Popup and library                  | Done        |
 | 4     | Sections, links, private pages     | Done        |
-| 5     | Design track: sessions, MCP writes | Not started |
+| 5     | Design track: sessions, MCP writes | Done        |
 | 6     | Later                              | Not started |
+
+### Phase 5 — Design track: sessions and MCP writes (5a proposal, 5b build)
+
+- Status: Done. 5a is [design-track-proposal.md](design-track-proposal.md); the owner asked for every phase without stopping for review, so it was built as proposed. "Workflow Config" (#1) stays open because nothing defines it.
+- Existing functionality reused: the read tools and `runTool` in `packages/mcp-tools`, `HttpSource` (now also writes, with the API token), `/api/clip` for `save_reference` (duplicates, background capture, Inbox), `findByUrl`, the Inbox from Phase 3, the Markdown renderer for briefs, `updateResource`/`addToCollection`/`createCollection` to apply accepted suggestions.
+- Files changed: core `design.ts`, `suggestions.ts`, `resources.ts` (pending suggestion text is searchable; `suggestions` count), `types.ts`, `capabilities.ts` (API 4), schema + migration `0007` (adds `design_sessions`, `design_snapshots`, `design_decisions`, `resource_suggestions`); routes `api/design/*`, `api/resources/[id]/suggestions`, `api/resources/[id]/annotate`, `api/suggestions`, `api/suggestions/decide`; web `app/design` pages, `components/design-session.tsx`, `components/suggestions.tsx`, Inbox and detail page, top-bar link; MCP `packages/mcp-tools/src/write-tools.ts`, `source.ts` (`PivotWriter`), `apps/mcp/src/http-source.ts`, `server.ts` (12 tools, read-only hints), README; `.claude/skills/pivot-design/SKILL.md` (uses the tools at each step, says when a save fails); SPEC §10, §11, §15; DESIGN.md; MCP plan Step 5.
+- Checks run and results: core `design.test.ts` 3/3 (session opened only by the first brief, same brief twice is one snapshot, approval → approved, major change → exploring; suggestions matched to existing facet names, skipped when already present or repeated, searchable while pending, applied only when accepted, rejected text no longer found; agent notes appended); MCP `write-tools.test.ts` 6/6 plus the read tests (read-only connection refuses, input validation, collection names resolved); typecheck, lint, `next build` (it caught a `params` access outside `<Suspense>` on `/design/[id]`, fixed), full suite in the hooks.
+- Manual verification:
+  - Full headless `pivot-design` run against the scratch app, with the MCP pointed at it and three real pricing references (Linear, Notion, Supabase) captured by the Phase 1 pipeline. Turn 1 ($1.19, 176 s): read the design system, searched, inspected 3 references, `save_design_brief` initial, 3 mockups in its scratch folder, stopped for the pick; project `git status` clean. Turn 2 after "Approved: direction 1" ($1.72, 90 s): `record_design_decision` approval, `save_design_brief` approved, built `pricing.html` + `styles/pricing.css`, checked 1280 and 375 px, said plainly that the Yearly view wasn't checked in a browser (its script needed a permission the headless run didn't have), recorded no deviations; the target repo has only those two code files.
+  - The session shows in the app as Approved with the first brief, the approval and the approved brief. Three suggestions sent through the API: the text was searchable at once, the Inbox listed them, Accept on "Style: Dark" added the facet.
+- Remaining issues: the agent never called `suggest_metadata` on its own in the run (it's optional in the skill). Mockup images aren't stored. "Workflow Config" undefined.
+- Next step: Phase 6.
 
 ### Phase 4 — Sections, links, private pages
 

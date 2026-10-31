@@ -388,6 +388,14 @@ PT is the core, PIVOT the expansion: the mark starts from the first and last let
 
 In the detail sidebar, above Classification: "Links" in ink-subtle with a ghost "+ Link" button. Each link is a surface row (10px radius): a link icon, the relation in ink-muted ("Part of", "Has section", "Same page as"…), the other reference's title as a link, and for a suggestion "suggested" with a ✓ to accept; a × removes it. "+ Link" opens a surface panel with the relation select, a search field and the matching titles.
 
+### Design sessions — `app/design/page.tsx`, `components/design-session.tsx`
+
+A pen-tool icon button in the top bar (between Trash and Settings; inverse when on `/design`). The list page: display title "Design sessions", one ink-muted line, then surface rows (14px radius) with the title in 15px ink, a status chip, and a second line with project, surface and date. A session page: a ghost "Design sessions" back pill, the title at the detail-page size, a meta line, a radiogroup of status pills (the current one inverse), then the timeline: each brief is a collapsible surface card (the newest open) rendered as Markdown with reference chips; each decision is a surface card with its kind ("Approved", "Changed", "Deviation found in QA") in ink-secondary, the summary in ink and the direction under it.
+
+### Suggestions — `components/suggestions.tsx`
+
+A surface panel (14px radius) on the Inbox page and at the top of a reference's detail page: a sparkles icon, "3 suggestions from an agent" and an ink-muted note that nothing changes until you accept. Each suggestion is a surface-raised row with a checkbox, what it suggests ("Style: Dark", "Collection: Pricing pages (new)", "Title: …"), the reference it is for (Inbox only), the reason in ink-muted, and ✓ / × icon buttons. With some checked, "Accept n" and "Reject n" appear at the right of the header.
+
 ### Capture queue — `app/captures/page.tsx`
 
 Display title "Capture queue", a 14px ink-muted line, then a radiogroup of pills (All, Queued & capturing, Failed & partial; the chosen one inverse). Each run is a surface row (14px radius): a status chip (danger for Failed, warning for Partial, a spinner while running), the item's title as a link, the time in mono ink-subtle, a small **Cancel** or **Retry** pill, and a second line in 12px ink-muted with the scheme, options, retries, quality and error. It refreshes every 2 seconds while something runs.

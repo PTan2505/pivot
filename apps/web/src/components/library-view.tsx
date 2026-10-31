@@ -8,6 +8,7 @@ import { Breadcrumbs, typeCrumbs, type Crumb } from "@/components/breadcrumbs";
 import { FolderShelf } from "@/components/folder-shelf";
 import { ResourceCard, ResourceRow } from "@/components/resource-card";
 import { SelectionBar } from "@/components/selection-bar";
+import { Suggestions } from "@/components/suggestions";
 import { SkillPackGroups } from "@/components/skill-pack-groups";
 import { SkillSyncPanel } from "@/components/skill-sync-panel";
 import { categoryOf, SourceGroups, SourceToolbar } from "@/components/source-groups";
@@ -251,11 +252,13 @@ export function LibraryView({
               Quick saves waiting to be organised. They are searchable already; select some and mark them reviewed.
             </p>
           )}
-          {library && !params.review && (counts?.inbox ?? 0) > 0 && !actions && (
+          {library && !params.review && (counts?.inbox ?? 0) + (counts?.suggestions ?? 0) > 0 && !actions && (
             <div className="ml-auto pb-1">
               <Button variant="secondary" onClick={() => set({ review: "needs", type: undefined, section: "library" })}>
                 Inbox
-                <span className="font-mono text-xs text-ink-secondary tabular-nums">{counts!.inbox}</span>
+                <span className="font-mono text-xs text-ink-secondary tabular-nums">
+                  {(counts?.inbox ?? 0) + (counts?.suggestions ?? 0)}
+                </span>
               </Button>
             </div>
           )}
@@ -323,6 +326,7 @@ export function LibraryView({
       </section>
 
       <div className="flex-1 space-y-6 px-4 pt-6 pb-16 md:px-10">
+        {params.review && <Suggestions />}
         {params.type === "skill" && library && <SkillSyncPanel />}
         {params.type === "source" && library && <SourceToolbar />}
         {library &&

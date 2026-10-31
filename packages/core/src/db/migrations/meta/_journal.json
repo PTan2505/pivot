@@ -50,6 +50,13 @@
       "when": 1793466567579,
       "tag": "0006_cynical_dracula",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793467628803,
+      "tag": "0007_lonely_genesis",
+      "breakpoints": true
     }
   ]
 }

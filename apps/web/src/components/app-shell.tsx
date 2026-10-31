@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, FolderPlus, Folders, Search, Settings, Trash2 } from "lucide-react";
+import { ChevronDown, FolderPlus, Folders, PenTool, Search, Settings, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
@@ -243,6 +243,14 @@ function TopBar() {
                 {counts.trash}
               </span>
             )}
+          </Link>
+        </Button>
+        <Button variant="secondary" size="icon-lg" asChild aria-label="Design sessions">
+          <Link
+            href="/design"
+            className={cn(pathname.startsWith("/design") && "bg-inverse text-on-inverse hover:bg-inverse")}
+          >
+            <PenTool />
           </Link>
         </Button>
         <Button variant="secondary" size="icon-lg" asChild aria-label="Settings">

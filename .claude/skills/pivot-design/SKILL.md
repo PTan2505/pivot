@@ -5,14 +5,20 @@ description: Design or redesign an interface from the user's own PIVOT reference
 
 # PIVOT design workflow
 
-PIVOT is the user's library of saved UI references: screenshots of real websites (cover + full page) tagged with **page type**, **domain**, **style** and **pattern** facets, plus design **sources** (sites to browse) and **collections**. The `pivot` MCP server exposes it read-only:
+PIVOT is the user's library of saved UI references: screenshots of real websites (cover + full page) tagged with **page type**, **domain**, **style** and **pattern** facets, plus design **sources** (sites to browse) and **collections**. The `pivot` MCP server reads it, and stores the work of a design session:
 
-| Tool                   | Use it to                                                                                              |
-| ---------------------- | ------------------------------------------------------------------------------------------------------ |
-| `list_facets`          | Learn the vocabulary once per task: which page types, domains, styles, patterns and collections exist. |
-| `search_references`    | Find candidates by words and facets (by name), inside a collection or from a source.                   |
-| `get_reference`        | Read one candidate: link, description, the user's notes, facets, which screenshots exist.              |
-| `get_reference_images` | Look at it: the cover, and the full page in ~2,000-token slices (`fromSlice` to page on).              |
+| Tool                     | Use it to                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `list_facets`            | Learn the vocabulary once per task: which page types, domains, styles, patterns and collections exist. |
+| `search_references`      | Find candidates by words and facets (by name), inside a collection or from a source.                   |
+| `get_reference`          | Read one candidate: link, description, the user's notes, facets, which screenshots exist.              |
+| `get_reference_images`   | Look at it: the cover, and the full page in ~2,000-token slices (`fromSlice` to page on).              |
+| `save_design_brief`      | Save the brief in PIVOT at a milestone (`initial` opens the session, `approved`, `major_change`).      |
+| `record_design_decision` | Record the user's approval, a change after approval, or a deviation found in QA.                       |
+| `get_design_session`     | Read an earlier session (its briefs and decisions) to continue that work.                              |
+| `suggest_metadata`       | Suggest facets, a collection, a title or a visual description for a reference you looked at.           |
+| `annotate_reference`     | Add a short, dated agent note to a reference (the user's notes stay as they are).                      |
+| `save_reference`         | Save a page to the library, only when the user asks for it.                                            |
 
 The flow is **understand → search → inspect → choose → brief → design session → mockups → approval → build → QA**.
 
@@ -84,9 +90,9 @@ Write this before any mockup and show it to the user in this shape, table includ
 
 A design session starts with the first completed brief. It groups the chosen references, the brief, the mockups and the decisions for this piece of work. Small fixes don't get one.
 
-- Save the brief to PIVOT at three moments only: the **first completed brief**, the **approved brief**, and any **major change** after approval. Not on every small edit.
-- If the `pivot` MCP server offers tools that save briefs, sessions or decisions, use them at those moments.
-- If it doesn't (the current server only reads), tell the user in one line that the brief isn't saved in PIVOT yet. Don't write it into the target project, and don't pretend it was saved.
+- Continuing earlier work? `get_design_session` (no id) lists sessions; read the matching one and keep its `sessionId`.
+- Save the brief with `save_design_brief` at three moments only: the **first completed brief** (`milestone: "initial"`, no `sessionId`: this opens the session; pass `targetProject` and `surface`), the **approved brief** (`approved`), and any **major change** after approval (`major_change`, with a `note` on what changed). Not on every small edit. Pass the ids of the references the brief uses.
+- If a write fails or the tools aren't there (`read_only`, `unauthorized`, `app_unreachable`), tell the user in one line that the brief isn't saved in PIVOT, and why. Don't write it into the target project instead, and don't pretend it was saved.
 
 ## 7. Mockups
 
@@ -100,8 +106,9 @@ Mockups are **temporary design prototypes**, not the implementation.
 
 - Ask the user to pick, mix or change a direction, then **stop**. No production code until they explicitly approve one. Silence, or approval of something else, is not approval.
 - When they ask for changes, revise the brief or the mockups and ask again.
-- Once approved, record the decision (the direction, what was mixed in, open points) the same way as the brief in §6, and save the approved brief.
-- **A major change after approval goes back here.** If the build needs a different structure, hierarchy or direction from what was approved, stop and ask, with what changed and why. Small adjustments inside the approved direction (spacing, a wrapped label, a state the mockup didn't show) don't need a new approval.
+- Once approved, `record_design_decision` with `kind: "approval"` (the summary in the user's terms, the direction, what was mixed in, open points), then `save_design_brief` with `milestone: "approved"`. Record an approval only after the user explicitly approved in this conversation.
+- A change the user makes to an approved decision is `kind: "change"`.
+- **A major change after approval goes back here.** If the build needs a different structure, hierarchy or direction from what was approved, stop and ask, with what changed and why, and save the changed brief as `major_change` (the session then needs approving again). Small adjustments inside the approved direction (spacing, a wrapped label, a state the mockup didn't show) don't need a new approval.
 
 ## 9. Build
 
@@ -111,8 +118,14 @@ Mockups are **temporary design prototypes**, not the implementation.
 ## 10. QA
 
 - Check the result in the browser against the approved direction, at desktop and phone widths, in the states that matter (empty, error, long content, keyboard focus).
-- Fix what is a bug. Where the result departs from the approved direction, **report the deviation** to the user, and why, instead of quietly redefining the decision. A material deviation goes back to §8.
+- Fix what is a bug. Where the result departs from the approved direction, **report the deviation** to the user, and why, instead of quietly redefining the decision; record it with `record_design_decision` (`kind: "deviation"`). A material deviation goes back to §8.
 - Say what you checked and what you couldn't check.
+
+## Helping the library (optional)
+
+- When a reference you looked at is missing facets, has a vague title, or would be easier to find with a short visual description, `suggest_metadata` it (existing facet names from `list_facets`; no synonyms). It waits in the user's Inbox; it changes nothing by itself.
+- `annotate_reference` adds one dated line about what you learned from a reference, when that would help next time.
+- `save_reference` only when the user asks to save a page.
 
 ## Rules
 
