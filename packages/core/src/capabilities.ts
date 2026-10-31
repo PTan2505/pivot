@@ -2,7 +2,7 @@
  * What this server supports, for clients that may be newer or older than it (the browser extension). Clients check
  * for the features they need instead of comparing version numbers; a feature is only ever added here, never renamed.
  */
-export const API_VERSION = 3;
+export const API_VERSION = 4;
 
 export const API_FEATURES = [
   "clip",
@@ -20,6 +20,10 @@ export const API_FEATURES = [
   "clip.section",
   /** `/api/resources/[id]/links` and `/api/links/[id]`. */
   "links",
+  /** Design sessions, brief snapshots and decisions (`/api/design/*`). */
+  "design",
+  /** Agent suggestions (`/api/resources/[id]/suggestions`, `/api/suggestions`) and notes (`/annotate`). */
+  "suggestions",
 ] as const;
 
 export type ApiFeature = (typeof API_FEATURES)[number];

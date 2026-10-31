@@ -592,3 +592,61 @@ export interface ResourceLinkDTO {
   other: { id: string; title: string; type: string; coverAssetId: string | null };
   createdAt: string;
 }
+
+export const DESIGN_MILESTONES = ["initial", "approved", "major_change"] as const;
+export type DesignMilestone = (typeof DESIGN_MILESTONES)[number];
+export const DESIGN_DECISION_KINDS = ["approval", "change", "deviation"] as const;
+export type DesignDecisionKind = (typeof DESIGN_DECISION_KINDS)[number];
+export const DESIGN_STATUSES = ["exploring", "approved", "building", "done", "abandoned"] as const;
+export type DesignStatus = (typeof DESIGN_STATUSES)[number];
+
+export interface DesignSessionDTO {
+  id: string;
+  title: string;
+  targetProject: string;
+  surface: string;
+  status: DesignStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DesignSnapshotDTO {
+  id: string;
+  sessionId: string;
+  milestone: DesignMilestone;
+  markdown: string;
+  referenceIds: string[];
+  note: string;
+  createdAt: string;
+}
+
+export interface DesignDecisionDTO {
+  id: string;
+  sessionId: string;
+  kind: DesignDecisionKind;
+  summary: string;
+  direction: string;
+  details: string;
+  createdAt: string;
+}
+
+export interface DesignSessionDetailDTO extends DesignSessionDTO {
+  snapshots: DesignSnapshotDTO[];
+  decisions: DesignDecisionDTO[];
+}
+
+export const SUGGESTION_KINDS = ["facet", "collection", "title", "description"] as const;
+export type SuggestionKind = (typeof SUGGESTION_KINDS)[number];
+
+export interface SuggestionDTO {
+  id: string;
+  resourceId: string;
+  kind: SuggestionKind;
+  value: Record<string, unknown>;
+  reason: string;
+  source: string;
+  status: "pending" | "accepted" | "rejected";
+  createdAt: string;
+  /** For lists across resources (the Inbox). */
+  resourceTitle?: string;
+}

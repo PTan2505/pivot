@@ -50,15 +50,15 @@ Compared with `.claude/skills/pivot-design/SKILL.md` as it stands in PR #34.
 | Part A                                                                                                                | Today                                                                                    | Phase | Done |
 | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ----- | ---- |
 | A1. Roles: generated briefs, decisions and session notes never go into the target repo                                | Partial: the brief is only shown to the user and mockups go to a scratch folder; no rule | S     | [x]  |
-| A2. Nine steps: requirements → discover → select 2–4 → brief → session → 2–3 mockups → approval gate → implement → QA | Partial: seven steps, no session, no recorded decision, QA folded into Build             | S, 5b | [ ]  |
+| A2. Nine steps: requirements → discover → select 2–4 → brief → session → 2–3 mockups → approval gate → implement → QA | Partial: seven steps, no session, no recorded decision, QA folded into Build             | S, 5b | [x]  |
 | A2.7, A8. No implementation before explicit approval                                                                  | Conflict: the "go ahead" exception (C10)                                                 | S     | [x]  |
-| A3. Brief snapshots in PIVOT at initial, approved and major-change milestones; a major change goes back to the gate   | Missing                                                                                  | S, 5b | [ ]  |
-| A4. Session after the first completed brief; tiny fixes create none                                                   | Partial: the small-fix exception exists; sessions don't                                  | 5b    | [ ]  |
-| A5. MCP read tools exist; with no write tools, say so and never fall back to the target repo                          | Partial: four read tools; no rule about the missing writes                               | S, 5b | [ ]  |
+| A3. Brief snapshots in PIVOT at initial, approved and major-change milestones; a major change goes back to the gate   | Missing                                                                                  | S, 5b | [x]  |
+| A4. Session after the first completed brief; tiny fixes create none                                                   | Partial: the small-fix exception exists; sessions don't                                  | 5b    | [x]  |
+| A5. MCP read tools exist; with no write tools, say so and never fall back to the target repo                          | Partial: four read tools; no rule about the missing writes                               | S, 5b | [x]  |
 | A6. Extension → Library → MCP → skill; states and versions are evidence on one Reference                              | Partial: covered by Part B Phases 1, 4 and 6                                             | 1–6   | [ ]  |
-| A7. Prefer confirmed metadata and real screenshots over AI labels; external results are never saved automatically     | Partial: no AI labels yet; saved Sources are only named                                  | 5b    | [ ]  |
-| A8. Not decided: skill command syntax, write-tool names and schemas, approval schema, mockup rendering, QA automation | Open                                                                                     | 5a    | [ ]  |
-| A9. Review checklist (2–4 references and 2–3 mockups as defaults, a strict gate, Capture Session ≠ Design Session)    | The skill already uses 2–4 and 2–3                                                       | S, 5a | [ ]  |
+| A7. Prefer confirmed metadata and real screenshots over AI labels; external results are never saved automatically     | Partial: no AI labels yet; saved Sources are only named                                  | 5b    | [x]  |
+| A8. Not decided: skill command syntax, write-tool names and schemas, approval schema, mockup rendering, QA automation | Open                                                                                     | 5a    | [x]  |
+| A9. Review checklist (2–4 references and 2–3 mockups as defaults, a strict gate, Capture Session ≠ Design Session)    | The skill already uses 2–4 and 2–3                                                       | S, 5a | [x]  |
 
 ## 4. Part B — decisions by phase
 
@@ -67,8 +67,8 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | #   | Decision                            | Today    | Phase     | Done |
 | --- | ----------------------------------- | -------- | --------- | ---- |
 | 1   | MVP scope                           | Partial  | 1–5       | [ ]  |
-| 2   | Design Session after first brief    | Missing  | 5         | [ ]  |
-| 3   | Brief snapshots inside PIVOT        | Missing  | 5         | [ ]  |
+| 2   | Design Session after first brief    | Missing  | 5         | [x]  |
+| 3   | Brief snapshots inside PIVOT        | Missing  | 5         | [x]  |
 | 4   | One record + optional metadata      | Partial  | 4, 6      | [ ]  |
 | 5   | Collections vs facets               | Partial  | 3         | [x]  |
 | 6   | Source Directory 2.0                | Partial  | Optional  | [ ]  |
@@ -78,7 +78,7 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 10  | Duplicates with thumbnails          | Partial  | 3         | [x]  |
 | 11  | Theme Light/Dark/Both               | Conflict | 1         | [x]  |
 | 12  | Expand content opt-in               | Conflict | 1         | [x]  |
-| 13  | Facet suggestions (agent)           | Missing  | 5         | [ ]  |
+| 13  | Facet suggestions (agent)           | Missing  | 5         | [x]  |
 | 14  | Quick save → Needs review           | Missing  | 3         | [x]  |
 | 15  | Quick edit in the extension         | Missing  | 3         | [x]  |
 | 16  | Failure and bounded retry           | Partial  | 1         | [x]  |
@@ -95,12 +95,12 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 27  | Relationships                       | Missing  | 4         | [x]  |
 | 28  | Design Versions                     | Missing  | 6         | [ ]  |
 | 29  | Annotations                         | Partial  | 6         | [ ]  |
-| 30  | Layered metadata                    | Partial  | 5         | [ ]  |
+| 30  | Layered metadata                    | Partial  | 5         | [x]  |
 | 31  | Provenance                          | Partial  | 3         | [x]  |
 | 32  | Selective asset extraction          | Missing  | 6         | [ ]  |
 | 33  | Interaction states                  | Missing  | 6         | [ ]  |
-| 34  | Naming `[Section] — [Source]`       | Partial  | 4, 5      | [ ]  |
-| 35  | Review Inbox                        | Missing  | 3, 5      | [ ]  |
+| 34  | Naming `[Section] — [Source]`       | Partial  | 4, 5      | [x]  |
+| 35  | Review Inbox                        | Missing  | 3, 5      | [x]  |
 | 36  | Capture Sessions                    | Missing  | Optional  | [ ]  |
 | 37  | Offline queue                       | Missing  | 2         | [x]  |
 | 38  | Storage and retention               | Partial  | 1         | [ ]  |
@@ -209,22 +209,22 @@ A8 says the write-tool names and schemas, the approval schema, mockup rendering 
 
 **5a. Proposal for review** (a `docs/` PR, no code)
 
-- [ ] `docs/design-track-proposal.md`:
+- [x] `docs/design-track-proposal.md`:
   - data: sessions, snapshots (initial, approved, major_change), decisions, approval state and its history;
   - MCP write tools: names, inputs, outputs, idempotency. Candidates: `save_design_brief`, `record_design_decision`, `suggest_metadata`, `save_reference`, `annotate_reference`;
   - how the skill calls them at each A2 step;
   - what "Workflow Config" (#1) could mean, as questions for the owner;
   - where mockups are rendered and whether their images are kept in the session;
   - how much QA is automated.
-- [ ] The owner approves or amends it before 5b starts.
+- [x] The owner approves or amends it before 5b starts.
 
 **5b. Build the approved proposal.** Expected scope:
 
-- [ ] Additive migrations for sessions, snapshots and decisions.
-- [ ] Token-gated MCP write tools: `http-source.ts` sends the Bearer token, and C8 in `proxy.ts` is fixed.
-- [ ] Agent suggestions through Claude Code (#13, #19, #30, #34): searchable but not official facets until accepted; confirmed data is never overwritten.
-- [ ] The skill saves the first-brief snapshot (which creates the session), the approved snapshot and major-change snapshots; records the decision at the gate; prefers confirmed metadata and real screenshots over AI labels (A7); when a write fails, it says so and never writes into the target repo.
-- [ ] Web: a Design Sessions page (list, snapshot timeline, approval history); agent suggestions in the Inbox.
+- [x] Additive migrations for sessions, snapshots and decisions.
+- [x] Token-gated MCP write tools: `http-source.ts` sends the Bearer token, and C8 in `proxy.ts` is fixed.
+- [x] Agent suggestions through Claude Code (#13, #19, #30, #34): searchable but not official facets until accepted; confirmed data is never overwritten.
+- [x] The skill saves the first-brief snapshot (which creates the session), the approved snapshot and major-change snapshots; records the decision at the gate; prefers confirmed metadata and real screenshots over AI labels (A7); when a write fails, it says so and never writes into the target repo.
+- [x] Web: a Design Sessions page (list, snapshot timeline, approval history); agent suggestions in the Inbox.
 
 Files: `packages/mcp-tools/src/tools.ts`, `apps/mcp/src/http-source.ts`, new routes in `apps/web/src/app/api`, `.claude/skills/pivot-design/SKILL.md`, Step 5 of [SEARCH_MCP_IMPLEMENTATION_PLAN.md](SEARCH_MCP_IMPLEMENTATION_PLAN.md).
 

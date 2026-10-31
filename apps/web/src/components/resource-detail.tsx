@@ -44,6 +44,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useUi } from "@/components/ui-store";
 import { ResourceLinks } from "@/components/resource-links";
+import { Suggestions } from "@/components/suggestions";
 import { copyContext, useCopyResource } from "@/hooks/use-copy-resource";
 import {
   api,
@@ -614,6 +615,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
       <div className="grid flex-1 gap-10 px-4 pt-6 pb-16 md:px-10 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-5">
           {resource.reviewStatus === "needs_review" && <ReviewBanner id={resource.id} />}
+          <Suggestions resourceId={resource.id} />
           {draft.type === "skill" && <SkillBar resource={resource} flush={flush} />}
           {draft.type === "skill" && <SkillGuide meta={draft.meta} sourceUrl={draft.sourceUrl} onChange={change} />}
           {draft.type === "typography" && (

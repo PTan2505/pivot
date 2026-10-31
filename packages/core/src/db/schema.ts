@@ -214,3 +214,91 @@ export const resourceLinks = pgTable(
     index("resource_links_to_idx").on(t.toId),
   ],
 );
+
+/**
+ * One piece of design work done with the pivot-design skill, from the first complete brief on. Small fixes don't get
+ * one. Briefs and decisions live here, never in the target project's repository.
+ */
+export const designSessions = pgTable(
+  "design_sessions",
+  {
+    id: id(),
+    title: text("title").notNull(),
+    /** The project being designed for, as the agent names it (folder or repo name). */
+    targetProject: text("target_project").notNull().default(""),
+    /** What is being designed: "pricing page", "settings sidebar"… */
+    surface: text("surface").notNull().default(""),
+    /** exploring | approved | building | done | abandoned */
+    status: text("status").notNull().default("exploring"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("design_sessions_project_idx").on(t.targetProject, t.updatedAt)],
+);
+
+/** A brief as Markdown at a milestone: the first complete one, the approved one, and each major change. */
+export const designSnapshots = pgTable(
+  "design_snapshots",
+  {
+    id: id(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => designSessions.id, { onDelete: "cascade" }),
+    /** initial | approved | major_change */
+    milestone: text("milestone").notNull(),
+    markdown: text("markdown").notNull(),
+    referenceIds: jsonb("reference_ids").$type<string[]>().notNull().default([]),
+    note: text("note").notNull().default(""),
+    /** sha256 of the Markdown, so a repeated save returns the same snapshot. */
+    digest: text("digest").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("design_snapshots_session_idx").on(t.sessionId, t.createdAt)],
+);
+
+/** What was decided and when: approvals, changes after approval, deviations found in QA. */
+export const designDecisions = pgTable(
+  "design_decisions",
+  {
+    id: id(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => designSessions.id, { onDelete: "cascade" }),
+    /** approval | change | deviation */
+    kind: text("kind").notNull(),
+    summary: text("summary").notNull(),
+    direction: text("direction").notNull().default(""),
+    details: text("details").notNull().default(""),
+    createdAt: createdAt(),
+  },
+  (t) => [index("design_decisions_session_idx").on(t.sessionId, t.createdAt)],
+);
+
+/**
+ * Metadata an agent suggests for a reference: a facet, a collection, a title, a visual description. Searchable, but not
+ * official until you accept it; accepting never overwrites what you confirmed yourself.
+ */
+export const resourceSuggestions = pgTable(
+  "resource_suggestions",
+  {
+    id: id(),
+    resourceId: text("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    /** facet | collection | title | description */
+    kind: text("kind").notNull(),
+    /** facet: { kind, name }; collection: { id?, name }; title / description: { text } */
+    value: jsonb("value").$type<Record<string, unknown>>().notNull(),
+    reason: text("reason").notNull().default(""),
+    /** "agent" today; a model name or tool can go here later. */
+    source: text("source").notNull().default("agent"),
+    /** pending | accepted | rejected */
+    status: text("status").notNull().default("pending"),
+    createdAt: createdAt(),
+    decidedAt: timestamp("decided_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => [
+    index("resource_suggestions_resource_idx").on(t.resourceId),
+    index("resource_suggestions_status_idx").on(t.status),
+  ],
+);

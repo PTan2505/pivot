@@ -19,7 +19,16 @@ import matter from "gray-matter";
 import { z } from "zod";
 import { deleteOrphanAssets, listResourceAssets } from "./assets";
 import { getDb } from "./db/client";
-import { assets, collectionItems, collections, resourceAssets, resources, resourceTags, tags } from "./db/schema";
+import {
+  assets,
+  collectionItems,
+  collections,
+  resourceAssets,
+  resourceSuggestions,
+  resourceTags,
+  resources,
+  tags,
+} from "./db/schema";
 import { normalizeUrl, urlKey } from "./net-guard";
 import { parseQuery, type QueryTerm } from "./query";
 import { hostOf, knownSourceFor, knownSourceMeta, matchHost } from "./source-match";
@@ -153,6 +162,12 @@ function matchesTerm(column: SQLWrapper, term: QueryTerm) {
   )})`;
 }
 
+/**
+ * Text of the agent suggestions still waiting for review (a visual description, a facet name): searchable before you
+ * accept them, as decision #30 asks, but never shown as confirmed facets.
+ */
+const pendingSuggestionText = sql`coalesce((select string_agg(coalesce(${resourceSuggestions.value}->>'text', ${resourceSuggestions.value}->>'name', ''), ' ') from ${resourceSuggestions} where ${resourceSuggestions.resourceId} = ${resources.id} and ${resourceSuggestions.status} = 'pending'), '')`;
+
 /** A source's category by its label ("Type & Color"), so "fonts" or "inspiration" find the sources filed there. */
 const categoryLabel = sql`(case ${resources.meta}->>'category' ${sql.join(
   SOURCE_CATEGORIES.map((c) => sql`when ${c.value} then ${c.label}`),
@@ -204,6 +219,7 @@ async function listQuery(filters: ListFilters) {
         matchesTerm(sql`coalesce(${resources.sourceUrl}, '')`, term),
         matchesTerm(categoryLabel, term),
         tagMatches(db, term),
+        matchesTerm(pendingSuggestionText, term),
       )!,
     );
   }
@@ -554,9 +570,16 @@ export async function typeCounts(): Promise<Record<string, number>> {
     .select({ count: sql<number>`count(*)::int` })
     .from(resources)
     .where(and(isNull(resources.deletedAt), eq(resources.reviewStatus, "needs_review")));
+  // agent suggestions waiting in the Inbox, for references that are still around
+  const [suggested] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(resourceSuggestions)
+    .innerJoin(resources, eq(resources.id, resourceSuggestions.resourceId))
+    .where(and(isNull(resources.deletedAt), eq(resourceSuggestions.status, "pending")));
   const counts: Record<string, number> = {
     trash: Number(trash[0]?.count ?? 0),
     inbox: Number(inbox?.count ?? 0),
+    suggestions: Number(suggested?.count ?? 0),
     all: 0,
   };
   for (const r of rows) {
