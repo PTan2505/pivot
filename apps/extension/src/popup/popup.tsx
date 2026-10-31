@@ -308,6 +308,7 @@ export function Popup() {
   const [collectionId, setCollectionId] = useState("");
   const [attachShot, setAttachShot] = useState(true);
   const [serverCapture, setServerCapture] = useState(true);
+  const [expandContent, setExpandContent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
 
@@ -378,6 +379,7 @@ export function Popup() {
                 title,
                 description: descriptionEdited || !(type === "source" && knownSource) ? description : undefined,
                 serverCapture: willServerCapture,
+                expandContent: willServerCapture && type !== "source" ? expandContent : undefined,
               },
               { screenshot: attachShot && shot ? shot : undefined },
             )
@@ -656,6 +658,22 @@ export function Popup() {
                       {type === "source" ? "Take a screenshot in PIVOT" : "Also capture a full-page screenshot"}
                       <span className="block text-ink-subtle">
                         Taken by PIVOT, so logged-in pages show their logged-out version.
+                      </span>
+                    </span>
+                  </label>
+                )}
+                {offerServerCapture && serverCapture && type !== "source" && (
+                  <label className="flex cursor-pointer items-start gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={expandContent}
+                      onChange={(e) => setExpandContent(e.target.checked)}
+                      className="mt-0.5 accent-[var(--accent-fill)]"
+                    />
+                    <span>
+                      Expand content
+                      <span className="block text-ink-subtle">
+                        Click “Load more” buttons before the full-page shot.
                       </span>
                     </span>
                   </label>

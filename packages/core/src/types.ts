@@ -385,8 +385,55 @@ export function isResourceType(v: unknown): v is ResourceType {
 }
 
 export type AssetKind = "image" | "svg" | "video" | "lottie" | "font" | "text" | "other";
-export type AssetRole = "screenshot" | "screenshot-full" | "attachment";
-export type CaptureStatus = "pending" | "done" | "failed";
+/**
+ * `screenshot` / `screenshot-full` are the Latest server capture. `-original` keeps the first successful capture once
+ * a retake replaces it, and `-variant` holds the other colour scheme when both were captured.
+ */
+export type AssetRole =
+  | "screenshot"
+  | "screenshot-full"
+  | "screenshot-original"
+  | "screenshot-full-original"
+  | "screenshot-variant"
+  | "screenshot-full-variant"
+  | "attachment";
+/** `partial`: the first screen was saved but the full page wasn't. `cancelled`: stopped by the user. */
+export type CaptureStatus = "pending" | "done" | "partial" | "failed" | "cancelled";
+/** Separate from the status: a completed capture can still look wrong (blank, a sign-in wall, broken images). */
+export type CaptureQuality = "looks_good" | "needs_review" | "unavailable";
+export type CaptureTheme = "light" | "dark" | "both";
+
+/** What one capture is asked to do. Unset fields fall back to the capture settings. */
+export interface CaptureOptions {
+  /** Click "Load more"-style buttons while walking the page. Off unless asked for. */
+  expandContent?: boolean;
+  theme?: CaptureTheme;
+}
+
+export interface CaptureSettings {
+  expandContent: boolean;
+  theme: CaptureTheme;
+}
+
+export const DEFAULT_CAPTURE_SETTINGS: CaptureSettings = { expandContent: false, theme: "dark" };
+
+export type CaptureAttemptStatus = "queued" | "capturing" | "completed" | "partial" | "failed" | "cancelled";
+
+export interface CaptureAttemptDTO {
+  id: string;
+  resourceId: string;
+  method: "server" | "extension";
+  status: CaptureAttemptStatus;
+  quality: CaptureQuality | null;
+  qualityReasons: string[];
+  error: string | null;
+  context: Record<string, unknown>;
+  viewportAssetId: string | null;
+  fullAssetId: string | null;
+  requestedAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
 export type SkillSyncState = "synced" | "app-changed" | "disk-changed" | "conflict" | "missing";
 
 export interface TagDTO {
@@ -407,6 +454,8 @@ export interface AssetDTO {
   height: number | null;
   sourceUrl: string | null;
   notes: string;
+  /** For screenshots: colorScheme, viewport, capturedAt, finalUrl. */
+  meta: Record<string, unknown>;
   createdAt: string;
   /** Present when the file no longer exists on disk. */
   missing?: boolean;
@@ -424,6 +473,7 @@ export interface ResourceDTO {
   coverAssetId: string | null;
   captureStatus: CaptureStatus | null;
   captureError: string | null;
+  captureQuality: CaptureQuality | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;

@@ -80,8 +80,8 @@ afterAll(async () => {
   await new Promise((resolve) => server.close(resolve));
 });
 
-const fullHeight = async (path: string) => {
-  const shots = await screenshotUrl(`${baseUrl}${path}`);
+const fullHeight = async (path: string, options: { expandContent?: boolean } = {}) => {
+  const shots = await screenshotUrl(`${baseUrl}${path}`, options);
   return (await sharp(shots.full!).metadata()).height;
 };
 
@@ -90,8 +90,12 @@ describe.skipIf(!chromium.installed)("full-page capture loads the whole page", (
     expect(await fullHeight("/infinite")).toBe(5000);
   });
 
-  it("presses Load more until the button is gone", { timeout: 90_000 }, async () => {
-    expect(await fullHeight("/load-more")).toBe(1000 + 3 * 1500);
+  it("presses Load more until the button is gone when content expansion is on", { timeout: 90_000 }, async () => {
+    expect(await fullHeight("/load-more", { expandContent: true })).toBe(1000 + 3 * 1500);
+  });
+
+  it("leaves Load more alone by default", { timeout: 90_000 }, async () => {
+    expect(await fullHeight("/load-more")).toBeLessThan(2500);
   });
 
   it("captures a page that scrolls an inner panel", { timeout: 60_000 }, async () => {

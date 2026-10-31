@@ -22,6 +22,8 @@ export const resources = pgTable(
     coverAssetId: text("cover_asset_id"),
     captureStatus: text("capture_status"),
     captureError: text("capture_error"),
+    /** How the latest server capture looks: "looks_good", "needs_review" or "unavailable". */
+    captureQuality: text("capture_quality"),
     deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -74,6 +76,8 @@ export const assets = pgTable(
     sha256: text("sha256").notNull(),
     sourceUrl: text("source_url"),
     notes: text("notes").notNull().default(""),
+    /** For screenshots: how they were taken (colorScheme, viewport, capturedAt, finalUrl, method). */
+    meta: jsonb("meta").$type<Record<string, unknown>>().notNull().default({}),
     createdAt: createdAt(),
   },
   (t) => [index("assets_sha_idx").on(t.sha256)],
@@ -130,3 +134,43 @@ export const collectionItems = pgTable(
   },
   (t) => [primaryKey({ columns: [t.collectionId, t.resourceId] })],
 );
+
+/**
+ * One run of the screenshot capture for a resource. The first successful attempt holds the Original shots, the
+ * newest successful one the Latest; failed, partial and cancelled runs stay as history.
+ */
+export const captureAttempts = pgTable(
+  "capture_attempts",
+  {
+    id: id(),
+    resourceId: text("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    /** "server" (Playwright) or "extension" (the tab the user saw). */
+    method: text("method").notNull().default("server"),
+    /** queued | capturing | completed | partial | failed | cancelled */
+    status: text("status").notNull().default("queued"),
+    /** looks_good | needs_review | unavailable */
+    quality: text("quality"),
+    qualityReasons: jsonb("quality_reasons").$type<string[]>().notNull().default([]),
+    error: text("error"),
+    /** What was asked for and what was seen: expandContent, colorScheme, viewport, finalUrl, retries. */
+    context: jsonb("context").$type<Record<string, unknown>>().notNull().default({}),
+    viewportAssetId: text("viewport_asset_id"),
+    fullAssetId: text("full_asset_id"),
+    requestedAt: timestamp("requested_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+    finishedAt: timestamp("finished_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => [
+    index("capture_attempts_resource_idx").on(t.resourceId, t.requestedAt),
+    index("capture_attempts_status_idx").on(t.status),
+  ],
+);
+
+/** App-wide settings that should follow the library (Neon or PGlite), keyed by area: { capture: {...} }. */
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").$type<Record<string, unknown>>().notNull().default({}),
+  updatedAt: updatedAt(),
+});

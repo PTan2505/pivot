@@ -76,14 +76,14 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 8   | Section references                  | Missing  | 4         | [ ]  |
 | 9   | Auto / Crop / Select capture        | Partial  | 4         | [ ]  |
 | 10  | Duplicates with thumbnails          | Partial  | 3         | [ ]  |
-| 11  | Theme Light/Dark/Both               | Conflict | 1         | [ ]  |
-| 12  | Expand content opt-in               | Conflict | 1         | [ ]  |
+| 11  | Theme Light/Dark/Both               | Conflict | 1         | [x]  |
+| 12  | Expand content opt-in               | Conflict | 1         | [x]  |
 | 13  | Facet suggestions (agent)           | Missing  | 5         | [ ]  |
 | 14  | Quick save → Needs review           | Missing  | 3         | [ ]  |
 | 15  | Quick edit in the extension         | Missing  | 3         | [ ]  |
-| 16  | Failure and bounded retry           | Partial  | 1         | [ ]  |
+| 16  | Failure and bounded retry           | Partial  | 1         | [x]  |
 | 17  | Capture Queue                       | Partial  | 1, 3      | [ ]  |
-| 18  | Original / Latest                   | Conflict | 1         | [ ]  |
+| 18  | Original / Latest                   | Conflict | 1         | [x]  |
 | 19  | Collection suggestions              | Missing  | 3, 5      | [ ]  |
 | 20  | Motion: suggest and record          | Missing  | 6         | [ ]  |
 | 21  | Scroll animation, keyframes         | Partial  | 6         | [ ]  |
@@ -91,7 +91,7 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 23  | Responsive capture                  | Missing  | 6         | [ ]  |
 | 24  | Signed-in pages                     | Partial  | 4         | [ ]  |
 | 25  | Redaction                           | Missing  | 4         | [ ]  |
-| 26  | Status vs quality vs review         | Partial  | 1         | [ ]  |
+| 26  | Status vs quality vs review         | Partial  | 1         | [x]  |
 | 27  | Relationships                       | Missing  | 4         | [ ]  |
 | 28  | Design Versions                     | Missing  | 6         | [ ]  |
 | 29  | Annotations                         | Partial  | 6         | [ ]  |
@@ -112,7 +112,7 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 44  | Shortcuts and context menu          | Exists   | 4         | [ ]  |
 | 45  | Onboarding and connection           | Partial  | 2         | [ ]  |
 | 46  | API compatibility                   | Missing  | 2         | [ ]  |
-| 47  | Performance budget                  | Partial  | 1         | [ ]  |
+| 47  | Performance budget                  | Partial  | 1         | [x]  |
 | 48  | Accessibility                       | Partial  | 3, 4      | [ ]  |
 | 49  | Error diagnostics                   | Partial  | 1, 2      | [ ]  |
 | 50  | Settings groups                     | Partial  | 3, Opt.   | [ ]  |
@@ -122,7 +122,7 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 54  | Activity log                        | Missing  | 1, 3      | [ ]  |
 | 55  | Cancel / Undo / Discard             | Partial  | 1, 3      | [ ]  |
 | 56  | Deferred capture                    | Missing  | 6         | [ ]  |
-| 57  | Capture context snapshot            | Missing  | 1         | [ ]  |
+| 57  | Capture context snapshot            | Missing  | 1         | [x]  |
 | 58  | Capture comparison                  | Missing  | 6         | [ ]  |
 | 59  | Health signals                      | Missing  | 6         | [ ]  |
 | 60  | Progressive disclosure              | Partial  | 3         | [ ]  |
@@ -161,12 +161,12 @@ New table `capture_attempts` (additive): id, resource_id, method (`server` | `ex
 
 Tasks:
 
-- [ ] `expandContent` option, off by default: a global default in Settings, a per-capture override in the popup and the Retake menu (#12, #47).
-- [ ] Bounded retry: up to 2 retries for timeouts, network errors and 502/503/504; honour `Retry-After` on 429 up to 10 minutes; never for 401/403, bot challenges or unsafe URLs (#16).
-- [ ] A retake that makes no new full page keeps the old one.
-- [ ] Capture quality: near-blank images (`sharp` stats), login walls, bad stitching. A suspicious shot never replaces a good Latest (#26).
-- [ ] Record `colorScheme`; Light / Dark / Both on request; the detail page shows a theme switch only when both exist (#11).
-- [ ] The queue lives in `capture_attempts`; Cancel for queued and running attempts (#17, #55).
+- [x] `expandContent` option, off by default: a global default in Settings, a per-capture override in the popup and the Retake menu (#12, #47).
+- [x] Bounded retry: up to 2 retries for timeouts, network errors and 502/503/504; honour `Retry-After` on 429 up to 10 minutes; never for 401/403, bot challenges or unsafe URLs (#16).
+- [x] A retake that makes no new full page keeps the old one.
+- [x] Capture quality: near-blank images (`sharp` stats), login walls, bad stitching. A suspicious shot never replaces a good Latest (#26).
+- [x] Record `colorScheme`; Light / Dark / Both on request; the detail page shows a theme switch only when both exist (#11).
+- [x] The queue lives in `capture_attempts`; Cancel for queued and running attempts (#17, #55).
 
 Files: `packages/core/src/capture.ts`, `db/schema.ts` (+ `pnpm db:generate`), `assets.ts`, `apps/web/src/app/api/resources/[id]/capture/route.ts`, `components/asset-gallery.tsx`.
 

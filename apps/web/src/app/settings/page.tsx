@@ -4,9 +4,11 @@ import { Check, Copy, Eye, EyeOff, Loader2, Pencil, RefreshCw, Trash2, TriangleA
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { TAG_KIND_LABELS, TAG_KINDS, type TagDTO } from "@pivot/core/types";
+import { TAG_KIND_LABELS, TAG_KINDS, type CaptureSettings, type CaptureTheme, type TagDTO } from "@pivot/core/types";
 import { ConfirmButton } from "@/components/confirm-button";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { api, useInvalidate, useSettings, useTags } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
@@ -171,6 +173,67 @@ function StorageRow() {
   );
 }
 
+const THEME_LABEL: Record<CaptureTheme, string> = { dark: "Dark", light: "Light", both: "Both (two captures)" };
+
+/** Defaults for server screenshots; each capture can still override them from the Retake menu or the extension. */
+function CaptureSection() {
+  const qc = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ["capture-settings"],
+    queryFn: () => api<CaptureSettings>("/api/settings/capture"),
+  });
+  const save = async (patch: Partial<CaptureSettings>) => {
+    try {
+      const next = await api<CaptureSettings>("/api/settings/capture", { method: "PATCH", json: patch });
+      qc.setQueryData(["capture-settings"], next);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save the setting");
+    }
+  };
+  return (
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-[22px] leading-[1.2] font-medium tracking-[-0.02em]">Capture</h2>
+        <p className="text-sm text-muted-foreground">
+          Defaults for the screenshots PIVOT takes. The Retake menu and the extension can change them for one capture.
+        </p>
+      </div>
+      <dl className="rounded-[14px] bg-surface px-5">
+        <Row label="Colour scheme">
+          {data && (
+            <Select value={data.theme} onValueChange={(v) => save({ theme: v as CaptureTheme })}>
+              <SelectTrigger className="w-56" aria-label="Colour scheme for captures">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(THEME_LABEL) as CaptureTheme[]).map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {THEME_LABEL[t]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            The page is asked for this scheme; a site that has only one look shows the same in both.
+          </p>
+        </Row>
+        <Row label="Expand content">
+          {data && (
+            <label className="flex items-center gap-2">
+              <Checkbox checked={data.expandContent} onCheckedChange={(v) => save({ expandContent: !!v })} /> Click
+              “Load more” buttons before the full-page shot
+            </label>
+          )}
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Off by default. Scrolling still loads lazy images and infinite lists either way.
+          </p>
+        </Row>
+      </dl>
+    </section>
+  );
+}
+
 function ExtensionSection({ serverUrl }: { serverUrl?: string }) {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["api-token"], queryFn: () => api<{ token: string }>("/api/settings/token") });
@@ -277,6 +340,8 @@ export default function SettingsPage() {
           </Row>
         </dl>
       </section>
+
+      <CaptureSection />
 
       <ExtensionSection serverUrl={s?.serverUrl} />
 

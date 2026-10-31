@@ -1,24 +1,55 @@
 "use client";
 
-import { Camera, Download, ExternalLink, ImageUp, Loader2, Maximize2, Plus, Star, Trash2 } from "lucide-react";
+import {
+  Camera,
+  ChevronDown,
+  Download,
+  ExternalLink,
+  ImageUp,
+  Info,
+  Loader2,
+  Maximize2,
+  Plus,
+  Star,
+  Trash2,
+} from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import type { AssetDTO, ResourceDetailDTO } from "@pivot/core/types";
+import type { AssetDTO, CaptureAttemptDTO, CaptureOptions, ResourceDetailDTO } from "@pivot/core/types";
 import { AssetPreview, formatBytes } from "@/components/asset-preview";
 import { ConfirmButton } from "@/components/confirm-button";
 import { ScreenshotViewer } from "@/components/screenshot-viewer";
 import { TypeIcon } from "@/components/type-icon";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api, assetUrl, uploadToResource, useInvalidate, useUpdateResource } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 
 const ROLE_LABEL: Record<AssetDTO["role"], string> = {
   screenshot: "Screenshot",
   "screenshot-full": "Full page",
+  "screenshot-original": "Original",
+  "screenshot-full-original": "Original full page",
+  "screenshot-variant": "Other theme",
+  "screenshot-full-variant": "Other theme, full page",
   attachment: "File",
 };
+
+/** "Screenshot · dark": the role, plus the colour scheme it was captured in when known. */
+function labelOf(asset: AssetDTO) {
+  const scheme = typeof asset.meta?.colorScheme === "string" ? asset.meta.colorScheme : null;
+  return scheme && asset.role !== "attachment" ? `${ROLE_LABEL[asset.role]} · ${scheme}` : ROLE_LABEL[asset.role];
+}
 
 const ACCEPT = "image/*,video/*,.svg,.json,.lottie,.woff,.woff2,.ttf,.otf,.txt,.md,.css,.ts,.tsx,.js,.jsx,.html";
 
@@ -40,8 +71,12 @@ export function useAttach(resourceId: string) {
 export function AssetGallery({ resource, compact = false }: { resource: ResourceDetailDTO; compact?: boolean }) {
   const assets = resource.assets;
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // The first capture (Original) is shown first once a retake has replaced it; otherwise the cover.
   const selected =
-    assets.find((a) => a.id === selectedId) ?? assets.find((a) => a.id === resource.coverAssetId) ?? assets[0];
+    assets.find((a) => a.id === selectedId) ??
+    assets.find((a) => a.role === "screenshot-original") ??
+    assets.find((a) => a.id === resource.coverAssetId) ??
+    assets[0];
   const fileRef = useRef<HTMLInputElement>(null);
   const shotRef = useRef<HTMLInputElement>(null);
   const attach = useAttach(resource.id);
@@ -50,12 +85,22 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
   const [over, setOver] = useState(false);
   const [viewing, setViewing] = useState(false);
 
-  const recapture = async () => {
+  const recapture = async (options: CaptureOptions = {}) => {
     try {
-      await api(`/api/resources/${resource.id}/capture`, { method: "POST" });
+      await api(`/api/resources/${resource.id}/capture`, { method: "POST", json: options });
       invalidate(resource.id);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not start capture");
+    }
+  };
+
+  const cancel = async () => {
+    try {
+      await api(`/api/resources/${resource.id}/capture`, { method: "DELETE" });
+      invalidate(resource.id);
+      toast.success("Capture cancelled. Screenshots already saved are kept.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not cancel the capture");
     }
   };
 
@@ -79,6 +124,8 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
   };
 
   const capturing = resource.captureStatus === "pending";
+  // A partial capture, a suspicious one, or a retake that kept the previous shot leaves a note.
+  const note = !capturing && resource.captureStatus !== "failed" ? resource.captureError : null;
   const capturable = !!resource.sourceUrl && ["reference", "library", "animation", "source"].includes(resource.type);
 
   return (
@@ -127,7 +174,11 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
           <span className="min-w-0 flex-1 truncate">
             {capturing ? "Capturing screenshots…" : `Screenshot failed: ${resource.captureError ?? "unknown error"}`}
           </span>
-          {!capturing && (
+          {capturing ? (
+            <Button size="xs" variant="secondary" className="bg-surface-raised" onClick={cancel}>
+              Cancel
+            </Button>
+          ) : (
             <>
               <Button
                 size="xs"
@@ -137,10 +188,22 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
               >
                 Upload one
               </Button>
-              <Button size="xs" variant="secondary" className="bg-surface-raised" onClick={recapture}>
+              <Button size="xs" variant="secondary" className="bg-surface-raised" onClick={() => recapture()}>
                 Retry
               </Button>
             </>
+          )}
+        </div>
+      )}
+
+      {note && (
+        <div role="status" className="flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-xs text-ink-muted">
+          <Info className="size-3.5 shrink-0" />
+          <span className="min-w-0 flex-1">{note}</span>
+          {capturable && (
+            <Button size="xs" variant="secondary" className="bg-surface-raised" onClick={() => recapture()}>
+              Retake
+            </Button>
           )}
         </div>
       )}
@@ -201,7 +264,7 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
             type="button"
             onClick={() => setSelectedId(a.id)}
             aria-pressed={selected?.id === a.id}
-            aria-label={`${ROLE_LABEL[a.role]}: ${a.fileName}`}
+            aria-label={`${labelOf(a)}: ${a.fileName}`}
             className={cn(
               "relative size-14 overflow-hidden rounded-[10px] bg-surface transition-colors hover:bg-surface-raised",
               selected?.id === a.id && "outline-2 outline-offset-2 outline-accent-text",
@@ -238,16 +301,44 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
             <Button variant="secondary" onClick={() => shotRef.current?.click()} disabled={capturing}>
               <ImageUp /> Replace screenshot
             </Button>
-            <Button variant="secondary" onClick={recapture} disabled={capturing}>
-              <Camera /> {resource.captureStatus === "done" ? "Retake screenshot" : "Capture screenshot"}
-            </Button>
+            <div className="flex">
+              <Button variant="secondary" className="rounded-r-none" onClick={() => recapture()} disabled={capturing}>
+                <Camera />{" "}
+                {resource.captureStatus === "done" || resource.captureStatus === "partial"
+                  ? "Retake screenshot"
+                  : "Capture screenshot"}
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="rounded-l-none border-l border-canvas"
+                    aria-label="Capture options"
+                    disabled={capturing}
+                  >
+                    <ChevronDown />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-60">
+                  <DropdownMenuLabel>Capture once with</DropdownMenuLabel>
+                  <DropdownMenuItem onSelect={() => recapture({ expandContent: true })}>
+                    Expand content (click “Load more”)
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => recapture({ theme: "light" })}>Light theme</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => recapture({ theme: "dark" })}>Dark theme</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => recapture({ theme: "both" })}>Both themes</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         )}
       </div>
 
       {selected && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-ink-subtle">
-          <span className="rounded-full bg-surface px-2.5 py-0.5 text-ink-secondary">{ROLE_LABEL[selected.role]}</span>
+          <span className="rounded-full bg-surface px-2.5 py-0.5 text-ink-secondary">{labelOf(selected)}</span>
           <span className="max-w-60 truncate font-mono" title={selected.fileName}>
             {selected.fileName}
           </span>
@@ -295,7 +386,62 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
           <AssetNotes key={selected.id} asset={selected} resourceId={resource.id} />
         </div>
       )}
+
+      {capturable && <CaptureHistory resourceId={resource.id} status={resource.captureStatus} />}
     </section>
+  );
+}
+
+const ATTEMPT_STATUS: Record<CaptureAttemptDTO["status"], string> = {
+  queued: "Queued",
+  capturing: "Capturing",
+  completed: "Completed",
+  partial: "Partial",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
+
+/** Every capture of this resource: when, how, what came out. Collapsed by default. */
+function CaptureHistory({ resourceId, status }: { resourceId: string; status: string | null }) {
+  const { data } = useQuery({
+    queryKey: ["capture-attempts", resourceId, status],
+    queryFn: () => api<{ attempts: CaptureAttemptDTO[] }>(`/api/resources/${resourceId}/capture`),
+  });
+  const attempts = data?.attempts ?? [];
+  if (!attempts.length) return null;
+  return (
+    <details className="text-xs text-ink-muted">
+      <summary className="w-fit cursor-pointer rounded-full px-2 py-1 hover:text-ink">
+        Capture history ({attempts.length})
+      </summary>
+      <ol className="mt-2 space-y-1.5">
+        {attempts.map((a) => {
+          const ctx = a.context as {
+            theme?: string;
+            colorScheme?: string;
+            variantColorScheme?: string;
+            expandContent?: boolean;
+            retries?: number;
+          };
+          const details = [
+            [ctx.colorScheme ?? ctx.theme, ctx.variantColorScheme].filter(Boolean).join(" + "),
+            ctx.expandContent ? "expanded content" : null,
+            ctx.retries ? `${ctx.retries} retr${ctx.retries > 1 ? "ies" : "y"}` : null,
+            a.quality === "needs_review" ? "needs review" : null,
+          ].filter(Boolean);
+          return (
+            <li key={a.id} className="flex flex-wrap gap-x-2 rounded-[10px] bg-surface px-3 py-2">
+              <span className="text-ink-secondary">{ATTEMPT_STATUS[a.status]}</span>
+              <time className="font-mono tabular-nums" dateTime={a.requestedAt}>
+                {new Date(a.requestedAt).toLocaleString()}
+              </time>
+              {details.length > 0 && <span>{details.join(" · ")}</span>}
+              {a.error && <span className="basis-full">{a.error}</span>}
+            </li>
+          );
+        })}
+      </ol>
+    </details>
   );
 }
 

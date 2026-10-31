@@ -162,6 +162,10 @@ const searchReferences: PivotTool<typeof searchInput> = {
 const ROLE_LABEL: Record<string, string> = {
   screenshot: "viewport",
   "screenshot-full": "full page",
+  "screenshot-original": "original viewport",
+  "screenshot-full-original": "original full page",
+  "screenshot-variant": "viewport, other colour scheme",
+  "screenshot-full-variant": "full page, other colour scheme",
   attachment: "attachment",
 };
 

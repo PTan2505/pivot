@@ -1,12 +1,15 @@
-import { and, eq, inArray } from "drizzle-orm";
+import crypto from "node:crypto";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Browser, Page } from "playwright";
 import sharp from "sharp";
 import { attachAsset, deleteOrphanAssets, saveAsset } from "./assets";
 import { getDb } from "./db/client";
-import { resourceAssets, resources } from "./db/schema";
+import { captureAttempts, resourceAssets, resources } from "./db/schema";
 import { fetchUrlMetadata } from "./metadata";
 import { assertPublicUrl, safeFetch, UnsafeUrlError } from "./net-guard";
 import { setResourceFields } from "./resources";
+import { getCaptureSettings } from "./settings";
+import type { AssetRole, CaptureAttemptDTO, CaptureOptions, CaptureQuality, CaptureTheme } from "./types";
 
 const VIEWPORT = { width: 1440, height: 900 };
 /** Full-page shots keep only the top 12000px: frames below it are never shot. */
@@ -21,15 +24,62 @@ const CAPTURE_TIMEOUT_MS = 120_000;
 const CHALLENGE_TITLE = /^(just a moment|attention required|access denied|security check|verifying you are human)/i;
 const IDLE_CLOSE_MS = 2 * 60 * 1000;
 
+/** Waits between automatic retries. Exported so tests can shorten them. */
+export const captureTiming = {
+  /** Before the 1st and 2nd retry of a timeout, network error or HTTP 502/503/504. */
+  retryDelaysMs: [5_000, 20_000],
+  /** A 429 asking to wait longer than this fails instead of retrying. */
+  maxRetryAfterMs: 10 * 60_000,
+  /** A 429 without a Retry-After header waits this long. */
+  defaultRetryAfterMs: 60_000,
+};
+const MAX_RETRIES = 2;
+
+export type CaptureErrorKind =
+  "blocked" | "rate_limited" | "unavailable" | "http" | "timeout" | "network" | "unsafe" | "cancelled" | "other";
+
+/** A capture failure with enough detail to decide whether to retry it. */
+export class CaptureError extends Error {
+  constructor(
+    message: string,
+    readonly kind: CaptureErrorKind,
+    readonly retryAfterMs?: number,
+  ) {
+    super(message);
+  }
+}
+
+/** Plain-language versions of the quality flags, for messages. */
+export const QUALITY_REASON_TEXT: Record<string, string> = {
+  blank: "the first screen is blank",
+  sign_in_page: "it shows a sign-in form",
+  broken_images: "some images didn't load",
+  fonts_not_loaded: "the web fonts hadn't loaded",
+  repeated_frames: "the full page repeats the same screen",
+};
+
+export function describeQuality(reasons: string[]) {
+  return reasons.map((r) => QUALITY_REASON_TEXT[r] ?? r).join(", ");
+}
+
+interface Job {
+  resourceId: string;
+  attemptId: string;
+}
+
 interface CaptureState {
   browser?: Promise<Browser>;
   idleTimer?: ReturnType<typeof setTimeout>;
-  queue: string[];
+  queue: Job[];
   running: boolean;
+  /** The job being captured now, and how to stop it. */
+  current?: { job: Job; abort: AbortController };
+  /** Jobs waiting to be retried, by resource id. */
+  timers: Map<string, { job: Job; timer: ReturnType<typeof setTimeout> }>;
 }
 
-const g = globalThis as unknown as { __pivotCapture?: CaptureState };
-const state: CaptureState = (g.__pivotCapture ??= { queue: [], running: false });
+const g = globalThis as unknown as { __pivotCaptureJobs?: CaptureState };
+const state: CaptureState = (g.__pivotCaptureJobs ??= { queue: [], running: false, timers: new Map() });
 
 async function browser(): Promise<Browser> {
   if (!state.browser) {
@@ -85,10 +135,11 @@ function networkQuiet(page: Page) {
 
 /**
  * Walks the page top to bottom before the full-page shot, so content that only appears on scroll is in it:
- * lazy images, reveal-on-scroll sections, infinite lists, and "Load more" buttons. Stops at the bottom once the
+ * lazy images, reveal-on-scroll sections and infinite lists. "Load more" buttons are clicked only when
+ * `expandContent` is on. Stops at the bottom once the
  * height stops growing, or when the page passes the full-page cap, or after the step/time budget.
  */
-async function loadWholePage(page: Page, settle: ReturnType<typeof networkQuiet>) {
+async function loadWholePage(page: Page, settle: ReturnType<typeof networkQuiet>, expandContent: boolean) {
   // Pages that scroll an inner container instead of the document would otherwise shoot as one screen.
   await page.evaluate(UNLOCK_INNER_SCROLL).catch(() => {});
   await page.evaluate(EAGER_IMAGES).catch(() => {});
@@ -114,7 +165,11 @@ async function loadWholePage(page: Page, settle: ReturnType<typeof networkQuiet>
     if (height >= MAX_FULL_PAGE_HEIGHT) break;
     if (bottom < height - 2) {
       stableAtBottom = 0;
-    } else if (clicks < MAX_LOAD_MORE_CLICKS && (await page.evaluate<boolean>(CLICK_LOAD_MORE).catch(() => false))) {
+    } else if (
+      expandContent &&
+      clicks < MAX_LOAD_MORE_CLICKS &&
+      (await page.evaluate<boolean>(CLICK_LOAD_MORE).catch(() => false))
+    ) {
       clicks++;
       stableAtBottom = 0;
       await settle(500, 4000);
@@ -216,6 +271,10 @@ async function stitchedFullPage(page: Page, settle: ReturnType<typeof networkQui
   await page.evaluate(NO_SMOOTH_SCROLL).catch(() => {});
   const total = Math.min(MAX_FULL_PAGE_HEIGHT, await page.evaluate<number>(PAGE_HEIGHT));
   const frames: { input: Buffer; top: number; left: number }[] = [];
+  // A page that stops scrolling halfway shoots the same screen again and again.
+  let previous = "";
+  let sameInARow = 0;
+  let repeated = false;
   for (let y = 0; y < total; y += VIEWPORT.height) {
     const at = await page.evaluate<number>(scrollToY(Math.min(y, Math.max(0, total - VIEWPORT.height))));
     // a page that won't scroll this far is done
@@ -225,6 +284,10 @@ async function stitchedFullPage(page: Page, settle: ReturnType<typeof networkQui
     await page.evaluate(IMAGES_ON_SCREEN).catch(() => {});
     await page.waitForTimeout(FRAME_SETTLE_MS);
     const shot = await page.screenshot({ type: "png" });
+    const digest = crypto.createHash("sha1").update(shot).digest("hex");
+    sameInARow = digest === previous ? sameInARow + 1 : 0;
+    if (sameInARow >= 2) repeated = true;
+    previous = digest;
     // The last screen stops at the bottom and overlaps the one before it: keep only what's new.
     const skip = Math.max(0, y - at);
     const height = Math.min(VIEWPORT.height - skip, total - y);
@@ -237,10 +300,53 @@ async function stitchedFullPage(page: Page, settle: ReturnType<typeof networkQui
   }
   const bottom = frames.length ? frames.at(-1)!.top + (await sharp(frames.at(-1)!.input).metadata()).height! : 0;
   if (!bottom) return null;
-  return sharp({ create: { width: VIEWPORT.width, height: bottom, channels: 3, background: "#ffffff" } })
+  const image = await sharp({ create: { width: VIEWPORT.width, height: bottom, channels: 3, background: "#ffffff" } })
     .composite(frames)
     .webp({ quality: 80 })
     .toBuffer();
+  return { image, repeated };
+}
+
+/** Signs that a shot may not show the real page: a sign-in form, broken images, fonts still loading. */
+const PAGE_ISSUES = `(() => {
+  const visible = (el) => {
+    const r = el.getBoundingClientRect();
+    const s = getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none";
+  };
+  const password = [...document.querySelectorAll("input[type=password]")].some(visible);
+  const images = [...document.images].filter(visible);
+  const broken = images.filter((img) => img.complete && img.naturalWidth === 0).length;
+  return {
+    password,
+    broken,
+    images: images.length,
+    fonts: document.fonts ? document.fonts.status : "loaded",
+    text: (document.body ? document.body.innerText : "").trim().length,
+  };
+})()`;
+
+/** Turns what the page reported, and the first-screen image, into quality flags. */
+async function qualityIssues(page: Page, viewport: Buffer) {
+  const issues: string[] = [];
+  const info = await page
+    .evaluate<{ password: boolean; broken: number; images: number; fonts: string; text: number }>(PAGE_ISSUES)
+    .catch(() => null);
+  if (info?.password && info.text < 3000) issues.push("sign_in_page");
+  if (info && (info.broken >= 3 || (info.broken > 0 && info.broken / info.images > 0.3))) issues.push("broken_images");
+  if (info && info.fonts !== "loaded") issues.push("fonts_not_loaded");
+  const stats = await sharp(viewport).stats();
+  if (stats.channels.slice(0, 3).every((c) => c.stdev < 3)) issues.push("blank");
+  return issues;
+}
+
+/** Seconds or an HTTP date, as in a Retry-After header. */
+function parseRetryAfter(value: string | undefined) {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now());
 }
 
 /** Clicks one visible "Load more"-style button. Buttons only, never links or form submits, so it can't navigate. */
@@ -286,8 +392,22 @@ async function followRedirects(url: string) {
  */
 export async function screenshotUrl(
   url: string,
-  { fullPage = true, timeoutMs = CAPTURE_TIMEOUT_MS }: { fullPage?: boolean; timeoutMs?: number } = {},
+  {
+    fullPage = true,
+    timeoutMs = CAPTURE_TIMEOUT_MS,
+    expandContent = false,
+    colorScheme = "dark",
+    signal,
+  }: {
+    fullPage?: boolean;
+    timeoutMs?: number;
+    expandContent?: boolean;
+    colorScheme?: "light" | "dark";
+    /** Aborting it stops the capture as soon as the browser can be closed. */
+    signal?: AbortSignal;
+  } = {},
 ) {
+  if (signal?.aborted) throw new CaptureError("The capture was cancelled.", "cancelled");
   await assertPublicUrl(url);
   const start = await followRedirects(url);
   const b = await browser();
@@ -295,9 +415,15 @@ export async function screenshotUrl(
   const context = await b.newContext({
     viewport: VIEWPORT,
     deviceScaleFactor: 1,
-    colorScheme: "dark",
+    colorScheme,
     serviceWorkers: "block",
   });
+  let cancelled = false;
+  const onAbort = () => {
+    cancelled = true;
+    void context.close().catch(() => {});
+  };
+  signal?.addEventListener("abort", onAbort, { once: true });
   // Closing the context makes every pending page call reject, including a page.evaluate on a frozen page.
   let timedOut = false;
   const deadline = setTimeout(() => {
@@ -345,45 +471,87 @@ export async function screenshotUrl(
     await page.waitForTimeout(800);
     // A block or error page is not a picture of the site; fail so the old screenshots stay.
     const status = response?.status() ?? 200;
-    if ([401, 403, 429].includes(status) || CHALLENGE_TITLE.test((await page.title()).trim())) {
-      throw new Error(
+    if (status === 429) {
+      const retryAfterMs = parseRetryAfter((await response?.allHeaders())?.["retry-after"]);
+      throw new CaptureError("The site is rate limiting requests (HTTP 429).", "rate_limited", retryAfterMs);
+    }
+    if ([401, 403].includes(status) || CHALLENGE_TITLE.test((await page.title()).trim())) {
+      throw new CaptureError(
         `The site blocked the screenshot${status >= 400 ? ` (HTTP ${status})` : ""}. Try again later, or add a screenshot yourself.`,
+        "blocked",
       );
     }
-    if (status >= 400) throw new Error(`The page answered with HTTP ${status}.`);
+    if (status >= 400) {
+      const kind = [502, 503, 504].includes(status) ? "unavailable" : "http";
+      throw new CaptureError(`The page answered with HTTP ${status}.`, kind);
+    }
     await assertStayedPublic();
+    await page
+      .evaluate("document.fonts ? Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 2000))]) : 0")
+      .catch(() => {});
     const viewport = await page.screenshot({ type: "png" });
+    const issues = await qualityIssues(page, viewport);
     let full: Buffer | null = null;
     if (fullPage) {
-      await loadWholePage(page, settle).catch(() => {});
+      await loadWholePage(page, settle, expandContent).catch(() => {});
       // A broken full-page shot must not cost us the viewport shot.
-      full = await stitchedFullPage(page, settle).catch(() => null);
+      const stitched = await stitchedFullPage(page, settle).catch(() => null);
+      full = stitched?.image ?? null;
+      if (stitched?.repeated) issues.push("repeated_frames");
     }
     // a redirect made while walking the page counts too
     await assertStayedPublic();
-    return { viewport: await sharp(viewport).webp({ quality: 85 }).toBuffer(), full };
+    if (cancelled) throw new CaptureError("The capture was cancelled.", "cancelled");
+    return {
+      viewport: await sharp(viewport).webp({ quality: 85 }).toBuffer(),
+      full,
+      issues,
+      finalUrl: page.url(),
+      colorScheme,
+    };
   } catch (err) {
     await Promise.all(checks);
     if (privateUrl) throw new UnsafeUrlError("The page sent the browser to a private address, so it wasn't captured.");
-    if (timedOut) throw new Error(`The page took longer than ${Math.round(timeoutMs / 1000)}s to capture.`);
+    if (cancelled) throw new CaptureError("The capture was cancelled.", "cancelled");
+    if (timedOut) {
+      throw new CaptureError(`The page took longer than ${Math.round(timeoutMs / 1000)}s to capture.`, "timeout");
+    }
+    if (err instanceof CaptureError) throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    if (/Timeout \d+ms exceeded/.test(message)) {
+      throw new CaptureError("The page took too long to load.", "timeout");
+    }
+    if (/net::ERR_/.test(message)) {
+      throw new CaptureError(`The page couldn't be reached (${message.match(/net::ERR_[A-Z_]+/)?.[0]}).`, "network");
+    }
     throw err;
   } finally {
+    signal?.removeEventListener("abort", onAbort);
     clearTimeout(deadline);
     await context.close().catch(() => {});
     scheduleIdleClose();
   }
 }
 
-/** Asset ids of the server screenshots currently linked to a resource. */
-async function screenshotIds(resourceId: string) {
+const SHOT_ROLES: AssetRole[] = [
+  "screenshot",
+  "screenshot-full",
+  "screenshot-original",
+  "screenshot-full-original",
+  "screenshot-variant",
+  "screenshot-full-variant",
+];
+
+/** The server screenshots linked to a resource, by role. */
+async function shotsByRole(resourceId: string) {
   const db = await getDb();
   const rows = await db
-    .select({ assetId: resourceAssets.assetId })
+    .select({ assetId: resourceAssets.assetId, role: resourceAssets.role })
     .from(resourceAssets)
-    .where(
-      and(eq(resourceAssets.resourceId, resourceId), inArray(resourceAssets.role, ["screenshot", "screenshot-full"])),
-    );
-  return rows.map((r) => r.assetId);
+    .where(and(eq(resourceAssets.resourceId, resourceId), inArray(resourceAssets.role, SHOT_ROLES)));
+  const byRole = new Map<string, string>();
+  for (const r of rows) byRole.set(r.role, r.assetId);
+  return { byRole, all: rows.map((r) => r.assetId) };
 }
 
 async function detachAssets(resourceId: string, assetIds: string[]) {
@@ -394,83 +562,299 @@ async function detachAssets(resourceId: string, assetIds: string[]) {
     .where(and(eq(resourceAssets.resourceId, resourceId), inArray(resourceAssets.assetId, assetIds)));
 }
 
-async function currentCover(resourceId: string) {
+async function currentResource(resourceId: string) {
   const db = await getDb();
   const [now] = await db
-    .select({ coverAssetId: resources.coverAssetId })
+    .select({
+      coverAssetId: resources.coverAssetId,
+      captureQuality: resources.captureQuality,
+      captureStatus: resources.captureStatus,
+    })
     .from(resources)
     .where(eq(resources.id, resourceId))
     .limit(1);
   return now;
 }
 
-async function captureOne(resourceId: string) {
+/**
+ * Makes `newId` the Latest shot for `role`. The shot it replaces becomes the Original when there is none yet (the
+ * first successful capture is kept); otherwise it is an in-between shot and is returned for deletion.
+ */
+async function promote(
+  resourceId: string,
+  byRole: Map<string, string>,
+  role: "screenshot" | "screenshot-full",
+  newId: string | null,
+  { replaceWithoutNew = false } = {},
+) {
+  const prevId = byRole.get(role) ?? null;
+  if (newId) await attachAsset(resourceId, newId, role);
+  if (!prevId || prevId === newId || (!newId && !replaceWithoutNew)) return [];
+  const originalRole = role === "screenshot" ? "screenshot-original" : "screenshot-full-original";
+  const hasOriginal = byRole.has("screenshot-original") || byRole.has("screenshot-full-original");
+  if (!hasOriginal) {
+    await attachAsset(resourceId, prevId, originalRole);
+    return [];
+  }
+  return [prevId];
+}
+
+type Shots = Awaited<ReturnType<typeof screenshotUrl>>;
+
+interface AttemptContext {
+  expandContent?: boolean;
+  theme?: CaptureTheme;
+  retries?: number;
+  retryAt?: string;
+  previousStatus?: string | null;
+  [key: string]: unknown;
+}
+
+async function updateAttempt(id: string, set: Partial<typeof captureAttempts.$inferInsert>) {
+  const db = await getDb();
+  await db.update(captureAttempts).set(set).where(eq(captureAttempts.id, id));
+}
+
+/** Stores a finished capture: Latest, Original, the other colour scheme, cover and status. */
+async function applyShots(
+  resourceId: string,
+  attemptId: string,
+  context: AttemptContext,
+  wantFull: boolean,
+  shots: Shots,
+  variant: Shots | null,
+  sourceUrl: string,
+) {
+  const before = await currentResource(resourceId);
+  if (!before) return; // deleted while capturing
+  const { byRole, all } = await shotsByRole(resourceId);
+  const quality: CaptureQuality = shots.issues.length ? "needs_review" : "looks_good";
+  const hadGoodLatest =
+    (byRole.has("screenshot") || byRole.has("screenshot-full")) && before.captureQuality !== "needs_review";
+
+  // A suspicious shot never replaces a good one.
+  if (quality === "needs_review" && hadGoodLatest) {
+    const note = `The new capture looked wrong (${describeQuality(shots.issues)}), so the previous screenshot was kept.`;
+    await updateAttempt(attemptId, {
+      status: "completed",
+      quality,
+      qualityReasons: shots.issues,
+      error: note,
+      finishedAt: new Date(),
+      context: { ...context, finalUrl: shots.finalUrl, colorScheme: shots.colorScheme, keptPrevious: true },
+    });
+    await setResourceFields(resourceId, { captureStatus: "done", captureError: note });
+    return;
+  }
+
+  const host = new URL(sourceUrl).hostname.replace(/^www\./, "");
+  const stamp = new Date().toISOString().slice(0, 10);
+  const metaFor = (s: Shots) => ({
+    method: "server",
+    colorScheme: s.colorScheme,
+    viewport: VIEWPORT,
+    capturedAt: new Date().toISOString(),
+    finalUrl: s.finalUrl,
+  });
+  // A cover you chose, or the view the extension took of the page, already shows the first screen; a
+  // server viewport shot would repeat it, so only the full page is added.
+  const ownCover = !!before.coverAssetId && !all.includes(before.coverAssetId);
+  const viewport = ownCover
+    ? null
+    : await saveAsset({ data: shots.viewport, fileName: `${host}-${stamp}.webp`, sourceUrl, meta: metaFor(shots) });
+  const full =
+    shots.full &&
+    (await saveAsset({ data: shots.full, fileName: `${host}-${stamp}-full.webp`, sourceUrl, meta: metaFor(shots) }));
+
+  const now = await currentResource(resourceId);
+  if (!now) {
+    // Deleted while saving.
+    await deleteOrphanAssets([viewport?.id, full?.id].filter((id): id is string => !!id));
+    return;
+  }
+  // Link the new shots before unlinking the old ones, so a failure never leaves the resource without any.
+  const dropped = [
+    ...(await promote(resourceId, byRole, "screenshot", viewport?.id ?? null, { replaceWithoutNew: ownCover })),
+    // a capture whose full page failed keeps the previous full page
+    ...(await promote(resourceId, byRole, "screenshot-full", full?.id ?? null)),
+  ];
+  if (variant) {
+    for (const [role, data, suffix] of [
+      ["screenshot-variant", variant.viewport, ""],
+      ["screenshot-full-variant", variant.full, "-full"],
+    ] as const) {
+      if (!data || (role === "screenshot-variant" && ownCover)) continue;
+      const asset = await saveAsset({
+        data,
+        fileName: `${host}-${stamp}-${variant.colorScheme}${suffix}.webp`,
+        sourceUrl,
+        meta: metaFor(variant),
+      });
+      // A site with one look gives identical bytes in both schemes: that is the same file, not a variant.
+      if (asset.id === viewport?.id || asset.id === full?.id || asset.id === byRole.get("screenshot")) continue;
+      const prev = byRole.get(role);
+      await attachAsset(resourceId, asset.id, role);
+      if (prev && prev !== asset.id) dropped.push(prev);
+    }
+  }
+  await detachAssets(resourceId, dropped);
+
+  // Keep a cover the user chose (or one clipped by the extension); a previous server shot gives way to the new one.
+  const cover = now.coverAssetId;
+  const coverWasServerShot = !!cover && (cover === byRole.get("screenshot") || dropped.includes(cover));
+  const nextCover =
+    cover && !coverWasServerShot ? cover : (viewport?.id ?? (cover && !dropped.includes(cover) ? cover : null));
+  const partial = wantFull && !full;
+  const notes = [
+    partial ? "The full-page screenshot failed; the first screen was saved." : "",
+    quality === "needs_review" ? `This capture may look wrong: ${describeQuality(shots.issues)}.` : "",
+  ].filter(Boolean);
+  await setResourceFields(resourceId, {
+    coverAssetId: nextCover,
+    captureStatus: partial ? "partial" : "done",
+    captureError: notes.length ? notes.join(" ") : null,
+    captureQuality: quality,
+  });
+  await updateAttempt(attemptId, {
+    status: partial ? "partial" : "completed",
+    quality,
+    qualityReasons: shots.issues,
+    error: notes.length ? notes.join(" ") : null,
+    viewportAssetId: viewport?.id ?? null,
+    fullAssetId: full?.id ?? null,
+    finishedAt: new Date(),
+    context: {
+      ...context,
+      finalUrl: shots.finalUrl,
+      colorScheme: shots.colorScheme,
+      viewport: VIEWPORT,
+      ...(variant ? { variantColorScheme: variant.colorScheme } : {}),
+    },
+  });
+  await deleteOrphanAssets(dropped);
+}
+
+/** How long to wait before retrying this failure, or null when it shouldn't be retried. */
+function retryDelay(err: unknown, retries: number): number | null {
+  if (!(err instanceof CaptureError) || retries >= MAX_RETRIES) return null;
+  if (err.kind === "timeout" || err.kind === "network" || err.kind === "unavailable") {
+    return captureTiming.retryDelaysMs[retries] ?? captureTiming.retryDelaysMs.at(-1)!;
+  }
+  if (err.kind === "rate_limited") {
+    const wait = err.retryAfterMs ?? captureTiming.defaultRetryAfterMs;
+    return wait <= captureTiming.maxRetryAfterMs ? wait : null;
+  }
+  return null;
+}
+
+async function finishCancelled(resourceId: string, attemptId: string) {
+  await updateAttempt(attemptId, { status: "cancelled", finishedAt: new Date(), error: null });
+  const now = await currentResource(resourceId);
+  if (!now) return;
+  const { all } = await shotsByRole(resourceId);
+  await setResourceFields(resourceId, {
+    captureStatus: all.length ? "done" : "cancelled",
+    captureError: null,
+  });
+}
+
+async function captureOne(job: Job) {
+  const { resourceId, attemptId } = job;
   const db = await getDb();
   const [row] = await db.select().from(resources).where(eq(resources.id, resourceId)).limit(1);
-  if (!row) return;
+  const [attempt] = await db.select().from(captureAttempts).where(eq(captureAttempts.id, attemptId)).limit(1);
+  if (!row || !attempt || attempt.status === "cancelled") return;
+  const context = attempt.context as AttemptContext;
+  const abort = new AbortController();
+  state.current = { job, abort };
+  await updateAttempt(attemptId, { status: "capturing", startedAt: new Date() });
 
   try {
-    if (!row.sourceUrl) throw new Error("There is no URL to capture.");
-    const host = new URL(row.sourceUrl).hostname.replace(/^www\./, "");
-    const stamp = new Date().toISOString().slice(0, 10);
+    if (!row.sourceUrl) throw new CaptureError("There is no URL to capture.", "other");
     // A source is a site you browse, not a page to study: its first screen is enough.
-    const shots = await screenshotUrl(row.sourceUrl, { fullPage: row.type !== "source" });
-
-    // Read the cover now, not before the capture: the user may have picked one meanwhile.
-    const before = await currentCover(resourceId);
-    if (!before) return; // deleted while capturing
-    const previous = await screenshotIds(resourceId);
-    // A cover you chose, or the view the extension took of the page, already shows the first screen; a
-    // server viewport shot would repeat it, so only the full page is added.
-    const ownCover = !!before.coverAssetId && !previous.includes(before.coverAssetId);
-    const viewport = ownCover
-      ? null
-      : await saveAsset({ data: shots.viewport, fileName: `${host}-${stamp}.webp`, sourceUrl: row.sourceUrl });
-    const full =
-      shots.full &&
-      (await saveAsset({ data: shots.full, fileName: `${host}-${stamp}-full.webp`, sourceUrl: row.sourceUrl }));
-    const newIds = [viewport?.id, full?.id].filter((id): id is string => !!id);
-
-    const now = await currentCover(resourceId);
-    if (!now) {
-      // Deleted while saving.
-      await deleteOrphanAssets(newIds);
+    const wantFull = row.type !== "source";
+    const theme = context.theme ?? "dark";
+    const primary = theme === "light" ? "light" : "dark";
+    const shots = await screenshotUrl(row.sourceUrl, {
+      fullPage: wantFull,
+      expandContent: !!context.expandContent,
+      colorScheme: primary,
+      signal: abort.signal,
+    });
+    let variant: Shots | null = null;
+    let variantError: string | undefined;
+    if (theme === "both") {
+      variant = await screenshotUrl(row.sourceUrl, {
+        fullPage: wantFull,
+        expandContent: !!context.expandContent,
+        colorScheme: "light",
+        signal: abort.signal,
+      }).catch((err) => {
+        if (err instanceof CaptureError && err.kind === "cancelled") throw err;
+        variantError = err instanceof Error ? err.message : String(err);
+        return null;
+      });
+    }
+    await applyShots(
+      resourceId,
+      attemptId,
+      variantError ? { ...context, variantError } : context,
+      wantFull,
+      shots,
+      variant,
+      row.sourceUrl,
+    );
+  } catch (err) {
+    if (err instanceof CaptureError && err.kind === "cancelled") return finishCancelled(resourceId, attemptId);
+    const message = err instanceof Error ? err.message : String(err);
+    const retries = context.retries ?? 0;
+    const delay = retryDelay(err, retries);
+    if (delay !== null) {
+      // Try again later; the resource stays pending, and a restart picks the attempt up again.
+      await updateAttempt(attemptId, {
+        status: "queued",
+        error: message.slice(0, 500),
+        context: { ...context, retries: retries + 1, retryAt: new Date(Date.now() + delay).toISOString() },
+      });
+      schedule(job, delay);
       return;
     }
-    // Link the new shots before unlinking the old ones, so a failure never leaves the resource without any.
-    const oldIds = previous.filter((id) => !newIds.includes(id));
-    if (viewport) await attachAsset(resourceId, viewport.id, "screenshot");
-    if (full) await attachAsset(resourceId, full.id, "screenshot-full");
-    await detachAssets(resourceId, oldIds);
-    // Keep a cover the user chose (or one clipped by the extension); replace only a previous server shot.
-    const keepCover = now.coverAssetId && !oldIds.includes(now.coverAssetId);
-    await setResourceFields(resourceId, {
-      coverAssetId: keepCover ? now.coverAssetId : (viewport?.id ?? now.coverAssetId),
-      captureStatus: "done",
-      captureError: null,
-    });
-    await deleteOrphanAssets(oldIds);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
     // Fall back to the page's Open Graph image so the card still has a picture. It stands in for the
     // screenshot (same role), so the next successful capture replaces it.
     const ogCover = row.sourceUrl ? await ogImageFallback(row.sourceUrl).catch(() => null) : null;
-    const now = await currentCover(resourceId);
+    const now = await currentResource(resourceId);
     if (ogCover && now && !now.coverAssetId) {
       await attachAsset(resourceId, ogCover.id, "screenshot");
       await setResourceFields(resourceId, { coverAssetId: ogCover.id });
     }
+    await updateAttempt(attemptId, {
+      status: "failed",
+      quality: "unavailable",
+      error: message.slice(0, 500),
+      finishedAt: new Date(),
+      context: { ...context, errorKind: err instanceof CaptureError ? err.kind : "other" },
+    });
     if (now) await setResourceFields(resourceId, { captureStatus: "failed", captureError: message.slice(0, 500) });
+  } finally {
+    state.current = undefined;
   }
 }
 
-/** Makes an uploaded image the resource's screenshot: it replaces the captured shots and becomes the cover. */
+/** Makes an uploaded image the resource's screenshot: it replaces the Latest shots and becomes the cover. */
 export async function replaceScreenshot(resourceId: string, assetId: string) {
-  const oldIds = (await screenshotIds(resourceId)).filter((id) => id !== assetId);
-  await attachAsset(resourceId, assetId, "screenshot");
-  await detachAssets(resourceId, oldIds);
-  await setResourceFields(resourceId, { coverAssetId: assetId, captureStatus: "done", captureError: null });
-  await deleteOrphanAssets(oldIds);
+  const { byRole } = await shotsByRole(resourceId);
+  const dropped = [
+    ...(await promote(resourceId, byRole, "screenshot", assetId)),
+    ...(await promote(resourceId, byRole, "screenshot-full", null, { replaceWithoutNew: true })),
+  ].filter((id) => id !== assetId);
+  await detachAssets(resourceId, dropped);
+  await setResourceFields(resourceId, {
+    coverAssetId: assetId,
+    captureStatus: "done",
+    captureError: null,
+    captureQuality: null,
+  });
+  await deleteOrphanAssets(dropped);
 }
 
 async function ogImageFallback(url: string) {
@@ -482,31 +866,171 @@ async function ogImageFallback(url: string) {
   return saveAsset({ data: webp, fileName: `${new URL(url).hostname}-og.webp`, sourceUrl: meta.imageUrl });
 }
 
+function schedule(job: Job, delay: number) {
+  clearTimeout(state.timers.get(job.resourceId)?.timer);
+  const timer = setTimeout(() => {
+    state.timers.delete(job.resourceId);
+    state.queue.push(job);
+    void drain();
+  }, delay);
+  timer.unref?.();
+  state.timers.set(job.resourceId, { job, timer });
+}
+
 async function drain() {
   if (state.running) return;
   state.running = true;
   try {
     while (state.queue.length) {
-      const id = state.queue.shift()!;
-      await captureOne(id).catch(() => {});
+      const job = state.queue.shift()!;
+      await captureOne(job).catch(() => {});
     }
   } finally {
     state.running = false;
   }
 }
 
-/** Queues a background screenshot; progress is visible through resources.capture_status. */
-export async function enqueueCapture(resourceId: string) {
+/**
+ * Queues a background screenshot and returns the attempt's id. Progress is visible through resources.capture_status
+ * and the attempt. Options left out use the capture settings.
+ */
+export async function enqueueCapture(resourceId: string, options: CaptureOptions = {}) {
+  const busy =
+    state.current?.job.resourceId === resourceId
+      ? state.current.job
+      : state.queue.find((j) => j.resourceId === resourceId);
+  if (busy) return busy.attemptId;
+  const waiting = state.timers.get(resourceId);
+  if (waiting) {
+    // A new request replaces a retry that is waiting.
+    clearTimeout(waiting.timer);
+    state.timers.delete(resourceId);
+    await updateAttempt(waiting.job.attemptId, {
+      status: "cancelled",
+      finishedAt: new Date(),
+      error: "Replaced by a new capture request.",
+    });
+  }
+  const settings = await getCaptureSettings();
+  const db = await getDb();
+  const [row] = await db
+    .select({ captureStatus: resources.captureStatus })
+    .from(resources)
+    .where(eq(resources.id, resourceId))
+    .limit(1);
+  const [attempt] = await db
+    .insert(captureAttempts)
+    .values({
+      resourceId,
+      method: "server",
+      status: "queued",
+      context: {
+        expandContent: options.expandContent ?? settings.expandContent,
+        theme: options.theme ?? settings.theme,
+        previousStatus: row?.captureStatus ?? null,
+      },
+    })
+    .returning({ id: captureAttempts.id });
   await setResourceFields(resourceId, { captureStatus: "pending", captureError: null });
-  if (!state.queue.includes(resourceId)) state.queue.push(resourceId);
+  state.queue.push({ resourceId, attemptId: attempt.id });
   void drain();
+  return attempt.id;
 }
 
-/** Captures interrupted by a server restart are still marked pending; queue them again. */
+/** Stops a queued, waiting or running capture. Shots already saved stay. Returns whether anything was stopped. */
+export async function cancelCapture(resourceId: string) {
+  if (state.current?.job.resourceId === resourceId) {
+    state.current.abort.abort();
+    return true;
+  }
+  const waiting = state.timers.get(resourceId);
+  const index = state.queue.findIndex((j) => j.resourceId === resourceId);
+  const job = waiting?.job ?? (index >= 0 ? state.queue[index] : undefined);
+  if (waiting) {
+    clearTimeout(waiting.timer);
+    state.timers.delete(resourceId);
+  }
+  if (index >= 0) state.queue.splice(index, 1);
+  if (job) {
+    await finishCancelled(resourceId, job.attemptId);
+    return true;
+  }
+  // Nothing in memory (for example after a restart): settle a stale pending status.
+  const db = await getDb();
+  const open = await db
+    .select({ id: captureAttempts.id })
+    .from(captureAttempts)
+    .where(and(eq(captureAttempts.resourceId, resourceId), inArray(captureAttempts.status, ["queued", "capturing"])));
+  for (const a of open) await finishCancelled(resourceId, a.id);
+  return open.length > 0;
+}
+
+/** Captures interrupted by a server restart are still pending; queue their attempts again. */
 export async function resumePendingCaptures() {
   const db = await getDb();
   const rows = await db.select({ id: resources.id }).from(resources).where(eq(resources.captureStatus, "pending"));
-  for (const r of rows) await enqueueCapture(r.id);
+  for (const r of rows) {
+    const [open] = await db
+      .select({ id: captureAttempts.id })
+      .from(captureAttempts)
+      .where(and(eq(captureAttempts.resourceId, r.id), inArray(captureAttempts.status, ["queued", "capturing"])))
+      .orderBy(desc(captureAttempts.requestedAt))
+      .limit(1);
+    if (!open) {
+      await enqueueCapture(r.id);
+      continue;
+    }
+    if (state.queue.some((j) => j.resourceId === r.id) || state.current?.job.resourceId === r.id) continue;
+    await updateAttempt(open.id, { status: "queued" });
+    state.queue.push({ resourceId: r.id, attemptId: open.id });
+  }
+  void drain();
+}
+
+function toAttemptDTO(row: typeof captureAttempts.$inferSelect): CaptureAttemptDTO {
+  return {
+    id: row.id,
+    resourceId: row.resourceId,
+    method: row.method as CaptureAttemptDTO["method"],
+    status: row.status as CaptureAttemptDTO["status"],
+    quality: row.quality as CaptureQuality | null,
+    qualityReasons: row.qualityReasons ?? [],
+    error: row.error,
+    context: row.context ?? {},
+    viewportAssetId: row.viewportAssetId,
+    fullAssetId: row.fullAssetId,
+    requestedAt: row.requestedAt.toISOString(),
+    startedAt: row.startedAt?.toISOString() ?? null,
+    finishedAt: row.finishedAt?.toISOString() ?? null,
+  };
+}
+
+/** A resource's capture history, newest first. */
+export async function listCaptureAttempts(resourceId: string, limit = 20) {
+  const db = await getDb();
+  const rows = await db
+    .select()
+    .from(captureAttempts)
+    .where(eq(captureAttempts.resourceId, resourceId))
+    .orderBy(desc(captureAttempts.requestedAt))
+    .limit(limit);
+  return rows.map(toAttemptDTO);
+}
+
+/** Recent attempts across the library, newest first, with the resource's title (for the capture queue). */
+export async function listRecentCaptureAttempts({
+  limit = 50,
+  statuses,
+}: { limit?: number; statuses?: string[] } = {}) {
+  const db = await getDb();
+  const rows = await db
+    .select({ attempt: captureAttempts, title: resources.title, type: resources.type, deletedAt: resources.deletedAt })
+    .from(captureAttempts)
+    .innerJoin(resources, eq(resources.id, captureAttempts.resourceId))
+    .where(statuses?.length ? inArray(captureAttempts.status, statuses) : undefined)
+    .orderBy(desc(captureAttempts.requestedAt))
+    .limit(limit);
+  return rows.filter((r) => !r.deletedAt).map((r) => ({ ...toAttemptDTO(r.attempt), title: r.title, type: r.type }));
 }
 
 export async function playwrightStatus(): Promise<{ installed: boolean; path?: string }> {
