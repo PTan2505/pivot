@@ -50,6 +50,8 @@ const fields = z.object({
    * as a `state` named here, instead of creating a new reference.
    */
   attachTo: z.string().optional(),
+  /** The page looked private and its screenshot was approved (and masked) before upload: kept out of share packages. */
+  privatePage: z.boolean().optional(),
   state: z.string().trim().min(1).max(60).optional(),
   /** The address bar's URL when the saved `url` is the page's canonical link (provenance: "Captured from"). */
   capturedUrl: z.string().max(2000).optional(),
@@ -162,7 +164,11 @@ async function save(form: FormData, input: ClipInput): Promise<Saved> {
       sourceUrl: pageUrl,
       tags: input.tags,
       reviewStatus: input.needsReview ? "needs_review" : null,
-      meta: { ...capturedFrom(input, pageUrl), ...(input.section ? { section: input.section } : {}) },
+      meta: {
+        ...capturedFrom(input, pageUrl),
+        ...(input.section ? { section: input.section } : {}),
+        ...(input.privatePage ? { privatePage: true } : {}),
+      },
     });
     id = r.id;
     title = r.title;

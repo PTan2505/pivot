@@ -399,6 +399,10 @@ A pen-tool icon button in the top bar (between Trash and Settings; inverse when 
 
 A surface panel (14px radius) on the Inbox page and at the top of a reference's detail page: a sparkles icon, "3 suggestions from an agent" and an ink-muted note that nothing changes until you accept. Each suggestion is a surface-raised row with a checkbox, what it suggests ("Style: Dark", "Collection: Pricing pages (new)", "Title: …"), the reference it is for (Inbox only), the reason in ink-muted, and ✓ / × icon buttons. With some checked, "Accept n" and "Reject n" appear at the right of the header.
 
+### Backup & restore — `components/backup-section.tsx`
+
+A Settings section: a secondary **Back up the library** pill with the result beside it (counts, then the folder path in mono as a link that shows it in Finder). Under a divider: "Restore from a backup folder", a mono path field and a secondary **Preview** pill. The preview states the counts in a sentence, lists the conflicts in 12px muted text, offers one select for them (Keep is the default), and has a primary **Restore** pill; the result is a status line that says restoring again adds nothing twice.
+
 ### Capture queue — `app/captures/page.tsx`
 
 Display title "Capture queue", a 14px ink-muted line, then a radiogroup of pills (All, Queued & capturing, Failed & partial; the chosen one inverse). Each run is a surface row (14px radius): a status chip (danger for Failed, warning for Partial, a spinner while running), the item's title as a link, the time in mono ink-subtle, a small **Cancel** or **Retry** pill, and a second line in 12px ink-muted with the scheme, options, retries, quality and error. It refreshes every 2 seconds while something runs. A "Requested for later" filter lists capture-later requests, each with **Capture now** and a ghost **Drop**. Above the filters, a surface "Worth a look" panel appears only when a site keeps failing (host in warning) or a newest capture looks worse than an earlier one.
@@ -427,7 +431,7 @@ Single-line inputs are 36px surface pills with no border, 15px ink text, ink-mut
 
 ### Selection bar — `components/selection-bar.tsx`
 
-Appears bottom-centre while resources are selected: strong glass, 28px radius, 6px padding (16px on the left), wraps on narrow screens, enters with a 200ms fade and 8px rise. Count in mono ink-subtle (promoted to ink-muted by the glass), then ghost actions (Copy context, Export, Collection, Remove, Trash; in Trash: Restore and Delete forever in danger, confirmed in a dialog).
+Appears bottom-centre while resources are selected: strong glass, 28px radius, 6px padding (16px on the left), wraps on narrow screens, enters with a 200ms fade and 8px rise. Count in mono ink-subtle (promoted to ink-muted by the glass), then ghost actions (Copy context, Export, Share package, Collection, Remove, Trash; in Trash: Restore and Delete forever in danger, confirmed in a dialog).
 
 - **Add to collection** popover (strong glass, 256px): a "Find or create a collection…" field, the collections with their counts, and, when the typed name is new, a "Create “name”" row with a folder-plus icon that creates the collection and adds the selection to it.
 
@@ -478,6 +482,7 @@ A row of glass folders as a visual index on section landing pages, Skills (one p
 - **Section picker (on the page):** a full-window transparent layer with a crosshair, a 2px ember outline over the element or the box being dragged (12% ember fill, 4px radius), and a dark pill centred at the top with the keys ("↑ bigger · ↓ smaller · Enter to save · Esc to cancel").
 - **Private page review:** a surface panel (14px radius) with "This page looks private" in warning, the reasons as a short list in ink-muted, one ink-muted paragraph, then the mask editor: the screenshot with solid black boxes (focusable; accent-text focus ring), "Add a box" (outline pill) with "or drag on the picture", and a checkbox list of the masks. Two checkboxes close it: "Attach this view" and "I checked it: upload this screenshot with these masks". Save stays disabled until the second is ticked.
 - **Approval view:** opened from **Review** on a held save in the waiting panel (which opens by itself when something needs you): the title, the reasons, the same mask editor, then **Upload with these masks** (the one ember button), "Upload without the screenshot" and a two-step Discard.
+- **Options › Waiting saves:** a line saying how many saves wait on this computer, an outline **Export waiting saves** pill (downloads a file) and an "Import a file" pill; importing shows the count in a surface box first, with the primary **Import n** button.
 - **Facet combobox:** a rounded surface field (18px radius, min 36px) holding the chosen values as 24px inverse chips with a remove ×, then a borderless input ("Add page type…"). The accent-text focus ring sits on the field, not the input. Focusing it opens a list right under it (surface-raised, 14px radius, soft drop shadow, up to 176px): the values already used, most used first, with their count in mono ink-subtle; typing filters them (names starting with the text first) and adds a "+ Create “text”" row. ↑↓ move the highlight (surface), Enter picks it, Backspace in an empty field removes the last chip. Nothing is highlighted until you type or press ↓, so Enter in an empty field still saves.
 
 ### Browser surfaces — `globals.css` base layer

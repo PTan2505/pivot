@@ -446,6 +446,7 @@ export function Popup() {
                 description: descriptionEdited || !(type === "source" && knownSource) ? description : undefined,
                 // the server, without your login, can't see a private page
                 serverCapture: willServerCapture && !privacy?.flagged,
+                privatePage: privacy?.flagged || undefined,
                 expandContent: willServerCapture && type !== "source" ? expandContent : undefined,
               },
               // a private page's view goes up only with the masks painted into its pixels

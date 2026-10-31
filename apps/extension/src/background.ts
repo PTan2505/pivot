@@ -131,6 +131,7 @@ async function savePage(tab: chrome.tabs.Tab): Promise<Prepared> {
     description: source ? undefined : info.description,
     // the server, without your login, can't see a private page
     serverCapture: !(source && shot) && !verdict.flagged,
+    privatePage: verdict.flagged || undefined,
     ifExists: "skip",
     // saved without a form: it waits in the Inbox to be organised
     needsReview: true,
@@ -239,6 +240,7 @@ async function saveSection(tab: chrome.tabs.Tab, picked: PickedSection) {
       section,
       needsReview: true,
       serverCapture: false,
+      privatePage: verdict.flagged || undefined,
       capturedUrl: info.address && info.address !== info.url ? info.address : undefined,
     },
     title: `${section.type} — ${new URL(info.url).hostname.replace(/^www\./, "")}`,

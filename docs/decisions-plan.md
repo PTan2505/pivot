@@ -103,9 +103,9 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 35  | Review Inbox                        | Missing  | 3, 5      | [x]  |
 | 36  | Capture Sessions                    | Missing  | Optional  | [ ]  |
 | 37  | Offline queue                       | Missing  | 2         | [x]  |
-| 38  | Storage and retention               | Partial  | 1         | [ ]  |
-| 39  | Export                              | Partial  | 6         | [ ]  |
-| 40  | Import / restore                    | Missing  | 6         | [ ]  |
+| 38  | Storage and retention               | Partial  | 1         | [x]  |
+| 39  | Export                              | Partial  | 6         | [x]  |
+| 40  | Import / restore                    | Missing  | 6         | [x]  |
 | 41  | Sharing                             | Missing  | 6         | [ ]  |
 | 42  | Extension search                    | Missing  | 3         | [x]  |
 | 43  | Notifications                       | Partial  | 2         | [x]  |
@@ -116,7 +116,7 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 48  | Accessibility                       | Partial  | 3, 4      | [x]  |
 | 49  | Error diagnostics                   | Partial  | 1, 2      | [ ]  |
 | 50  | Settings groups                     | Partial  | 3, Opt.   | [ ]  |
-| 51  | Device migration                    | Missing  | 6         | [ ]  |
+| 51  | Device migration                    | Missing  | 6         | [x]  |
 | 52  | Least-privilege permissions         | Partial  | 2, 4      | [x]  |
 | 53  | Lifecycle and recovery              | Partial  | 1, 2      | [ ]  |
 | 54  | Activity log                        | Missing  | 1, 3      | [x]  |
@@ -234,8 +234,8 @@ Files: `packages/mcp-tools/src/tools.ts`, `apps/mcp/src/http-source.ts`, new rou
 - [x] Responsive: Desktop / Tablet / Mobile server shots on request, in the same reference (#23).
 - [x] Interaction states (#33) and pin or region annotations (#29).
 - [x] Design Versions and visual diff (#28, #58).
-- [ ] Export / import / backup and device transfer, reusing `exportBundle` in `context.ts` (#39, #40, #51).
-- [ ] Share Package as a file (#41).
+- [x] Export / import / backup and device transfer (#39, #40, #51).
+- [x] Share Package as a file (#41). A public, revocable share link is still not built (needs its own architecture decision).
 - [x] Selective asset extraction (#32). Deferred capture (#56) and health alerts (#59): done in 6.1.
 
 ### Optional

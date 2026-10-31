@@ -119,7 +119,7 @@ export async function approvePending(
     privacy: undefined,
     nextAttemptAt: Date.now(),
     // the server can't see a private page, so it doesn't capture it either
-    data: { ...item.data, serverCapture: false },
+    data: { ...item.data, serverCapture: false, privatePage: true },
   });
   return syncNow({ only: [id], force: true });
 }

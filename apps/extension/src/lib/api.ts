@@ -132,6 +132,8 @@ export interface ClipData {
   /** Add the screenshot to this saved reference as an interaction state (named by `state`) instead of a new one. */
   attachTo?: string;
   state?: string;
+  /** The page looked private: kept out of share packages. */
+  privatePage?: boolean;
   /** The address bar's URL when it differs from the saved (canonical) one. */
   capturedUrl?: string;
   serverCapture?: boolean;

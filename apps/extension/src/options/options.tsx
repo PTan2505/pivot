@@ -1,6 +1,8 @@
 import { Check, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, DEFAULT_SERVER, getConfig, setConfig } from "../lib/api";
+import { pendingStore } from "../lib/pending-store";
+import { exportPending, importPending, readTransfer, type TransferFile } from "../lib/transfer";
 import { Button, Field, Input, Logo } from "../ui";
 
 export function Options() {
@@ -95,6 +97,91 @@ export function Options() {
           Change shortcuts at <code className="font-mono">chrome://extensions/shortcuts</code>.
         </p>
       </section>
+      <WaitingSaves />
     </main>
+  );
+}
+
+/**
+ * Moving to another computer, or reinstalling: saves still waiting on this one go with you as a file. The extension
+ * can't stop an uninstall, so export first; once removed, waiting saves are gone. The token stays here.
+ */
+function WaitingSaves() {
+  const [count, setCount] = useState<number | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [incoming, setIncoming] = useState<{ file: TransferFile; total: number; alreadyHere: number } | null>(null);
+  useEffect(() => {
+    void pendingStore.count().then(setCount);
+  }, []);
+  const download = async () => {
+    const { serverUrl } = await getConfig();
+    const blob = await exportPending(serverUrl);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `pivot-waiting-saves-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    setMessage("Downloaded. Keep it somewhere safe: it holds the screenshots of these saves.");
+  };
+  return (
+    <section className="space-y-2 border-t border-divider pt-6 text-sm">
+      <h2 className="font-medium">Waiting saves</h2>
+      <p className="text-xs text-ink-muted">
+        {count === null
+          ? "…"
+          : count
+            ? `${count} save${count > 1 ? "s are" : " is"} waiting on this computer. Before you move to another computer or remove the extension, export them; then import the file there.`
+            : "Nothing is waiting on this computer."}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" disabled={!count} onClick={download}>
+          Export waiting saves
+        </Button>
+        <label className="inline-flex h-9 cursor-pointer items-center rounded-full bg-surface px-4 text-[13px] font-medium text-ink-secondary hover:bg-surface-raised hover:text-ink">
+          Import a file
+          <input
+            type="file"
+            accept="application/json,.json"
+            className="sr-only"
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (!f) return;
+              try {
+                setIncoming(await readTransfer(await f.text()));
+                setMessage(null);
+              } catch (err) {
+                setMessage(err instanceof Error ? err.message : String(err));
+              }
+            }}
+          />
+        </label>
+      </div>
+      {incoming && (
+        <div className="space-y-2 rounded-[12px] bg-surface p-3 text-xs">
+          <p>
+            {incoming.total} save{incoming.total > 1 ? "s" : ""} in the file
+            {incoming.alreadyHere ? `, ${incoming.alreadyHere} already here (skipped)` : ""}. They will be sent like any
+            waiting save; ones waiting for privacy approval still wait.
+          </p>
+          <Button
+            onClick={async () => {
+              const added = await importPending(incoming.file);
+              setIncoming(null);
+              setCount(await pendingStore.count());
+              setMessage(`Imported ${added}.`);
+              void chrome.runtime.sendMessage({ type: "pivot:queue-changed" }).catch(() => {});
+            }}
+          >
+            Import {incoming.total - incoming.alreadyHere}
+          </Button>
+        </div>
+      )}
+      {message && (
+        <p role="status" className="text-xs text-ink-muted">
+          {message}
+        </p>
+      )}
+    </section>
   );
 }

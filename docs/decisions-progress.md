@@ -15,6 +15,16 @@ Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 | 5     | Design track: sessions, MCP writes | Done        |
 | 6     | Later                              | In progress |
 
+### Phase 6.3 — Backup, restore, share package, device transfer
+
+- Status: Done (except public share links, which need an architecture decision: the API only answers this machine).
+- Existing functionality reused: the exports folder and Finder reveal, `saveAsset` (sha256 reuse), `urlKey` for "same URL", the offline queue's IndexedDB store.
+- Files changed: core `backup.ts` (backup, preview, restore with keep / merge / new), `share.ts`; routes `api/backup`, `api/backup/preview`, `api/backup/restore`, `api/share`, `api/clip` (`privatePage`); web `backup-section.tsx` in Settings, `selection-bar.tsx` (Share package); extension `lib/transfer.ts`, `options.tsx` (Waiting saves), `privatePage` set on saves from pages flagged private; SPEC §11, §17; DESIGN.md.
+- Checks run and results: core `backup.test.ts` 4/4 (a purged reference restored with facets, collection, screenshot and cover, annotation and link, the rest kept; a second restore adds nothing; merge fills only the emptied description and keeps the user's new title; "import as new" twice makes one copy; a tampered file name, a non-backup folder and a relative path refused; the share package leaves out notes and the private page and escapes HTML). Extension tests; typecheck, lint, full suite in the hooks.
+- Manual verification: scratch app — Settings › Back up the library: 22 references, 29 files, 36 links, 1 annotation, 1 design session (3.7 MB); Preview of that folder: 22 already here; Restore with Keep: kept 22, nothing added. Share package of Linear and Notion pricing: `index.html` with both, four images. Two headless Chromium profiles with the built extension: profile A exported two waiting saves (one held for privacy approval); the file holds the screenshots and not the token; profile B imported 2, then 0 on the second import, with the approval hold kept.
+- Remaining issues: no public share link; restoring into a library with the same ids but different content keeps yours unless you choose merge or new per item (the UI sets one choice for all conflicts).
+- Next step: Optional items.
+
 ### Phase 6.2 — Annotations, interaction states, asset extraction
 
 - Status: Done
