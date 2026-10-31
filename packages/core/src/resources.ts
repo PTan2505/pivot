@@ -1,14 +1,32 @@
-import { and, asc, desc, eq, exists, ilike, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  ne,
+  or,
+  sql,
+  type SQL,
+  type SQLWrapper,
+} from "drizzle-orm";
 import matter from "gray-matter";
 import { z } from "zod";
 import { deleteOrphanAssets, listResourceAssets } from "./assets";
 import { getDb } from "./db/client";
 import { assets, collectionItems, collections, resourceAssets, resources, resourceTags, tags } from "./db/schema";
 import { normalizeUrl, urlKey } from "./net-guard";
+import { parseQuery, type QueryTerm } from "./query";
 import { hostOf, knownSourceFor, knownSourceMeta, matchHost } from "./source-match";
 import {
   FACET_SUGGESTIONS,
   RESOURCE_TYPES,
+  SOURCE_CATEGORIES,
   TAG_KINDS,
   type CaptureStatus,
   type ResourceDetailDTO,
@@ -52,6 +70,8 @@ export interface ListFilters {
   /** `created` is newest first, `oldest` is by creation date the other way. */
   sort?: "updated" | "created" | "oldest" | "title";
   limit?: number;
+  /** Rows to skip, for paging (see search.ts). */
+  offset?: number;
 }
 
 type ResourceRow = typeof resources.$inferSelect;
@@ -114,7 +134,32 @@ function escapeLike(s: string) {
   return s.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
-export async function listResources(filters: ListFilters = {}): Promise<ResourceDTO[]> {
+/** True when the column matches any of the term's patterns (case-insensitive regular expressions). */
+function matchesTerm(column: SQLWrapper, term: QueryTerm) {
+  return sql`(${sql.join(
+    term.patterns.map((p) => sql`${column} ~* ${p}`),
+    sql` or `,
+  )})`;
+}
+
+/** A source's category by its label ("Type & Color"), so "fonts" or "inspiration" find the sources filed there. */
+const categoryLabel = sql`(case ${resources.meta}->>'category' ${sql.join(
+  SOURCE_CATEGORIES.map((c) => sql`when ${c.value} then ${c.label}`),
+  sql` `,
+)} else '' end)`;
+
+function tagMatches(db: Awaited<ReturnType<typeof getDb>>, term: QueryTerm) {
+  return exists(
+    db
+      .select({ one: sql`1` })
+      .from(resourceTags)
+      .innerJoin(tags, eq(tags.id, resourceTags.tagId))
+      .where(and(eq(resourceTags.resourceId, resources.id), matchesTerm(tags.name, term))),
+  );
+}
+
+/** The WHERE and ORDER BY of a list, shared by `listResources` and `countResources` so a page and its total agree. */
+async function listQuery(filters: ListFilters) {
   const db = await getDb();
   const where: SQL[] = [filters.trash ? isNotNull(resources.deletedAt) : isNull(resources.deletedAt)];
   if (filters.type) where.push(eq(resources.type, filters.type));
@@ -125,27 +170,20 @@ export async function listResources(filters: ListFilters = {}): Promise<Resource
   }
 
   const q = filters.q?.trim();
-  if (q) {
-    // Every word must match somewhere (fields or tag names).
-    for (const word of q.split(/\s+/).slice(0, 8)) {
-      const pattern = `%${escapeLike(word)}%`;
-      where.push(
-        or(
-          ilike(resources.title, pattern),
-          ilike(resources.description, pattern),
-          ilike(resources.notes, pattern),
-          ilike(resources.content, pattern),
-          ilike(resources.sourceUrl, pattern),
-          exists(
-            db
-              .select({ one: sql`1` })
-              .from(resourceTags)
-              .innerJoin(tags, eq(tags.id, resourceTags.tagId))
-              .where(and(eq(resourceTags.resourceId, resources.id), ilike(tags.name, pattern))),
-          ),
-        )!,
-      );
-    }
+  const terms = q ? parseQuery(q) : [];
+  // Every term must match somewhere: a field, a tag name, or a source's category (see query.ts for what a term is).
+  for (const term of terms) {
+    where.push(
+      or(
+        matchesTerm(resources.title, term),
+        matchesTerm(resources.description, term),
+        matchesTerm(resources.notes, term),
+        matchesTerm(resources.content, term),
+        matchesTerm(sql`coalesce(${resources.sourceUrl}, '')`, term),
+        matchesTerm(categoryLabel, term),
+        tagMatches(db, term),
+      )!,
+    );
   }
 
   // AND semantics: the resource must carry every selected tag.
@@ -173,12 +211,16 @@ export async function listResources(filters: ListFilters = {}): Promise<Resource
     );
   }
 
-  // With a search, title matches come first, then description matches, then everything else.
-  const relevance = q
+  // With a search: the whole query in the title, then every term in the title, then a tag or category match, then the
+  // description, then the rest (notes, content, URL). Within a tier, the chosen sort.
+  const relevance = terms.length
     ? [
-        asc(
-          sql`case when ${resources.title} ilike ${`%${escapeLike(q)}%`} then 0 when ${resources.description} ilike ${`%${escapeLike(q)}%`} then 1 else 2 end`,
-        ),
+        asc(sql`case
+          when ${resources.title} ilike ${`%${escapeLike(q!)}%`} then 0
+          when ${and(...terms.map((t) => matchesTerm(resources.title, t)))} then 1
+          when ${or(...terms.map((t) => or(tagMatches(db, t), matchesTerm(categoryLabel, t))!))} then 2
+          when ${or(...terms.map((t) => matchesTerm(resources.description, t)))} then 3
+          else 4 end`),
       ]
     : [];
   const order =
@@ -191,13 +233,19 @@ export async function listResources(filters: ListFilters = {}): Promise<Resource
           : filters.trash
             ? [desc(resources.deletedAt)]
             : [desc(resources.updatedAt)];
+  // the id settles ties, so the same query always lists in the same order and pages never overlap
+  return { db, where: and(...where), orderBy: [...relevance, ...order, asc(resources.id)] };
+}
 
+export async function listResources(filters: ListFilters = {}): Promise<ResourceDTO[]> {
+  const { db, where, orderBy } = await listQuery(filters);
   const rows = await db
     .select()
     .from(resources)
-    .where(and(...where))
-    .orderBy(...relevance, ...order)
-    .limit(filters.limit ?? 1000);
+    .where(where)
+    .orderBy(...orderBy)
+    .limit(filters.limit ?? 1000)
+    .offset(filters.offset ?? 0);
   const ids = rows.map((r) => r.id);
   const [tagMap, shots] = await Promise.all([tagsFor(ids), fullShotsFor(ids)]);
   return rows.map((r) => toDTO(r, tagMap.get(r.id) ?? [], shots.get(r.id)));
@@ -380,6 +428,34 @@ export async function purgeExpiredTrash() {
     .where(and(isNotNull(resources.deletedAt), lt(resources.deletedAt, cutoff)));
   await purgeResources(rows.map((r) => r.id));
   return rows.length;
+}
+
+/** How many resources the filters match, ignoring `limit` and `offset`. */
+export async function countResources(filters: ListFilters = {}): Promise<number> {
+  const { db, where } = await listQuery(filters);
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(resources)
+    .where(where);
+  return row?.n ?? 0;
+}
+
+/** Tag ids for facet or tag names, matched by kind and case-insensitively; names that don't exist are returned apart. */
+export async function resolveTagNames(names: { kind: TagKind; name: string }[]) {
+  if (!names.length) return { ids: [] as string[], unknown: [] as { kind: TagKind; name: string }[] };
+  const db = await getDb();
+  const ids: string[] = [];
+  const unknown: { kind: TagKind; name: string }[] = [];
+  for (const n of names) {
+    const [row] = await db
+      .select({ id: tags.id })
+      .from(tags)
+      .where(and(eq(tags.kind, n.kind), sql`lower(${tags.name}) = lower(${n.name.trim()})`))
+      .limit(1);
+    if (row) ids.push(row.id);
+    else unknown.push(n);
+  }
+  return { ids, unknown };
 }
 
 /** Live resources whose URL matches, ignoring protocol, www and trailing slashes. */

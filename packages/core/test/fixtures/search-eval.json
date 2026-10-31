@@ -1,0 +1,185 @@
+{
+  "note": "Queries an agent or the owner would type, with the titles that should come back (relevance judged by hand against search-corpus.json). Searched over references and sources together. Recall@5 counts the relevant titles in the top 5 out of min(5, relevant); MRR uses the rank of the first relevant title.",
+  "queries": [
+    {
+      "q": "pricing page",
+      "relevant": [
+        "Stripe — Pricing & Fees",
+        "Pricing – Linear",
+        "Notion Pricing Plans: Free, Plus, Business, & Enterprise.",
+        "Framer: Pricing",
+        "Pricing & Fees | Supabase",
+        "Plans & Pricing | Figma"
+      ]
+    },
+    {
+      "q": "dark pricing",
+      "relevant": ["Pricing – Linear", "Framer: Pricing", "Pricing & Fees | Supabase"]
+    },
+    {
+      "q": "saas pricing table",
+      "relevant": ["Pricing – Linear", "Framer: Pricing"]
+    },
+    {
+      "q": "docs",
+      "relevant": ["Stripe Docs", "Tailwind CSS — Installation docs", "Next.js Docs"]
+    },
+    {
+      "q": "documentation sidebar",
+      "relevant": ["Stripe Docs", "Tailwind CSS — Installation docs", "Next.js Docs"]
+    },
+    {
+      "q": "minimal docs",
+      "relevant": ["Tailwind CSS — Installation docs", "Next.js Docs"]
+    },
+    {
+      "q": "sign in",
+      "relevant": ["GitHub — Sign in", "Supabase — Sign in"]
+    },
+    {
+      "q": "login",
+      "relevant": ["GitHub — Sign in", "Supabase — Sign in"]
+    },
+    {
+      "q": "auth form",
+      "relevant": ["GitHub — Sign in", "Supabase — Sign in"]
+    },
+    {
+      "q": "changelog",
+      "relevant": ["Changelog – Linear"]
+    },
+    {
+      "q": "blog",
+      "relevant": ["Blog - Vercel", "Changelog – Linear"]
+    },
+    {
+      "q": "dashboard",
+      "relevant": [
+        "NobleFinance - Financial Dashboard UI & Management Platform by Orbix Studio – SaaS Dashboard Design for Orbix Studio LLC on Dribbble",
+        "R2 Object Storage | Cloudflare"
+      ]
+    },
+    {
+      "q": "fintech",
+      "relevant": [
+        "Stripe — Pricing & Fees",
+        "Stripe Docs",
+        "NobleFinance - Financial Dashboard UI & Management Platform by Orbix Studio – SaaS Dashboard Design for Orbix Studio LLC on Dribbble"
+      ]
+    },
+    {
+      "q": "landing page dark",
+      "relevant": [
+        "Linear – The system for product development",
+        "Agentic Infrastructure - Vercel",
+        "Raycast - Your shortcut to everything",
+        "Resend · Email for developers"
+      ]
+    },
+    {
+      "q": "developer tool landing",
+      "relevant": [
+        "Agentic Infrastructure - Vercel",
+        "PostHog – Your product’s context layer",
+        "Resend · Email for developers"
+      ]
+    },
+    {
+      "q": "hero",
+      "relevant": [
+        "Linear – The system for product development",
+        "Agentic Infrastructure - Vercel",
+        "Resend · Email for developers",
+        "Cal.com | Scheduling Software for Online Bookings",
+        "AirPods Pro 3"
+      ]
+    },
+    {
+      "q": "bento",
+      "relevant": ["Agentic Infrastructure - Vercel"]
+    },
+    {
+      "q": "command palette",
+      "relevant": ["Raycast - Your shortcut to everything"]
+    },
+    {
+      "q": "playful",
+      "relevant": ["PostHog – Your product’s context layer"]
+    },
+    {
+      "q": "email",
+      "relevant": ["Resend · Email for developers"]
+    },
+    {
+      "q": "scheduling",
+      "relevant": ["Cal.com | Scheduling Software for Online Bookings"]
+    },
+    {
+      "q": "e-commerce product page",
+      "relevant": ["AirPods Pro 3"]
+    },
+    {
+      "q": "portfolio",
+      "relevant": ["Rauno Freiberg"]
+    },
+    {
+      "q": "linear",
+      "relevant": ["Linear – The system for product development", "Pricing – Linear", "Changelog – Linear"]
+    },
+    {
+      "q": "stripe",
+      "relevant": ["Stripe — Pricing & Fees", "Stripe Docs"]
+    },
+    {
+      "q": "icons",
+      "relevant": ["Iconify", "Icônes", "Lucide", "Phosphor Icons"]
+    },
+    {
+      "q": "fonts",
+      "relevant": ["Google Fonts", "Fontshare", "Typewolf", "Fonts In Use"]
+    },
+    {
+      "q": "react components",
+      "relevant": [
+        "React Bits",
+        "shadcn/ui",
+        "Magic UI",
+        "Aceternity UI",
+        "21st.dev",
+        "coss ui (formerly Origin UI)",
+        "Uiverse"
+      ]
+    },
+    {
+      "q": "color palette",
+      "relevant": ["Coolors", "Realtime Colors"]
+    },
+    {
+      "q": "design system",
+      "relevant": ["Design Systems Repo", "Design Systems Surf", "Adele", "The Component Gallery", "Refero Styles"]
+    },
+    {
+      "q": "mobile app screens",
+      "relevant": ["Mobbin", "Page Flows", "Refero"]
+    },
+    {
+      "q": "animation",
+      "relevant": ["LottieFiles", "Rive Marketplace", "Motion Examples", "Codrops"]
+    },
+    {
+      "q": "inspiration gallery",
+      "relevant": [
+        "Dribbble",
+        "Behance",
+        "Awwwards",
+        "Recent (formerly Godly)",
+        "Landbook",
+        "One Page Love",
+        "Siteinspire",
+        "Cosmos",
+        "Savee",
+        "Pinterest"
+      ]
+    }
+  ]
+}
