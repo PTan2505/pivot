@@ -39,7 +39,7 @@ The current requirements document (`SPEC.md`, PIVOT Requirements v0.2) defines 1
 
 - Skill packs, skill sync/editing, and skill guide enhancements.
 - Workflows, prompts, MCP, snippets, rules, checklists, and other knowledge expansion.
-- Projects, AI tagging, advanced duplicate detection, resource-to-resource linking, backup/restore, MCP server.
+- Projects, AI tagging, advanced duplicate detection, resource-to-resource linking, backup/restore, MCP server. (After Phase 5, the owner moved the MCP server and agent search into scope on 2026-10-31: see `SEARCH_MCP_IMPLEMENTATION_PLAN.md`.)
 - New animation/branding polish unrelated to the reference workflow.
 
 **Important:** Existing functionality in deferred areas may remain accessible; do not extend it during this initiative.
