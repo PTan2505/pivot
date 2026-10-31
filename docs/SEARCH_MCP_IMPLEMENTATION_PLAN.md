@@ -268,8 +268,10 @@ As built: the tools, image slicing and `PivotSource` live in `packages/mcp-tools
 
 ### Step 3 — Skill (brief 10) (1–2 d)
 
-- [ ] `pivot-design/SKILL.md` (location per the owner's decision), with the flow in §5.4, the brief template, the attribution rules and the mockup-before-code rule.
-- [ ] Try it on 5 realistic prompts: dashboard, onboarding, navigation, form, pricing. Record what it picked and why in `docs/reference-first-progress.md` (or a new `docs/search-mcp-progress.md`).
+As built: `.claude/skills/pivot-design/SKILL.md`, linked into `~/.claude/skills` by `pnpm skill:install`. Results are in [search-mcp-progress.md](search-mcp-progress.md).
+
+- [x] `pivot-design/SKILL.md` (location per the owner's decision), with the flow in §5.4, the brief template, the attribution rules and the mockup-before-code rule.
+- [x] Try it on 5 realistic prompts: dashboard, onboarding, navigation, form, pricing. Record what it picked and why in `docs/reference-first-progress.md` (or a new `docs/search-mcp-progress.md`).
 
 ### Step 4 — Hardening (brief 11) (1–2 d)
 
