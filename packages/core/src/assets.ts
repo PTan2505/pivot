@@ -104,6 +104,8 @@ export interface SaveAssetInput {
   fileName: string;
   mimeType?: string;
   sourceUrl?: string | null;
+  /** How a screenshot was taken; kept on a new file only (an identical existing file keeps its own). */
+  meta?: Record<string, unknown>;
 }
 
 /** 720px wide, and only the top 1200px of very tall (full-page) captures. */
@@ -177,6 +179,7 @@ export async function saveAsset(input: SaveAssetInput) {
       height,
       sha256,
       sourceUrl: input.sourceUrl ?? null,
+      meta: input.meta ?? {},
     })
     .returning();
   return row;
@@ -371,6 +374,7 @@ export async function listResourceAssets(resourceId: string): Promise<AssetDTO[]
       height: asset.height,
       sourceUrl: asset.sourceUrl,
       notes: asset.notes,
+      meta: asset.meta ?? {},
       createdAt: asset.createdAt.toISOString(),
       // Checking R2 would cost a request per file on every page view; trust the record there.
       missing: asset.storage === "local" ? (await storeOf(asset).size(asset.storagePath)) === null : false,

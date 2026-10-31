@@ -22,6 +22,13 @@
       "when": 1793116283773,
       "tag": "0002_married_infant_terrible",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793464253810,
+      "tag": "0003_lean_richard_fisk",
+      "breakpoints": true
     }
   ]
 }

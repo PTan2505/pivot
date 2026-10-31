@@ -79,6 +79,8 @@ export interface ClipData {
   tags?: { kind: TagKind; name: string }[];
   collectionId?: string;
   serverCapture?: boolean;
+  /** Let the server capture click "Load more" buttons; off unless asked for. */
+  expandContent?: boolean;
   /** "skip": when the page is already saved, return that one instead of saving it again. */
   ifExists?: "create" | "skip";
 }

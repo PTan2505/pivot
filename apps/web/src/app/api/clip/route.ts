@@ -22,6 +22,8 @@ const fields = z.object({
   tags: z.array(z.object({ kind: z.enum(TAG_KINDS), name: z.string().trim().min(1) })).optional(),
   collectionId: z.string().optional(),
   serverCapture: z.boolean().optional(),
+  /** Let the server capture click "Load more" buttons; off unless asked for. */
+  expandContent: z.boolean().optional(),
   /** Page saves without a form to review (quick-save, context menu): keep the saved one instead of a duplicate. */
   ifExists: z.enum(["create", "skip"]).default("create"),
 });
@@ -83,7 +85,7 @@ export const POST = route(async (req: Request) => {
       await attachAsset(id, asset.id, "attachment");
       await setResourceFields(id, { coverAssetId: asset.id });
     }
-    if (input.serverCapture) await enqueueCapture(id);
+    if (input.serverCapture) await enqueueCapture(id, { expandContent: input.expandContent });
   } else if (input.kind === "image") {
     const upload = form.get("image");
     let data: Buffer;

@@ -76,8 +76,14 @@ function fence(content: string, lang = "") {
 }
 
 function relevantAssets(assets: AssetDTO[], opts: ContextOptions) {
+  // Exports carry the Latest capture; the kept Original and the other colour scheme stay in PIVOT.
   return assets.filter(
-    (a) => !a.missing && (a.role !== "screenshot-full" || opts.includeFullScreenshots) && a.kind !== "font",
+    (a) =>
+      !a.missing &&
+      !a.role.endsWith("-original") &&
+      !a.role.endsWith("-variant") &&
+      (a.role !== "screenshot-full" || opts.includeFullScreenshots) &&
+      a.kind !== "font",
   );
 }
 

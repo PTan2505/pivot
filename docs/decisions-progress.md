@@ -8,12 +8,22 @@ Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 | ----- | ---------------------------------- | ----------- |
 | 0     | Plan and docs                      | Done        |
 | S     | Align `pivot-design` with Part A   | Done        |
-| 1     | Reliable capture (server)          | Not started |
+| 1     | Reliable capture (server)          | Done        |
 | 2     | Extension that survives offline    | Not started |
 | 3     | Popup and library                  | Not started |
 | 4     | Sections, links, private pages     | Not started |
 | 5     | Design track: sessions, MCP writes | Not started |
 | 6     | Later                              | Not started |
+
+### Phase 1 — Reliable capture (server)
+
+- Status: Done
+- Existing functionality reused: the Playwright pipeline in `capture.ts` (SSRF guard, scroll walk, stitched full page, block-page detection, Open Graph fallback), `saveAsset`'s sha256 dedupe, `attachAsset`'s role upsert, the detail page's status bar and Retry button.
+- Files changed: `packages/core/src/capture.ts` (attempts, retry, quality, theme, cancel, Original/Latest), new `settings.ts`, `db/schema.ts` + migration `0003` (adds `capture_attempts`, `app_settings`, `resources.capture_quality`, `assets.meta`; nothing removed), `types.ts`, `assets.ts`, `resources.ts`, `context.ts`; routes `api/resources/[id]/capture` (POST options, GET history, DELETE cancel), `api/captures`, `api/settings/capture`, `api/clip` (`expandContent`); `asset-gallery.tsx` (Cancel, notes, Retake options, theme labels, Original first, capture history), Settings → Capture; the extension popup's "Expand content"; MCP role labels; SPEC #7 and new §12.
+- Checks run and results: core capture tests 20/20 (new: Original kept and in-between shots deleted; history order; a sign-in wall doesn't replace a good shot and is flagged when there's nothing to keep; 503 retried; 429 waits for Retry-After; a blocked page isn't retried; cancelling a running capture; settings and per-capture override; Load More only with `expandContent`). `pnpm typecheck`, `pnpm lint`, full `pnpm test` in the pre-push hook.
+- Manual verification: scratch app on port 4400 (PGlite, no R2). Saved example.com, retook it with "Both themes": Latest dark plus light variant, both labelled; the identical second dark shot was not stored twice; history shows two completed runs; the Retake options menu opens and lists the four options; Settings → Capture shows Dark and Expand content off.
+- Remaining issues: the Capture Queue page and the extension's queue view are Phase 3 (#17); Undo/Discard are Phase 3 (#55). Quality detection is heuristic and can be wrong (by design it never blocks a save).
+- Next step: Phase 2.
 
 ### Phase S — Align `pivot-design` with Part A
 

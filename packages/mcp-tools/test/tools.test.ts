@@ -26,6 +26,7 @@ const detail = (over: Partial<ResourceDetailDTO> = {}): ResourceDetailDTO => ({
   coverAssetId: "cover",
   captureStatus: "done",
   captureError: null,
+  captureQuality: null,
   createdAt: "2026-10-30T00:00:00.000Z",
   updatedAt: "2026-10-30T00:00:00.000Z",
   deletedAt: null,
@@ -47,6 +48,7 @@ const detail = (over: Partial<ResourceDetailDTO> = {}): ResourceDetailDTO => ({
       height: 900,
       sourceUrl: null,
       notes: "",
+      meta: {},
       createdAt: "",
     },
     {
@@ -60,6 +62,7 @@ const detail = (over: Partial<ResourceDetailDTO> = {}): ResourceDetailDTO => ({
       height: 6192,
       sourceUrl: null,
       notes: "",
+      meta: {},
       createdAt: "",
     },
   ],
