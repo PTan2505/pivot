@@ -396,6 +396,14 @@ export type AssetRole =
   | "screenshot-full-original"
   | "screenshot-variant"
   | "screenshot-full-variant"
+  /** Tablet or mobile captures, taken on request; `meta.viewportName` says which. */
+  | "screenshot-responsive"
+  | "screenshot-full-responsive"
+  /** A recording of the page scrolling, and still frames from it, taken on request. */
+  | "motion-video"
+  | "motion-keyframe"
+  /** An interaction state (hover, open menu, error…) captured from the tab; `meta.state` names it. */
+  | "state"
   | "attachment";
 /** `partial`: the first screen was saved but the full page wasn't. `cancelled`: stopped by the user. */
 export type CaptureStatus = "pending" | "done" | "partial" | "failed" | "cancelled";
@@ -408,7 +416,19 @@ export interface CaptureOptions {
   /** Click "Load more"-style buttons while walking the page. Off unless asked for. */
   expandContent?: boolean;
   theme?: CaptureTheme;
+  /** Extra real viewports to capture in the same reference, on request. */
+  viewports?: ResponsiveViewport[];
+  /** Record the page scrolling (video + keyframes), on request. */
+  motion?: boolean;
 }
+
+export type ResponsiveViewport = "tablet" | "mobile";
+
+/** Real browser sizes for responsive captures (not a scaled-down desktop). */
+export const RESPONSIVE_VIEWPORTS: Record<ResponsiveViewport, { width: number; height: number; mobile: boolean }> = {
+  tablet: { width: 820, height: 1180, mobile: true },
+  mobile: { width: 390, height: 844, mobile: true },
+};
 
 export interface CaptureSettings {
   expandContent: boolean;
@@ -417,7 +437,9 @@ export interface CaptureSettings {
 
 export const DEFAULT_CAPTURE_SETTINGS: CaptureSettings = { expandContent: false, theme: "dark" };
 
-export type CaptureAttemptStatus = "queued" | "capturing" | "completed" | "partial" | "failed" | "cancelled";
+/** `deferred`: a "capture later" request; it runs only when you start it. */
+export type CaptureAttemptStatus =
+  "deferred" | "queued" | "capturing" | "completed" | "partial" | "failed" | "cancelled";
 
 export interface CaptureAttemptDTO {
   id: string;

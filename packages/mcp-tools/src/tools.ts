@@ -166,6 +166,11 @@ const ROLE_LABEL: Record<string, string> = {
   "screenshot-full-original": "original full page",
   "screenshot-variant": "viewport, other colour scheme",
   "screenshot-full-variant": "full page, other colour scheme",
+  "screenshot-responsive": "tablet or mobile viewport",
+  "screenshot-full-responsive": "tablet or mobile full page",
+  "motion-video": "motion video",
+  "motion-keyframe": "motion keyframe",
+  state: "interaction state",
   attachment: "attachment",
 };
 

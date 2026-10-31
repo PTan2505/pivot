@@ -289,3 +289,106 @@ describe.skipIf(!(await (await import("../src/capture")).playwrightStatus()).ins
     await settings.setCaptureSettings({ theme: "dark" });
   });
 });
+
+describe.skipIf(!(await (await import("../src/capture")).playwrightStatus()).installed)("capture extras", () => {
+  it(
+    "captures tablet and mobile at their real sizes in the same reference, and replaces them next time",
+    { timeout: 120_000 },
+    async () => {
+      mode = "page";
+      const r = await resources.createResource({
+        type: "reference",
+        title: "Responsive",
+        sourceUrl: `${baseUrl}?resp`,
+      });
+      await capture.enqueueCapture(r.id, { viewports: ["tablet", "mobile"] });
+      await settled(r.id);
+      const shots = (await assets.listResourceAssets(r.id)).filter((a) => a.role === "screenshot-responsive");
+      expect(shots.map((a) => [a.meta.viewportName, a.width]).sort()).toEqual([
+        ["mobile", 390],
+        ["tablet", 820],
+      ]);
+      await capture.enqueueCapture(r.id, { viewports: ["mobile"] });
+      await settled(r.id);
+      const again = (await assets.listResourceAssets(r.id)).filter((a) => a.role === "screenshot-responsive");
+      expect(again.filter((a) => a.meta.viewportName === "mobile")).toHaveLength(1);
+      expect(again.filter((a) => a.meta.viewportName === "tablet")).toHaveLength(1);
+      const [attempt] = await capture.listCaptureAttempts(r.id);
+      expect(attempt.context.extras).toMatchObject({ mobile: "done" });
+    },
+  );
+
+  it("records motion as a video with keyframes", { timeout: 120_000 }, async () => {
+    mode = "page";
+    const r = await resources.createResource({ type: "reference", title: "Motion", sourceUrl: `${baseUrl}?motion` });
+    await capture.enqueueCapture(r.id, { motion: true });
+    await settled(r.id);
+    const list = await assets.listResourceAssets(r.id);
+    const video = list.find((a) => a.role === "motion-video");
+    expect(video?.mimeType).toBe("video/webm");
+    expect(video?.size).toBeGreaterThan(1000);
+    expect(list.filter((a) => a.role === "motion-keyframe").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("keeps a capture-later request waiting until it is run", { timeout: 60_000 }, async () => {
+    mode = "page";
+    const r = await resources.createResource({ type: "reference", title: "Later", sourceUrl: `${baseUrl}?later` });
+    const id = await capture.enqueueCapture(r.id, {}, { defer: true });
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    expect((await resources.getResource(r.id))!.captureStatus).toBeNull();
+    expect((await capture.listCaptureAttempts(r.id))[0].status).toBe("deferred");
+    // a restart doesn't run it either
+    await capture.resumePendingCaptures();
+    expect((await capture.listCaptureAttempts(r.id))[0].status).toBe("deferred");
+    expect(await capture.runDeferredCapture(id)).toBe(true);
+    expect((await settled(r.id)).captureStatus).toBe("done");
+    expect(await capture.runDeferredCapture(id)).toBe(false);
+  });
+
+  it(
+    "compares Original and Latest, saves a new design version, and reports repeated failures",
+    { timeout: 120_000 },
+    async () => {
+      const compare = await import("../src/compare");
+      const links = await import("../src/links");
+      mode = "page";
+      const r = await resources.createResource({
+        type: "reference",
+        title: "Versions",
+        sourceUrl: `${baseUrl}?versions`,
+      });
+      await capture.enqueueCapture(r.id);
+      await settled(r.id);
+      await capture.enqueueCapture(r.id);
+      await settled(r.id);
+      const pair = (await compare.originalAndLatest(r.id))!;
+      const diff = await compare.diffAssets(pair.original, pair.latest);
+      // the test page swaps its background colour between captures: almost everything changed
+      expect(diff.changedRatio).toBeGreaterThan(0.5);
+      expect(diff.image.subarray(1, 4).toString()).toBe("PNG");
+
+      const newer = await compare.createDesignVersion(r.id);
+      const v = (await resources.getResource(newer))!;
+      expect(v.title).toMatch(/^Versions \(\d{4}-\d{2}\)$/);
+      expect(v.assets.map((a) => a.id).sort()).toEqual(
+        (await assets.listResourceAssets(r.id))
+          .filter((a) => a.role === "screenshot" || a.role === "screenshot-full")
+          .map((a) => a.id)
+          .sort(),
+      );
+      expect((await links.listLinks(newer))[0]).toMatchObject({ kind: "newer_version_of", direction: "out" });
+      // the old reference keeps its Original
+      expect((await assets.listResourceAssets(r.id)).some((a) => a.role === "screenshot-original")).toBe(true);
+
+      mode = "blocked";
+      const sad = await resources.createResource({ type: "reference", title: "Sad", sourceUrl: `${baseUrl}?sad` });
+      for (let i = 0; i < 3; i++) {
+        await capture.enqueueCapture(sad.id);
+        await settled(sad.id);
+      }
+      const health = await compare.captureHealth();
+      expect(health.failingSites.find((h) => h.host === "127.0.0.1")?.failures).toBeGreaterThanOrEqual(3);
+      mode = "page";
+    },
+  );
+});

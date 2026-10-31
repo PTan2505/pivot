@@ -382,6 +382,8 @@ PT is the core, PIVOT the expansion: the mark starts from the first and last let
 - While capturing, a surface status pill with a spinner reads "Capturing screenshots…" with a small **Cancel** pill. A failed capture turns it into a danger line "Screenshot failed: <reason>" with two small pills, **Upload one** and **Retry**. A partial or doubtful capture (or a retake that kept the previous shot) shows the same pill in ink-muted with an info icon, the note, and a **Retake** pill.
 - **Retake** is a split pill: the main half retakes with the saved defaults; a chevron half opens a menu ("Capture once with": Expand content, Light theme, Dark theme, Both themes).
 - Thumbnails are labelled with their role and colour scheme ("Original", "Screenshot · dark", "Other theme · light"). When a retake has replaced the first capture, the Original is the one shown first.
+- The Retake menu adds "Tablet and mobile too", "Record motion (video and keyframes)" and "Capture later…". Tablet and mobile shots, the motion video and keyframes appear as more thumbnails, labelled "Viewport · mobile · dark", "Motion", "Keyframe 3". When the last capture saw animation, a 12px ink-muted line above the history offers a small **Record motion** pill.
+- **Compare Original and Latest** (collapsed `<details>`, only when an Original exists): the share of changed pixels in ink with the capture times in ink-muted, the difference image (Latest dimmed to grey, changed pixels in ember, 10px radius), and a pill to save the Latest as a new design version (secondary and preceded by "This looks like a redesign." above 25%, ghost below).
 - **Capture history** sits under the gallery as a collapsed `<details>` ("Capture history (n)"), each run a surface row: status in ink-secondary, the time in mono, the scheme and options, the error on its own line.
 
 ### Links — `components/resource-links.tsx`
@@ -398,7 +400,7 @@ A surface panel (14px radius) on the Inbox page and at the top of a reference's 
 
 ### Capture queue — `app/captures/page.tsx`
 
-Display title "Capture queue", a 14px ink-muted line, then a radiogroup of pills (All, Queued & capturing, Failed & partial; the chosen one inverse). Each run is a surface row (14px radius): a status chip (danger for Failed, warning for Partial, a spinner while running), the item's title as a link, the time in mono ink-subtle, a small **Cancel** or **Retry** pill, and a second line in 12px ink-muted with the scheme, options, retries, quality and error. It refreshes every 2 seconds while something runs.
+Display title "Capture queue", a 14px ink-muted line, then a radiogroup of pills (All, Queued & capturing, Failed & partial; the chosen one inverse). Each run is a surface row (14px radius): a status chip (danger for Failed, warning for Partial, a spinner while running), the item's title as a link, the time in mono ink-subtle, a small **Cancel** or **Retry** pill, and a second line in 12px ink-muted with the scheme, options, retries, quality and error. It refreshes every 2 seconds while something runs. A "Requested for later" filter lists capture-later requests, each with **Capture now** and a ghost **Drop**. Above the filters, a surface "Worth a look" panel appears only when a site keeps failing (host in warning) or a newest capture looks worse than an earlier one.
 
 ### Add from URL — `components/add-url-dialog.tsx`
 
