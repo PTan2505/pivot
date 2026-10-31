@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Copy, Eye, EyeOff, Loader2, Pencil, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -195,7 +196,10 @@ function CaptureSection() {
       <div>
         <h2 className="text-[22px] leading-[1.2] font-medium tracking-[-0.02em]">Capture</h2>
         <p className="text-sm text-muted-foreground">
-          Defaults for the screenshots PIVOT takes. The Retake menu and the extension can change them for one capture.
+          Defaults for the screenshots PIVOT takes. The Retake menu and the extension can change them for one capture.{" "}
+          <Link href="/captures" className="text-accent-text hover:underline">
+            Open the capture queue
+          </Link>
         </p>
       </div>
       <dl className="rounded-[14px] bg-surface px-5">

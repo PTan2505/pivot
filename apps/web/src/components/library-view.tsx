@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useLibraryParams } from "@/hooks/use-library-params";
-import { assetUrl, useResource, useResources } from "@/lib/api";
+import { assetUrl, useCollections, useCounts, useResource, useResources } from "@/lib/api";
 import { hostOf } from "@/components/resource-card";
 
 const SHORT_LABEL: Partial<Record<ResourceType, string>> = {
@@ -87,6 +87,23 @@ function TypeShelf({ types, items }: { types: readonly ResourceType[]; items: Re
   );
 }
 
+/** A filter shown as a dark pill with a button that removes it. */
+function FilterChip({ label, clearLabel, onClear }: { label: ReactNode; clearLabel: string; onClear: () => void }) {
+  return (
+    <span className="inline-flex h-9 items-center gap-1 rounded-full bg-inverse pr-1 pl-3 text-[13px] font-medium text-on-inverse">
+      {label}
+      <button
+        type="button"
+        onClick={onClear}
+        aria-label={clearLabel}
+        className="grid size-6 place-items-center rounded-full hover:bg-on-inverse/15"
+      >
+        <X className="size-3.5" aria-hidden />
+      </button>
+    </span>
+  );
+}
+
 /** Shown while the list is narrowed to what was saved from one source. */
 function ViaChip({ sourceId, onClear }: { sourceId: string; onClear: () => void }) {
   const { data: source } = useResource(sourceId);
@@ -139,13 +156,18 @@ export function LibraryView({
     q: params.q,
     type: params.type,
     // "Saved from this source" counts every type, so the list it opens doesn't stop at the section's types.
-    types: library && !params.type && !params.via ? params.section.types : undefined,
+    types: library && !params.type && !params.via && !params.review && !params.url ? params.section.types : undefined,
     tags: params.tags,
     via: params.via || undefined,
+    review: params.review || undefined,
+    url: params.url || undefined,
     sort: params.sort,
-    collection: collectionId,
+    collection: collectionId ?? (params.collection || undefined),
     trash: mode === "trash",
   });
+  const { data: counts } = useCounts();
+  const { data: allCollections = [] } = useCollections();
+  const collectionName = allCollections.find((c) => c.id === params.collection)?.name;
 
   // One source category: narrow here, the list of sources is small.
   const items = useMemo(
@@ -190,12 +212,13 @@ export function LibraryView({
   const { data: viaSource } = useResource(library && !params.type ? params.via : "");
   const heading =
     title ??
+    (params.review ? "Inbox" : undefined) ??
     category?.label ??
     viaSource?.title ??
     (params.type && params.section.types.length > 1 ? TYPE_DEFS[params.type].plural : params.section.label);
-  const filtered = !!(params.q || params.tags.length || params.via);
-  // Search, tags and source; the type, section and category are where you are, not filters.
-  const clearFilters = () => set({ q: "", tags: [], via: "" });
+  const filtered = !!(params.q || params.tags.length || params.via || params.collection || params.url);
+  // Search, tags, source, collection and page; the type, section, category and Inbox are where you are, not filters.
+  const clearFilters = () => set({ q: "", tags: [], via: "", collection: "", url: "" });
   const trail =
     crumbs ??
     (library && params.type ? [...typeCrumbs(params.type), ...(category ? [{ label: category.label }] : [])] : []);
@@ -223,6 +246,19 @@ export function LibraryView({
             </span>
           )}
           {subtitle && <p className="pb-2.5 text-base text-ink-muted">{subtitle}</p>}
+          {params.review && (
+            <p className="pb-2.5 text-base text-ink-muted">
+              Quick saves waiting to be organised. They are searchable already; select some and mark them reviewed.
+            </p>
+          )}
+          {library && !params.review && (counts?.inbox ?? 0) > 0 && !actions && (
+            <div className="ml-auto pb-1">
+              <Button variant="secondary" onClick={() => set({ review: "needs", type: undefined, section: "library" })}>
+                Inbox
+                <span className="font-mono text-xs text-ink-secondary tabular-nums">{counts!.inbox}</span>
+              </Button>
+            </div>
+          )}
           {actions && <div className="ml-auto flex flex-wrap items-center gap-2 pb-1">{actions}</div>}
         </div>
         <TagPills items={items} selected={params.tags} onChange={(tags) => set({ tags })} />
@@ -232,6 +268,23 @@ export function LibraryView({
             <TypeSelect types={typeChoices} value={params.type} onChange={(type) => set({ type })} />
           )}
           {params.via && <ViaChip sourceId={params.via} onClear={() => set({ via: "" })} />}
+          {params.review && (
+            <FilterChip label="Needs review" clearLabel="Leave the Inbox" onClear={() => set({ review: "" })} />
+          )}
+          {params.collection && !collectionId && (
+            <FilterChip
+              label={`In ${collectionName ?? "collection"}`}
+              clearLabel="Show every collection"
+              onClear={() => set({ collection: "" })}
+            />
+          )}
+          {params.url && (
+            <FilterChip
+              label={`Saved from ${hostOf(params.url) ?? "this page"}`}
+              clearLabel="Show every page"
+              onClear={() => set({ url: "" })}
+            />
+          )}
           {filtered && (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
               <X aria-hidden /> Clear filters
@@ -272,11 +325,17 @@ export function LibraryView({
       <div className="flex-1 space-y-6 px-4 pt-6 pb-16 md:px-10">
         {params.type === "skill" && library && <SkillSyncPanel />}
         {params.type === "source" && library && <SourceToolbar />}
-        {library && !params.type && !params.via && params.section.types.length > 1 && items && (
-          <div className="pb-10">
-            <TypeShelf types={params.section.types} items={items} />
-          </div>
-        )}
+        {library &&
+          !params.type &&
+          !params.via &&
+          !params.review &&
+          !params.url &&
+          params.section.types.length > 1 &&
+          items && (
+            <div className="pb-10">
+              <TypeShelf types={params.section.types} items={items} />
+            </div>
+          )}
 
         {error && (
           <div role="alert" className="rounded-[14px] bg-surface p-4 text-sm text-danger">
@@ -359,8 +418,9 @@ export function LibraryView({
         ids={selection}
         onClear={() => setSelected([])}
         mode={mode}
-        collectionId={collectionId}
+        collectionId={collectionId ?? (params.collection || undefined)}
         exportName={exportName}
+        inbox={!!params.review}
       />
     </div>
   );

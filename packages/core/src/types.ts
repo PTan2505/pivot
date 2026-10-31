@@ -474,6 +474,8 @@ export interface ResourceDTO {
   captureStatus: CaptureStatus | null;
   captureError: string | null;
   captureQuality: CaptureQuality | null;
+  /** "needs_review": a quick save waiting in the Inbox. Separate from the capture status. */
+  reviewStatus: "needs_review" | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;

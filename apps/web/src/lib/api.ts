@@ -55,8 +55,13 @@ export interface ResourceQuery {
   via?: string;
   tags?: string[];
   collection?: string;
+  /** "needs": the Inbox. */
+  review?: string;
+  url?: string;
+  host?: string;
   trash?: boolean;
   sort?: string;
+  limit?: number;
 }
 
 function toParams(q: ResourceQuery): Record<string, string | undefined> {
@@ -67,8 +72,12 @@ function toParams(q: ResourceQuery): Record<string, string | undefined> {
     via: q.via,
     tags: q.tags?.length ? q.tags.join(",") : undefined,
     collection: q.collection,
+    review: q.review || undefined,
+    url: q.url || undefined,
+    host: q.host || undefined,
     trash: q.trash ? "1" : undefined,
     sort: q.sort,
+    limit: q.limit ? String(q.limit) : undefined,
   };
 }
 
@@ -199,7 +208,7 @@ export function useBulk() {
   const invalidate = useInvalidate();
   return useMutation({
     mutationFn: (input: {
-      action: "trash" | "restore" | "purge" | "addToCollection" | "removeFromCollection";
+      action: "trash" | "restore" | "purge" | "addToCollection" | "removeFromCollection" | "reviewed" | "needsReview";
       ids: string[];
       collectionId?: string;
     }) => api<{ ok: true }>("/api/resources/bulk", { method: "POST", json: input }),

@@ -21,6 +21,12 @@ export interface LibraryParams {
   tags: string[];
   /** Source id: only resources saved from that source. */
   via: string;
+  /** "needs": only the Inbox (quick saves waiting for review). */
+  review: string;
+  /** Collection id: only resources in that collection. */
+  collection: string;
+  /** Only resources saved from this exact page. */
+  url: string;
   /** Sources only: one source category. */
   category: SourceCategory | undefined;
   sort: "updated" | "created" | "oldest" | "title";
@@ -55,6 +61,9 @@ export function useLibraryParams() {
     type,
     tags: sp.get("tags")?.split(",").filter(Boolean) ?? [],
     via: sp.get("via") ?? "",
+    review: sp.get("review") === "needs" ? "needs" : "",
+    collection: sp.get("collection") ?? "",
+    url: sp.get("url") ?? "",
     category: type === "source" ? SOURCE_CATEGORIES.find((c) => c.value === sp.get("category"))?.value : undefined,
     sort: sort === "created" || sort === "oldest" || sort === "title" ? sort : "updated",
     view: sp.get("view") === "list" ? "list" : "grid",

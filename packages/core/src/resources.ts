@@ -51,6 +51,8 @@ export const resourceInput = z.object({
   meta: z.record(z.string(), z.unknown()).optional(),
   tags: z.array(tagInput).max(100).optional(),
   coverAssetId: z.string().nullable().optional(),
+  /** "needs_review" puts it in the Inbox; null takes it out. */
+  reviewStatus: z.enum(["needs_review"]).nullable().optional(),
 });
 
 export const resourcePatch = resourceInput.partial();
@@ -67,6 +69,12 @@ export interface ListFilters {
   via?: string;
   tagIds?: string[];
   collectionId?: string;
+  /** Only the Inbox: quick saves still marked "needs review". */
+  needsReview?: boolean;
+  /** Only resources saved from this exact page (same normalised URL). */
+  url?: string;
+  /** Only resources whose URL is on this host (subdomains included). */
+  host?: string;
   trash?: boolean;
   /** `created` is newest first, `oldest` is by creation date the other way. */
   sort?: "updated" | "created" | "oldest" | "title";
@@ -93,6 +101,7 @@ function toDTO(row: ResourceRow, rowTags: TagDTO[], fullShot: FullShot = null): 
     captureStatus: row.captureStatus as CaptureStatus | null,
     captureError: row.captureError,
     captureQuality: row.captureQuality as CaptureQuality | null,
+    reviewStatus: row.reviewStatus === "needs_review" ? "needs_review" : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     deletedAt: row.deletedAt?.toISOString() ?? null,
@@ -169,6 +178,17 @@ async function listQuery(filters: ListFilters) {
   if (filters.via) {
     const ids = (await sourceAttribution()).get(filters.via) ?? [];
     where.push(ids.length ? inArray(resources.id, ids) : sql`false`);
+  }
+  if (filters.needsReview) where.push(eq(resources.reviewStatus, "needs_review"));
+  if (filters.url) {
+    const ids = (await findByUrl(filters.url).catch(() => [])).map((r) => r.id);
+    where.push(ids.length ? inArray(resources.id, ids) : sql`false`);
+  }
+  if (filters.host) {
+    const host = filters.host.toLowerCase().replace(/^www\./, "");
+    where.push(
+      sql`lower(coalesce(${resources.sourceUrl}, '')) ~ ${`^https?://([^/]*\\.)?${host.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(:\\d+)?(/|$)`}`,
+    );
   }
 
   const q = filters.q?.trim();
@@ -352,6 +372,7 @@ export async function createResource(input: ResourceInput): Promise<ResourceDeta
       content: data.content ?? "",
       meta: data.meta ?? {},
       coverAssetId: data.coverAssetId ?? null,
+      reviewStatus: data.reviewStatus ?? null,
     })
     .returning();
   if (data.tags?.length) await setResourceTags(row.id, data.tags);
@@ -373,6 +394,7 @@ export async function updateResource(id: string, patch: ResourcePatch): Promise<
   if (data.content !== undefined) set.content = data.content;
   if (data.meta !== undefined) set.meta = { ...(current.meta ?? {}), ...data.meta };
   if (data.coverAssetId !== undefined) set.coverAssetId = data.coverAssetId;
+  if (data.reviewStatus !== undefined) set.reviewStatus = data.reviewStatus;
   if ((data.type ?? current.type) === "skill" && data.content !== undefined) {
     const d = deriveFromSkill(data.content);
     if (d.title) set.title = d.title;
@@ -528,7 +550,15 @@ export async function typeCounts(): Promise<Record<string, number>> {
     .select({ count: sql<number>`count(*)::int` })
     .from(resources)
     .where(isNotNull(resources.deletedAt));
-  const counts: Record<string, number> = { trash: Number(trash[0]?.count ?? 0), all: 0 };
+  const [inbox] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(resources)
+    .where(and(isNull(resources.deletedAt), eq(resources.reviewStatus, "needs_review")));
+  const counts: Record<string, number> = {
+    trash: Number(trash[0]?.count ?? 0),
+    inbox: Number(inbox?.count ?? 0),
+    all: 0,
+  };
   for (const r of rows) {
     counts[r.type] = Number(r.count);
     counts.all += Number(r.count);
@@ -689,4 +719,11 @@ export async function collectionResourceIds(collectionId: string): Promise<strin
     .where(and(eq(collectionItems.collectionId, collectionId), isNull(resources.deletedAt)))
     .orderBy(asc(collectionItems.position));
   return rows.map((r) => r.id);
+}
+
+/** Takes resources out of the Inbox (or puts them back). */
+export async function setReviewStatus(ids: string[], reviewStatus: "needs_review" | null) {
+  if (!ids.length) return;
+  const db = await getDb();
+  await db.update(resources).set({ reviewStatus }).where(inArray(resources.id, ids));
 }
