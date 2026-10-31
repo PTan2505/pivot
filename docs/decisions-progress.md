@@ -11,9 +11,24 @@ Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 | 1     | Reliable capture (server)          | Done        |
 | 2     | Extension that survives offline    | Done        |
 | 3     | Popup and library                  | Done        |
-| 4     | Sections, links, private pages     | Not started |
+| 4     | Sections, links, private pages     | Done        |
 | 5     | Design track: sessions, MCP writes | Not started |
 | 6     | Later                              | Not started |
+
+### Phase 4 — Sections, links, private pages
+
+- Status: Done
+- Existing functionality reused: the offline queue (held saves are queue items), `queueSave`/`syncNow`, `findByUrl`/`urlKey` for "same page", `safeFetch` (SSRF-guarded, no cookies) for the private check, `getPageInfo`'s injected reader, the Inbox from Phase 3 (sections land there).
+- Files changed: core `links.ts`, `visibility.ts`, `types.ts` (link kinds), `capabilities.ts` (API 3: `visibility`, `clip.section`, `links`), schema + migration `0006` (adds `resource_links`); routes `api/resources/[id]/links`, `api/links/[id]`, `api/visibility`, `api/clip` (`section`, auto-link); web `resource-links.tsx`, `resource-detail.tsx` (Links, Section info); extension `lib/section.ts` (picker, list, scrolling), `lib/privacy.ts`, `lib/redact.ts`, `lib/page.ts` (privacy signals, mask suggestions), `lib/queue.ts` (`needs_approval`), `lib/sync.ts` (`approvePending`), `background.ts` (section capture and stitching, capture retry on Chrome's rate limit, private quick saves held, context-menu section), `popup.tsx` (section buttons and list, private review, approval view), new `popup/redact-editor.tsx`; SPEC §14, DESIGN.md.
+- Checks run and results: core `links.test.ts` 4/4 (section `part_of` its page, same-page links, nothing by website alone, one row for symmetric links, suggestions confirmed by hand, no self-links, trashed ends hidden; visibility: public page, redirect to sign-in, 403, unreachable, app-like URLs); extension tests 12/12 (a held save is never sent, even forced); typecheck, lint, full suite in the hooks.
+- Manual verification: headless Chromium with the built extension and a local test site, against the scratch app:
+  - "Pick from a list" listed Hero, Pricing and Footer; Pricing (2000px tall) was saved as "Pricing — 127.0.0.1", in the Inbox, with its rect and a 1280×2000 stitched image.
+  - A page with a password field, an email and a filled card field was flagged (password field, app-like address); three masks were suggested; Save stayed disabled until the approval box was ticked; the uploaded image is black under the email; no server capture was queued.
+  - "Select a section" + Enter on that page held the section as `needs_approval` (nothing on the server); Review → "Upload with these masks" sent it (one more save on the server, queue empty).
+  - Two real bugs found and fixed: the second tab capture within a second was refused by Chrome (now waits and retries), and the waiting panel was collapsed so Review was hidden (it now opens when something needs you).
+  - Test-only difference: Playwright can't click the toolbar button, so the run used a copy of the build with `<all_urls>` standing in for the `activeTab` grant a real click gives. The shipped manifest is unchanged.
+- Remaining issues: mask suggestions cover filled fields, emails and amounts on screen; names, addresses and anything inside images or canvases are not detected. Fixed headers can repeat inside a stitched section. MCP doesn't expose links or section context yet.
+- Next step: Phase 5a.
 
 ### Phase 3 — Popup and library
 

@@ -1,12 +1,16 @@
 import type { ClipData } from "./api";
+import type { Box } from "./page";
 
 /**
  * The offline queue ("Pending Sync"): every save is written here first and leaves only once PIVOT has confirmed it.
  * This file is the storage-free logic, so it can be tested; `pending-store.ts` keeps the items in IndexedDB.
  */
 
-/** `pending`: will be sent automatically. `needs_attention`: PIVOT refused it; it waits for you to retry or discard. */
-export type PendingStatus = "pending" | "needs_attention";
+/**
+ * `pending`: will be sent automatically. `needs_attention`: PIVOT refused it; it waits for you to retry or discard.
+ * `needs_approval`: the page looks private; nothing is sent until you review the screenshot (and its masks).
+ */
+export type PendingStatus = "pending" | "needs_attention" | "needs_approval";
 
 export interface PendingItem {
   /** Also sent as `clientRequestId`, so a save whose answer got lost is never stored twice. */
@@ -23,6 +27,8 @@ export interface PendingItem {
   attempts: number;
   nextAttemptAt: number;
   lastError?: string;
+  /** For `needs_approval`: why the page looks private, the masks suggested, and the page width they refer to. */
+  privacy?: { reasons: string[]; suggestions: Box[]; viewportWidth: number };
 }
 
 export interface PendingStore {
@@ -71,6 +77,8 @@ export interface SyncSummary {
   /** Still pending (offline, retrying later, or waiting for a server update). */
   waiting: number;
   attention: number;
+  /** Waiting for your approval before upload. */
+  approval: number;
   offline: boolean;
   auth: boolean;
   /** Items waiting because the server lacks a feature they need. */
@@ -86,7 +94,15 @@ export async function syncPending(
   { only, force = false }: { only?: string[]; force?: boolean } = {},
 ): Promise<SyncSummary> {
   const now = deps.now ?? Date.now;
-  const summary: SyncSummary = { synced: 0, waiting: 0, attention: 0, offline: false, auth: false, unsupported: 0 };
+  const summary: SyncSummary = {
+    synced: 0,
+    waiting: 0,
+    attention: 0,
+    approval: 0,
+    offline: false,
+    auth: false,
+    unsupported: 0,
+  };
   const items = (await deps.store.list()).sort((a, b) => a.createdAt - b.createdAt);
   if (!items.length) return summary;
   const features = await deps.features();
@@ -95,6 +111,11 @@ export async function syncPending(
 
   for (const item of items) {
     const picked = !only || only.includes(item.id);
+    // never sent, not even by "Sync now": approving it makes it pending first
+    if (item.status === "needs_approval") {
+      summary.approval++;
+      continue;
+    }
     // a refused save goes again only when you ask for it (Retry); a pending one when its time has come
     const due = force || (item.status === "pending" && item.nextAttemptAt <= now());
     if (item.status === "needs_attention" && !(force && picked)) {
@@ -151,8 +172,15 @@ export async function syncPending(
 }
 
 export function newPendingItem(
-  input: Pick<PendingItem, "label" | "title" | "data" | "screenshot" | "image" | "imageName">,
+  input: Pick<PendingItem, "label" | "title" | "data" | "screenshot" | "image" | "imageName" | "privacy">,
   now = Date.now(),
 ): PendingItem {
-  return { ...input, id: crypto.randomUUID(), createdAt: now, status: "pending", attempts: 0, nextAttemptAt: now };
+  return {
+    ...input,
+    id: crypto.randomUUID(),
+    createdAt: now,
+    status: input.privacy ? "needs_approval" : "pending",
+    attempts: 0,
+    nextAttemptAt: now,
+  };
 }

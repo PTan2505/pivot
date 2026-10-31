@@ -1,6 +1,7 @@
 import { api, ApiError } from "./api";
 import { pendingStore } from "./pending-store";
 import { newPendingItem, syncPending, type PendingItem, type SendResult, type SyncSummary } from "./queue";
+import { redact, type Mask } from "./redact";
 
 async function send(item: PendingItem): Promise<SendResult> {
   try {
@@ -51,7 +52,7 @@ export async function syncNow(options: { only?: string[]; force?: boolean } = {}
 
 export type QueuedSave =
   | { synced: true; path: string; title: string; existing?: boolean }
-  | { synced: false; item: PendingItem; reason: "offline" | "auth" | "attention" | "update" | "retry" };
+  | { synced: false; item: PendingItem; reason: "offline" | "auth" | "attention" | "update" | "retry" | "approval" };
 
 /**
  * Saves through the queue: written on this computer first ("Saved locally"), then sent at once. Only a confirmed
@@ -60,6 +61,10 @@ export type QueuedSave =
 export async function queueSave(input: Parameters<typeof newPendingItem>[0]): Promise<QueuedSave> {
   const item = newPendingItem(input);
   await pendingStore.put(item);
+  if (item.status === "needs_approval") {
+    await refreshBadge();
+    return { synced: false, item, reason: "approval" };
+  }
   let result: { path: string; title?: string; existing?: boolean } | null = null;
   const summary = await syncPending(
     { store: pendingStore, send, features, onSynced: (_, res) => void (result = res) },
@@ -89,4 +94,32 @@ export const SAVED_LOCALLY_TEXT: Record<Exclude<QueuedSave, { synced: true }>["r
   update: "PIVOT needs an update to save this. It’s kept on this computer until then.",
   retry: "PIVOT couldn’t take it right now. It’s kept on this computer and will be retried.",
   attention: "PIVOT refused it. It’s kept on this computer; open the popup to retry or discard it.",
+  approval:
+    "This page looks private, so nothing was uploaded. It’s kept on this computer: open the popup to review the screenshot and approve it.",
 };
+
+/**
+ * Your approval of a held save: the screenshot is uploaded with the masks painted in, or left out. Then it is sent
+ * like any other save.
+ */
+export async function approvePending(
+  id: string,
+  { masks, attachScreenshot }: { masks: Mask[]; attachScreenshot: boolean },
+) {
+  const item = (await pendingStore.list()).find((i) => i.id === id);
+  if (!item || item.status !== "needs_approval") return null;
+  const screenshot =
+    attachScreenshot && item.screenshot
+      ? await redact(item.screenshot, masks, item.privacy?.viewportWidth ?? 0)
+      : undefined;
+  await pendingStore.put({
+    ...item,
+    screenshot,
+    status: "pending",
+    privacy: undefined,
+    nextAttemptAt: Date.now(),
+    // the server can't see a private page, so it doesn't capture it either
+    data: { ...item.data, serverCapture: false },
+  });
+  return syncNow({ only: [id], force: true });
+}
