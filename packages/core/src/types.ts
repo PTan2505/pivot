@@ -466,3 +466,53 @@ export interface SkillPackDTO {
   description: string;
   count: number;
 }
+
+// ---- Search for agents (MCP) and paged API callers ----
+
+export const SEARCH_SORTS = ["relevance", "updated", "created", "oldest", "title"] as const;
+export type SearchSort = (typeof SEARCH_SORTS)[number];
+
+export interface SearchRequest {
+  query?: string;
+  /** Types to search; defaults to references. Ignored when `section` is set. */
+  types?: ResourceType[];
+  section?: SectionId;
+  /** Facets or tags by name, all required (AND), matched case-insensitively. */
+  facets?: { kind: TagKind; name: string }[];
+  collectionId?: string;
+  /** Only resources saved from this source (a source resource id). */
+  sourceId?: string;
+  /** `relevance` (the default with a query) ranks title, then tag, then description matches; otherwise recently edited. */
+  sort?: SearchSort;
+  /** 1–50, default 20. */
+  limit?: number;
+  /** From the previous page's `nextCursor`. */
+  cursor?: string | null;
+}
+
+/** One result, small enough for an agent's context: no storage paths, no asset ids, no notes or content. */
+export interface SearchHit {
+  id: string;
+  type: ResourceType;
+  title: string;
+  /** "attio.com", never the full tracking URL. */
+  host: string | null;
+  /** http(s) only. */
+  sourceUrl: string | null;
+  /** Up to 280 characters. */
+  description: string;
+  /** Facets first, then plain tags; at most 8. */
+  facets: { kind: TagKind; name: string }[];
+  hasScreenshot: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SearchPage {
+  results: SearchHit[];
+  total: number;
+  nextCursor: string | null;
+  sort: SearchSort;
+  /** Requested facets that don't exist in the library; the result is then empty. */
+  unknownFacets?: { kind: TagKind; name: string }[];
+}
