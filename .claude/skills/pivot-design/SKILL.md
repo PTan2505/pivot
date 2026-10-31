@@ -1,6 +1,6 @@
 ---
 name: pivot-design
-description: Design or redesign an interface from the user's own PIVOT reference library (the "pivot" MCP server) — search saved UI references, look at them, choose, write a short brief, show 2–3 mockups, then build the chosen one. Use whenever the user asks to design, build, restyle or improve a screen, page or component (landing, pricing, dashboard, onboarding, sign-in, docs, settings, checkout, navigation, forms…) and references would help, or mentions PIVOT, references, inspiration or "what others do". Skip for pure logic, backend or copy-only work.
+description: Design or redesign an interface from the user's own PIVOT reference library (the "pivot" MCP server) — search saved UI references, look at them, choose, write a short brief, show 2–3 mockups, then build the chosen one. Use whenever the user asks to design, build, restyle or improve a screen, page or component (landing, pricing, dashboard, onboarding, sign-in, docs, settings, checkout, navigation, forms…) and references would help, or mentions PIVOT, references, inspiration or "what others do". Skip for pure logic, backend or copy-only work, and for small explicit fixes that need no design exploration.
 ---
 
 # PIVOT design workflow
@@ -15,6 +15,8 @@ PIVOT is the user's library of saved UI references: screenshots of real websites
 | `get_reference_images` | Look at it: the cover, and the full page in ~2,000-token slices (`fromSlice` to page on).              |
 
 The flow is **understand → search → inspect → choose → brief → mockups → build**. Don't skip the brief or the mockups unless the user says so ("just build it", "skip mockups"); then write the brief and go straight to code.
+
+**Small, explicit fixes skip the flow.** When the request already says what to change and there is nothing to explore (fix a misaligned icon, raise a contrast, rename a label, tighten one gap, match a button to its neighbours), don't search the library or write a brief: make the fix in the project's design system and verify it. Use the full flow when the request leaves the design open: a new screen or component, a restyle, a layout or hierarchy change, "make this better", or when the user asks for references. If it's unclear which one a request is, ask.
 
 ## 0. Before you start
 
@@ -58,7 +60,7 @@ Pick 2–4 references. For each, decide what to **take** and what to **leave**, 
 
 ## 5. Brief
 
-Write this before any mockup. Keep it short.
+Write this before any mockup and show it to the user in this shape, table included; don't fold it into a prose summary. Keep it short.
 
 ```md
 ## Brief: <surface>
@@ -76,13 +78,16 @@ Write this before any mockup. Keep it short.
 
 ## 6. Mockups
 
+Mockups are **temporary design prototypes**, not the implementation.
+
 - Build 2–3 **distinct** directions (different structure or emphasis, not three colourways), in the target project's tokens, type and components, with real content from the project, not lorem ipsum.
-- Show them side by side (an HTML page, the host's artifact or preview tool, or the project's own dev server, whichever the session offers), each labelled with the references that shaped it.
-- Ask the user to pick or mix. Don't write production code before they do.
+- Keep them out of production code: a standalone HTML file in a scratch folder, or the host's artifact or preview tool. Don't add them to the project's routes, components or styles, and don't commit them.
+- Show them side by side (or one file each, with the paths listed together), each labelled on the page with the references that shaped it.
+- Ask the user to pick or mix, then **stop**. Production code waits for that answer, unless the user said up front to go ahead (then build the direction you'd recommend and say which one and why).
 
 ## 7. Build
 
-- Implement the chosen direction in the project's stack and conventions; follow its repo rules (branches, specs, checks).
+- Implement the chosen direction in the project's stack and conventions; follow its repo rules (branches, specs, checks). Rebuild it properly rather than pasting the mockup in.
 - Verify it in the browser at desktop and phone widths, in the states that matter (empty, error, long content).
 - List the references that shaped it in the PR description or the summary to the user (title + link). Code comments don't need them.
 
