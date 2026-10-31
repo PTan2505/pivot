@@ -35,11 +35,12 @@ import {
   type TagKind,
 } from "@pivot/core/types";
 import { knownSourceFor } from "@pivot/core/source-match";
-import { api, ApiError, getConfig, openInApp } from "../lib/api";
+import { api, ApiError, getConfig, openInApp, type Duplicate } from "../lib/api";
 import { pendingStore, storageWarning } from "../lib/pending-store";
 import type { PendingItem } from "../lib/queue";
 import { queueSave, SAVED_LOCALLY_TEXT, syncNow, type QueuedSave } from "../lib/sync";
 import { captureTab, getPageInfo, isHomePage, isPivotPage, isSavable, type PageInfo } from "../lib/page";
+import { CollectionPicker, Duplicates, LibraryTab, QuickEdit } from "./parts";
 import { Button, cx, Field, Input, Logo, Textarea } from "../ui";
 
 type Status = "loading" | "ready" | "offline" | "unauthorized" | "unsupported";
@@ -291,7 +292,11 @@ export function Popup() {
   const shotUrl = useMemo(() => (shot ? URL.createObjectURL(shot) : null), [shot]);
   const [tags, setTags] = useState<TagDTO[]>([]);
   const [collections, setCollections] = useState<CollectionDTO[]>([]);
-  const [duplicates, setDuplicates] = useState<{ id: string; title: string; type: ResourceType }[]>([]);
+  const [duplicates, setDuplicates] = useState<Duplicate[]>([]);
+  const [duplicateTotal, setDuplicateTotal] = useState(0);
+  const [view, setView] = useState<"capture" | "library">("capture");
+  const [editing, setEditing] = useState(false);
+  const [editNote, setEditNote] = useState("");
   const [ownPage, setOwnPage] = useState(false);
 
   const [mode, setMode] = useState<Mode>("page");
@@ -309,7 +314,7 @@ export function Popup() {
   const [notes, setNotes] = useState("");
   const [text, setText] = useState("");
   const [chosen, setChosen] = useState<TagValue[]>([]);
-  const [collectionId, setCollectionId] = useState("");
+  const [collectionIds, setCollectionIds] = useState<string[]>([]);
   const [attachShot, setAttachShot] = useState(true);
   const [serverCapture, setServerCapture] = useState(true);
   const [expandContent, setExpandContent] = useState(false);
@@ -369,6 +374,7 @@ export function Popup() {
         setTags(t);
         setCollections(c);
         setDuplicates(d.duplicates);
+        setDuplicateTotal(d.total ?? d.duplicates.length);
         setNeedsUpdate(!caps.features.includes("clip.client-request-id"));
         void chrome.storage.local.set({ "cache:tags": t, "cache:collections": c });
         setStatus("ready");
@@ -401,7 +407,13 @@ export function Popup() {
     try {
       // Only the kinds on screen: facets picked under a type you switched away from are dropped.
       const tags = chosen.filter((t) => facets.includes(t.kind));
-      const common = { url: page.url, notes, tags, collectionId: collectionId || undefined };
+      const common = {
+        url: page.url,
+        notes,
+        tags,
+        collectionIds: collectionIds.length ? collectionIds : undefined,
+        capturedUrl: page.address && page.address !== page.url ? page.address : undefined,
+      };
       const res = await queueSave(
         mode === "page"
           ? {
@@ -449,14 +461,51 @@ export function Popup() {
     void chrome.storage.local.set({ lastType: t });
   };
 
+  const viewTabs = (
+    <div
+      role="tablist"
+      aria-label="Popup view"
+      className="ml-auto flex gap-0.5 rounded-full bg-surface p-0.5 text-xs"
+      onKeyDown={(e) => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault();
+        const next = view === "capture" ? "library" : "capture";
+        setView(next);
+        document.getElementById(`view-${next}`)?.focus();
+      }}
+    >
+      {(["capture", "library"] as const).map((v) => (
+        <button
+          key={v}
+          id={`view-${v}`}
+          type="button"
+          role="tab"
+          aria-selected={view === v}
+          tabIndex={view === v ? 0 : -1}
+          onClick={() => setView(v)}
+          className={cx(
+            "h-7 cursor-pointer rounded-full px-3 font-medium transition-colors",
+            view === v ? "bg-inverse text-on-inverse" : "text-ink-secondary hover:text-ink",
+          )}
+        >
+          {v === "capture" ? "Capture" : "Library"}
+        </button>
+      ))}
+    </div>
+  );
+
   const header = (
     <header className="flex h-14 items-center gap-2.5 px-4">
       <Logo />
       <span className="text-[15px] font-medium tracking-[-0.01em]">Save to PIVOT</span>
+      {status === "ready" && !saved && !savedLocally && viewTabs}
       <button
         type="button"
         onClick={() => chrome.runtime.openOptionsPage()}
-        className="ml-auto grid size-8 cursor-pointer place-items-center rounded-full bg-surface text-ink-secondary hover:bg-surface-raised hover:text-ink"
+        className={cx(
+          "grid size-8 cursor-pointer place-items-center rounded-full bg-surface text-ink-secondary hover:bg-surface-raised hover:text-ink",
+          !(status === "ready" && !saved && !savedLocally) && "ml-auto",
+        )}
         aria-label="Extension settings"
       >
         <Settings className="size-3.5" />
@@ -492,12 +541,35 @@ export function Popup() {
           <Button onClick={() => window.close()}>Close</Button>
         </div>
       </>
+    ) : saved && editing ? (
+      <QuickEdit
+        id={saved.replace(/^\/r\//, "")}
+        title={title || page?.title || ""}
+        notes={notes}
+        collections={collections}
+        initialCollections={collectionIds}
+        facets={
+          mode === "page"
+            ? {
+                node: facets.map((k) => (
+                  <FacetPicker key={k} kind={k} tags={tags} value={chosen} onChange={setChosen} />
+                )),
+                value: () => chosen.filter((t) => facets.includes(t.kind)),
+              }
+            : null
+        }
+        onDone={(message) => {
+          setEditing(false);
+          setEditNote(message);
+        }}
+      />
     ) : saved ? (
       <>
         <span className="grid size-10 place-items-center rounded-full bg-surface text-success">
           <Check className="size-4" />
         </span>
         <p className="font-medium">Saved</p>
+        {editNote && <p className="text-xs text-success">{editNote}</p>}
         <p className="text-xs text-ink-muted">
           {mode === "page" && willServerCapture
             ? type === "source"
@@ -509,7 +581,10 @@ export function Popup() {
           <Button variant="outline" onClick={() => window.close()}>
             Close
           </Button>
-          <Button onClick={() => openInApp(saved).then(() => window.close())}>
+          <Button variant="outline" onClick={() => setEditing(true)}>
+            Edit
+          </Button>
+          <Button autoFocus onClick={() => openInApp(saved).then(() => window.close())}>
             <ExternalLink /> Open
           </Button>
         </div>
@@ -543,7 +618,25 @@ export function Popup() {
     return (
       <div className="w-[400px]">
         {header}
-        <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">{body}</div>
+        <div role={editing ? undefined : "status"} className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+          {body}
+        </div>
+      </div>
+    );
+  }
+
+  if (view === "library") {
+    return (
+      <div className="flex max-h-[590px] w-[400px] flex-col">
+        {header}
+        <div role="tabpanel" aria-labelledby="view-library" className="flex-1 overflow-y-auto px-4 pb-4">
+          <LibraryTab
+            pageUrl={page?.url ?? null}
+            host={page ? new URL(page.url).hostname.replace(/^www\./, "") : null}
+            pending={pending}
+            offline={offline}
+          />
+        </div>
       </div>
     );
   }
@@ -582,13 +675,26 @@ export function Popup() {
         )}
         {pending.length > 0 && <PendingPanel items={pending} offline={offline} onChange={reloadPending} />}
         {page?.selection && (
-          <div role="tablist" className="grid grid-cols-2 gap-1 rounded-full bg-surface p-1 text-xs">
+          <div
+            role="tablist"
+            aria-label="What to save"
+            className="grid grid-cols-2 gap-1 rounded-full bg-surface p-1 text-xs"
+            onKeyDown={(e) => {
+              if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+              e.preventDefault();
+              const next = mode === "page" ? "selection" : "page";
+              setMode(next);
+              document.getElementById(`mode-${next}`)?.focus();
+            }}
+          >
             {(["page", "selection"] as const).map((m) => (
               <button
                 key={m}
+                id={`mode-${m}`}
                 type="button"
                 role="tab"
                 aria-selected={mode === m}
+                tabIndex={mode === m ? 0 : -1}
                 onClick={() => setMode(m)}
                 className={cx(
                   "h-8 cursor-pointer rounded-full font-medium transition-colors",
@@ -603,18 +709,7 @@ export function Popup() {
 
         {mode === "page" && step === "type" ? (
           <div className="space-y-2">
-            {duplicates.length > 0 && (
-              <p className="flex items-center gap-1.5 pb-1 text-xs text-warning">
-                <AlertTriangle className="size-3.5 shrink-0" /> Already saved as
-                <button
-                  type="button"
-                  onClick={() => openInApp(`/r/${duplicates[0].id}`)}
-                  className="cursor-pointer truncate underline"
-                >
-                  {duplicates[0].title}
-                </button>
-              </p>
-            )}
+            {page && <Duplicates items={duplicates} total={duplicateTotal} url={page.url} />}
             <p className="text-[13px] font-medium text-ink">What are you saving?</p>
             {knownSource && (
               <p className="text-xs text-ink-muted">This is {knownSource}’s home page, so Source is picked.</p>
@@ -711,23 +806,7 @@ export function Popup() {
                     placeholder="What’s worth stealing here?"
                   />
                 </Field>
-                {collections.length > 0 && (
-                  <Field label="Collection" htmlFor="collection">
-                    <select
-                      id="collection"
-                      value={collectionId}
-                      onChange={(e) => setCollectionId(e.target.value)}
-                      className="h-9 w-full rounded-full border-0 bg-surface px-4 text-[13px] text-ink hover:bg-surface-raised"
-                    >
-                      <option value="">None</option>
-                      {collections.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                )}
+                <CollectionPicker collections={collections} value={collectionIds} onChange={setCollectionIds} />
                 {offerServerCapture && (
                   <label className="flex cursor-pointer items-start gap-2 text-xs">
                     <input
@@ -765,13 +844,14 @@ export function Popup() {
           </>
         ) : (
           <>
-            <Field label="Save as" htmlFor="text-type">
-              <div className="grid grid-cols-4 gap-1" id="text-type">
+            <Field label="Save as">
+              <div className="grid grid-cols-4 gap-1" role="radiogroup" aria-label="Save as">
                 {TEXT_TYPES.map((t) => (
                   <button
                     key={t}
                     type="button"
-                    aria-pressed={textType === t}
+                    role="radio"
+                    aria-checked={textType === t}
                     onClick={() => setTextType(t)}
                     className={cx(
                       "h-8 cursor-pointer rounded-full text-xs font-medium transition-colors duration-150",
@@ -823,23 +903,7 @@ export function Popup() {
               />
             </Field>
 
-            {collections.length > 0 && (
-              <Field label="Collection" htmlFor="collection">
-                <select
-                  id="collection"
-                  value={collectionId}
-                  onChange={(e) => setCollectionId(e.target.value)}
-                  className="h-9 w-full rounded-full border-0 bg-surface px-4 text-[13px] text-ink hover:bg-surface-raised"
-                >
-                  <option value="">None</option>
-                  {collections.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            )}
+            <CollectionPicker collections={collections} value={collectionIds} onChange={setCollectionIds} />
           </>
         )}
 

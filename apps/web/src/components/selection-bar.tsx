@@ -1,6 +1,16 @@
 "use client";
 
-import { ClipboardCopy, FolderInput, FolderMinus, FolderPlus, PackageOpen, RotateCcw, Trash2, X } from "lucide-react";
+import {
+  CheckCheck,
+  ClipboardCopy,
+  FolderInput,
+  FolderMinus,
+  FolderPlus,
+  PackageOpen,
+  RotateCcw,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -80,18 +90,21 @@ export function SelectionBar({
   mode,
   collectionId,
   exportName,
+  inbox = false,
 }: {
   ids: string[];
   onClear: () => void;
   mode: "library" | "trash";
   collectionId?: string;
   exportName: string;
+  /** Showing the Inbox: offer "Mark reviewed". */
+  inbox?: boolean;
 }) {
   const bulk = useBulk();
   const { openExport } = useUi();
   if (!ids.length) return null;
 
-  const run = async (action: "trash" | "restore" | "purge" | "removeFromCollection", message: string) => {
+  const run = async (action: "trash" | "restore" | "purge" | "removeFromCollection" | "reviewed", message: string) => {
     await bulk.mutateAsync({ action, ids, collectionId });
     toast.success(message);
     onClear();
@@ -117,6 +130,11 @@ export function SelectionBar({
               <FolderInput /> Collection
             </Button>
           </AddToCollection>
+          {inbox && (
+            <Button variant="ghost" onClick={() => run("reviewed", `Marked ${ids.length} as reviewed`)}>
+              <CheckCheck /> Mark reviewed
+            </Button>
+          )}
           {collectionId && (
             <Button variant="ghost" onClick={() => run("removeFromCollection", "Removed from collection")}>
               <FolderMinus /> Remove

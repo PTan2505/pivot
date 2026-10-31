@@ -10,10 +10,20 @@ Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 | S     | Align `pivot-design` with Part A   | Done        |
 | 1     | Reliable capture (server)          | Done        |
 | 2     | Extension that survives offline    | Done        |
-| 3     | Popup and library                  | Not started |
+| 3     | Popup and library                  | Done        |
 | 4     | Sections, links, private pages     | Not started |
 | 5     | Design track: sessions, MCP writes | Not started |
 | 6     | Later                              | Not started |
+
+### Phase 3 — Popup and library
+
+- Status: Done
+- Existing functionality reused: `findByUrl`/`urlKey` (same duplicate rule as before), `listResources` filters, the bulk route, `LibraryView` chips (`ViaChip`), the detail page's `Field` rows, the extension's `FacetPicker`, the `capture_attempts` table from Phase 1 for the queue page.
+- Files changed: core `resources.ts` (`review_status`, `needsReview`/`url`/`host` filters, `inbox` count, `setReviewStatus`), schema + migration `0005` (adds `resources.review_status`), `types.ts`; routes `api/resources` (filters), `api/resources/bulk` (`reviewed`, `needsReview`), `api/lookup` (3 newest with thumbnails + total), `api/clip` (`needsReview`, `collectionIds`, `capturedUrl`); web `use-library-params.ts`, `lib/api.ts`, `library-view.tsx` (Inbox pill, chips), `selection-bar.tsx` (Mark reviewed), `resource-detail.tsx` (Inbox banner, Captured from, Published by, Original source), new `app/captures/page.tsx`, Settings link; extension `popup.tsx` (Capture/Library tabs, duplicate panel, collection pills, Edit after save, a11y fixes), new `popup/parts.tsx`, `lib/api.ts`, `lib/page.ts` (address bar URL), `background.ts` (quick saves go to the Inbox with provenance); SPEC §13, DESIGN.md (gallery, capture queue, page header, popup).
+- Checks run and results: core `review-filters.test.ts` 2/2 (Inbox lists, search still finds, count, mark reviewed, page and website filters); extension tests 11/11; typecheck, lint, full suite in the hooks.
+- Manual verification: scratch app — Inbox pill with count 1, Inbox list, detail banner, Mark reviewed removes it, Captured from shown; `/captures` lists runs with Retry. Headless Chromium with the built extension: the duplicate panel shows the earlier save with a loaded thumbnail; the Library tab lists this page, this website and recent saves; ← switches tabs; two collection pills pressed; save, then Edit → new title and one collection removed → the server has the new title, only "Pricing pages", and `capturedUrl` from the address bar.
+- Remaining issues: agent suggestions in the Inbox come with Phase 5 (#35). The library has no direct "Saved from <host>" entry point except the popup (the `host` filter is API-only).
+- Next step: Phase 4.
 
 ### Phase 2 — Extension that survives being offline
 

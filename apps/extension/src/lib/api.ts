@@ -1,4 +1,4 @@
-import type { CollectionDTO, ResourceType, TagDTO, TagKind } from "@pivot/core/types";
+import type { CollectionDTO, ResourceDTO, ResourceType, TagDTO, TagKind } from "@pivot/core/types";
 
 export interface Config {
   serverUrl: string;
@@ -53,10 +53,35 @@ export const api = {
   capabilities: () => request<{ apiVersion: number; features: string[] }>("/api/capabilities"),
   tags: () => request<TagDTO[]>("/api/tags"),
   collections: () => request<CollectionDTO[]>("/api/collections"),
+  /** The newest 3 saves of the same page (with a thumbnail path when they have a cover) and how many in all. */
   lookup: (url: string) =>
-    request<{ duplicates: { id: string; title: string; type: ResourceType }[] }>(
-      `/api/lookup?url=${encodeURIComponent(url)}`,
-    ),
+    request<{ duplicates: Duplicate[]; total?: number }>(`/api/lookup?url=${encodeURIComponent(url)}`),
+  /** A short list for the popup's Library tab: `q`, `url`, `host`, `sort` like the app's own list. */
+  list: (params: { q?: string; url?: string; host?: string; sort?: string; limit?: number }) => {
+    const sp = new URLSearchParams(
+      Object.entries({ ...params, limit: String(params.limit ?? 8) }).filter(([, v]) => v) as [string, string][],
+    );
+    return request<ResourceDTO[]>(`/api/resources?${sp}`);
+  },
+  /** Quick edit after saving. `tags` replaces the item's tags and facets. */
+  update: (id: string, patch: { title?: string; notes?: string; tags?: { kind: TagKind; name: string }[] }) =>
+    request<ResourceDTO>(`/api/resources/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    }),
+  addToCollection: (collectionId: string, ids: string[]) =>
+    request("/api/resources/bulk", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "addToCollection", collectionId, ids }),
+    }),
+  removeFromCollection: (collectionId: string, ids: string[]) =>
+    request("/api/resources/bulk", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "removeFromCollection", collectionId, ids }),
+    }),
   clip: (data: ClipData, files: { screenshot?: Blob; image?: Blob; imageName?: string } = {}) => {
     const form = new FormData();
     form.set("data", JSON.stringify(data));
@@ -80,6 +105,11 @@ export interface ClipData {
   imageUrl?: string;
   tags?: { kind: TagKind; name: string }[];
   collectionId?: string;
+  collectionIds?: string[];
+  /** Quick saves go to the Inbox ("needs review"). */
+  needsReview?: boolean;
+  /** The address bar's URL when it differs from the saved (canonical) one. */
+  capturedUrl?: string;
   serverCapture?: boolean;
   /** Let the server capture click "Load more" buttons; off unless asked for. */
   expandContent?: boolean;
@@ -87,6 +117,20 @@ export interface ClipData {
   ifExists?: "create" | "skip";
   /** Set from the offline queue's item id, so a resend never saves twice. */
   clientRequestId?: string;
+}
+
+export interface Duplicate {
+  id: string;
+  title: string;
+  type: ResourceType;
+  createdAt?: string;
+  /** A path on the server (`/api/assets/…`), or null. */
+  thumbnail?: string | null;
+}
+
+/** A server path as a full URL (thumbnails and covers in the popup). */
+export async function serverUrlFor(path: string) {
+  return `${(await getConfig()).serverUrl}${path}`;
 }
 
 export async function openInApp(path: string) {

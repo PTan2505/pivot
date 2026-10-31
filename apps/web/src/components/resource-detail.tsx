@@ -612,6 +612,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
 
       <div className="grid flex-1 gap-10 px-4 pt-6 pb-16 md:px-10 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-5">
+          {resource.reviewStatus === "needs_review" && <ReviewBanner id={resource.id} />}
           {draft.type === "skill" && <SkillBar resource={resource} flush={flush} />}
           {draft.type === "skill" && <SkillGuide meta={draft.meta} sourceUrl={draft.sourceUrl} onChange={change} />}
           {draft.type === "typography" && (
@@ -660,6 +661,34 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
               className="font-mono text-xs"
             />
           </Field>
+          {typeof draft.meta.capturedUrl === "string" && (
+            <Field label="Captured from" htmlFor="captured-from">
+              <p id="captured-from" className="font-mono text-xs break-all text-ink-secondary">
+                {draft.meta.capturedUrl}
+              </p>
+            </Field>
+          )}
+          {def.visual && (
+            <>
+              <Field label="Published by" htmlFor="published-by">
+                <Input
+                  id="published-by"
+                  value={typeof draft.meta.publishedBy === "string" ? draft.meta.publishedBy : ""}
+                  onChange={(e) => change({ meta: { ...draft.meta, publishedBy: e.target.value } })}
+                  placeholder="The account or studio that posted it"
+                />
+              </Field>
+              <Field label="Original source" htmlFor="original-source">
+                <Input
+                  id="original-source"
+                  value={typeof draft.meta.originalSource === "string" ? draft.meta.originalSource : ""}
+                  onChange={(e) => change({ meta: { ...draft.meta, originalSource: e.target.value } })}
+                  placeholder="Where it first appeared, if you know"
+                  className="font-mono text-xs"
+                />
+              </Field>
+            </>
+          )}
           {draft.type === "skill" && <PackField meta={draft.meta} onChange={change} />}
           {draft.type === "source" && <SourceInfo id={resource.id} searchUrl={draft.meta.searchUrl} />}
           {def.fields.map((f) => (
@@ -763,4 +792,25 @@ export function ResourceDetail({ id }: { id: string }) {
     );
   }
   return <Editor key={data.id} resource={data} />;
+}
+
+/** A quick save waiting in the Inbox: organise it, then take it out. */
+function ReviewBanner({ id }: { id: string }) {
+  const bulk = useBulk();
+  return (
+    <div
+      role="status"
+      className="flex flex-wrap items-center gap-2 rounded-full bg-surface px-4 py-2 text-xs text-ink-muted"
+    >
+      <span className="min-w-0 flex-1">In the Inbox: saved quickly, waiting for a title, facets or a collection.</span>
+      <Button
+        size="xs"
+        variant="secondary"
+        className="bg-surface-raised"
+        onClick={() => bulk.mutate({ action: "reviewed", ids: [id] })}
+      >
+        Mark reviewed
+      </Button>
+    </div>
+  );
 }

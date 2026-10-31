@@ -69,6 +69,9 @@ export const GET = route(async (req: Request) => {
     via: sp.get("via") ?? undefined,
     tagIds: sp.get("tags")?.split(",").filter(Boolean),
     collectionId: sp.get("collection") ?? undefined,
+    needsReview: sp.get("review") === "needs",
+    url: sp.get("url") ?? undefined,
+    host: sp.get("host") ?? undefined,
     trash: sp.get("trash") === "1",
     sort: sort === "created" || sort === "oldest" || sort === "title" ? sort : "updated",
     limit:

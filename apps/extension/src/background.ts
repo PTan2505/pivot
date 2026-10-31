@@ -120,12 +120,20 @@ async function savePage(tab: chrome.tabs.Tab): Promise<Prepared> {
     description: source ? undefined : info.description,
     serverCapture: !(source && shot),
     ifExists: "skip",
+    // saved without a form: it waits in the Inbox to be organised
+    needsReview: true,
+    capturedUrl: info.address && info.address !== info.url ? info.address : undefined,
   };
   return { data, title: info.title || info.url, screenshot: shot ?? undefined };
 }
 
 async function saveImage(srcUrl: string, pageUrl: string): Promise<Prepared> {
-  const data: ClipData = { kind: "image", url: pageUrl, imageUrl: srcUrl.startsWith("data:") ? undefined : srcUrl };
+  const data: ClipData = {
+    kind: "image",
+    url: pageUrl,
+    imageUrl: srcUrl.startsWith("data:") ? undefined : srcUrl,
+    needsReview: true,
+  };
   let image: Blob | undefined;
   // Try fetching here first (keeps cookies for logged-in images); the server downloads it otherwise.
   try {
@@ -148,7 +156,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
       return run("Page", () => savePage(tab));
     case MENU.link:
       return run("Link", async () => ({
-        data: { kind: "page", url: info.linkUrl!, serverCapture: true, ifExists: "skip" },
+        data: { kind: "page", url: info.linkUrl!, serverCapture: true, ifExists: "skip", needsReview: true },
         title: info.linkUrl!,
       }));
     case MENU.image:
@@ -165,6 +173,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
             url: pageUrl,
             type: info.menuItemId === MENU.snippet ? "snippet" : "prompt",
             text,
+            needsReview: true,
           },
           title: text.split("\n")[0].slice(0, 60),
         };

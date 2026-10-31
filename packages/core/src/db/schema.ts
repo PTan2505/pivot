@@ -24,6 +24,8 @@ export const resources = pgTable(
     captureError: text("capture_error"),
     /** How the latest server capture looks: "looks_good", "needs_review" or "unavailable". */
     captureQuality: text("capture_quality"),
+    /** "needs_review" for quick saves waiting in the Inbox; null once reviewed. Doesn't hide it from search. */
+    reviewStatus: text("review_status"),
     deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

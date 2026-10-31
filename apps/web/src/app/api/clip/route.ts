@@ -27,6 +27,12 @@ const fields = z.object({
   imageUrl: z.string().optional(),
   tags: z.array(z.object({ kind: z.enum(TAG_KINDS), name: z.string().trim().min(1) })).optional(),
   collectionId: z.string().optional(),
+  /** Several collections at once; `collectionId` still works. */
+  collectionIds: z.array(z.string()).max(50).optional(),
+  /** Quick saves land in the Inbox ("needs review") so they get organised later. */
+  needsReview: z.boolean().optional(),
+  /** The address bar's URL when the saved `url` is the page's canonical link (provenance: "Captured from"). */
+  capturedUrl: z.string().max(2000).optional(),
   serverCapture: z.boolean().optional(),
   /** Let the server capture click "Load more" buttons; off unless asked for. */
   expandContent: z.boolean().optional(),
@@ -41,6 +47,21 @@ const fields = z.object({
 
 type ClipInput = z.infer<typeof fields>;
 type Saved = { id: string; existing?: boolean; title?: string };
+
+function collectionsOf(input: ClipInput) {
+  return [...new Set([...(input.collectionIds ?? []), ...(input.collectionId ? [input.collectionId] : [])])];
+}
+
+/** Provenance: where the page was actually open when saved, when that differs from the URL it is saved under. */
+function capturedFrom(input: ClipInput, pageUrl: string) {
+  if (!input.capturedUrl) return undefined;
+  try {
+    const captured = normalizeUrl(input.capturedUrl);
+    return captured !== pageUrl ? { capturedUrl: captured } : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 function hostOf(url: string) {
   return new URL(url).hostname.replace(/^www\./, "");
@@ -95,7 +116,7 @@ async function save(form: FormData, input: ClipInput): Promise<Saved> {
     if (input.ifExists === "skip") {
       const existing = (await findByUrl(pageUrl)).find((r) => r.type === (input.type ?? "reference"));
       if (existing) {
-        if (input.collectionId) await addToCollection(input.collectionId, [existing.id]);
+        for (const c of collectionsOf(input)) await addToCollection(c, [existing.id]);
         return { id: existing.id, existing: true, title: existing.title };
       }
     }
@@ -115,6 +136,8 @@ async function save(form: FormData, input: ClipInput): Promise<Saved> {
       notes: input.notes ?? "",
       sourceUrl: pageUrl,
       tags: input.tags,
+      reviewStatus: input.needsReview ? "needs_review" : null,
+      meta: capturedFrom(input, pageUrl),
     });
     id = r.id;
     title = r.title;
@@ -159,6 +182,7 @@ async function save(form: FormData, input: ClipInput): Promise<Saved> {
       notes: input.notes ?? "",
       sourceUrl: pageUrl,
       tags: input.tags,
+      reviewStatus: input.needsReview ? "needs_review" : null,
     });
     id = r.id;
     title = r.title;
@@ -179,11 +203,12 @@ async function save(form: FormData, input: ClipInput): Promise<Saved> {
       notes: input.notes ?? "",
       sourceUrl: pageUrl,
       tags: input.tags,
+      reviewStatus: input.needsReview ? "needs_review" : null,
     });
     id = r.id;
     title = r.title;
   }
 
-  if (input.collectionId) await addToCollection(input.collectionId, [id]);
+  for (const c of collectionsOf(input)) await addToCollection(c, [id]);
   return { id, title };
 }

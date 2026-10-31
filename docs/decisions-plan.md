@@ -70,21 +70,21 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 2   | Design Session after first brief    | Missing  | 5         | [ ]  |
 | 3   | Brief snapshots inside PIVOT        | Missing  | 5         | [ ]  |
 | 4   | One record + optional metadata      | Partial  | 4, 6      | [ ]  |
-| 5   | Collections vs facets               | Partial  | 3         | [ ]  |
+| 5   | Collections vs facets               | Partial  | 3         | [x]  |
 | 6   | Source Directory 2.0                | Partial  | Optional  | [ ]  |
 | 7   | Unified search All/Library/External | Partial  | 3, Opt.   | [ ]  |
 | 8   | Section references                  | Missing  | 4         | [ ]  |
 | 9   | Auto / Crop / Select capture        | Partial  | 4         | [ ]  |
-| 10  | Duplicates with thumbnails          | Partial  | 3         | [ ]  |
+| 10  | Duplicates with thumbnails          | Partial  | 3         | [x]  |
 | 11  | Theme Light/Dark/Both               | Conflict | 1         | [x]  |
 | 12  | Expand content opt-in               | Conflict | 1         | [x]  |
 | 13  | Facet suggestions (agent)           | Missing  | 5         | [ ]  |
-| 14  | Quick save → Needs review           | Missing  | 3         | [ ]  |
-| 15  | Quick edit in the extension         | Missing  | 3         | [ ]  |
+| 14  | Quick save → Needs review           | Missing  | 3         | [x]  |
+| 15  | Quick edit in the extension         | Missing  | 3         | [x]  |
 | 16  | Failure and bounded retry           | Partial  | 1         | [x]  |
-| 17  | Capture Queue                       | Partial  | 1, 3      | [ ]  |
+| 17  | Capture Queue                       | Partial  | 1, 3      | [x]  |
 | 18  | Original / Latest                   | Conflict | 1         | [x]  |
-| 19  | Collection suggestions              | Missing  | 3, 5      | [ ]  |
+| 19  | Collection suggestions              | Missing  | 3, 5      | [x]  |
 | 20  | Motion: suggest and record          | Missing  | 6         | [ ]  |
 | 21  | Scroll animation, keyframes         | Partial  | 6         | [ ]  |
 | 22  | Section context                     | Missing  | 4         | [ ]  |
@@ -96,7 +96,7 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 28  | Design Versions                     | Missing  | 6         | [ ]  |
 | 29  | Annotations                         | Partial  | 6         | [ ]  |
 | 30  | Layered metadata                    | Partial  | 5         | [ ]  |
-| 31  | Provenance                          | Partial  | 3         | [ ]  |
+| 31  | Provenance                          | Partial  | 3         | [x]  |
 | 32  | Selective asset extraction          | Missing  | 6         | [ ]  |
 | 33  | Interaction states                  | Missing  | 6         | [ ]  |
 | 34  | Naming `[Section] — [Source]`       | Partial  | 4, 5      | [ ]  |
@@ -107,7 +107,7 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 39  | Export                              | Partial  | 6         | [ ]  |
 | 40  | Import / restore                    | Missing  | 6         | [ ]  |
 | 41  | Sharing                             | Missing  | 6         | [ ]  |
-| 42  | Extension search                    | Missing  | 3         | [ ]  |
+| 42  | Extension search                    | Missing  | 3         | [x]  |
 | 43  | Notifications                       | Partial  | 2         | [x]  |
 | 44  | Shortcuts and context menu          | Exists   | 4         | [ ]  |
 | 45  | Onboarding and connection           | Partial  | 2         | [x]  |
@@ -119,13 +119,13 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 51  | Device migration                    | Missing  | 6         | [ ]  |
 | 52  | Least-privilege permissions         | Partial  | 2, 4      | [ ]  |
 | 53  | Lifecycle and recovery              | Partial  | 1, 2      | [ ]  |
-| 54  | Activity log                        | Missing  | 1, 3      | [ ]  |
-| 55  | Cancel / Undo / Discard             | Partial  | 1, 3      | [ ]  |
+| 54  | Activity log                        | Missing  | 1, 3      | [x]  |
+| 55  | Cancel / Undo / Discard             | Partial  | 1, 3      | [x]  |
 | 56  | Deferred capture                    | Missing  | 6         | [ ]  |
 | 57  | Capture context snapshot            | Missing  | 1         | [x]  |
 | 58  | Capture comparison                  | Missing  | 6         | [ ]  |
 | 59  | Health signals                      | Missing  | 6         | [ ]  |
-| 60  | Progressive disclosure              | Partial  | 3         | [ ]  |
+| 60  | Progressive disclosure              | Partial  | 3         | [x]  |
 | 61  | Lightweight extension               | Exists   | all       | [ ]  |
 | 62  | Secure defaults                     | Partial  | 2         | [x]  |
 | 63  | Risk-based QA                       | Partial  | all       | [ ]  |
@@ -183,14 +183,14 @@ Files: `apps/extension/src/background.ts`, `lib/api.ts`, new `lib/queue.ts`, `pu
 
 ### Phase 3 — Popup and library
 
-- [ ] `/api/lookup` returns 2–3 items with thumbnails and a total; the popup offers Open Existing, Save New and View All (`/?url=`) (#10).
-- [ ] Quick edit after save: title, notes, facets, collections; never forced (#15).
-- [ ] Several collections per save, 2–3 recent or frequent ones shown first; `/api/clip` takes `collectionIds[]` and still accepts `collectionId`; a `?collection=` library filter (#5, #19).
-- [ ] `resources.review_status`; quick save sets `needs_review`; the Inbox is a library filter with Accept, Edit, Skip and multi-select; review never hides an item from search or MCP (#14, #35).
-- [ ] Capture Queue page and Recent Activity from `capture_attempts`, with Retry and Cancel; no invented progress (#17, #54).
-- [ ] Popup `Capture` / `Library` tabs: quick search, recently saved, "Saved from this page", "Saved from this website", Pending Sync labels (#42).
-- [ ] Provenance: `capturedUrl` beside the canonical URL and the final URL after redirects; an optional `publishedBy` the user fills in (#31).
-- [ ] Accessibility fixes from the audit: tablist arrow keys, selected state in the type picker, the dangling `label htmlFor`, live regions for the duplicate and success messages (#48).
+- [x] `/api/lookup` returns 2–3 items with thumbnails and a total; the popup offers Open Existing, Save New and View All (`/?url=`) (#10).
+- [x] Quick edit after save: title, notes, facets, collections; never forced (#15).
+- [x] Several collections per save, 2–3 recent or frequent ones shown first; `/api/clip` takes `collectionIds[]` and still accepts `collectionId`; a `?collection=` library filter (#5, #19).
+- [x] `resources.review_status`; quick save sets `needs_review`; the Inbox is a library filter with Accept, Edit, Skip and multi-select; review never hides an item from search or MCP (#14, #35).
+- [x] Capture Queue page and Recent Activity from `capture_attempts`, with Retry and Cancel; no invented progress (#17, #54).
+- [x] Popup `Capture` / `Library` tabs: quick search, recently saved, "Saved from this page", "Saved from this website", Pending Sync labels (#42).
+- [x] Provenance: `capturedUrl` beside the canonical URL and the final URL after redirects; an optional `publishedBy` the user fills in (#31).
+- [x] Accessibility fixes from the audit: tablist arrow keys, selected state in the type picker, the dangling `label htmlFor`, live regions for the duplicate and success messages (#48).
 
 Files: `apps/extension/src/popup/popup.tsx`, `apps/web/src/app/api/lookup/route.ts`, `hooks/use-library-params.ts`, `components/library-view.tsx`, `packages/core/src/resources.ts`, `search.ts`.
 

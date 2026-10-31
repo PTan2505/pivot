@@ -1,5 +1,7 @@
 export interface PageInfo {
   url: string;
+  /** What the address bar shows; differs from `url` when the page names a canonical link. */
+  address?: string;
   title: string;
   description: string;
   selection: string;
@@ -26,6 +28,7 @@ function readPage(): PageInfo {
   const underneath = !!canonical && !samePage(canonical, location.href);
   return {
     url: canonical && !underneath ? canonical : location.href,
+    address: location.href,
     title: underneath ? document.title : meta("og:title", "twitter:title") || document.title,
     description: underneath ? "" : meta("og:description", "twitter:description", "description"),
     selection: String(window.getSelection() ?? "").trim(),
