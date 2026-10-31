@@ -50,6 +50,7 @@ pnpm check             # format:check + lint + typecheck + test
 pnpm db:generate       # after editing packages/core/src/db/schema.ts — commit the new migration
 pnpm ext:build         # build the extension into apps/extension/dist
 pnpm mcp:build         # build the stdio MCP server into apps/mcp/dist (setup: apps/mcp/README.md)
+pnpm skill:install     # link .claude/skills/pivot-design into ~/.claude/skills
 ```
 
 Run `pnpm check` (format check, lint, typecheck, tests) before saying a change is done. To try the app without touching the real Neon database or R2 bucket, start it with a scratch environment: `DATABASE_URL= PIVOT_DATA_DIR=<tmp dir> PORT=4400 node scripts/start.mjs` (unset the `R2_*` variables the same way).
