@@ -42,6 +42,7 @@ import { queueSave, SAVED_LOCALLY_TEXT, syncNow, type QueuedSave } from "../lib/
 import { captureTab, getPageInfo, isHomePage, isPivotPage, isSavable, type PageInfo } from "../lib/page";
 import { AssetPicker, CollectionPicker, Duplicates, LibraryTab, QuickEdit } from "./parts";
 import { discoverAssets, type Discovered } from "../lib/discover";
+import { endCaptureSession, getCaptureSession, startCaptureSession, type CaptureSession } from "../lib/capture-session";
 import { RedactEditor } from "./redact-editor";
 import { assessPrivacy, type PrivacyVerdict } from "../lib/privacy";
 import { masksFrom, redact, type Mask } from "../lib/redact";
@@ -310,6 +311,7 @@ export function Popup() {
   const [sectionBusy, setSectionBusy] = useState(false);
   const [reviewing, setReviewing] = useState<PendingItem | null>(null);
   const [found, setFound] = useState<Discovered | null>(null);
+  const [session, setSession] = useState<CaptureSession | null>(null);
   const [editNote, setEditNote] = useState("");
   const [ownPage, setOwnPage] = useState(false);
 
@@ -376,6 +378,11 @@ export function Popup() {
       }
       void reloadPending();
       void storageWarning().then(setStorageNote);
+      void getCaptureSession().then((s) => {
+        setSession(s);
+        // the session's collections start picked; untick them to leave this one save out
+        if (s) setCollectionIds(s.collectionIds);
+      });
       void assessPrivacy(info.url, info.privacy).then((v) => {
         setPrivacy(v);
         if (v.flagged) setMasks(masksFrom(info.privacy?.suggestions));
@@ -760,6 +767,26 @@ export function Popup() {
     >
       {header}
       <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-2">
+        {session && (
+          <p
+            role="status"
+            className="flex items-center gap-2 rounded-[12px] bg-surface px-3 py-2 text-xs text-ink-muted"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="font-medium text-ink">Capture session:</span> saves go into {session.names.join(", ")}.
+            </span>
+            <button
+              type="button"
+              className="cursor-pointer text-ink-secondary underline"
+              onClick={async () => {
+                await endCaptureSession();
+                setSession(null);
+              }}
+            >
+              End
+            </button>
+          </p>
+        )}
         {offline && (
           <p role="status" className="rounded-[12px] bg-surface px-3 py-2 text-xs text-ink-muted">
             <span className="font-medium text-ink">PIVOT isn’t running.</span> You can still save: it stays on this
@@ -1004,6 +1031,20 @@ export function Popup() {
                   />
                 </Field>
                 <CollectionPicker collections={collections} value={collectionIds} onChange={setCollectionIds} />
+                {collectionIds.length > 0 && !session && (
+                  <button
+                    type="button"
+                    className="cursor-pointer text-left text-[11px] text-ink-secondary underline"
+                    onClick={async () => {
+                      const names = collections.filter((c) => collectionIds.includes(c.id)).map((c) => c.name);
+                      await startCaptureSession(collectionIds, names);
+                      setSession({ collectionIds, names, startedAt: Date.now() });
+                    }}
+                  >
+                    Keep saving into {collectionIds.length > 1 ? "these collections" : "this collection"} until I end it
+                    (capture session)
+                  </button>
+                )}
                 {offerServerCapture && (
                   <label className="flex cursor-pointer items-start gap-2 text-xs">
                     <input
@@ -1101,6 +1142,20 @@ export function Popup() {
             </Field>
 
             <CollectionPicker collections={collections} value={collectionIds} onChange={setCollectionIds} />
+            {collectionIds.length > 0 && !session && (
+              <button
+                type="button"
+                className="cursor-pointer text-left text-[11px] text-ink-secondary underline"
+                onClick={async () => {
+                  const names = collections.filter((c) => collectionIds.includes(c.id)).map((c) => c.name);
+                  await startCaptureSession(collectionIds, names);
+                  setSession({ collectionIds, names, startedAt: Date.now() });
+                }}
+              >
+                Keep saving into {collectionIds.length > 1 ? "these collections" : "this collection"} until I end it
+                (capture session)
+              </button>
+            )}
           </>
         )}
 

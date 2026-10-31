@@ -1,6 +1,7 @@
 import { getConfig, type ClipData } from "./lib/api";
 import type { PendingItem } from "./lib/queue";
 import { pendingStore } from "./lib/pending-store";
+import { getCaptureSession } from "./lib/capture-session";
 import { assessPrivacy } from "./lib/privacy";
 import { scrollPageTo, sectionPicker, toSectionContext, type PickedSection } from "./lib/section";
 import { queueSave, refreshBadge, SAVED_LOCALLY_TEXT, syncNow } from "./lib/sync";
@@ -98,6 +99,11 @@ async function run(label: string, prepare: () => Promise<Prepared>) {
   } catch (err) {
     await notify("Couldn’t save", err instanceof Error ? err.message : String(err));
     return;
+  }
+  // a capture session files every save into its collections
+  const session = await getCaptureSession();
+  if (session && !prepared.data.attachTo) {
+    prepared.data.collectionIds = [...new Set([...(prepared.data.collectionIds ?? []), ...session.collectionIds])];
   }
   const result = await queueSave({ label, ...prepared });
   if (result.synced) {

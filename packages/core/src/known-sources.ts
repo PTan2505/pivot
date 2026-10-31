@@ -464,3 +464,27 @@ export const KNOWN_SOURCES: KnownSource[] = [
     description: "Open-source flat illustrations with a color you can change, as SVG or PNG.",
   },
 ];
+
+/**
+ * Where else to look for a query: each known source with a URL-based search, the user's saved sources first, then the
+ * rest of the given category (or all). Links only: the results stay on those sites and nothing is saved until the user
+ * saves a page from them.
+ */
+export function externalSearchLinks(
+  query: string,
+  { savedHosts = [], category, limit = 8 }: { savedHosts?: string[]; category?: SourceCategory; limit?: number } = {},
+) {
+  const q = query.trim();
+  if (!q) return [];
+  const saved = new Set(savedHosts.map((h) => h.toLowerCase().replace(/^www\./, "")));
+  return KNOWN_SOURCES.filter((s) => s.searchUrl && (!category || s.category === category || saved.has(s.host)))
+    .sort((a, b) => Number(saved.has(b.host)) - Number(saved.has(a.host)))
+    .slice(0, limit)
+    .map((s) => ({
+      name: s.name,
+      host: s.host,
+      category: s.category,
+      saved: saved.has(s.host),
+      url: s.searchUrl!.replace("{q}", encodeURIComponent(q)),
+    }));
+}

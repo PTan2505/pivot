@@ -8,6 +8,7 @@ import { Breadcrumbs, typeCrumbs, type Crumb } from "@/components/breadcrumbs";
 import { FolderShelf } from "@/components/folder-shelf";
 import { ResourceCard, ResourceRow } from "@/components/resource-card";
 import { SelectionBar } from "@/components/selection-bar";
+import { ExternalSearch } from "@/components/external-search";
 import { Suggestions } from "@/components/suggestions";
 import { SkillPackGroups } from "@/components/skill-pack-groups";
 import { SkillSyncPanel } from "@/components/skill-sync-panel";
@@ -373,6 +374,7 @@ export function LibraryView({
                 <Button variant="secondary" onClick={clearFilters}>
                   <X aria-hidden /> Clear filters
                 </Button>
+                {params.q && <ExternalSearch query={params.q} />}
               </div>
             ) : (
               (emptyState ?? (

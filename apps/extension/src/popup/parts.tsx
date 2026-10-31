@@ -4,6 +4,7 @@ import type { CollectionDTO, ResourceDTO, TagKind } from "@pivot/core/types";
 import { TYPE_DEFS } from "@pivot/core/types";
 import { api, openInApp, serverUrlFor, type Duplicate } from "../lib/api";
 import type { Discovered } from "../lib/discover";
+import { externalSearchLinks } from "@pivot/core/known-sources";
 import type { PendingItem } from "../lib/queue";
 import { Button, cx, Field, Input, Textarea } from "../ui";
 
@@ -245,6 +246,8 @@ export function LibraryTab({
   offline: boolean;
 }) {
   const [q, setQ] = useState("");
+  const [where, setWhere] = useState<"library" | "external">("library");
+  const [savedHosts, setSavedHosts] = useState<string[]>([]);
   const [results, setResults] = useState<ResourceDTO[] | null>(null);
   const [recent, setRecent] = useState<ResourceDTO[] | null>(null);
   const [thisPage, setThisPage] = useState<ResourceDTO[] | null>(null);
@@ -256,6 +259,14 @@ export function LibraryTab({
     if (pageUrl) void api.list({ url: pageUrl, limit: 5 }).then(setThisPage, () => setThisPage([]));
     if (host) void api.list({ host, sort: "created", limit: 5 }).then(setThisSite, () => setThisSite([]));
   }, [offline, pageUrl, host]);
+
+  useEffect(() => {
+    if (offline) return;
+    void api.list({ type: "source", limit: 100 }).then(
+      (rows) => setSavedHosts(rows.map((r) => (r.sourceUrl ? new URL(r.sourceUrl).hostname : "")).filter(Boolean)),
+      () => {},
+    );
+  }, [offline]);
 
   useEffect(() => {
     if (offline || !q.trim()) return;
@@ -280,7 +291,45 @@ export function LibraryTab({
           className="pl-9"
         />
       </label>
-      {q.trim() ? (
+      {q.trim() && (
+        <div role="radiogroup" aria-label="Search in" className="flex gap-1 text-xs">
+          {(["library", "external"] as const).map((w) => (
+            <button
+              key={w}
+              type="button"
+              role="radio"
+              aria-checked={where === w}
+              onClick={() => setWhere(w)}
+              className={cx(
+                "h-7 cursor-pointer rounded-full px-3 font-medium",
+                where === w ? "bg-inverse text-on-inverse" : "bg-surface text-ink-secondary hover:text-ink",
+              )}
+            >
+              {w === "library" ? "Library" : "Elsewhere"}
+            </button>
+          ))}
+        </div>
+      )}
+      {q.trim() && where === "external" ? (
+        <section aria-label="Search elsewhere" className="space-y-1.5">
+          <ul className="space-y-1">
+            {externalSearchLinks(q, { savedHosts, limit: 8 }).map((l) => (
+              <li key={l.host}>
+                <button
+                  type="button"
+                  onClick={() => chrome.tabs.create({ url: l.url })}
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-[10px] px-2 py-1.5 text-left text-xs hover:bg-surface"
+                >
+                  <ExternalLink className="size-3 shrink-0 text-ink-muted" aria-hidden />
+                  <span className="flex-1 text-ink">{l.name}</span>
+                  {l.saved && <span className="text-[11px] text-ink-subtle">saved source</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-ink-subtle">Opens their search. Nothing is saved until you save a page.</p>
+        </section>
+      ) : q.trim() ? (
         <section aria-label="Search results" className="space-y-1.5">
           <ResultList items={results} empty="Nothing matches." />
         </section>

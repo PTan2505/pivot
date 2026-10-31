@@ -72,7 +72,7 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 4   | One record + optional metadata      | Partial  | 4, 6      | [ ]  |
 | 5   | Collections vs facets               | Partial  | 3         | [x]  |
 | 6   | Source Directory 2.0                | Partial  | Optional  | [ ]  |
-| 7   | Unified search All/Library/External | Partial  | 3, Opt.   | [ ]  |
+| 7   | Unified search All/Library/External | Partial  | 3, Opt.   | [x]  |
 | 8   | Section references                  | Missing  | 4         | [x]  |
 | 9   | Auto / Crop / Select capture        | Partial  | 4         | [x]  |
 | 10  | Duplicates with thumbnails          | Partial  | 3         | [x]  |
@@ -101,7 +101,7 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 33  | Interaction states                  | Missing  | 6         | [x]  |
 | 34  | Naming `[Section] — [Source]`       | Partial  | 4, 5      | [x]  |
 | 35  | Review Inbox                        | Missing  | 3, 5      | [x]  |
-| 36  | Capture Sessions                    | Missing  | Optional  | [ ]  |
+| 36  | Capture Sessions                    | Missing  | Optional  | [x]  |
 | 37  | Offline queue                       | Missing  | 2         | [x]  |
 | 38  | Storage and retention               | Partial  | 1         | [x]  |
 | 39  | Export                              | Partial  | 6         | [x]  |
@@ -240,7 +240,8 @@ Files: `packages/mcp-tools/src/tools.ts`, `apps/mcp/src/http-source.ts`, new rou
 
 ### Optional
 
-- [ ] Trusted Websites (#52), Capture Sessions (#36), the External link-out tab (#6, #7), an Advanced settings group (#50).
+- [x] Capture Sessions (#36) and the External link-out (#6, #7).
+- [ ] Trusted Websites (#52) and an Advanced settings group (#50): not built.
 
 ## 6. Verification for each phase
 

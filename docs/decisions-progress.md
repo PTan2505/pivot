@@ -4,16 +4,30 @@ Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 
 ## Status
 
-| Phase | Name                               | Status      |
-| ----- | ---------------------------------- | ----------- |
-| 0     | Plan and docs                      | Done        |
-| S     | Align `pivot-design` with Part A   | Done        |
-| 1     | Reliable capture (server)          | Done        |
-| 2     | Extension that survives offline    | Done        |
-| 3     | Popup and library                  | Done        |
-| 4     | Sections, links, private pages     | Done        |
-| 5     | Design track: sessions, MCP writes | Done        |
-| 6     | Later                              | In progress |
+| Phase | Name                               | Status                       |
+| ----- | ---------------------------------- | ---------------------------- |
+| 0     | Plan and docs                      | Done                         |
+| S     | Align `pivot-design` with Part A   | Done                         |
+| 1     | Reliable capture (server)          | Done                         |
+| 2     | Extension that survives offline    | Done                         |
+| 3     | Popup and library                  | Done                         |
+| 4     | Sections, links, private pages     | Done                         |
+| 5     | Design track: sessions, MCP writes | Done                         |
+| 6     | Later + Optional                   | Done, with gaps listed below |
+
+### Phase 6.4 — Optional: look elsewhere, capture sessions
+
+- Status: Done for #6/#7 (link-out) and #36. Not built: Trusted Websites (#52), an Advanced settings group (#50).
+- Existing functionality reused: `KNOWN_SOURCES` and their verified `searchUrl` templates, the saved Sources list, the popup's collection pills and `chrome.storage.session`.
+- Files changed: core `known-sources.ts` (`externalSearchLinks`), test in `sources.test.ts`; web `external-search.tsx`, `library-view.tsx`; extension `lib/capture-session.ts`, `background.ts`, `popup.tsx`, `popup/parts.tsx` (Library | Elsewhere), `lib/api.ts`; SPEC §18; DESIGN.md.
+- Checks run and results: core sources tests 4/4 (links for a query, saved sources first, none for an empty query, category filter); extension tests; typecheck, lint, `next build`, full suite in the hooks.
+- Manual verification: headless Chromium with the built extension against the scratch app — a capture session on "Heroes" put two saves on different pages into it, the collection came preselected on the second popup, the session sits in session storage (ends with the browser); Library › Elsewhere for "pricing table" listed Dribbble, Behance, Awwwards, Landbook, Lapa Ninja, One Page Love, Siteinspire and Pinterest.
+
+## What is still open after all phases
+
+- **Not built:** extension-side tab recording for signed-in motion (#20; needs the `tabCapture` and `offscreen` permissions and can't be driven headless), Trusted Websites (#52), an Advanced settings group (#50), public revocable share links (#41; needs an architecture decision), "Workflow Config" (#1; undefined).
+- **Partly:** #4 (Motion metadata exists as assets, not as a reference kind), #49 (errors explain cause and next step; there is no collapsed technical-details view), #63 and #65 (QA and consistent states are practised per phase, not finished work items).
+- **Verification limits:** extension flows were driven in headless Chromium with a stubbed active tab or a test-only build with `<all_urls>` standing in for the `activeTab` grant; real-Chrome quick save (⌥⇧D), context menus and the alarm-driven sync weren't clicked through by hand.
 
 ### Phase 6.3 — Backup, restore, share package, device transfer
 
