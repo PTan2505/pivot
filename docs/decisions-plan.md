@@ -94,11 +94,11 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 26  | Status vs quality vs review         | Partial  | 1         | [x]  |
 | 27  | Relationships                       | Missing  | 4         | [x]  |
 | 28  | Design Versions                     | Missing  | 6         | [x]  |
-| 29  | Annotations                         | Partial  | 6         | [ ]  |
+| 29  | Annotations                         | Partial  | 6         | [x]  |
 | 30  | Layered metadata                    | Partial  | 5         | [x]  |
 | 31  | Provenance                          | Partial  | 3         | [x]  |
-| 32  | Selective asset extraction          | Missing  | 6         | [ ]  |
-| 33  | Interaction states                  | Missing  | 6         | [ ]  |
+| 32  | Selective asset extraction          | Missing  | 6         | [x]  |
+| 33  | Interaction states                  | Missing  | 6         | [x]  |
 | 34  | Naming `[Section] — [Source]`       | Partial  | 4, 5      | [x]  |
 | 35  | Review Inbox                        | Missing  | 3, 5      | [x]  |
 | 36  | Capture Sessions                    | Missing  | Optional  | [ ]  |
@@ -232,11 +232,11 @@ Files: `packages/mcp-tools/src/tools.ts`, `apps/mcp/src/http-source.ts`, new rou
 
 - [ ] Motion: server video with Playwright `recordVideo` on request, plus keyframes (done in 6.1, with a "Record motion" hint when the page animates); extension tab recording through `tabCapture` or an offscreen document; never restarted automatically (#20, #21).
 - [x] Responsive: Desktop / Tablet / Mobile server shots on request, in the same reference (#23).
-- [ ] Interaction states (#33) and pin or region annotations (#29).
+- [x] Interaction states (#33) and pin or region annotations (#29).
 - [x] Design Versions and visual diff (#28, #58).
 - [ ] Export / import / backup and device transfer, reusing `exportBundle` in `context.ts` (#39, #40, #51).
 - [ ] Share Package as a file (#41).
-- [ ] Selective asset extraction (#32). Deferred capture (#56) and health alerts (#59): done in 6.1.
+- [x] Selective asset extraction (#32). Deferred capture (#56) and health alerts (#59): done in 6.1.
 
 ### Optional
 

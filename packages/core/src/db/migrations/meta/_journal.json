@@ -57,6 +57,13 @@
       "when": 1793467628803,
       "tag": "0007_lonely_genesis",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793470043130,
+      "tag": "0008_loud_spacker_dave",
+      "breakpoints": true
     }
   ]
 }

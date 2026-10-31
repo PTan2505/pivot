@@ -40,7 +40,8 @@ import { pendingStore, storageWarning } from "../lib/pending-store";
 import type { PendingItem } from "../lib/queue";
 import { queueSave, SAVED_LOCALLY_TEXT, syncNow, type QueuedSave } from "../lib/sync";
 import { captureTab, getPageInfo, isHomePage, isPivotPage, isSavable, type PageInfo } from "../lib/page";
-import { CollectionPicker, Duplicates, LibraryTab, QuickEdit } from "./parts";
+import { AssetPicker, CollectionPicker, Duplicates, LibraryTab, QuickEdit } from "./parts";
+import { discoverAssets, type Discovered } from "../lib/discover";
 import { RedactEditor } from "./redact-editor";
 import { assessPrivacy, type PrivacyVerdict } from "../lib/privacy";
 import { masksFrom, redact, type Mask } from "../lib/redact";
@@ -308,6 +309,7 @@ export function Popup() {
   const [sections, setSections] = useState<PickedSection[] | null>(null);
   const [sectionBusy, setSectionBusy] = useState(false);
   const [reviewing, setReviewing] = useState<PendingItem | null>(null);
+  const [found, setFound] = useState<Discovered | null>(null);
   const [editNote, setEditNote] = useState("");
   const [ownPage, setOwnPage] = useState(false);
 
@@ -490,6 +492,39 @@ export function Popup() {
     }
     const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: listSections });
     setSections((res?.result as PickedSection[] | undefined) ?? []);
+  };
+
+  const pickAssets = async () => {
+    if (!tab?.id) return;
+    const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: discoverAssets });
+    setFound((res?.result as Discovered | undefined) ?? { images: [], svgs: [], fonts: [], gradients: [] });
+  };
+
+  /** The tab as it is now, added to a saved reference as one of its states (held for approval on a private page). */
+  const addState = async (target: Duplicate, state: string) => {
+    if (!page || !shot) return;
+    const res = await queueSave({
+      label: "State",
+      title: `${state} — ${target.title}`,
+      data: {
+        kind: "page",
+        url: page.url,
+        attachTo: target.id,
+        state,
+        capturedUrl: page.address && page.address !== page.url ? page.address : undefined,
+      },
+      screenshot: shot,
+      privacy: privacy?.flagged
+        ? {
+            reasons: privacy.reasons,
+            suggestions: page.privacy?.suggestions ?? [],
+            viewportWidth: page.privacy?.viewport.width ?? 0,
+          }
+        : undefined,
+    });
+    void chrome.runtime.sendMessage({ type: "pivot:queue-changed" }).catch(() => {});
+    if (res.synced) setSaved(res.path);
+    else setSavedLocally(res.reason);
   };
 
   const saveListedSection = async (section: PickedSection) => {
@@ -778,7 +813,14 @@ export function Popup() {
 
         {mode === "page" && step === "type" ? (
           <div className="space-y-2">
-            {page && <Duplicates items={duplicates} total={duplicateTotal} url={page.url} />}
+            {page && (
+              <Duplicates
+                items={duplicates}
+                total={duplicateTotal}
+                url={page.url}
+                onAddState={shot ? addState : undefined}
+              />
+            )}
             <p className="text-[13px] font-medium text-ink">What are you saving?</p>
             {knownSource && (
               <p className="text-xs text-ink-muted">This is {knownSource}’s home page, so Source is picked.</p>
@@ -809,7 +851,11 @@ export function Popup() {
                 <Button variant="outline" className="h-8 px-3 text-xs" onClick={() => pickSection("list")}>
                   Pick from a list
                 </Button>
+                <Button variant="outline" className="h-8 px-3 text-xs" onClick={pickAssets}>
+                  Pick assets
+                </Button>
               </div>
+              {found && !offline && <AssetPicker found={found} target={duplicates[0] ?? null} />}
               {sections && (
                 <ul aria-label="Sections on this page" className="space-y-1">
                   {sections.length === 0 && <li className="text-xs text-ink-muted">No clear sections found.</li>}

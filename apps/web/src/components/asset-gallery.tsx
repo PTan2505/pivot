@@ -9,6 +9,7 @@ import {
   Info,
   Loader2,
   Maximize2,
+  MessageSquarePlus,
   Plus,
   Star,
   Trash2,
@@ -16,6 +17,7 @@ import {
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import type { AssetDTO, CaptureAttemptDTO, CaptureOptions, ResourceDetailDTO } from "@pivot/core/types";
+import { AnnotationLayer } from "@/components/annotation-layer";
 import { AssetPreview, formatBytes } from "@/components/asset-preview";
 import { ConfirmButton } from "@/components/confirm-button";
 import { ScreenshotViewer } from "@/components/screenshot-viewer";
@@ -95,6 +97,7 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
   const update = useUpdateResource(resource.id);
   const [over, setOver] = useState(false);
   const [viewing, setViewing] = useState(false);
+  const [annotating, setAnnotating] = useState(false);
 
   const recapture = async (options: CaptureOptions & { defer?: boolean } = {}) => {
     try {
@@ -220,7 +223,9 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
         </div>
       )}
 
-      {selected ? (
+      {selected && annotating && selected.kind === "image" && !selected.missing ? (
+        <AnnotationLayer resourceId={resource.id} asset={selected} annotations={resource.annotations ?? []} />
+      ) : selected ? (
         <div className="relative">
           <div className={cn("overflow-auto rounded-[14px] bg-surface", compact ? "max-h-80" : "max-h-[75vh]")}>
             <div className="grid min-h-48 place-items-center">
@@ -360,6 +365,19 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
       {selected && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-ink-subtle">
           <span className="rounded-full bg-surface px-2.5 py-0.5 text-ink-secondary">{labelOf(selected)}</span>
+          {selected.kind === "image" && !selected.missing && (
+            <Button
+              size="xs"
+              variant={annotating ? "secondary" : "ghost"}
+              aria-pressed={annotating}
+              onClick={() => setAnnotating((a) => !a)}
+            >
+              <MessageSquarePlus />
+              {annotating
+                ? "Done"
+                : `Notes${(resource.annotations ?? []).filter((a) => a.assetId === selected.id).length ? ` (${(resource.annotations ?? []).filter((a) => a.assetId === selected.id).length})` : ""}`}
+            </Button>
+          )}
           <span className="max-w-60 truncate font-mono" title={selected.fileName}>
             {selected.fileName}
           </span>

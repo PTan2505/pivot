@@ -15,6 +15,16 @@ Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 | 5     | Design track: sessions, MCP writes | Done        |
 | 6     | Later                              | In progress |
 
+### Phase 6.2 — Annotations, interaction states, asset extraction
+
+- Status: Done
+- Existing functionality reused: `/api/clip` (a state is a clip with `attachTo`), the offline queue and privacy hold, `safeFetch` (SSRF guard) for picked images, `saveAsset`/`attachAsset`, the assets route's sandboxed CSP for SVG, `get_reference` in MCP.
+- Files changed: core `annotations.ts`, `extract.ts`, `resources.ts` (annotations in a resource's details), `types.ts`, schema + migration `0008` (adds `asset_annotations`); routes `api/resources/[id]/annotations`, `api/annotations/[id]`, `api/resources/[id]/extract`, `api/clip` (`attachTo`, `state`); web `annotation-layer.tsx`, `asset-gallery.tsx` (Notes mode); MCP `get_reference` (annotations, section context); extension `lib/discover.ts`, `lib/api.ts`, `popup/parts.tsx` (`AddState`, `AssetPicker`), `popup.tsx`; SPEC §16, DESIGN.md.
+- Checks run and results: core `annotations-extract.test.ts` 2/2 (notes on the reference's own screenshot only, boxes kept inside the image, out-of-range refused, partial edits keep the rest, the pixels unchanged; picked image and SVG saved with their source, a non-image and a non-SVG reported, font names and gradients in meta, more than 20 files refused); MCP and extension suites; typecheck, lint, full suite in the hooks.
+- Manual verification: scratch app — on Notion pricing, Notes mode: dragged a box, typed a note, moved it 3% with the arrow keys; stored as a region at x 0.06 with its size and note, and MCP `get_reference` lists "Two tiers side by side, price first (region at 6%, 52% of viewport)". A real bug found and fixed on the way: the edit schema inherited the create defaults, so editing a note reset the box's size. Headless Chromium with the extension on a local test site: the page saved once, then "Add this view as a state" → "Open menu" added a `state` image to that same reference (still one reference for the URL); "Pick assets" saved the SVG icon and the gradient, and reported the logo as blocked because it sits on 127.0.0.1 (the SSRF guard; public images are covered by the unit test).
+- Remaining issues: annotations live on the detail page only (not in the full-size viewer); asset discovery reads only on-screen images and same-origin stylesheets for font sources.
+- Next step: Phase 6.3 (export, backup, import, share package, device transfer).
+
 ### Phase 6.1 — Capture variants, comparison, versions, requests, health
 
 - Status: Done

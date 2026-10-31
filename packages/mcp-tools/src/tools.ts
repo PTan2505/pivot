@@ -39,6 +39,8 @@ const NOTES_CHARS = 2000;
 const CONTENT_CHARS = 8000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const round = (n: number) => Math.round(n * 1000) / 1000;
+
 const clip = (s: string, max: number) =>
   s.length > max ? { text: `${s.slice(0, max - 1)}…`, truncated: true } : { text: s, truncated: false };
 
@@ -219,6 +221,18 @@ const getReference: PivotTool<typeof idInput> = {
       facets: r.tags.map(({ kind, name }) => ({ kind, name })),
       collections: r.collections.map((c) => c.name),
       screenshots: screenshotsOf(r),
+      // the user's (or an agent's) notes on places in the screenshots, as fractions of the image
+      annotations: (r.annotations ?? []).map((a) => ({
+        assetId: a.assetId,
+        kind: a.kind,
+        x: round(a.x),
+        y: round(a.y),
+        width: round(a.width),
+        height: round(a.height),
+        note: a.note,
+        author: a.author,
+      })),
+      ...(typeof r.meta.section === "object" && r.meta.section ? { section: r.meta.section } : {}),
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
     };
@@ -233,6 +247,13 @@ const getReference: PivotTool<typeof idInput> = {
       detail.screenshots.length
         ? `Screenshots: ${detail.screenshots.map((s) => `${s.role} ${s.width}×${s.height}`).join(", ")}. get_reference_images shows them.`
         : "No screenshots.",
+      detail.annotations.length &&
+        `Annotations: ${detail.annotations
+          .map(
+            (a, i) =>
+              `${i + 1}. "${a.note}" (${a.kind} at ${Math.round(a.x * 100)}%, ${Math.round(a.y * 100)}% of ${ROLE_LABEL[r.assets.find((x) => x.id === a.assetId)?.role ?? "attachment"]})`,
+          )
+          .join("; ")}`,
       r.content && `Content:\n${content.text}`,
     ].filter(Boolean);
     return { content: [text(lines.join("\n"))], structuredContent: detail };

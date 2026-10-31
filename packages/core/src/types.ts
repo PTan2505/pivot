@@ -509,6 +509,8 @@ export interface ResourceDTO {
 export interface ResourceDetailDTO extends ResourceDTO {
   assets: AssetDTO[];
   collections: { id: string; name: string }[];
+  /** Notes pinned to places on its screenshots (a separate layer; pixels unchanged). */
+  annotations?: AnnotationDTO[];
 }
 
 export interface CollectionDTO {
@@ -671,4 +673,19 @@ export interface SuggestionDTO {
   createdAt: string;
   /** For lists across resources (the Inbox). */
   resourceTitle?: string;
+}
+
+export interface AnnotationDTO {
+  id: string;
+  resourceId: string;
+  assetId: string;
+  kind: "pin" | "region";
+  /** Fractions of the image (0–1), from its top-left corner. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  note: string;
+  author: "user" | "agent";
+  createdAt: string;
 }
