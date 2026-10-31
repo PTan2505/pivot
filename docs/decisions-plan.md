@@ -49,9 +49,9 @@ Compared with `.claude/skills/pivot-design/SKILL.md` as it stands in PR #34.
 
 | Part A                                                                                                                | Today                                                                                    | Phase | Done |
 | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ----- | ---- |
-| A1. Roles: generated briefs, decisions and session notes never go into the target repo                                | Partial: the brief is only shown to the user and mockups go to a scratch folder; no rule | S     | [ ]  |
+| A1. Roles: generated briefs, decisions and session notes never go into the target repo                                | Partial: the brief is only shown to the user and mockups go to a scratch folder; no rule | S     | [x]  |
 | A2. Nine steps: requirements → discover → select 2–4 → brief → session → 2–3 mockups → approval gate → implement → QA | Partial: seven steps, no session, no recorded decision, QA folded into Build             | S, 5b | [ ]  |
-| A2.7, A8. No implementation before explicit approval                                                                  | Conflict: the "go ahead" exception (C10)                                                 | S     | [ ]  |
+| A2.7, A8. No implementation before explicit approval                                                                  | Conflict: the "go ahead" exception (C10)                                                 | S     | [x]  |
 | A3. Brief snapshots in PIVOT at initial, approved and major-change milestones; a major change goes back to the gate   | Missing                                                                                  | S, 5b | [ ]  |
 | A4. Session after the first completed brief; tiny fixes create none                                                   | Partial: the small-fix exception exists; sessions don't                                  | 5b    | [ ]  |
 | A5. MCP read tools exist; with no write tools, say so and never fall back to the target repo                          | Partial: four read tools; no rule about the missing writes                               | S, 5b | [ ]  |
@@ -143,13 +143,13 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 
 ### Phase S — Align `pivot-design` with Part A (commits on PR #34)
 
-- [ ] Nine steps: Understand → Search → Inspect → Choose (2–4) → Brief → Design Session → Mockups (2–3) → Approval gate → Build → QA. The session and "record the approved decision" steps say: save to PIVOT once it has write tools; until then tell the user it isn't saved, and never write it into the target repo.
-- [ ] Remove the "go ahead" exception at the top of the skill and in §6. "Just build it" or "skip mockups" means one direction, still waiting for approval.
-- [ ] A major change after approval (structure or direction) goes back to the gate; small changes inside the approved direction don't.
-- [ ] QA as its own step: check the result against the approved direction at desktop and phone widths and in the states that matter; report deviations instead of quietly changing the decision.
-- [ ] Keep the small-fix exception, with no session (A4).
-- [ ] SPEC §10, `search-mcp-progress.md` (an "Approval gate (strict)" row, **Not tested** until run) and Step 3 of `SEARCH_MCP_IMPLEMENTATION_PLAN.md`.
-- [ ] Verify headless on a copy of the Ledgerly target: "just build it, design the pricing page" ends with one direction and a question, `git status` clean; a small fix ("raise the contrast of the footer links") skips the library and the brief.
+- [x] Nine steps: Understand → Search → Inspect → Choose (2–4) → Brief → Design Session → Mockups (2–3) → Approval gate → Build → QA. The session and "record the approved decision" steps say: save to PIVOT once it has write tools; until then tell the user it isn't saved, and never write it into the target repo.
+- [x] Remove the "go ahead" exception at the top of the skill and in §6. "Just build it" or "skip mockups" means one direction, still waiting for approval.
+- [x] A major change after approval (structure or direction) goes back to the gate; small changes inside the approved direction don't.
+- [x] QA as its own step: check the result against the approved direction at desktop and phone widths and in the states that matter; report deviations instead of quietly changing the decision.
+- [x] Keep the small-fix exception, with no session (A4).
+- [x] SPEC §10, `search-mcp-progress.md` (an "Approval gate (strict)" row, **Not tested** until run) and Step 3 of `SEARCH_MCP_IMPLEMENTATION_PLAN.md`.
+- [x] Verify headless on a copy of the Ledgerly target: "just build it, design the pricing page" ends with one direction and a question, `git status` clean; a small fix ("raise the contrast of the footer links") skips the library and the brief.
 
 ### Phase 1 — Reliable capture (server)
 

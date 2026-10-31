@@ -275,6 +275,7 @@ As built: `.claude/skills/pivot-design/SKILL.md`, linked into `~/.claude/skills`
 - [x] One full end-to-end run on a scratch project: brief → 3 mockups → user pick → build → browser verification (2026-10-31).
 - [x] Small, explicit fixes skip the flow; mockups are temporary prototypes and production code waits for the pick (wording in the skill).
 - [ ] Try the small-fix exception, "just build it", and a real React/Next target. Not run yet.
+- [ ] Part A alignment (2026-10-31): approval always required, design session and QA steps, design documents only in PIVOT. Verified in `decisions-progress.md` Phase S.
 
 ### Step 4 — Hardening (brief 11) (1–2 d)
 
