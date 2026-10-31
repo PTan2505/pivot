@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { CollectionDTO, ResourceDTO, TagKind } from "@pivot/core/types";
 import { TYPE_DEFS } from "@pivot/core/types";
 import { api, openInApp, serverUrlFor, type Duplicate } from "../lib/api";
+import type { Discovered } from "../lib/discover";
 import type { PendingItem } from "../lib/queue";
 import { Button, cx, Field, Input, Textarea } from "../ui";
 
@@ -28,7 +29,18 @@ function Thumb({ path, className }: { path: string | null | undefined; className
  * Earlier saves of this page: up to three with thumbnails, "View all" when there are more. Opening one is the
  * alternative to saving again; nothing is merged.
  */
-export function Duplicates({ items, total, url }: { items: Duplicate[]; total: number; url: string }) {
+export function Duplicates({
+  items,
+  total,
+  url,
+  onAddState,
+}: {
+  items: Duplicate[];
+  total: number;
+  url: string;
+  /** Offered for the newest save: add the current view to it as a state instead of saving again. */
+  onAddState?: (target: Duplicate, state: string) => Promise<void>;
+}) {
   if (!items.length) return null;
   return (
     <section aria-label="Already saved" className="space-y-1.5 rounded-[12px] bg-surface p-2.5">
@@ -56,6 +68,7 @@ export function Duplicates({ items, total, url }: { items: Duplicate[]; total: n
           </li>
         ))}
       </ul>
+      {onAddState && <AddState target={items[0]} onSave={(state) => onAddState(items[0], state)} />}
       {total > items.length && (
         <button
           type="button"
@@ -321,6 +334,231 @@ export function LibraryTab({
             <ExternalLink className="size-3" aria-hidden /> Open PIVOT
           </button>
         </>
+      )}
+    </div>
+  );
+}
+
+const STATES = [
+  "Default",
+  "Hover",
+  "Focus",
+  "Open menu",
+  "Expanded",
+  "Selected",
+  "Error",
+  "Empty",
+  "Loading",
+  "Success",
+];
+
+/**
+ * Adds what the tab shows now (a hover, an open menu, an error…) to a page already saved, as one of its states, instead
+ * of saving the page again. Nothing on the page is clicked for you: put it in the state first, then open the popup.
+ */
+export function AddState({ target, onSave }: { target: Duplicate; onSave: (state: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [state, setState] = useState("Hover");
+  const [custom, setCustom] = useState("");
+  const [busy, setBusy] = useState(false);
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="cursor-pointer text-[11px] text-ink-secondary underline"
+      >
+        Add this view as a state of “{target.title}”
+      </button>
+    );
+  }
+  const name = state === "Other…" ? custom.trim() : state;
+  return (
+    <div className="space-y-1.5 rounded-[10px] bg-surface-raised p-2">
+      <label className="block text-[11px] text-ink-muted" htmlFor="state-name">
+        Which state is on screen?
+      </label>
+      <div className="flex flex-wrap gap-1">
+        <select
+          id="state-name"
+          value={state}
+          onChange={(e) => setState(e.target.value)}
+          className="h-8 rounded-full border-0 bg-surface px-3 text-xs text-ink"
+        >
+          {[...STATES, "Other…"].map((s) => (
+            <option key={s}>{s}</option>
+          ))}
+        </select>
+        {state === "Other…" && (
+          <Input
+            value={custom}
+            onChange={(e) => setCustom(e.target.value)}
+            placeholder="Name it"
+            aria-label="State name"
+            className="h-8 w-32 text-xs"
+          />
+        )}
+        <Button
+          className="h-8 px-3 text-xs"
+          disabled={!name || busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await onSave(name);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Add state
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Pick assets out of the page to keep with its reference: images and SVG icons (files), the fonts in use (names only)
+ * and gradients (CSS). At most 20 files; nothing is copied wholesale.
+ */
+export function AssetPicker({ found, target }: { found: Discovered; target: Duplicate | null }) {
+  const [images, setImages] = useState<string[]>([]);
+  const [svgs, setSvgs] = useState<number[]>([]);
+  const [fonts, setFonts] = useState<number[]>([]);
+  const [gradients, setGradients] = useState<number[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const files = images.length + svgs.length;
+  const toggle = <T,>(list: T[], set: (v: T[]) => void, v: T) =>
+    set(list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+  const empty = !found.images.length && !found.svgs.length && !found.fonts.length && !found.gradients.length;
+  if (empty) return <p className="text-xs text-ink-muted">No images, icons, fonts or gradients found on screen.</p>;
+  const save = async () => {
+    if (!target) return;
+    setBusy(true);
+    setResult(null);
+    try {
+      const res = await api.extract(target.id, {
+        images: images.map((url) => ({ url })),
+        svgs: svgs.map((i) => ({ markup: found.svgs[i].markup, name: found.svgs[i].name })),
+        fonts: fonts.map((i) => found.fonts[i]),
+        gradients: gradients.map((i) => found.gradients[i]),
+      });
+      setResult(
+        `Saved ${res.saved.length} file${res.saved.length === 1 ? "" : "s"}` +
+          (res.fonts ? `, ${res.fonts} font name${res.fonts === 1 ? "" : "s"}` : "") +
+          (res.gradients ? `, ${res.gradients} gradient${res.gradients === 1 ? "" : "s"}` : "") +
+          (res.failed.length ? `. Couldn’t get ${res.failed.length}: ${res.failed[0].error}` : "."),
+      );
+    } catch (err) {
+      setResult(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const section = (title: string, children: React.ReactNode) => (
+    <fieldset className="space-y-1">
+      <legend className="text-xs text-ink-subtle">{title}</legend>
+      {children}
+    </fieldset>
+  );
+  const row = (checked: boolean, onChange: () => void, label: React.ReactNode, key: string, disabled = false) => (
+    <label key={key} className={cx("flex items-center gap-2 text-xs", disabled && "opacity-40")}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onChange}
+        disabled={disabled}
+        className="accent-[var(--accent-fill)]"
+      />
+      {label}
+    </label>
+  );
+  const full = files >= 20;
+  return (
+    <div className="space-y-3 rounded-[12px] bg-surface p-3">
+      {found.images.length > 0 &&
+        section(
+          "Images",
+          found.images.map((img) =>
+            row(
+              images.includes(img.url),
+              () => toggle(images, setImages, img.url),
+              <span className="flex min-w-0 items-center gap-2">
+                <img src={img.url} alt="" className="h-8 w-12 shrink-0 rounded-[6px] bg-surface-raised object-cover" />
+                <span className="truncate text-ink-secondary">
+                  {img.alt || new URL(img.url).pathname.split("/").pop()} · {img.width}×{img.height}
+                </span>
+              </span>,
+              img.url,
+              full && !images.includes(img.url),
+            ),
+          ),
+        )}
+      {found.svgs.length > 0 &&
+        section(
+          "Icons (SVG)",
+          found.svgs.map((s, i) =>
+            row(
+              svgs.includes(i),
+              () => toggle(svgs, setSvgs, i),
+              <span className="flex min-w-0 items-center gap-2">
+                <img
+                  src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(s.markup)}`}
+                  alt=""
+                  className="size-6 shrink-0 rounded-[4px] bg-white p-0.5"
+                />
+                <span className="truncate text-ink-secondary">{s.name}</span>
+              </span>,
+              `svg${i}`,
+              full && !svgs.includes(i),
+            ),
+          ),
+        )}
+      {found.fonts.length > 0 &&
+        section(
+          "Fonts (names only)",
+          found.fonts.map((f, i) =>
+            row(
+              fonts.includes(i),
+              () => toggle(fonts, setFonts, i),
+              <span className="text-ink-secondary">
+                {f.family} {f.weight} {f.style !== "normal" ? f.style : ""}
+              </span>,
+              `font${i}`,
+            ),
+          ),
+        )}
+      {found.gradients.length > 0 &&
+        section(
+          "Gradients",
+          found.gradients.map((g, i) =>
+            row(
+              gradients.includes(i),
+              () => toggle(gradients, setGradients, i),
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="h-5 w-12 shrink-0 rounded-[4px]" style={{ backgroundImage: g }} />
+                <span className="truncate font-mono text-[10px] text-ink-muted">{g}</span>
+              </span>,
+              `gradient${i}`,
+            ),
+          ),
+        )}
+      {target ? (
+        <Button
+          disabled={busy || !(files || fonts.length || gradients.length)}
+          onClick={save}
+          className="h-8 px-3 text-xs"
+        >
+          {busy && <Loader2 className="animate-spin" />} Save to “{target.title}”{files ? ` (${files}/20 files)` : ""}
+        </Button>
+      ) : (
+        <p className="text-xs text-ink-muted">Save the page first; then its assets can be kept with it.</p>
+      )}
+      {result && (
+        <p role="status" className="text-xs text-ink-muted">
+          {result}
+        </p>
       )}
     </div>
   );

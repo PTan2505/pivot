@@ -1,5 +1,15 @@
 import { sql } from "drizzle-orm";
-import { index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  doublePrecision,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 const id = () =>
   text("id")
@@ -301,4 +311,32 @@ export const resourceSuggestions = pgTable(
     index("resource_suggestions_resource_idx").on(t.resourceId),
     index("resource_suggestions_status_idx").on(t.status),
   ],
+);
+
+/**
+ * Notes pinned to a place on a screenshot: a point or a box, in fractions of the image (0–1) so they survive
+ * resizing. A separate layer: the screenshot's pixels are never changed (redaction is the opposite, done before upload).
+ */
+export const assetAnnotations = pgTable(
+  "asset_annotations",
+  {
+    id: id(),
+    resourceId: text("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    assetId: text("asset_id")
+      .notNull()
+      .references(() => assets.id, { onDelete: "cascade" }),
+    /** pin | region */
+    kind: text("kind").notNull().default("region"),
+    x: doublePrecision("x").notNull(),
+    y: doublePrecision("y").notNull(),
+    width: doublePrecision("width").notNull().default(0),
+    height: doublePrecision("height").notNull().default(0),
+    note: text("note").notNull().default(""),
+    /** "user" or "agent". */
+    author: text("author").notNull().default("user"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("asset_annotations_resource_idx").on(t.resourceId), index("asset_annotations_asset_idx").on(t.assetId)],
 );

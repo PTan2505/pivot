@@ -75,6 +75,20 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(patch),
     }),
+  /** Saves picked assets onto a reference: image and SVG files, font names (no files), gradients. */
+  extract: (
+    id: string,
+    body: {
+      images?: { url: string }[];
+      svgs?: { markup: string; name?: string }[];
+      fonts?: { family: string; weight?: string; style?: string; src?: string }[];
+      gradients?: string[];
+    },
+  ) =>
+    request<{ saved: string[]; failed: { item: string; error: string }[]; fonts: number; gradients: number }>(
+      `/api/resources/${id}/extract`,
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+    ),
   addToCollection: (collectionId: string, ids: string[]) =>
     request("/api/resources/bulk", {
       method: "POST",
@@ -115,6 +129,9 @@ export interface ClipData {
   needsReview?: boolean;
   /** A part of the page saved as its own reference. */
   section?: SectionContext;
+  /** Add the screenshot to this saved reference as an interaction state (named by `state`) instead of a new one. */
+  attachTo?: string;
+  state?: string;
   /** The address bar's URL when it differs from the saved (canonical) one. */
   capturedUrl?: string;
   serverCapture?: boolean;

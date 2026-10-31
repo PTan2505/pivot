@@ -1,7 +1,7 @@
 import path from "node:path";
 import sharp from "sharp";
 import { z } from "zod";
-import { attachAsset, saveAsset } from "@pivot/core/assets";
+import { attachAsset, saveAsset, updateAssetNotes } from "@pivot/core/assets";
 import { enqueueCapture } from "@pivot/core/capture";
 import {
   claimClipRequest,
@@ -45,6 +45,12 @@ const fields = z.object({
       method: z.enum(["select", "crop", "list"]).optional(),
     })
     .optional(),
+  /**
+   * An interaction state (hover, open menu, error…) of a page already saved: the screenshot is added to that reference
+   * as a `state` named here, instead of creating a new reference.
+   */
+  attachTo: z.string().optional(),
+  state: z.string().trim().min(1).max(60).optional(),
   /** The address bar's URL when the saved `url` is the page's canonical link (provenance: "Captured from"). */
   capturedUrl: z.string().max(2000).optional(),
   serverCapture: z.boolean().optional(),
@@ -122,6 +128,7 @@ function respond({ id, existing, title }: Saved) {
 }
 
 async function save(form: FormData, input: ClipInput): Promise<Saved> {
+  if (input.attachTo) return saveState(form, input);
   const pageUrl = normalizeUrl(input.url);
   let id: string;
   let title: string | undefined;
@@ -231,4 +238,31 @@ async function save(form: FormData, input: ClipInput): Promise<Saved> {
   // Same page saved before (or a section of it): link them. Never fails the save.
   if (input.kind === "page") await autoLinkSamePage(id).catch(() => 0);
   return { id, title };
+}
+
+/** Adds the tab's screenshot to an existing reference as one of its interaction states. */
+async function saveState(form: FormData, input: ClipInput): Promise<Saved> {
+  const r = await getResource(input.attachTo!);
+  if (!r || r.deletedAt) throw new HttpError(404, "The reference to add this state to is gone.");
+  const shot = form.get("screenshot");
+  if (!(shot instanceof File) || shot.size === 0) throw new HttpError(400, "A state needs the tab's screenshot.");
+  const webp = await sharp(Buffer.from(await shot.arrayBuffer()))
+    .webp({ quality: 85 })
+    .toBuffer();
+  const state = input.state ?? "State";
+  const asset = await saveAsset({
+    data: webp,
+    fileName: `${hostOf(normalizeUrl(input.url))}-${state.toLowerCase().replace(/[^\w]+/g, "-")}.webp`,
+    sourceUrl: normalizeUrl(input.url),
+    meta: {
+      state,
+      method: "extension",
+      capturedAt: new Date().toISOString(),
+      ...capturedFrom(input, normalizeUrl(input.url)),
+    },
+  });
+  await attachAsset(r.id, asset.id, "state");
+  // a note about this state goes on the screenshot, not over the reference's own notes
+  if (input.notes?.trim()) await updateAssetNotes(asset.id, input.notes.trim());
+  return { id: r.id, title: r.title };
 }

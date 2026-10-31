@@ -20,6 +20,7 @@ import { z } from "zod";
 import { deleteOrphanAssets, listResourceAssets } from "./assets";
 import { getDb } from "./db/client";
 import {
+  assetAnnotations,
   assets,
   collectionItems,
   collections,
@@ -293,7 +294,7 @@ export async function getResource(id: string): Promise<ResourceDetailDTO | null>
   const db = await getDb();
   const [row] = await db.select().from(resources).where(eq(resources.id, id)).limit(1);
   if (!row) return null;
-  const [tagMap, shots, assetList, cols] = await Promise.all([
+  const [tagMap, shots, assetList, cols, notes] = await Promise.all([
     tagsFor([id]),
     fullShotsFor([id]),
     listResourceAssets(id),
@@ -303,8 +304,30 @@ export async function getResource(id: string): Promise<ResourceDetailDTO | null>
       .innerJoin(collections, eq(collections.id, collectionItems.collectionId))
       .where(eq(collectionItems.resourceId, id))
       .orderBy(asc(collections.name)),
+    db
+      .select()
+      .from(assetAnnotations)
+      .where(eq(assetAnnotations.resourceId, id))
+      .orderBy(asc(assetAnnotations.createdAt)),
   ]);
-  return { ...toDTO(row, tagMap.get(id) ?? [], shots.get(id)), assets: assetList, collections: cols };
+  return {
+    ...toDTO(row, tagMap.get(id) ?? [], shots.get(id)),
+    assets: assetList,
+    collections: cols,
+    annotations: notes.map((n) => ({
+      id: n.id,
+      resourceId: n.resourceId,
+      assetId: n.assetId,
+      kind: n.kind as "pin" | "region",
+      x: n.x,
+      y: n.y,
+      width: n.width,
+      height: n.height,
+      note: n.note,
+      author: n.author as "user" | "agent",
+      createdAt: n.createdAt.toISOString(),
+    })),
+  };
 }
 
 export async function getResourcesByIds(ids: string[]): Promise<ResourceDTO[]> {
