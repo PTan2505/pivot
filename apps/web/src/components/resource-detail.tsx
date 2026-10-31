@@ -43,6 +43,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useUi } from "@/components/ui-store";
+import { ResourceLinks } from "@/components/resource-links";
 import { copyContext, useCopyResource } from "@/hooks/use-copy-resource";
 import {
   api,
@@ -661,6 +662,9 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
               className="font-mono text-xs"
             />
           </Field>
+          {typeof draft.meta.section === "object" && draft.meta.section !== null && (
+            <SectionInfo section={draft.meta.section as Record<string, unknown>} />
+          )}
           {typeof draft.meta.capturedUrl === "string" && (
             <Field label="Captured from" htmlFor="captured-from">
               <p id="captured-from" className="font-mono text-xs break-all text-ink-secondary">
@@ -694,6 +698,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
           {def.fields.map((f) => (
             <MetaFieldInput key={f.key} field={f} draft={draft} change={change} />
           ))}
+          <ResourceLinks resourceId={resource.id} />
           <div className="space-y-2">
             <Label className="text-xs font-normal text-ink-subtle">Classification</Label>
             <TagsEditor kinds={[...def.facets, "tag"]} value={draft.tags} onChange={(tags) => change({ tags })} />
@@ -812,5 +817,37 @@ function ReviewBanner({ id }: { id: string }) {
         Mark reviewed
       </Button>
     </div>
+  );
+}
+
+/** Where a saved section sat on its page. The selector is only a hint: pages change. */
+function SectionInfo({ section }: { section: Record<string, unknown> }) {
+  const rect = section.rect as { width?: number; height?: number; y?: number } | undefined;
+  const viewport = section.viewport as { width?: number } | undefined;
+  const how = { select: "picked on the page", crop: "cropped", list: "picked from the section list" }[
+    String(section.method) as "select" | "crop" | "list"
+  ];
+  return (
+    <Field label="Section" htmlFor="section-info">
+      <div id="section-info" className="space-y-0.5 text-xs text-ink-secondary">
+        <p>
+          {String(section.type ?? "Section")}
+          {how ? ` · ${how}` : ""}
+        </p>
+        {rect && (
+          <p className="font-mono text-ink-muted tabular-nums">
+            {rect.width}×{rect.height} px, {rect.y} px down
+            {viewport?.width ? ` · window ${viewport.width} px wide` : ""}
+          </p>
+        )}
+        {section.truncated === true && <p className="text-ink-muted">Taller than PIVOT stitches; the bottom is cut.</p>}
+        {typeof section.selector === "string" && (
+          <p className="font-mono break-all text-ink-subtle" title="A hint for finding it again; pages change">
+            {section.selector}
+          </p>
+        )}
+        {typeof section.pageTitle === "string" && <p className="text-ink-muted">From “{section.pageTitle}”</p>}
+      </div>
+    </Field>
   );
 }

@@ -157,4 +157,26 @@ describe("syncPending", () => {
     expect(sent).toEqual(["a"]);
     expect(store.items.size).toBe(1);
   });
+
+  it("never sends a save that waits for privacy approval, even when forced", async () => {
+    const held = newPendingItem({
+      label: "Page",
+      title: "private",
+      data: { kind: "page", url: "https://app.example.com/billing" },
+      privacy: { reasons: ["The page shows a password field."], suggestions: [], viewportWidth: 1280 },
+    });
+    expect(held.status).toBe("needs_approval");
+    const store = memoryStore([held]);
+    let sends = 0;
+    const summary = await syncPending(
+      { store, features: async () => FEATURES, send: async () => (sends++, ok()) },
+      { only: [held.id], force: true },
+    );
+    expect(sends).toBe(0);
+    expect(summary.approval).toBe(1);
+    // approving it makes it an ordinary pending save
+    await store.put({ ...held, status: "pending", privacy: undefined });
+    await syncPending({ store, features: async () => FEATURES, send: async () => (sends++, ok()) });
+    expect(sends).toBe(1);
+  });
 });

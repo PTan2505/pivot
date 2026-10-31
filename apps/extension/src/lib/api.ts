@@ -49,6 +49,11 @@ export const api = {
   },
   /** Throws a 403 ApiError when the token is wrong, before anything is typed. */
   ping: () => request("/api/ping", { method: "POST" }),
+  /** Is the page private without your login? (A guess made by the server, which has no cookies.) */
+  visibility: (url: string) =>
+    request<{ private: boolean | null; reason: string; appUrl: boolean }>(
+      `/api/visibility?url=${encodeURIComponent(url)}`,
+    ),
   /** What the server supports; a server from before this endpoint answers 404, which counts as nothing. */
   capabilities: () => request<{ apiVersion: number; features: string[] }>("/api/capabilities"),
   tags: () => request<TagDTO[]>("/api/tags"),
@@ -108,6 +113,8 @@ export interface ClipData {
   collectionIds?: string[];
   /** Quick saves go to the Inbox ("needs review"). */
   needsReview?: boolean;
+  /** A part of the page saved as its own reference. */
+  section?: SectionContext;
   /** The address bar's URL when it differs from the saved (canonical) one. */
   capturedUrl?: string;
   serverCapture?: boolean;
@@ -117,6 +124,18 @@ export interface ClipData {
   ifExists?: "create" | "skip";
   /** Set from the offline queue's item id, so a resend never saves twice. */
   clientRequestId?: string;
+}
+
+export interface SectionContext {
+  type: string;
+  /** Where it sits on the page, in CSS pixels from the top of the document. */
+  rect: { x: number; y: number; width: number; height: number };
+  viewport: { width: number; height: number };
+  scrollY?: number;
+  /** A hint for finding it again; pages change, so it isn't relied on. */
+  selector?: string;
+  pageTitle?: string;
+  method?: "select" | "crop" | "list";
 }
 
 export interface Duplicate {

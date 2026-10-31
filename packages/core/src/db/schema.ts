@@ -187,3 +187,30 @@ export const clipRequests = pgTable("clip_requests", {
   resourceId: text("resource_id").references(() => resources.id, { onDelete: "cascade" }),
   createdAt: createdAt(),
 });
+
+/**
+ * Links between references: `same_source_page`, `part_of` (a section of a page), `related_to`, `variant_of`,
+ * `newer_version_of`. Only links PIVOT is sure of are made automatically; the rest wait as suggestions
+ * (`confirmed` false) or are added by hand.
+ */
+export const resourceLinks = pgTable(
+  "resource_links",
+  {
+    id: id(),
+    fromId: text("from_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    toId: text("to_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    confirmed: integer("confirmed").notNull().default(1),
+    /** "auto" (made by PIVOT), "user", or "agent". */
+    origin: text("origin").notNull().default("user"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("resource_links_unique_idx").on(t.fromId, t.toId, t.kind),
+    index("resource_links_to_idx").on(t.toId),
+  ],
+);

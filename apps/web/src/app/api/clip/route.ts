@@ -12,6 +12,7 @@ import {
 import { fetchUrlMetadata } from "@pivot/core/metadata";
 import { normalizeUrl, safeFetch } from "@pivot/core/net-guard";
 import { addToCollection, createResource, findByUrl, getResource, setResourceFields } from "@pivot/core/resources";
+import { autoLinkSamePage } from "@pivot/core/links";
 import { knownSourceFor } from "@pivot/core/source-match";
 import { RESOURCE_TYPES, TAG_KINDS } from "@pivot/core/types";
 import { HttpError, json, route } from "@/lib/server/http";
@@ -31,6 +32,19 @@ const fields = z.object({
   collectionIds: z.array(z.string()).max(50).optional(),
   /** Quick saves land in the Inbox ("needs review") so they get organised later. */
   needsReview: z.boolean().optional(),
+  /** A section of the page (hero, pricing…) saved as its own reference, with where it sat on the page. */
+  section: z
+    .object({
+      type: z.string().trim().min(1).max(60),
+      rect: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }),
+      viewport: z.object({ width: z.number(), height: z.number() }),
+      scrollY: z.number().optional(),
+      /** Only a hint for finding it again: pages change. */
+      selector: z.string().max(500).optional(),
+      pageTitle: z.string().max(300).optional(),
+      method: z.enum(["select", "crop", "list"]).optional(),
+    })
+    .optional(),
   /** The address bar's URL when the saved `url` is the page's canonical link (provenance: "Captured from"). */
   capturedUrl: z.string().max(2000).optional(),
   serverCapture: z.boolean().optional(),
@@ -122,6 +136,10 @@ async function save(form: FormData, input: ClipInput): Promise<Saved> {
     }
     let { description } = input;
     title = input.title;
+    // A section is named "[Section] — [Source]"; the page's own title stays in meta.section.pageTitle.
+    if (input.section && !title?.trim()) {
+      title = `${input.section.type} — ${knownSourceFor(pageUrl)?.name ?? hostOf(pageUrl)}`;
+    }
     // A known source brings its own description (see createResource); otherwise read the page's.
     const wantsDescription = !description?.trim() && !(input.type === "source" && knownSourceFor(pageUrl));
     if (!title?.trim() || wantsDescription) {
@@ -137,7 +155,7 @@ async function save(form: FormData, input: ClipInput): Promise<Saved> {
       sourceUrl: pageUrl,
       tags: input.tags,
       reviewStatus: input.needsReview ? "needs_review" : null,
-      meta: capturedFrom(input, pageUrl),
+      meta: { ...capturedFrom(input, pageUrl), ...(input.section ? { section: input.section } : {}) },
     });
     id = r.id;
     title = r.title;
@@ -210,5 +228,7 @@ async function save(form: FormData, input: ClipInput): Promise<Saved> {
   }
 
   for (const c of collectionsOf(input)) await addToCollection(c, [id]);
+  // Same page saved before (or a section of it): link them. Never fails the save.
+  if (input.kind === "page") await autoLinkSamePage(id).catch(() => 0);
   return { id, title };
 }

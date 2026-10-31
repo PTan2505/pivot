@@ -41,6 +41,11 @@ import type { PendingItem } from "../lib/queue";
 import { queueSave, SAVED_LOCALLY_TEXT, syncNow, type QueuedSave } from "../lib/sync";
 import { captureTab, getPageInfo, isHomePage, isPivotPage, isSavable, type PageInfo } from "../lib/page";
 import { CollectionPicker, Duplicates, LibraryTab, QuickEdit } from "./parts";
+import { RedactEditor } from "./redact-editor";
+import { assessPrivacy, type PrivacyVerdict } from "../lib/privacy";
+import { masksFrom, redact, type Mask } from "../lib/redact";
+import { listSections, type PickedSection } from "../lib/section";
+import { approvePending } from "../lib/sync";
 import { Button, cx, Field, Input, Logo, Textarea } from "../ui";
 
 type Status = "loading" | "ready" | "offline" | "unauthorized" | "unsupported";
@@ -296,6 +301,13 @@ export function Popup() {
   const [duplicateTotal, setDuplicateTotal] = useState(0);
   const [view, setView] = useState<"capture" | "library">("capture");
   const [editing, setEditing] = useState(false);
+  // Private pages: the verdict, the masks you keep, and your explicit go-ahead for the screenshot.
+  const [privacy, setPrivacy] = useState<PrivacyVerdict | null>(null);
+  const [masks, setMasks] = useState<Mask[]>([]);
+  const [approved, setApproved] = useState(false);
+  const [sections, setSections] = useState<PickedSection[] | null>(null);
+  const [sectionBusy, setSectionBusy] = useState(false);
+  const [reviewing, setReviewing] = useState<PendingItem | null>(null);
   const [editNote, setEditNote] = useState("");
   const [ownPage, setOwnPage] = useState(false);
 
@@ -362,6 +374,10 @@ export function Popup() {
       }
       void reloadPending();
       void storageWarning().then(setStorageNote);
+      void assessPrivacy(info.url, info.privacy).then((v) => {
+        setPrivacy(v);
+        if (v.flagged) setMasks(masksFrom(info.privacy?.suggestions));
+      });
       try {
         // the ping checks the token now, so a wrong one never costs what you typed
         const [t, c, d, , caps] = await Promise.all([
@@ -401,6 +417,7 @@ export function Popup() {
 
   const save = async () => {
     if (!page || saving || (mode === "page" && step === "type")) return;
+    if (needsApproval && !approved) return;
     setSaving(true);
     setError(null);
     setTokenRejected(false);
@@ -425,10 +442,17 @@ export function Popup() {
                 type,
                 title,
                 description: descriptionEdited || !(type === "source" && knownSource) ? description : undefined,
-                serverCapture: willServerCapture,
+                // the server, without your login, can't see a private page
+                serverCapture: willServerCapture && !privacy?.flagged,
                 expandContent: willServerCapture && type !== "source" ? expandContent : undefined,
               },
-              screenshot: attachShot && shot ? shot : undefined,
+              // a private page's view goes up only with the masks painted into its pixels
+              screenshot:
+                attachShot && shot
+                  ? privacy?.flagged
+                    ? await redact(shot, masks, page.privacy?.viewport.width ?? 0)
+                    : shot
+                  : undefined,
             }
           : {
               label: "Text",
@@ -454,6 +478,31 @@ export function Popup() {
   const attachingView = attachShot && !!shot;
   const offerServerCapture = TYPE_DEFS[type].visual && !(type === "source" && attachingView);
   const willServerCapture = offerServerCapture && serverCapture;
+  // A screenshot of a page that looks private is uploaded only after you have looked at it.
+  const needsApproval = mode === "page" && !!privacy?.flagged && attachShot && !!shot;
+
+  const pickSection = async (how: "select" | "crop" | "list") => {
+    if (!tab?.id) return;
+    if (how !== "list") {
+      await chrome.runtime.sendMessage({ type: "pivot:section-start", tabId: tab.id, mode: how });
+      window.close();
+      return;
+    }
+    const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: listSections });
+    setSections((res?.result as PickedSection[] | undefined) ?? []);
+  };
+
+  const saveListedSection = async (section: PickedSection) => {
+    if (!tab?.id) return;
+    setSectionBusy(true);
+    setError(null);
+    const res = (await chrome.runtime.sendMessage({ type: "pivot:section-capture", tabId: tab.id, section })) as
+      { ok: true; result: QueuedSave } | { ok: false; error: string };
+    setSectionBusy(false);
+    if (!res.ok) return setError(res.error);
+    if (res.result.synced) setSaved(res.result.path);
+    else setSavedLocally(res.result.reason);
+  };
 
   const chooseType = (t: ResourceType) => {
     setType(t);
@@ -519,6 +568,24 @@ export function Popup() {
         {header}
         <div className="grid h-60 place-items-center text-ink-muted">
           <Loader2 className="size-4 animate-spin" aria-label="Loading" />
+        </div>
+      </div>
+    );
+  }
+
+  if (reviewing) {
+    return (
+      <div className="flex max-h-[590px] w-[400px] flex-col">
+        {header}
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
+          <ApprovalView
+            item={reviewing}
+            onDone={async () => {
+              setReviewing(null);
+              await reloadPending();
+              void chrome.runtime.sendMessage({ type: "pivot:queue-changed" }).catch(() => {});
+            }}
+          />
         </div>
       </div>
     );
@@ -673,7 +740,9 @@ export function Popup() {
             {storageNote}
           </p>
         )}
-        {pending.length > 0 && <PendingPanel items={pending} offline={offline} onChange={reloadPending} />}
+        {pending.length > 0 && (
+          <PendingPanel items={pending} offline={offline} onChange={reloadPending} onReview={setReviewing} />
+        )}
         {page?.selection && (
           <div
             role="tablist"
@@ -728,6 +797,45 @@ export function Popup() {
                 More types <ChevronDown className="size-3.5" aria-hidden />
               </button>
             )}
+            <div className="space-y-1.5 pt-2">
+              <p className="text-xs text-ink-muted">Or save one part of the page as its own reference:</p>
+              <div className="flex flex-wrap gap-1">
+                <Button variant="outline" className="h-8 px-3 text-xs" onClick={() => pickSection("select")}>
+                  Select a section
+                </Button>
+                <Button variant="outline" className="h-8 px-3 text-xs" onClick={() => pickSection("crop")}>
+                  Crop
+                </Button>
+                <Button variant="outline" className="h-8 px-3 text-xs" onClick={() => pickSection("list")}>
+                  Pick from a list
+                </Button>
+              </div>
+              {sections && (
+                <ul aria-label="Sections on this page" className="space-y-1">
+                  {sections.length === 0 && <li className="text-xs text-ink-muted">No clear sections found.</li>}
+                  {sections.map((sec, i) => (
+                    <li key={i}>
+                      <button
+                        type="button"
+                        disabled={sectionBusy}
+                        onClick={() => saveListedSection(sec)}
+                        className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-[10px] bg-surface px-3 py-2 text-left text-xs hover:bg-surface-raised disabled:opacity-50"
+                      >
+                        <span className="min-w-0 truncate text-ink">{sec.type}</span>
+                        <span className="shrink-0 font-mono text-ink-subtle tabular-nums">
+                          {sec.rect.width}×{sec.rect.height}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {sectionBusy && (
+                <p role="status" className="flex items-center gap-1.5 text-xs text-ink-muted">
+                  <Loader2 className="size-3 animate-spin" /> Capturing the section…
+                </p>
+              )}
+            </div>
           </div>
         ) : mode === "page" ? (
           <>
@@ -739,7 +847,49 @@ export function Popup() {
             >
               <ArrowLeft className="size-3.5" aria-hidden /> {TYPE_DEFS[type].label}
             </button>
-            {shotUrl && (
+            {privacy?.flagged && shot && (
+              <div role="alert" className="space-y-2 rounded-[14px] bg-surface p-3 text-xs">
+                <p className="font-medium text-warning">This page looks private</p>
+                <ul className="list-disc space-y-0.5 pl-4 text-ink-muted">
+                  {privacy.reasons.map((r) => (
+                    <li key={r}>{r}</li>
+                  ))}
+                </ul>
+                <p className="text-ink-muted">
+                  Check the screenshot before it leaves this computer. Black boxes are painted into the picture; nothing
+                  under them is uploaded. Detection can miss things.
+                </p>
+                {attachShot && (
+                  <RedactEditor
+                    image={shot}
+                    width={page?.privacy?.viewport.width ?? 0}
+                    masks={masks}
+                    onChange={setMasks}
+                  />
+                )}
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={attachShot}
+                    onChange={(e) => setAttachShot(e.target.checked)}
+                    className="accent-[var(--accent-fill)]"
+                  />
+                  Attach this view
+                </label>
+                {attachShot && (
+                  <label className="flex cursor-pointer items-center gap-2 text-ink">
+                    <input
+                      type="checkbox"
+                      checked={approved}
+                      onChange={(e) => setApproved(e.target.checked)}
+                      className="accent-[var(--accent-fill)]"
+                    />
+                    I checked it: upload this screenshot with these masks
+                  </label>
+                )}
+              </div>
+            )}
+            {shotUrl && !privacy?.flagged && (
               <div className="relative overflow-hidden rounded-[14px] bg-surface">
                 <img
                   src={shotUrl}
@@ -932,7 +1082,11 @@ export function Popup() {
         {mode === "page" && step === "type" ? (
           <span className="ml-auto text-xs text-ink-subtle">Pick a type to continue</span>
         ) : (
-          <Button type="submit" className="ml-auto" disabled={saving || (mode === "selection" && !text.trim())}>
+          <Button
+            type="submit"
+            className="ml-auto"
+            disabled={saving || (mode === "selection" && !text.trim()) || (needsApproval && !approved)}
+          >
             {saving && <Loader2 className="animate-spin" />}
             {/* the warning above already says it's saved; saving again is a choice, not a slip */}
             {mode === "page" && duplicates.some((d) => d.type === type) ? "Save again" : "Save"}{" "}
@@ -949,10 +1103,13 @@ function PendingPanel({
   items,
   offline,
   onChange,
+  onReview,
 }: {
   items: PendingItem[];
   offline: boolean;
   onChange: () => Promise<void>;
+  /** Opens the approval view for a save held because the page looks private. */
+  onReview: (item: PendingItem) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -972,7 +1129,8 @@ function PendingPanel({
     await onChange();
   };
   return (
-    <details className="rounded-[12px] bg-surface px-3 py-2 text-xs">
+    // open when something needs you (an approval or a refused save), collapsed when it is only waiting
+    <details open={items.some((i) => i.status !== "pending")} className="rounded-[12px] bg-surface px-3 py-2 text-xs">
       <summary className="flex cursor-pointer items-center gap-2 text-ink-secondary">
         <span className="flex-1">
           {items.length} save{items.length > 1 ? "s" : ""} waiting to sync
@@ -999,9 +1157,20 @@ function PendingPanel({
               {item.label}: {item.title}
             </p>
             <p className="text-ink-muted">
-              {item.status === "needs_attention" ? "PIVOT refused it: " : "Saved locally. "}
+              {item.status === "needs_attention"
+                ? "PIVOT refused it: "
+                : item.status === "needs_approval"
+                  ? "Waiting for your approval: the page looks private. "
+                  : "Saved locally. "}
               {item.lastError ?? (offline ? "Waiting for PIVOT." : "Waiting to be sent.")}
             </p>
+            {item.status === "needs_approval" && (
+              <div className="mt-1.5 flex gap-1.5">
+                <Button type="button" className="h-7 px-2.5 text-xs" onClick={() => onReview(item)}>
+                  Review
+                </Button>
+              </div>
+            )}
             {item.status === "needs_attention" && (
               <div className="mt-1.5 flex gap-1.5">
                 <Button type="button" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => sync([item.id])}>
@@ -1027,5 +1196,72 @@ function PendingPanel({
         ))}
       </ul>
     </details>
+  );
+}
+
+/**
+ * A save held because its page looks private: look at the screenshot, mask what shouldn't leave this computer, then
+ * upload it, upload the save without the picture, or discard it.
+ */
+function ApprovalView({ item, onDone }: { item: PendingItem; onDone: () => Promise<void> }) {
+  const [masks, setMasks] = useState<Mask[]>(() => masksFrom(item.privacy?.suggestions));
+  const [busy, setBusy] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const act = async (attachScreenshot: boolean) => {
+    setBusy(true);
+    try {
+      await approvePending(item.id, { masks, attachScreenshot });
+    } finally {
+      setBusy(false);
+      await onDone();
+    }
+  };
+  return (
+    <div className="space-y-3 text-xs">
+      <p className="text-[13px] font-medium text-ink">
+        {item.label}: {item.title}
+      </p>
+      <ul className="list-disc space-y-0.5 pl-4 text-ink-muted">
+        {item.privacy?.reasons.map((r) => (
+          <li key={r}>{r}</li>
+        ))}
+      </ul>
+      {item.screenshot ? (
+        <RedactEditor
+          image={item.screenshot}
+          width={item.privacy?.viewportWidth ?? 0}
+          masks={masks}
+          onChange={setMasks}
+        />
+      ) : (
+        <p className="text-ink-muted">No screenshot with this save.</p>
+      )}
+      <div className="flex flex-wrap gap-1.5">
+        {item.screenshot && (
+          <Button disabled={busy} onClick={() => act(true)}>
+            Upload with these masks
+          </Button>
+        )}
+        <Button variant="outline" disabled={busy} onClick={() => act(false)}>
+          {item.screenshot ? "Upload without the screenshot" : "Upload"}
+        </Button>
+        {confirmDiscard ? (
+          <Button
+            variant="outline"
+            className="text-danger"
+            onClick={async () => {
+              await pendingStore.remove(item.id);
+              await onDone();
+            }}
+          >
+            Discard for good
+          </Button>
+        ) : (
+          <Button variant="outline" onClick={() => setConfirmDiscard(true)}>
+            Discard
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }

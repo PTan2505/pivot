@@ -73,8 +73,8 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 5   | Collections vs facets               | Partial  | 3         | [x]  |
 | 6   | Source Directory 2.0                | Partial  | Optional  | [ ]  |
 | 7   | Unified search All/Library/External | Partial  | 3, Opt.   | [ ]  |
-| 8   | Section references                  | Missing  | 4         | [ ]  |
-| 9   | Auto / Crop / Select capture        | Partial  | 4         | [ ]  |
+| 8   | Section references                  | Missing  | 4         | [x]  |
+| 9   | Auto / Crop / Select capture        | Partial  | 4         | [x]  |
 | 10  | Duplicates with thumbnails          | Partial  | 3         | [x]  |
 | 11  | Theme Light/Dark/Both               | Conflict | 1         | [x]  |
 | 12  | Expand content opt-in               | Conflict | 1         | [x]  |
@@ -87,12 +87,12 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 19  | Collection suggestions              | Missing  | 3, 5      | [x]  |
 | 20  | Motion: suggest and record          | Missing  | 6         | [ ]  |
 | 21  | Scroll animation, keyframes         | Partial  | 6         | [ ]  |
-| 22  | Section context                     | Missing  | 4         | [ ]  |
+| 22  | Section context                     | Missing  | 4         | [x]  |
 | 23  | Responsive capture                  | Missing  | 6         | [ ]  |
-| 24  | Signed-in pages                     | Partial  | 4         | [ ]  |
-| 25  | Redaction                           | Missing  | 4         | [ ]  |
+| 24  | Signed-in pages                     | Partial  | 4         | [x]  |
+| 25  | Redaction                           | Missing  | 4         | [x]  |
 | 26  | Status vs quality vs review         | Partial  | 1         | [x]  |
-| 27  | Relationships                       | Missing  | 4         | [ ]  |
+| 27  | Relationships                       | Missing  | 4         | [x]  |
 | 28  | Design Versions                     | Missing  | 6         | [ ]  |
 | 29  | Annotations                         | Partial  | 6         | [ ]  |
 | 30  | Layered metadata                    | Partial  | 5         | [ ]  |
@@ -109,15 +109,15 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 41  | Sharing                             | Missing  | 6         | [ ]  |
 | 42  | Extension search                    | Missing  | 3         | [x]  |
 | 43  | Notifications                       | Partial  | 2         | [x]  |
-| 44  | Shortcuts and context menu          | Exists   | 4         | [ ]  |
+| 44  | Shortcuts and context menu          | Exists   | 4         | [x]  |
 | 45  | Onboarding and connection           | Partial  | 2         | [x]  |
 | 46  | API compatibility                   | Missing  | 2         | [x]  |
 | 47  | Performance budget                  | Partial  | 1         | [x]  |
-| 48  | Accessibility                       | Partial  | 3, 4      | [ ]  |
+| 48  | Accessibility                       | Partial  | 3, 4      | [x]  |
 | 49  | Error diagnostics                   | Partial  | 1, 2      | [ ]  |
 | 50  | Settings groups                     | Partial  | 3, Opt.   | [ ]  |
 | 51  | Device migration                    | Missing  | 6         | [ ]  |
-| 52  | Least-privilege permissions         | Partial  | 2, 4      | [ ]  |
+| 52  | Least-privilege permissions         | Partial  | 2, 4      | [x]  |
 | 53  | Lifecycle and recovery              | Partial  | 1, 2      | [ ]  |
 | 54  | Activity log                        | Missing  | 1, 3      | [x]  |
 | 55  | Cancel / Undo / Discard             | Partial  | 1, 3      | [x]  |
@@ -196,10 +196,10 @@ Files: `apps/extension/src/popup/popup.tsx`, `apps/web/src/app/api/lookup/route.
 
 ### Phase 4 — Sections, links, private pages
 
-- [ ] `resource_links(from_id, to_id, kind, confirmed, created_at)`: `same_source_page`, `part_of`, `related_to`, `variant_of`, `newer_version_of`. Auto-link only on the same normalised URL; other links wait for confirmation (#27).
-- [ ] Section capture injected on request (activeTab + scripting): Select Element, Manual Crop and a keyboard Section List. Crop from `captureVisibleTab` by `devicePixelRatio`; tall sections are scrolled and stitched in the tab, within a budget. Store the rect, viewport, scroll position, a selector hint and the section type; link `part_of` the page when it is saved. Default title `[Section] — [Source]`, page title kept in meta (#8, #9, #22, #34, #48).
-- [ ] Private guess: a password field or sign-in form; the server, without cookies, gets 401/403 or a redirect to a sign-in page; URLs like `app.`, `/dashboard`, `/settings`, `/account`. Flagged pages get a review step with redaction in the popup; quick save holds them as "Needs approval" with an action-required notification (#24).
-- [ ] Redaction: suggested masks (filled inputs, emails, amounts) plus drawn boxes, keyboard operable; opaque pixels painted on an `OffscreenCanvas` before upload; no unredacted copy kept (#25).
+- [x] `resource_links(from_id, to_id, kind, confirmed, created_at)`: `same_source_page`, `part_of`, `related_to`, `variant_of`, `newer_version_of`. Auto-link only on the same normalised URL; other links wait for confirmation (#27).
+- [x] Section capture injected on request (activeTab + scripting): Select Element, Manual Crop and a keyboard Section List. Crop from `captureVisibleTab` by `devicePixelRatio`; tall sections are scrolled and stitched in the tab, within a budget. Store the rect, viewport, scroll position, a selector hint and the section type; link `part_of` the page when it is saved. Default title `[Section] — [Source]`, page title kept in meta (#8, #9, #22, #34, #48).
+- [x] Private guess: a password field or sign-in form; the server, without cookies, gets 401/403 or a redirect to a sign-in page; URLs like `app.`, `/dashboard`, `/settings`, `/account`. Flagged pages get a review step with redaction in the popup; quick save holds them as "Needs approval" with an action-required notification (#24).
+- [x] Redaction: suggested masks (filled inputs, emails, amounts) plus drawn boxes, keyboard operable; opaque pixels painted on an `OffscreenCanvas` before upload; no unredacted copy kept (#25).
 
 Files: new `apps/extension/src/content/select.ts`, new `lib/redact.ts`, `popup/popup.tsx`, `packages/core/src/db/schema.ts`, new `packages/core/src/links.ts`.
 

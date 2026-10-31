@@ -568,3 +568,27 @@ export interface SearchPage {
   /** Requested facets that don't exist in the library; the result is then empty. */
   unknownFacets?: { kind: TagKind; name: string }[];
 }
+
+/** How two references relate. Theme, viewport, Original/Latest and states are assets of one reference, not links. */
+export const LINK_KINDS = ["same_source_page", "part_of", "related_to", "variant_of", "newer_version_of"] as const;
+export type LinkKind = (typeof LINK_KINDS)[number];
+
+export const LINK_LABELS: Record<LinkKind, { out: string; in: string }> = {
+  same_source_page: { out: "Same page as", in: "Same page as" },
+  part_of: { out: "Part of", in: "Has section" },
+  related_to: { out: "Related to", in: "Related to" },
+  variant_of: { out: "Variant of", in: "Has variant" },
+  newer_version_of: { out: "Newer version of", in: "Older version of" },
+};
+
+export interface ResourceLinkDTO {
+  id: string;
+  kind: LinkKind;
+  /** "out": this reference is the link's `from`. */
+  direction: "out" | "in";
+  /** False for a suggestion waiting to be accepted. */
+  confirmed: boolean;
+  origin: "auto" | "user" | "agent";
+  other: { id: string; title: string; type: string; coverAssetId: string | null };
+  createdAt: string;
+}
