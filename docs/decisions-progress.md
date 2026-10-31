@@ -9,11 +9,21 @@ Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 | 0     | Plan and docs                      | Done        |
 | S     | Align `pivot-design` with Part A   | Done        |
 | 1     | Reliable capture (server)          | Done        |
-| 2     | Extension that survives offline    | Not started |
+| 2     | Extension that survives offline    | Done        |
 | 3     | Popup and library                  | Not started |
 | 4     | Sections, links, private pages     | Not started |
 | 5     | Design track: sessions, MCP writes | Not started |
 | 6     | Later                              | Not started |
+
+### Phase 2 — Extension that survives being offline
+
+- Status: Done
+- Existing functionality reused: the extension's `api.clip`, `getPageInfo`/`captureTab`, the popup form and its token ping; `/api/clip` unchanged apart from the request id; the proxy's origin check.
+- Files changed: extension `lib/queue.ts` (sync logic, no storage), `lib/pending-store.ts` (IndexedDB), `lib/sync.ts` (wiring, badge, `queueSave`), `background.ts` (every save goes through the queue; alarms; session-stored notification targets), `popup.tsx` (save while offline with cached tags and collections, "Saved locally" screen, waiting-saves panel with Sync now / Retry / Discard, update and storage warnings), `manifest.json` (`alarms`), Vitest setup; core `clip-requests.ts`, `capabilities.ts`, schema + migration `0004` (adds `clip_requests`); routes `api/clip` (`clientRequestId`), `api/capabilities`; `proxy.ts` (token required for writes with neither `Origin` nor `Sec-Fetch-Site`); root `pnpm test` now includes the extension; SPEC §3 and §4.
+- Checks run and results: extension queue tests 11/11 (order, offline stop, backoff, refused saves parked and retried only on request, missing server features, rejected token, single-item sync); core clip-request tests 4/4 (repeat answered, repeat waits for a save in progress, gives up with 409, retry after a failed first try); typecheck, lint, full suite in the hooks. One real bug found by the tests and fixed: Retry on a refused save didn't send it.
+- Manual verification: scratch app on port 4400. `/api/capabilities` answers; a POST to `/api/ping` without Origin or token → 403, with the token → 200; the same `clientRequestId` sent twice → one resource, second answer `replayed: true`. In headless Chromium with the built extension loaded (popup driven with a stubbed active tab): with PIVOT unreachable the popup still saved, showed "Saved locally", the item and its screenshot were in IndexedDB and the badge showed 1; after pointing it at the running app and reopening the popup the item was sent, the queue emptied, the badge cleared, and `/api/lookup` found the page.
+- Remaining issues: quick save, the context menu and the alarm-driven background sync weren't driven in a real browser (Playwright can't press extension shortcuts); they share the tested `queueSave`/`syncNow` code. Device transfer of waiting saves is Phase 6 (#51).
+- Next step: Phase 3.
 
 ### Phase 1 — Reliable capture (server)
 

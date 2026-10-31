@@ -3,9 +3,15 @@ import sharp from "sharp";
 import { z } from "zod";
 import { attachAsset, saveAsset } from "@pivot/core/assets";
 import { enqueueCapture } from "@pivot/core/capture";
+import {
+  claimClipRequest,
+  ClipInProgressError,
+  completeClipRequest,
+  releaseClipRequest,
+} from "@pivot/core/clip-requests";
 import { fetchUrlMetadata } from "@pivot/core/metadata";
 import { normalizeUrl, safeFetch } from "@pivot/core/net-guard";
-import { addToCollection, createResource, findByUrl, setResourceFields } from "@pivot/core/resources";
+import { addToCollection, createResource, findByUrl, getResource, setResourceFields } from "@pivot/core/resources";
 import { knownSourceFor } from "@pivot/core/source-match";
 import { RESOURCE_TYPES, TAG_KINDS } from "@pivot/core/types";
 import { HttpError, json, route } from "@/lib/server/http";
@@ -26,7 +32,15 @@ const fields = z.object({
   expandContent: z.boolean().optional(),
   /** Page saves without a form to review (quick-save, context menu): keep the saved one instead of a duplicate. */
   ifExists: z.enum(["create", "skip"]).default("create"),
+  /**
+   * Set by the extension's offline queue. Sending the same id again (after a lost answer) returns what the first
+   * request saved instead of saving twice.
+   */
+  clientRequestId: z.string().uuid().optional(),
 });
+
+type ClipInput = z.infer<typeof fields>;
+type Saved = { id: string; existing?: boolean; title?: string };
 
 function hostOf(url: string) {
   return new URL(url).hostname.replace(/^www\./, "");
@@ -43,18 +57,50 @@ export const POST = route(async (req: Request) => {
   const raw = form.get("data");
   if (typeof raw !== "string") throw new HttpError(400, "Missing data.");
   const input = fields.parse(JSON.parse(raw));
+  const requestId = input.clientRequestId;
+  if (!requestId) return respond(await save(form, input));
+
+  let earlier: string | null;
+  try {
+    earlier = await claimClipRequest(requestId);
+  } catch (err) {
+    if (err instanceof ClipInProgressError) throw new HttpError(409, err.message);
+    throw err;
+  }
+  if (earlier) {
+    const r = await getResource(earlier);
+    return json({ id: earlier, path: `/r/${earlier}`, title: r?.title, replayed: true });
+  }
+  try {
+    const saved = await save(form, input);
+    await completeClipRequest(requestId, saved.id);
+    return respond(saved);
+  } catch (err) {
+    await releaseClipRequest(requestId).catch(() => {});
+    throw err;
+  }
+});
+
+function respond({ id, existing, title }: Saved) {
+  if (existing) return json({ id, path: `/r/${id}`, existing: true, title });
+  return json({ id, path: `/r/${id}`, title }, { status: 201 });
+}
+
+async function save(form: FormData, input: ClipInput): Promise<Saved> {
   const pageUrl = normalizeUrl(input.url);
   let id: string;
+  let title: string | undefined;
 
   if (input.kind === "page") {
     if (input.ifExists === "skip") {
       const existing = (await findByUrl(pageUrl)).find((r) => r.type === (input.type ?? "reference"));
       if (existing) {
         if (input.collectionId) await addToCollection(input.collectionId, [existing.id]);
-        return json({ id: existing.id, path: `/r/${existing.id}`, existing: true, title: existing.title });
+        return { id: existing.id, existing: true, title: existing.title };
       }
     }
-    let { title, description } = input;
+    let { description } = input;
+    title = input.title;
     // A known source brings its own description (see createResource); otherwise read the page's.
     const wantsDescription = !description?.trim() && !(input.type === "source" && knownSourceFor(pageUrl));
     if (!title?.trim() || wantsDescription) {
@@ -71,6 +117,7 @@ export const POST = route(async (req: Request) => {
       tags: input.tags,
     });
     id = r.id;
+    title = r.title;
     const shot = form.get("screenshot");
     if (shot instanceof File && shot.size > 0) {
       const webp = await sharp(Buffer.from(await shot.arrayBuffer()))
@@ -114,6 +161,7 @@ export const POST = route(async (req: Request) => {
       tags: input.tags,
     });
     id = r.id;
+    title = r.title;
     await attachAsset(id, asset.id, "attachment");
     if (asset.kind === "image" || asset.kind === "svg") await setResourceFields(id, { coverAssetId: asset.id });
   } else {
@@ -133,8 +181,9 @@ export const POST = route(async (req: Request) => {
       tags: input.tags,
     });
     id = r.id;
+    title = r.title;
   }
 
   if (input.collectionId) await addToCollection(input.collectionId, [id]);
-  return json({ id, path: `/r/${id}` }, { status: 201 });
-});
+  return { id, title };
+}

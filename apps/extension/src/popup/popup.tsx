@@ -15,6 +15,7 @@ import {
   Palette,
   Plug,
   Plus,
+  RefreshCw,
   ScrollText,
   Settings,
   Shapes,
@@ -35,6 +36,9 @@ import {
 } from "@pivot/core/types";
 import { knownSourceFor } from "@pivot/core/source-match";
 import { api, ApiError, getConfig, openInApp } from "../lib/api";
+import { pendingStore, storageWarning } from "../lib/pending-store";
+import type { PendingItem } from "../lib/queue";
+import { queueSave, SAVED_LOCALLY_TEXT, syncNow, type QueuedSave } from "../lib/sync";
 import { captureTab, getPageInfo, isHomePage, isPivotPage, isSavable, type PageInfo } from "../lib/page";
 import { Button, cx, Field, Input, Logo, Textarea } from "../ui";
 
@@ -311,6 +315,14 @@ export function Popup() {
   const [expandContent, setExpandContent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
+  // Saved on this computer but not (yet) confirmed by PIVOT.
+  const [savedLocally, setSavedLocally] = useState<Exclude<QueuedSave, { synced: true }>["reason"] | null>(null);
+  const [offline, setOffline] = useState(false);
+  const [needsUpdate, setNeedsUpdate] = useState(false);
+  const [pending, setPending] = useState<PendingItem[]>([]);
+  const [storageNote, setStorageNote] = useState<string | null>(null);
+
+  const reloadPending = async () => setPending(await pendingStore.list().catch(() => []));
 
   useEffect(() => {
     (async () => {
@@ -343,17 +355,38 @@ export function Popup() {
         setType(last);
         if (!MAIN_TYPES.includes(last)) setMoreTypes(true);
       }
+      void reloadPending();
+      void storageWarning().then(setStorageNote);
       try {
         // the ping checks the token now, so a wrong one never costs what you typed
-        const [t, c, d] = await Promise.all([api.tags(), api.collections(), api.lookup(info.url), api.ping()]);
+        const [t, c, d, , caps] = await Promise.all([
+          api.tags(),
+          api.collections(),
+          api.lookup(info.url),
+          api.ping(),
+          api.capabilities().catch(() => ({ features: [] as string[] })),
+        ]);
         setTags(t);
         setCollections(c);
         setDuplicates(d.duplicates);
+        setNeedsUpdate(!caps.features.includes("clip.client-request-id"));
+        void chrome.storage.local.set({ "cache:tags": t, "cache:collections": c });
         setStatus("ready");
+        // waiting saves go out now that PIVOT answers
+        void syncNow().then(reloadPending);
       } catch (err) {
         const status = err instanceof ApiError ? err.status : -1;
-        setStatus(status === 0 ? "offline" : status === 403 ? "unauthorized" : "ready");
-        if (status !== 0) setError(err instanceof Error ? err.message : String(err));
+        if (status === 0) {
+          // Saving still works: it goes to the queue and is sent when PIVOT is back.
+          const cached = await chrome.storage.local.get(["cache:tags", "cache:collections"]);
+          setTags((cached["cache:tags"] as TagDTO[] | undefined) ?? []);
+          setCollections((cached["cache:collections"] as CollectionDTO[] | undefined) ?? []);
+          setOffline(true);
+          setStatus("ready");
+          return;
+        }
+        setStatus(status === 403 ? "unauthorized" : "ready");
+        setError(err instanceof Error ? err.message : String(err));
       }
     })();
   }, []);
@@ -369,10 +402,12 @@ export function Popup() {
       // Only the kinds on screen: facets picked under a type you switched away from are dropped.
       const tags = chosen.filter((t) => facets.includes(t.kind));
       const common = { url: page.url, notes, tags, collectionId: collectionId || undefined };
-      const res =
+      const res = await queueSave(
         mode === "page"
-          ? await api.clip(
-              {
+          ? {
+              label: "Page",
+              title: title || page.url,
+              data: {
                 ...common,
                 kind: "page",
                 type,
@@ -381,10 +416,18 @@ export function Popup() {
                 serverCapture: willServerCapture,
                 expandContent: willServerCapture && type !== "source" ? expandContent : undefined,
               },
-              { screenshot: attachShot && shot ? shot : undefined },
-            )
-          : await api.clip({ ...common, kind: "selection", type: textType, title, text });
-      setSaved(res.path);
+              screenshot: attachShot && shot ? shot : undefined,
+            }
+          : {
+              label: "Text",
+              title: title || text.split("\n")[0].slice(0, 60),
+              data: { ...common, kind: "selection", type: textType, title, text },
+            },
+      );
+      void chrome.runtime.sendMessage({ type: "pivot:queue-changed" }).catch(() => {});
+      // Not confirmed yet: it is in the queue, so the form closes rather than inviting a second copy.
+      if (res.synced) setSaved(res.path);
+      else setSavedLocally(res.reason);
     } catch (err) {
       // keep the form: a token fixed in the settings tab can be retried with everything still filled in
       setError(err instanceof Error ? err.message : String(err));
@@ -432,8 +475,24 @@ export function Popup() {
     );
   }
 
-  if (status !== "ready" || saved) {
-    const body = saved ? (
+  if (status !== "ready" || saved || savedLocally) {
+    const body = savedLocally ? (
+      <>
+        <span className="grid size-10 place-items-center rounded-full bg-surface text-warning">
+          <Check className="size-4" />
+        </span>
+        <p className="font-medium">Saved locally</p>
+        <p className="text-xs text-ink-muted">{SAVED_LOCALLY_TEXT[savedLocally]}</p>
+        <div className="flex gap-2 pt-1">
+          {savedLocally === "auth" && (
+            <Button variant="outline" onClick={() => chrome.runtime.openOptionsPage()}>
+              Extension settings
+            </Button>
+          )}
+          <Button onClick={() => window.close()}>Close</Button>
+        </div>
+      </>
+    ) : saved ? (
       <>
         <span className="grid size-10 place-items-center rounded-full bg-surface text-success">
           <Check className="size-4" />
@@ -472,6 +531,12 @@ export function Popup() {
       <>
         <p className="font-medium">Connect the extension</p>
         <p className="text-xs text-ink-muted">{error ?? "Paste the API token from PIVOT › Settings."}</p>
+        {pending.length > 0 && (
+          <p className="text-xs text-ink-muted">
+            {pending.length} save{pending.length > 1 ? "s are" : " is"} waiting on this computer and will be sent once
+            the token works.
+          </p>
+        )}
         <Button onClick={() => chrome.runtime.openOptionsPage()}>Open extension settings</Button>
       </>
     );
@@ -499,6 +564,23 @@ export function Popup() {
     >
       {header}
       <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-2">
+        {offline && (
+          <p role="status" className="rounded-[12px] bg-surface px-3 py-2 text-xs text-ink-muted">
+            <span className="font-medium text-ink">PIVOT isn’t running.</span> You can still save: it stays on this
+            computer and is sent when PIVOT is back (<code className="font-mono">npm start</code>).
+          </p>
+        )}
+        {needsUpdate && !offline && (
+          <p role="status" className="rounded-[12px] bg-surface px-3 py-2 text-xs text-warning">
+            This PIVOT is older than the extension. Saves are kept on this computer until PIVOT is updated.
+          </p>
+        )}
+        {storageNote && (
+          <p role="alert" className="rounded-[12px] bg-surface px-3 py-2 text-xs text-warning">
+            {storageNote}
+          </p>
+        )}
+        {pending.length > 0 && <PendingPanel items={pending} offline={offline} onChange={reloadPending} />}
         {page?.selection && (
           <div role="tablist" className="grid grid-cols-2 gap-1 rounded-full bg-surface p-1 text-xs">
             {(["page", "selection"] as const).map((m) => (
@@ -795,5 +877,91 @@ export function Popup() {
         )}
       </footer>
     </form>
+  );
+}
+
+/** Saves still on this computer: why each one is waiting, and what you can do about it. */
+function PendingPanel({
+  items,
+  offline,
+  onChange,
+}: {
+  items: PendingItem[];
+  offline: boolean;
+  onChange: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const sync = async (only?: string[]) => {
+    setBusy(true);
+    try {
+      await syncNow({ force: true, only });
+    } finally {
+      await onChange();
+      setBusy(false);
+    }
+  };
+  const discard = async (id: string) => {
+    await pendingStore.remove(id);
+    setConfirming(null);
+    void chrome.runtime.sendMessage({ type: "pivot:queue-changed" }).catch(() => {});
+    await onChange();
+  };
+  return (
+    <details className="rounded-[12px] bg-surface px-3 py-2 text-xs">
+      <summary className="flex cursor-pointer items-center gap-2 text-ink-secondary">
+        <span className="flex-1">
+          {items.length} save{items.length > 1 ? "s" : ""} waiting to sync
+        </span>
+        {!offline && (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-7 px-2.5 text-xs"
+            disabled={busy}
+            onClick={(e) => {
+              e.preventDefault();
+              void sync();
+            }}
+          >
+            <RefreshCw className={cx("size-3", busy && "animate-spin")} /> Sync now
+          </Button>
+        )}
+      </summary>
+      <ul className="mt-2 space-y-1.5">
+        {items.map((item) => (
+          <li key={item.id} className="rounded-[10px] bg-surface-raised px-2.5 py-2">
+            <p className="truncate font-medium text-ink">
+              {item.label}: {item.title}
+            </p>
+            <p className="text-ink-muted">
+              {item.status === "needs_attention" ? "PIVOT refused it: " : "Saved locally. "}
+              {item.lastError ?? (offline ? "Waiting for PIVOT." : "Waiting to be sent.")}
+            </p>
+            {item.status === "needs_attention" && (
+              <div className="mt-1.5 flex gap-1.5">
+                <Button type="button" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => sync([item.id])}>
+                  Retry
+                </Button>
+                {confirming === item.id ? (
+                  <Button type="button" className="h-7 px-2.5 text-xs" onClick={() => discard(item.id)}>
+                    Discard for good
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-7 px-2.5 text-xs"
+                    onClick={() => setConfirming(item.id)}
+                  >
+                    Discard
+                  </Button>
+                )}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }

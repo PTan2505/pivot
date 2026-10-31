@@ -49,6 +49,8 @@ export const api = {
   },
   /** Throws a 403 ApiError when the token is wrong, before anything is typed. */
   ping: () => request("/api/ping", { method: "POST" }),
+  /** What the server supports; a server from before this endpoint answers 404, which counts as nothing. */
+  capabilities: () => request<{ apiVersion: number; features: string[] }>("/api/capabilities"),
   tags: () => request<TagDTO[]>("/api/tags"),
   collections: () => request<CollectionDTO[]>("/api/collections"),
   lookup: (url: string) =>
@@ -60,7 +62,7 @@ export const api = {
     form.set("data", JSON.stringify(data));
     if (files.screenshot) form.set("screenshot", files.screenshot, "view.jpg");
     if (files.image) form.set("image", files.image, files.imageName ?? "image.png");
-    return request<{ id: string; path: string; existing?: boolean; title?: string }>("/api/clip", {
+    return request<{ id: string; path: string; existing?: boolean; replayed?: boolean; title?: string }>("/api/clip", {
       method: "POST",
       body: form,
     });
@@ -83,6 +85,8 @@ export interface ClipData {
   expandContent?: boolean;
   /** "skip": when the page is already saved, return that one instead of saving it again. */
   ifExists?: "create" | "skip";
+  /** Set from the offline queue's item id, so a resend never saves twice. */
+  clientRequestId?: string;
 }
 
 export async function openInApp(path: string) {
