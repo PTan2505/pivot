@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { TAG_KIND_LABELS, TAG_KINDS, type CaptureSettings, type CaptureTheme, type TagDTO } from "@pivot/core/types";
+import { BackupSection } from "@/components/backup-section";
 import { ConfirmButton } from "@/components/confirm-button";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -348,6 +349,8 @@ export default function SettingsPage() {
       <CaptureSection />
 
       <ExtensionSection serverUrl={s?.serverUrl} />
+
+      <BackupSection />
 
       <section className="space-y-3">
         <div>

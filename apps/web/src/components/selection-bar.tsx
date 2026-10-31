@@ -8,6 +8,7 @@ import {
   FolderPlus,
   PackageOpen,
   RotateCcw,
+  Share2,
   Trash2,
   X,
 } from "lucide-react";
@@ -84,6 +85,33 @@ export function AddToCollection({
   );
 }
 
+/**
+ * A read-only folder (index.html, screenshots, share.json) for someone else. Notes, annotations and pages saved as
+ * private stay out.
+ */
+async function sharePackage(ids: string[], title: string) {
+  const id = toast.loading("Making the share package…");
+  try {
+    const res = await api<{ path: string; shared: number; left: { title: string; why: string }[] }>("/api/share", {
+      method: "POST",
+      json: { ids, title },
+    });
+    toast.success(
+      `Share package ready: ${res.shared} item${res.shared > 1 ? "s" : ""}${res.left.length ? `, ${res.left.length} left out (private)` : ""}`,
+      {
+        id,
+        description: "Notes and annotations aren't in it.",
+        action: {
+          label: "Show",
+          onClick: () => void api("/api/reveal", { method: "POST", json: { path: res.path } }).catch(() => {}),
+        },
+      },
+    );
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : "Could not make the share package", { id });
+  }
+}
+
 export function SelectionBar({
   ids,
   onClear,
@@ -124,6 +152,9 @@ export function SelectionBar({
           </Button>
           <Button variant="ghost" onClick={() => openExport({ ids, name: exportName })}>
             <PackageOpen /> Export
+          </Button>
+          <Button variant="ghost" onClick={() => sharePackage(ids, exportName)}>
+            <Share2 /> Share package
           </Button>
           <AddToCollection ids={ids} onDone={onClear}>
             <Button variant="ghost">
