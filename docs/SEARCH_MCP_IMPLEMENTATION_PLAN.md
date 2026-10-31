@@ -214,20 +214,22 @@ Estimates are working days and assume Phase 5's real references exist.
 - [x] Commit, PR and merge Phase 4; live ⌥⇧D check in Chrome (#27, owner's check).
 - [x] Phase 5: 20+ real references with facets, 3 collections (#28). **This is the evaluation corpus.** Full pages re-captured with the stitched method (#29, #30).
 - [x] Owner decisions: stdio now, with the tools in a transport-independent package (§5.1); the skill lives in the repo and is synced to `~/.claude/skills` (§5.4); P0 read-only first.
-- [ ] `docs/SPEC.md`: remove "MCP server" from _Ngoài phạm vi_. Add a §1 decision row (MCP: stdio adapter over the local API, read-only P0) and a new section for search pagination and the MCP tools. `docs/reference-first-plan.md`: note the MCP initiative follows Phase 5.
+- [x] `docs/SPEC.md`: remove "MCP server" from _Ngoài phạm vi_. Add a §1 decision row (MCP: stdio adapter over the local API, read-only P0) and a new section for search pagination and the MCP tools. `docs/reference-first-plan.md`: note the MCP initiative follows Phase 5.
 
-### Step 1 — Shared search service (brief 06–07) (2–3 d)
+### Step 1 — Shared search service (brief 06–07) (2–3 d) — done in #32
 
-- [ ] `packages/core/src/search.ts` (new): `searchResources(req: SearchRequest): Promise<SearchPage>`, `encodeCursor`/`decodeCursor`, and `toSearchHit(dto)`, which strips the URL to http(s) using the same rules as `apps/web/src/lib/url.ts`.
-- [ ] `packages/core/src/resources.ts`:
+As built: the query reading lives in `packages/core/src/query.ts`. The evaluation set matches results by title (`search-corpus.json` copies the real library's metadata), not by ids, so it runs in CI. Recall@5 / P@5 / MRR went from 0.773 / 0.702 / 0.848 to 0.956 / 0.826 / 0.977, and the test has a floor of 0.95 / 0.82 / 0.97.
+
+- [x] `packages/core/src/search.ts` (new): `searchResources(req: SearchRequest): Promise<SearchPage>`, `encodeCursor`/`decodeCursor`, and `toSearchHit(dto)`, which strips the URL to http(s) using the same rules as `apps/web/src/lib/url.ts`.
+- [x] `packages/core/src/resources.ts`:
   - move the `where` construction into `buildResourceWhere(filters)`, used by both `listResources` and `searchResources`;
   - add the `id` tiebreaker to every sort;
   - add the tag tier to `relevance`;
   - add `facetNames` resolution (`kind` + `lower(name)` uses the existing `tags_kind_name_idx`).
-- [ ] `packages/core/src/types.ts`: `SearchRequest`, `SearchHit`, `SearchPage` (shared by the API, the MCP and tests).
-- [ ] `apps/web/src/app/api/resources/route.ts`: parse `paged`, `cursor`, `facet` and `sort=relevance` with a zod schema (today parsing is ad hoc); validate `limit`.
-- [ ] `apps/web/src/lib/api.ts`: no change (the UI keeps the array form).
-- [ ] Tests, in `packages/core/test/search.test.ts` (new):
+- [x] `packages/core/src/types.ts`: `SearchRequest`, `SearchHit`, `SearchPage` (shared by the API, the MCP and tests).
+- [x] `apps/web/src/app/api/resources/route.ts`: parse `paged`, `cursor`, `facet` and `sort=relevance` with a zod schema (today parsing is ad hoc); validate `limit`.
+- [x] `apps/web/src/lib/api.ts`: no change (the UI keeps the array form).
+- [x] Tests, in `packages/core/test/search.test.ts` (new):
   - pages concatenate to the full list with no duplicates;
   - a cursor reused with other filters fails;
   - facet names are matched case-insensitively;
@@ -235,22 +237,24 @@ Estimates are working days and assume Phase 5's real references exist.
   - the tag tier ranks above a description match;
   - trash is excluded;
   - `listResources` output is unchanged.
-- [ ] Word-start matching, stop words and the synonym map (§3), with tests built from the real misses (`sign in`, `login`).
-- [ ] `packages/core/test/fixtures/search-eval.json` (new; the corpus exists now): at least 30 `{ query, facets?, expectedIds[] }` cases from the owner's real library. The test prints Recall@5 and MRR, and fails if they drop below a baseline recorded in the file.
-- [ ] `docs/SPEC.md` §8: pagination, `facet`, the relevance tiers, and the threshold for moving to full text.
+- [x] Word-start matching, stop words and the synonym map (§3), with tests built from the real misses (`sign in`, `login`).
+- [x] `packages/core/test/fixtures/search-eval.json` (new; the corpus exists now): at least 30 `{ query, facets?, expectedIds[] }` cases from the owner's real library. The test prints Recall@5 and MRR, and fails if they drop below a baseline recorded in the file.
+- [x] `docs/SPEC.md` §8: pagination, `facet`, the relevance tiers, and the threshold for moving to full text.
 
 ### Step 2 — MCP adapter (brief 09) (2–3 d)
 
-- [ ] `packages/mcp-tools/` (new): the four tool definitions and handlers against a `PivotSource` interface (§5.1), with no stdio, HTTP or database code.
-- [ ] `apps/mcp/package.json`, `tsconfig.json`, `src/server.ts` (new):
+As built: the tools, image slicing and `PivotSource` live in `packages/mcp-tools` (`tools.ts`, `images.ts`, `source.ts`, tests in `test/`). `apps/mcp` only holds `server.ts` (stdio) and `http-source.ts`. The full page is sent in 960px-wide slices of up to 1568px (about 2,000 tokens each), at most 4 images per call, paged with `fromSlice`. The SDK is pinned to 1.32.1 (zod 4 support). Checked end to end with the SDK's stdio client against the real library: listing, every search option, paging, errors and images. Registering it in Claude Code is the owner's call, because it changes their Claude Code configuration.
+
+- [x] `packages/mcp-tools/` (new): the four tool definitions and handlers against a `PivotSource` interface (§5.1), with no stdio, HTTP or database code.
+- [x] `apps/mcp/package.json`, `tsconfig.json`, `src/server.ts` (new):
   - depends on `@modelcontextprotocol/sdk` (pin an exact version and check that it supports **zod 4**, which the repo uses) and `@pivot/core` (types only);
   - `pnpm --filter mcp build` uses `tsc` or `tsup`.
-- [ ] `apps/mcp/src/client.ts`: a fetch wrapper for `PIVOT_URL`. It sends `Authorization: Bearer` for writes (later), maps `ECONNREFUSED` to `app_unreachable` and 404 to `not_found`, and applies a 10s timeout.
-- [ ] `apps/mcp/src/tools.ts`: the four P0 tools from §5.2, with input and output schemas, size caps, structured errors (`isError` plus `{code, message}`) and the "untrusted page data" note in each description.
-- [ ] `apps/mcp/src/images.ts`: fetch the thumbnail or preview, then use sharp to fit 1568px and slice full pages. sharp is already a core dependency.
-- [ ] Root `package.json`: `mcp:build` script. `pnpm-workspace.yaml` already globs `apps/*`; confirm.
-- [ ] `apps/web`: probably no change. Optionally add a `GET /api/resources/[id]?compact=1` if `get_reference` would otherwise pull the full detail DTO. Decide during the build.
-- [ ] Tests, in `apps/mcp/test/tools.test.ts` (new, vitest):
+- [x] `apps/mcp/src/client.ts`: a fetch wrapper for `PIVOT_URL`. It sends `Authorization: Bearer` for writes (later), maps `ECONNREFUSED` to `app_unreachable` and 404 to `not_found`, and applies a 10s timeout.
+- [x] `apps/mcp/src/tools.ts`: the four P0 tools from §5.2, with input and output schemas, size caps, structured errors (`isError` plus `{code, message}`) and the "untrusted page data" note in each description.
+- [x] `apps/mcp/src/images.ts`: fetch the thumbnail or preview, then use sharp to fit 1568px and slice full pages. sharp is already a core dependency.
+- [x] Root `package.json`: `mcp:build` script. `pnpm-workspace.yaml` already globs `apps/*`; confirm.
+- [x] `apps/web`: probably no change. Optionally add a `GET /api/resources/[id]?compact=1` if `get_reference` would otherwise pull the full detail DTO. Decide during the build.
+- [x] Tests, in `apps/mcp/test/tools.test.ts` (new, vitest):
   - use the SDK's in-memory transport against a stubbed `fetch`;
   - check schemas reject bad input;
   - check errors are structured;
@@ -260,7 +264,7 @@ Estimates are working days and assume Phase 5's real references exist.
   Plus one scripted end-to-end run against a scratch app (`DATABASE_URL= PIVOT_DATA_DIR=<tmp>`).
 
 - [ ] Manual check: `claude mcp add pivot …`, then `/mcp` in Claude Code lists 4 tools. Ask "find dashboard references" and confirm it calls `search_references` then `get_reference_images`.
-- [ ] `apps/mcp/README.md`: setup, the token, troubleshooting (app not running, token rotated), and rollback (`claude mcp remove pivot`).
+- [x] `apps/mcp/README.md`: setup, the token, troubleshooting (app not running, token rotated), and rollback (`claude mcp remove pivot`).
 
 ### Step 3 — Skill (brief 10) (1–2 d)
 

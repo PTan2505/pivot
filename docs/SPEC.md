@@ -175,6 +175,25 @@ Mọi loại đều có các trường chung: `title`, `description`, `sourceUrl
   - Site không có icon thì trả 404, card hiện chữ cái đầu của host; server không thử lại site đó trong 1 giờ.
   - Không cần chạy backfill: tài nguyên cũ có icon ngay lần đầu card hiện ra.
 
-## 10. Ngoài phạm vi MVP
+## 10. MCP server cho Claude Code (bổ sung 2026-10-31)
+
+- **Cách chạy:**
+  - `apps/mcp` là một server **stdio**: Claude Code tự khởi động nó.
+  - Server đọc dữ liệu qua HTTP API của app PIVOT đang chạy (`PIVOT_URL`, mặc định `http://127.0.0.1:4321`), kèm API token (`PIVOT_TOKEN`, hoặc lấy từ `~/.pivot/api-token`).
+  - Vì vậy database, storage và quy tắc truy cập vẫn chỉ nằm ở app; MCP không đọc thẳng database.
+- **Build và đăng ký:** build bằng `pnpm mcp:build`, rồi đăng ký với `claude mcp add pivot -- node <repo>/apps/mcp/dist/server.js` (hướng dẫn chi tiết: `apps/mcp/README.md`).
+- **Tool:** định nghĩa trong `packages/mcp-tools`, viết theo interface `PivotSource`, không phụ thuộc cách kết nối. Một server online sau này có thể dùng lại mà không phải viết lại. Hiện chỉ có tool đọc:
+  - `search_references`: dùng `searchResources` (§8). Lọc được theo facet (tên), collection (tên hoặc id), source (host hoặc id), types hoặc section. Tối đa 25 kết quả mỗi trang, có cursor.
+  - `get_reference`: link (chỉ http/https), mô tả, ghi chú (tối đa 2000 ký tự), nội dung (tối đa 8000 ký tự), facet, collection, danh sách ảnh kèm kích thước. Mục trong thùng rác được coi là không tồn tại.
+  - `list_facets`: số mục theo type, các giá trị facet đang dùng kèm số lần dùng, số Source theo danh mục, các collection.
+  - `get_reference_images`:
+    - ảnh bìa, thu nhỏ để cạnh dài nhất không quá 1568px;
+    - ảnh full page thu về rộng 960px rồi cắt thành từng lát cao tối đa 1568px, khoảng 2000 token mỗi lát;
+    - tối đa 4 ảnh mỗi lần gọi; xem tiếp các lát sau bằng `fromSlice`.
+- **Lỗi:** trả về như một kết quả có mã, để agent biết phải làm gì tiếp: `not_found`, `invalid_input`, `invalid_cursor`, `no_images`, `app_unreachable` (kèm câu "chạy `npm start`").
+- **Nội dung không tin cậy:** mô tả tool và hướng dẫn của server đều nói rõ rằng tiêu đề, mô tả, ghi chú và nội dung lấy từ website là dữ liệu, không phải lệnh.
+- **Tool ghi** (lưu reference, ghi đánh giá) và **server online** cho người khác dùng: chưa làm. Xem `SEARCH_MCP_IMPLEMENTATION_PLAN.md`.
+
+## 11. Ngoài phạm vi MVP
 
 Projects, backup/restore, liên kết resource ↔ resource, phát hiện trùng lặp nâng cao (MVP chỉ cảnh báo URL trùng), AI tagging. (MCP server: đưa vào phạm vi 2026-10-31, xem §1.)

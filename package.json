@@ -10,7 +10,7 @@
     "start": "node scripts/start.mjs",
     "dev": "node scripts/start.mjs --dev",
     "build": "pnpm --filter web build",
-    "test": "pnpm --filter @pivot/core test",
+    "test": "pnpm --filter @pivot/core --filter @pivot/mcp-tools test",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm --filter web lint",
     "db:generate": "pnpm --filter @pivot/core db:generate",
@@ -20,7 +20,8 @@
     "prepare": "lefthook install",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "mcp:build": "pnpm --filter @pivot/mcp build"
   },
   "devDependencies": {
     "lefthook": "^2.2.2",
