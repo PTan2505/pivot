@@ -327,7 +327,12 @@ describe.skipIf(!(await (await import("../src/capture")).playwrightStatus()).ins
     const video = list.find((a) => a.role === "motion-video");
     expect(video?.mimeType).toBe("video/webm");
     expect(video?.size).toBeGreaterThan(1000);
-    expect(list.filter((a) => a.role === "motion-keyframe").length).toBeGreaterThanOrEqual(1);
+    // a rest on the first screen, the glide down, a rest at the bottom
+    expect(video?.meta.durationMs).toBeGreaterThanOrEqual(2000);
+    const keyframes = list.filter((a) => a.role === "motion-keyframe");
+    expect(keyframes.map((k) => k.meta.scrollY)).toEqual([0, expect.any(Number)]);
+    // the page is about 1360px tall in a 900px window: the recording reaches its bottom
+    expect(keyframes[1].meta.scrollY).toBeGreaterThan(400);
   });
 
   it("keeps a capture-later request waiting until it is run", { timeout: 60_000 }, async () => {

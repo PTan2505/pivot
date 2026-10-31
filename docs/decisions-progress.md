@@ -29,6 +29,15 @@ Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 - **Partly:** #4 (Motion metadata exists as assets, not as a reference kind), #49 (errors explain cause and next step; there is no collapsed technical-details view), #63 and #65 (QA and consistent states are practised per phase, not finished work items).
 - **Verification limits:** extension flows were driven in headless Chromium with a stubbed active tab or a test-only build with `<all_urls>` standing in for the `activeTab` grant; real-Chrome quick save (⌥⇧D), context menus and the alarm-driven sync weren't clicked through by hand.
 
+### Follow-up — Smooth full-page motion video (A6 feedback, 2026-11-01)
+
+- Status: Done
+- Why: testing A6, the owner found the motion video choppy and stopping before the end of the page, and asked for scroll videos like Refero's. Cause: the walk scrolled in 225px wheel steps every 250 ms, blocked on PNG keyframe shots mid-scroll, and stopped after 12 s, while `recordVideo` sampled whatever the screen showed.
+- Existing functionality reused: Playwright's bundled ffmpeg (the one `recordVideo` used), the scroll scripts (`UNLOCK_INNER_SCROLL`, `EAGER_IMAGES`, `IMAGES_ON_SCREEN`, `NO_SMOOTH_SCROLL`), the full-page height cap, the asset roles and the `motionLikely` hint.
+- Files changed: core `capture.ts` (`recordScroll` replaces `walkWithKeyframes` and `recordVideo`: every frame a CDP JPEG screenshot at its own scroll position, piped into ffmpeg VP9 at 30 fps; 1 s rest, eased glide at 900 px/s, 1 s rest; follows a page that grows; keyframes picked from the same frames; `durationMs` in the video's meta), `capture-flow.test.ts`; SPEC §12, the plan's Phase 6 line.
+- Checks run and results: the motion test now checks the two rests (≥ 2 s) and that the last keyframe is at the page bottom. Real pages: linear.app/pricing → 8.4 s video in 13.5 s, scrolled to 5083px, 8 keyframes; stripe.com → 14.9 s video in 26 s, scrolled to the 12000px cap. Frame-to-frame shift measured on the decoded Linear video: 0 for the first second, ramp 2 → 30px, a steady 30px per frame (900 px/s) with no dropped or repeated frame, ramp down 28 → 0, then a second at rest.
+- Remaining issues: time-based animations run while each frame is shot (about 30 ms per frame), so they play at roughly real speed but a frame that waits for images shows them jump ahead. Signed-in pages still need the extension-side recording (#20).
+
 ### Phase 6.3 — Backup, restore, share package, device transfer
 
 - Status: Done (except public share links, which need an architecture decision: the API only answers this machine).

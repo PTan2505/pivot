@@ -1,4 +1,6 @@
+import { spawn } from "node:child_process";
 import crypto from "node:crypto";
+import { once } from "node:events";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -372,35 +374,175 @@ function parseRetryAfter(value: string | undefined) {
 /** A phone's user agent, so sites that pick a layout by device serve their mobile one. */
 const MOBILE_UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
-const MAX_MOTION_MS = 12_000;
+/** The recording plays at this rate; every frame is a screenshot taken at its own scroll position. */
+const MOTION_FPS = 30;
+/** Cruising scroll speed in the video, px per second of video. */
+const MOTION_SPEED = 900;
+/** Time the scroll takes to reach that speed, and to slow to a stop at the bottom. */
+const MOTION_EASE_S = 0.6;
+/** The video rests this long on the first and the last screen. */
+const MOTION_HOLD_S = 1;
+/** Wall-clock limit for taking the frames; a slower page ends its video where the scroll got to. */
+const MOTION_BUDGET_MS = 75_000;
 const MAX_KEYFRAMES = 8;
 
+/** Scrolls to a position; returns where the page is and how far it can scroll (up to the full-page cap). */
+const scrollAndMeasure = (y: number) => `(() => {
+  scrollTo(0, ${y});
+  const el = document.scrollingElement || document.documentElement;
+  return { at: el.scrollTop, max: Math.max(0, Math.min(${MAX_FULL_PAGE_HEIGHT}, el.scrollHeight) - innerHeight) };
+})()`;
+
 /**
- * Scrolls down the page the way a visitor reads it (wheel steps, short pauses) while the video records, and keeps a
- * still frame every so often: scroll-driven effects, sticky parts and canvases show in the video and the keyframes
- * even when a stitched image can't represent them.
+ * Playwright's own ffmpeg, installed next to its Chromium by `pnpm setup:browser` (it is what `recordVideo` uses);
+ * `PIVOT_FFMPEG` overrides it, and one on the PATH is the last resort.
  */
-async function walkWithKeyframes(page: Page) {
-  const vp = page.viewportSize() ?? DESKTOP;
-  const frames: { data: Buffer; scrollY: number }[] = [];
-  const started = Date.now();
-  await page.mouse.move(vp.width / 2, vp.height / 2);
-  await page.waitForTimeout(600);
-  let lastFrameAt = -Infinity;
-  while (Date.now() - started < MAX_MOTION_MS) {
-    const { bottom, height } = await page.evaluate<{ bottom: number; height: number }>(SCROLL_POSITION);
-    const y = await page.evaluate<number>("scrollY");
-    if (y - lastFrameAt >= vp.height * 0.8 && frames.length < MAX_KEYFRAMES) {
-      const shot = await page.screenshot({ type: "png" });
-      frames.push({ data: await sharp(shot).webp({ quality: 80 }).toBuffer(), scrollY: Math.round(y) });
-      lastFrameAt = y;
-    }
-    if (bottom >= height - 2) break;
-    await page.mouse.wheel(0, Math.round(vp.height * 0.25));
-    await page.waitForTimeout(250);
+async function ffmpegPath() {
+  if (process.env.PIVOT_FFMPEG) return process.env.PIVOT_FFMPEG;
+  const { chromium } = await import("playwright");
+  // …/ms-playwright/chromium-1234/chrome-mac/…: the ffmpeg-NNNN folder sits beside chromium-NNNN
+  let dir = path.dirname(chromium.executablePath());
+  while (dir !== path.dirname(dir) && !/^chromium(_headless_shell)?-\d+$/.test(path.basename(dir))) {
+    dir = path.dirname(dir);
   }
-  await page.waitForTimeout(500);
-  return frames;
+  const root = path.dirname(dir);
+  const exe =
+    process.platform === "darwin" ? "ffmpeg-mac" : process.platform === "win32" ? "ffmpeg-win64.exe" : "ffmpeg-linux";
+  const folders = (await fs.readdir(root).catch(() => [] as string[]))
+    .filter((name) => /^ffmpeg-\d+$/.test(name))
+    .sort((a, b) => Number(b.slice(7)) - Number(a.slice(7)));
+  for (const folder of folders) {
+    const file = path.join(root, folder, exe);
+    if (
+      await fs.stat(file).then(
+        () => true,
+        () => false,
+      )
+    )
+      return file;
+  }
+  return "ffmpeg";
+}
+
+/** An ffmpeg process turning the JPEG frames written to it into a VP9 webm at `file`. */
+async function startEncoder(file: string) {
+  const proc = spawn(
+    await ffmpegPath(),
+    [
+      ...["-loglevel", "error", "-f", "image2pipe", "-c:v", "mjpeg", "-framerate", String(MOTION_FPS), "-i", "pipe:0"],
+      ...["-c:v", "libvpx-vp9", "-crf", "28", "-b:v", "0", "-deadline", "good", "-cpu-used", "5", "-row-mt", "1"],
+      ...["-pix_fmt", "yuv420p", "-an", "-y", file],
+    ],
+    { stdio: ["pipe", "ignore", "pipe"] },
+  );
+  let stderr = "";
+  proc.stderr.on("data", (chunk: Buffer) => (stderr = (stderr + chunk.toString()).slice(-2000)));
+  // a write after ffmpeg died fails here instead of crashing the process; `exited` reports why
+  proc.stdin.on("error", () => {});
+  const exited = new Promise<void>((resolve, reject) => {
+    proc.on("error", (err: NodeJS.ErrnoException) =>
+      reject(
+        err.code === "ENOENT"
+          ? new CaptureError("Recording needs Playwright's ffmpeg. Run `pnpm setup:browser`.", "other")
+          : err,
+      ),
+    );
+    proc.on("close", (code) =>
+      code === 0 ? resolve() : reject(new Error(`ffmpeg stopped (${code}): ${stderr.trim() || "no output"}`)),
+    );
+  });
+  exited.catch(() => {});
+  return {
+    async write(frame: Buffer) {
+      if (!proc.stdin.write(frame)) await Promise.race([once(proc.stdin, "drain"), exited]);
+    },
+    async finish() {
+      proc.stdin.end();
+      await exited;
+    },
+    kill: () => proc.kill("SIGKILL"),
+  };
+}
+
+/** Up to `max` items spread evenly from first to last. */
+function spread<T>(items: T[], max: number) {
+  if (items.length <= max) return items;
+  return Array.from({ length: max }, (_, i) => items[Math.round((i * (items.length - 1)) / (max - 1))]);
+}
+
+/**
+ * Records the page scrolling from top to bottom as a smooth 30 fps video, the way a screen recording of a visitor
+ * reads it: a rest on the first screen, an eased glide down at a steady speed, a rest at the bottom. Each frame is a
+ * screenshot taken at its exact scroll position, so a slow page never stutters the video (waiting for images costs
+ * time, not frames), and scroll-triggered reveals play as the page reaches them. Keyframes come from the same frames.
+ */
+async function recordScroll(page: Page, file: string) {
+  await page.evaluate(NO_SMOOTH_SCROLL).catch(() => {});
+  await page.evaluate(UNLOCK_INNER_SCROLL).catch(() => {});
+  await page.evaluate(EAGER_IMAGES).catch(() => {});
+  const vp = page.viewportSize() ?? DESKTOP;
+  // the pointer rests mid-screen, so hover effects show as the page passes under it
+  await page.mouse.move(vp.width / 2, vp.height / 2);
+  await page.evaluate(IMAGES_ON_SCREEN).catch(() => {});
+
+  const cdp = await page.context().newCDPSession(page);
+  const encoder = await startEncoder(file);
+  const candidates: { jpeg: Buffer; scrollY: number }[] = [];
+  let frames = 0;
+  let y = 0;
+  const shoot = async () => {
+    const { data } = await cdp.send("Page.captureScreenshot", { format: "jpeg", quality: 90, optimizeForSpeed: true });
+    const jpeg = Buffer.from(data, "base64");
+    await encoder.write(jpeg);
+    frames++;
+    return jpeg;
+  };
+  try {
+    const started = Date.now();
+    candidates.push({ jpeg: await shoot(), scrollY: 0 });
+    for (let i = 1; i < MOTION_FPS * MOTION_HOLD_S; i++) await shoot();
+
+    const accel = MOTION_SPEED / MOTION_EASE_S;
+    let speed = 0;
+    let stuck = 0;
+    let waitedAt = 0;
+    let { max } = await page.evaluate<{ at: number; max: number }>(scrollAndMeasure(0));
+    while (y < max - 0.5 && Date.now() - started < MOTION_BUDGET_MS) {
+      // speed up to cruising, and slow down in time to stop at the bottom (which moves if the page grows)
+      speed = Math.min(MOTION_SPEED, speed + accel / MOTION_FPS, Math.sqrt(2 * accel * (max - y)));
+      y = Math.min(max, y + Math.max(speed, 20) / MOTION_FPS);
+      const moved = await page.evaluate<{ at: number; max: number }>(scrollAndMeasure(Math.round(y)));
+      max = moved.max;
+      // a page that won't scroll any further is done
+      stuck = moved.at < Math.round(y) - 2 ? stuck + 1 : 0;
+      if (stuck >= MOTION_FPS / 2) break;
+      if (y - waitedAt >= vp.height / 2) {
+        await page.evaluate(IMAGES_ON_SCREEN).catch(() => {});
+        waitedAt = y;
+      }
+      const jpeg = await shoot();
+      if (y - candidates[candidates.length - 1].scrollY >= vp.height * 0.8) {
+        candidates.push({ jpeg, scrollY: Math.round(y) });
+      }
+    }
+    await page.evaluate(IMAGES_ON_SCREEN).catch(() => {});
+    let last = await shoot();
+    for (let i = 1; i < MOTION_FPS * MOTION_HOLD_S; i++) last = await shoot();
+    if (y - candidates[candidates.length - 1].scrollY >= vp.height * 0.25) {
+      candidates.push({ jpeg: last, scrollY: Math.round(y) });
+    }
+    await encoder.finish();
+  } catch (err) {
+    encoder.kill();
+    throw err;
+  }
+  const keyframes = await Promise.all(
+    spread(candidates, MAX_KEYFRAMES).map(async (c) => ({
+      data: await sharp(c.jpeg).webp({ quality: 85 }).toBuffer(),
+      scrollY: c.scrollY,
+    })),
+  );
+  return { video: await fs.readFile(file), durationMs: Math.round((frames / MOTION_FPS) * 1000), keyframes };
 }
 
 /** Clicks one visible "Load more"-style button. Buttons only, never links or form submits, so it can't navigate. */
@@ -482,7 +624,6 @@ export async function screenshotUrl(
     colorScheme,
     serviceWorkers: "block",
     ...(mobile ? { isMobile: true, hasTouch: true, userAgent: MOBILE_UA } : {}),
-    ...(videoDir ? { recordVideo: { dir: videoDir, size: viewport } } : {}),
   });
   let cancelled = false;
   const onAbort = () => {
@@ -559,12 +700,12 @@ export async function screenshotUrl(
     const { issues, motionLikely } = await qualityIssues(page, first);
     let full: Buffer | null = null;
     let video: Buffer | null = null;
+    let videoDurationMs = 0;
     let keyframes: { data: Buffer; scrollY: number }[] = [];
-    if (motion) {
-      keyframes = await walkWithKeyframes(page);
-      const file = await page.video()?.path();
-      await context.close();
-      video = file ? await fs.readFile(file).catch(() => null) : null;
+    if (motion && videoDir) {
+      const recorded = await recordScroll(page, path.join(videoDir, "motion.webm"));
+      ({ video, keyframes } = recorded);
+      videoDurationMs = recorded.durationMs;
     } else if (fullPage) {
       await loadWholePage(page, settle, expandContent).catch(() => {});
       // A broken full-page shot must not cost us the viewport shot.
@@ -582,6 +723,7 @@ export async function screenshotUrl(
       finalUrl: page.url(),
       colorScheme,
       video,
+      videoDurationMs,
       keyframes,
       motionLikely,
     };
@@ -604,11 +746,8 @@ export async function screenshotUrl(
   } finally {
     signal?.removeEventListener("abort", onAbort);
     clearTimeout(deadline);
-    if (videoDir) {
-      await context.close().catch(() => {});
-      await fs.rm(videoDir, { recursive: true, force: true }).catch(() => {});
-    }
     await context.close().catch(() => {});
+    if (videoDir) await fs.rm(videoDir, { recursive: true, force: true }).catch(() => {});
     scheduleIdleClose();
   }
 }
@@ -1010,7 +1149,7 @@ async function captureExtras(
           fileName: `${host}-${stamp}-motion.webm`,
           mimeType: "video/webm",
           sourceUrl,
-          meta: meta({ viewport: DESKTOP, finalUrl: shots.finalUrl }),
+          meta: meta({ viewport: DESKTOP, finalUrl: shots.finalUrl, durationMs: shots.videoDurationMs }),
         });
         await attachAsset(resourceId, video.id, "motion-video");
         kept.push(video.id);
