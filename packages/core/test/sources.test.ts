@@ -94,3 +94,20 @@ describe("sources", () => {
     }
   });
 });
+
+describe("external search links", () => {
+  it("builds search links for a query, saved sources first, and nothing for an empty query", async () => {
+    const { externalSearchLinks } = await import("../src/known-sources");
+    expect(externalSearchLinks("  ")).toEqual([]);
+    const links = externalSearchLinks("pricing table", { savedHosts: ["www.lapa.ninja"], limit: 3 });
+    expect(links[0]).toMatchObject({
+      host: "lapa.ninja",
+      saved: true,
+      url: "https://www.lapa.ninja/search/?q=pricing%20table",
+    });
+    expect(links).toHaveLength(3);
+    expect(links.every((l) => l.url.includes("pricing%20table"))).toBe(true);
+    const motion = externalSearchLinks("loader", { category: "motion" });
+    expect(motion.every((l) => l.category === "motion")).toBe(true);
+  });
+});

@@ -62,7 +62,7 @@ export const api = {
   lookup: (url: string) =>
     request<{ duplicates: Duplicate[]; total?: number }>(`/api/lookup?url=${encodeURIComponent(url)}`),
   /** A short list for the popup's Library tab: `q`, `url`, `host`, `sort` like the app's own list. */
-  list: (params: { q?: string; url?: string; host?: string; sort?: string; limit?: number }) => {
+  list: (params: { q?: string; url?: string; host?: string; type?: string; sort?: string; limit?: number }) => {
     const sp = new URLSearchParams(
       Object.entries({ ...params, limit: String(params.limit ?? 8) }).filter(([, v]) => v) as [string, string][],
     );
