@@ -10,7 +10,7 @@ function hostname(hostHeader: string | null) {
 
 /**
  * The API has no login, so it only answers requests addressed to this machine (blocks DNS rebinding),
- * and writes must come from the app's own pages or carry the extension's API token (blocks other sites).
+ * and writes must come from the app's own pages or carry the API token (blocks other sites and local scripts).
  */
 export function proxy(request: NextRequest) {
   const host = request.headers.get("host");
@@ -20,7 +20,8 @@ export function proxy(request: NextRequest) {
   if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
     const origin = request.headers.get("origin");
     const site = request.headers.get("sec-fetch-site");
-    const sameOrigin = origin ? new URL(origin).host === host : site === "same-origin" || site === null;
+    // Browsers always send one of these on a write; a request with neither (curl, a script) needs the token.
+    const sameOrigin = origin ? new URL(origin).host === host : site === "same-origin";
     const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
     if (!sameOrigin && !isValidApiToken(bearer)) {
       return NextResponse.json(

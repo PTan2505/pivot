@@ -174,3 +174,14 @@ export const appSettings = pgTable("app_settings", {
   value: jsonb("value").$type<Record<string, unknown>>().notNull().default({}),
   updatedAt: updatedAt(),
 });
+
+/**
+ * A save request the browser extension may send more than once (it retries when the answer got lost). The first one
+ * claims the id; later ones get the resource it created instead of a duplicate.
+ */
+export const clipRequests = pgTable("clip_requests", {
+  id: text("id").primaryKey(),
+  /** Null while the first request is still saving. */
+  resourceId: text("resource_id").references(() => resources.id, { onDelete: "cascade" }),
+  createdAt: createdAt(),
+});

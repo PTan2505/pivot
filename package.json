@@ -10,7 +10,7 @@
     "start": "node scripts/start.mjs",
     "dev": "node scripts/start.mjs --dev",
     "build": "pnpm --filter web build",
-    "test": "pnpm --filter @pivot/core --filter @pivot/mcp-tools test",
+    "test": "pnpm --filter @pivot/core --filter @pivot/mcp-tools --filter extension test",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm --filter web lint",
     "db:generate": "pnpm --filter @pivot/core db:generate",

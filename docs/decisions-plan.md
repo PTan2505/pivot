@@ -102,16 +102,16 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 34  | Naming `[Section] — [Source]`       | Partial  | 4, 5      | [ ]  |
 | 35  | Review Inbox                        | Missing  | 3, 5      | [ ]  |
 | 36  | Capture Sessions                    | Missing  | Optional  | [ ]  |
-| 37  | Offline queue                       | Missing  | 2         | [ ]  |
+| 37  | Offline queue                       | Missing  | 2         | [x]  |
 | 38  | Storage and retention               | Partial  | 1         | [ ]  |
 | 39  | Export                              | Partial  | 6         | [ ]  |
 | 40  | Import / restore                    | Missing  | 6         | [ ]  |
 | 41  | Sharing                             | Missing  | 6         | [ ]  |
 | 42  | Extension search                    | Missing  | 3         | [ ]  |
-| 43  | Notifications                       | Partial  | 2         | [ ]  |
+| 43  | Notifications                       | Partial  | 2         | [x]  |
 | 44  | Shortcuts and context menu          | Exists   | 4         | [ ]  |
-| 45  | Onboarding and connection           | Partial  | 2         | [ ]  |
-| 46  | API compatibility                   | Missing  | 2         | [ ]  |
+| 45  | Onboarding and connection           | Partial  | 2         | [x]  |
+| 46  | API compatibility                   | Missing  | 2         | [x]  |
 | 47  | Performance budget                  | Partial  | 1         | [x]  |
 | 48  | Accessibility                       | Partial  | 3, 4      | [ ]  |
 | 49  | Error diagnostics                   | Partial  | 1, 2      | [ ]  |
@@ -127,7 +127,7 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 59  | Health signals                      | Missing  | 6         | [ ]  |
 | 60  | Progressive disclosure              | Partial  | 3         | [ ]  |
 | 61  | Lightweight extension               | Exists   | all       | [ ]  |
-| 62  | Secure defaults                     | Partial  | 2         | [ ]  |
+| 62  | Secure defaults                     | Partial  | 2         | [x]  |
 | 63  | Risk-based QA                       | Partial  | all       | [ ]  |
 | 64  | Core first, advanced phased         | —        | this plan | [x]  |
 | 65  | Unified states and actions          | Partial  | all       | [ ]  |
@@ -172,12 +172,12 @@ Files: `packages/core/src/capture.ts`, `db/schema.ts` (+ `pnpm db:generate`), `a
 
 ### Phase 2 — Extension that survives being offline
 
-- [ ] `/api/clip` takes `clientRequestId`, stored in `resources.client_request_id` (unique, nullable); a repeat returns the existing item (#37).
-- [ ] Pending Sync queue in the extension's IndexedDB (payload and image). `Saved locally` becomes `Synced` only on a 2xx. Sync when the popup opens, on browser start and on `chrome.alarms`, with backoff. Never recapture the site; warn near the storage limit.
-- [ ] `GET /api/capabilities` returns `{ apiVersion, features[] }`. The extension tells server off, bad token and unsupported feature apart; unsupported items stay queued (#45, #46).
-- [ ] Notification targets in `chrome.storage.session`; "Saved" only after the server confirms (#43).
-- [ ] Require the token for non-browser writes (C8).
-- [ ] Vitest for the extension's queue logic, wired into `pnpm test`.
+- [x] `/api/clip` takes `clientRequestId`, stored in `resources.client_request_id` (unique, nullable); a repeat returns the existing item (#37).
+- [x] Pending Sync queue in the extension's IndexedDB (payload and image). `Saved locally` becomes `Synced` only on a 2xx. Sync when the popup opens, on browser start and on `chrome.alarms`, with backoff. Never recapture the site; warn near the storage limit.
+- [x] `GET /api/capabilities` returns `{ apiVersion, features[] }`. The extension tells server off, bad token and unsupported feature apart; unsupported items stay queued (#45, #46).
+- [x] Notification targets in `chrome.storage.session`; "Saved" only after the server confirms (#43).
+- [x] Require the token for non-browser writes (C8).
+- [x] Vitest for the extension's queue logic, wired into `pnpm test`.
 
 Files: `apps/extension/src/background.ts`, `lib/api.ts`, new `lib/queue.ts`, `public/manifest.json`, `apps/web/src/app/api/clip/route.ts`, `apps/web/src/proxy.ts`.
 
