@@ -4,7 +4,7 @@ import { resources } from "./db/schema";
 import { externalSearchLinks } from "./known-sources";
 import { safeFetch, urlKey } from "./net-guard";
 import { parseQuery, toJsRegex } from "./query";
-import { storeFor } from "./storage";
+import { r2ConfigFromEnv, storeFor, type BlobStore } from "./storage";
 import { getSearchSettings } from "./settings";
 import { hostOf } from "./source-match";
 import {
@@ -242,11 +242,29 @@ const PROVIDERS: DirectProvider[] = [
 /** The direct providers, in the order the owner chose (Magic UI, React Bits, shadcn/ui). */
 export const DIRECT_PROVIDERS: readonly Omit<DirectProvider, "parse" | "freeIds">[] = PROVIDERS;
 
+/** R2 object keys for catalogs: their own versioned namespace, apart from reference files (`assets/`, `thumbnails/`…). */
+export const CATALOG_PREFIX = "external-catalogs/v1";
+const storeKey = (id: DirectProviderId) => `${CATALOG_PREFIX}/${id}.json`;
+
+/** Most items kept from one catalog, so the in-memory cache stays bounded (today's largest has 218). */
+const MAX_CATALOG_ITEMS = 5000;
+
+export class CatalogStorageError extends Error {}
+
 /**
- * Catalogs always live in the local data folder, never in R2 even when R2 is configured: they are a cache of public
- * data, and keeping them local means no cloud requests or costs come from searching.
+ * Catalogs persist in Cloudflare R2 (owner's decision, 2026-11-02), never on local disk: R2 is chosen explicitly, not by
+ * the environment, and there is no fallback to the data folder when it isn't configured. R2 requests and storage may
+ * incur charges; PIVOT reads a catalog from R2 only when it isn't in memory (once per catalog after a start) and writes
+ * one only after a successful sync from the provider (at most daily, or on a manual refresh). Search never touches R2.
  */
-const catalogStore = () => storeFor("local");
+function catalogStore(): BlobStore {
+  if (!r2ConfigFromEnv()) {
+    throw new CatalogStorageError(
+      "Direct search keeps its catalogs in Cloudflare R2, and R2 isn't configured (set the R2_* keys in .env).",
+    );
+  }
+  return storeFor("r2");
+}
 
 /** Timing and network hooks. Exported so tests can stub the network and the clock. */
 export const externalSearchDeps = {
@@ -261,17 +279,18 @@ export const externalSearchDeps = {
   maxAgeMs: 24 * 60 * 60 * 1000,
   /** A manual refresh within this long of the last sync is skipped, so a held-down button can't hammer a site. */
   minRefreshMs: 60 * 1000,
+  /** Where catalogs persist: R2. Tests wrap it to count or break requests. */
+  store: (): BlobStore => catalogStore(),
 };
 
 /** `synced`: this call downloaded the catalog (false when an existing copy answered). */
 type Loaded = { catalog: Catalog; status: "ok" | "stale"; message?: string; synced: boolean };
 
+// The in-memory cache: at most one catalog per provider (three today), each capped at MAX_CATALOG_ITEMS.
 const g = globalThis as unknown as { __pivotCatalogs?: Map<DirectProviderId, Catalog> };
 const memory: Map<DirectProviderId, Catalog> = (g.__pivotCatalogs ??= new Map());
 const inflight = new Map<DirectProviderId, Promise<Loaded>>();
 const lastAttempt = new Map<DirectProviderId, number>();
-
-const storeKey = (id: DirectProviderId) => `catalogs/${id}.json`;
 
 function providerOf(id: DirectProviderId) {
   const p = PROVIDERS.find((x) => x.id === id);
@@ -279,19 +298,33 @@ function providerOf(id: DirectProviderId) {
   return p;
 }
 
-async function stored(id: DirectProviderId): Promise<Catalog | null> {
-  if (memory.has(id)) return memory.get(id)!;
-  const buf = await catalogStore()
-    .get(storeKey(id))
-    .catch(() => null);
-  if (!buf) return null;
+/**
+ * The catalog in memory, or else the copy in R2 (then kept in memory). `error` says R2 couldn't be read or isn't
+ * configured; a missing or unreadable object is simply no copy.
+ */
+async function stored(id: DirectProviderId): Promise<{ catalog: Catalog | null; error?: string }> {
+  const cached = memory.get(id);
+  if (cached) return { catalog: cached };
+  let buf: Buffer | null;
+  try {
+    buf = await externalSearchDeps.store().get(storeKey(id));
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    return {
+      catalog: null,
+      error: err instanceof CatalogStorageError ? why : `The catalog storage (R2) couldn't be read: ${why}`,
+    };
+  }
+  if (!buf) return { catalog: null };
   try {
     const catalog = JSON.parse(buf.toString("utf8")) as Catalog;
-    if (catalog.provider !== id || !Array.isArray(catalog.items)) return null;
+    if (catalog.provider !== id || !Array.isArray(catalog.items) || typeof catalog.syncedAt !== "string") {
+      return { catalog: null };
+    }
     memory.set(id, catalog);
-    return catalog;
+    return { catalog };
   } catch {
-    return null;
+    return { catalog: null };
   }
 }
 
@@ -299,8 +332,11 @@ function sitemapPages(xml: string) {
   return new Set([...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)].map((m) => m[1].replace(/\/+$/, "")));
 }
 
-/** Downloads and checks a provider's catalog (and sitemap), then keeps it. Throws when it can't. */
-async function syncCatalog(id: DirectProviderId): Promise<Catalog> {
+/**
+ * Downloads and checks a provider's catalog (and sitemap), then keeps it in memory and in R2. Throws when the provider
+ * can't be read; a failed R2 write is reported, not thrown.
+ */
+async function syncCatalog(id: DirectProviderId): Promise<{ catalog: Catalog; storeError?: string }> {
   const p = providerOf(id);
   lastAttempt.set(id, externalSearchDeps.now());
   const text = await externalSearchDeps.fetchText(p.catalogUrl);
@@ -327,7 +363,7 @@ async function syncCatalog(id: DirectProviderId): Promise<Catalog> {
     free = p.freeIds(text);
     if (!free.size) throw new Error(`${unconfirmed}: their list names no components.`);
   }
-  const items = p.parse(raw, pages, free);
+  const items = p.parse(raw, pages, free).slice(0, MAX_CATALOG_ITEMS);
   const excluded = free
     ? itemsOf(raw)
         .filter((i) => i.type === "registry:ui" && typeof i.name === "string" && !free!.has(i.name))
@@ -339,9 +375,15 @@ async function syncCatalog(id: DirectProviderId): Promise<Catalog> {
     items,
     ...(excluded.length ? { excluded } : {}),
   };
-  await catalogStore().put(storeKey(id), Buffer.from(JSON.stringify(catalog)), "application/json");
+  // Kept in memory first: if R2 can't take it, search still works until the next start.
   memory.set(id, catalog);
-  return catalog;
+  try {
+    await externalSearchDeps.store().put(storeKey(id), Buffer.from(JSON.stringify(catalog)), "application/json");
+    return { catalog };
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    return { catalog, storeError: `Saved in memory only; R2 couldn't store it (${why}).` };
+  }
 }
 
 /** The catalog to search: fresh enough as is, synced when it's older than a day, the last good copy when that fails. */
@@ -349,7 +391,9 @@ async function loadCatalog(id: DirectProviderId, { refresh = false } = {}): Prom
   const running = inflight.get(id);
   if (running) return running;
   const job = (async (): Promise<Loaded> => {
-    const have = await stored(id);
+    const { catalog: have, error: storeError } = await stored(id);
+    // R2 unreadable (or not configured) and nothing in memory: this provider is unavailable for now.
+    if (!have && storeError) throw new Error(storeError);
     const age = have ? externalSearchDeps.now() - Date.parse(have.syncedAt) : Infinity;
     const recentTry = externalSearchDeps.now() - (lastAttempt.get(id) ?? -Infinity) < externalSearchDeps.minRefreshMs;
     if (have && (age < externalSearchDeps.maxAgeMs || recentTry) && !(refresh && !recentTry)) {
@@ -357,7 +401,8 @@ async function loadCatalog(id: DirectProviderId, { refresh = false } = {}): Prom
     }
     if (!have && recentTry) throw new Error("The catalog couldn't be downloaded a moment ago; try again shortly.");
     try {
-      return { catalog: await syncCatalog(id), status: "ok", synced: true };
+      const done = await syncCatalog(id);
+      return { catalog: done.catalog, status: "ok", message: done.storeError, synced: true };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (have) return { catalog: have, status: "stale", message, synced: false };
@@ -504,7 +549,7 @@ export async function listDirectProviders(): Promise<DirectProviderInfo[]> {
   const { disabled } = await getSearchSettings();
   return Promise.all(
     PROVIDERS.map(async (p) => {
-      const catalog = await stored(p.id);
+      const { catalog, error } = await stored(p.id);
       return {
         id: p.id,
         name: p.name,
@@ -515,6 +560,7 @@ export async function listDirectProviders(): Promise<DirectProviderInfo[]> {
         enabled: !disabled.includes(p.id),
         syncedAt: catalog?.syncedAt ?? null,
         items: catalog?.items.length ?? null,
+        ...(error ? { storageError: error } : {}),
       };
     }),
   );

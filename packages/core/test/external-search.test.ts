@@ -1,9 +1,17 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import S3rver from "s3rver";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import type { BlobStore } from "../src/storage";
 
+// Catalogs persist in R2; here R2 is s3rver, a local S3-compatible server, so no Cloudflare account is needed.
 let tmp: string;
+let server: S3rver;
+let realStore: () => BlobStore;
+let r2Gets = 0;
+let r2Puts = 0;
+let r2Down = false;
 let ext: typeof import("../src/external-search");
 let resources: typeof import("../src/resources");
 let settings: typeof import("../src/settings");
@@ -30,8 +38,40 @@ beforeAll(async () => {
     PIVOT_MIGRATIONS_DIR: path.resolve(__dirname, "../src/db/migrations"),
   });
   delete process.env.DATABASE_URL;
-  for (const k of ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"]) delete process.env[k];
+  server = new S3rver({
+    port: 0,
+    address: "127.0.0.1",
+    silent: true,
+    directory: path.join(tmp, "s3"),
+    configureBuckets: [{ name: "pivot-hybrid", configs: [] }],
+  });
+  const { port } = (await server.run()) as { port: number };
+  delete process.env.R2_ACCOUNT_ID;
+  Object.assign(process.env, {
+    R2_ACCESS_KEY_ID: "S3RVER",
+    R2_SECRET_ACCESS_KEY: "S3RVER",
+    R2_BUCKET: "pivot-hybrid",
+    R2_ENDPOINT: `http://127.0.0.1:${port}`,
+  });
   ext = await import("../src/external-search");
+  // count R2 requests, and break them on demand
+  realStore = ext.externalSearchDeps.store;
+  ext.externalSearchDeps.store = () => {
+    const store = realStore();
+    return {
+      ...store,
+      get: async (key: string) => {
+        r2Gets++;
+        if (r2Down) throw new Error("connect ECONNREFUSED");
+        return store.get(key);
+      },
+      put: async (key: string, data: Buffer, type: string) => {
+        r2Puts++;
+        if (r2Down) throw new Error("connect ECONNREFUSED");
+        return store.put(key, data, type);
+      },
+    } as BlobStore;
+  };
   resources = await import("../src/resources");
   settings = await import("../src/settings");
   db = await import("../src/db/client");
@@ -48,6 +88,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await db.closeDb();
+  await server.close();
   await fs.rm(tmp, { recursive: true, force: true });
 });
 
@@ -57,9 +98,31 @@ beforeEach(async () => {
   overrides = {};
   clock = Date.parse("2026-11-01T10:00:00Z");
   ext.resetCatalogMemory();
-  await fs.rm(path.join(tmp, "data", "catalogs"), { recursive: true, force: true });
+  r2Down = false;
+  await clearR2();
+  r2Gets = 0;
+  r2Puts = 0;
   for (const id of ["magicui", "reactbits", "shadcn"] as const) await settings.setProviderEnabled(id, true);
 });
+
+const key = (id: string) => `external-catalogs/v1/${id}.json`;
+const inR2 = async (id: string) => {
+  const buf = await realStore().get(key(id));
+  return buf ? JSON.parse(buf.toString("utf8")) : null;
+};
+async function clearR2() {
+  for (const id of ["magicui", "reactbits", "shadcn"]) await realStore().delete(key(id));
+}
+/** Every file under the data folder, to prove nothing about catalogs is written to local disk. */
+async function localFiles(dir = path.join(tmp, "data")): Promise<string[]> {
+  const out: string[] = [];
+  for (const e of await fs.readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) out.push(...(await localFiles(full)));
+    else out.push(path.relative(path.join(tmp, "data"), full));
+  }
+  return out;
+}
 
 const first = (page: Awaited<ReturnType<typeof ext.externalSearch>>, id: string) =>
   page.providers.find((p) => p.id === id)!;
@@ -75,8 +138,14 @@ describe("hybrid search: external providers", () => {
         expect(new URL(url).hostname.replace(/^www\./, "")).toBe(p.host);
       }
     }
-    // no provider settings take a key, a token or a URL
-    expect(Object.keys(ext.externalSearchDeps).sort()).toEqual(["fetchText", "maxAgeMs", "minRefreshMs", "now"]);
+    // no provider settings take a key, a token or a URL ("store" is PIVOT's own R2, where catalogs persist)
+    expect(Object.keys(ext.externalSearchDeps).sort()).toEqual([
+      "fetchText",
+      "maxAgeMs",
+      "minRefreshMs",
+      "now",
+      "store",
+    ]);
   });
 
   it("syncs a catalog once, then searches it locally with no network and no database writes", async () => {
@@ -258,28 +327,91 @@ describe("hybrid search: external providers", () => {
     await expect(ext.externalSearch({ query: "x".repeat(121) })).rejects.toThrow(/120/);
   });
 
-  it("keeps catalogs in the local data folder even when R2 is configured", async () => {
-    // Bogus R2 settings: any read or write that went to R2 would fail and leave the provider unavailable.
-    const r2 = {
-      R2_ACCOUNT_ID: "audit-account",
-      R2_ACCESS_KEY_ID: "audit-key",
-      R2_SECRET_ACCESS_KEY: "audit-secret",
-      R2_BUCKET: "audit-bucket",
-    };
-    Object.assign(process.env, r2);
+  it("keeps catalogs in R2 under their own keys, never on local disk, and searches from memory", async () => {
+    const before = await localFiles();
+    const magic = first(await ext.externalSearch({ query: "marquee", providers: ["magicui"] }), "magicui");
+    expect(magic.status).toBe("ok");
+    expect(r2Gets).toBe(1); // nothing in memory: R2 was asked once, had nothing
+    expect(r2Puts).toBe(1); // synced from the provider, written once
+    const saved = await inR2("magicui");
+    expect(saved.items.length).toBe(10);
+    // nothing about catalogs on local disk (the database's own files may change)
+    const added = (await localFiles()).filter((f) => !before.includes(f) && !f.startsWith("db"));
+    expect(added).toEqual([]);
+    expect((await localFiles()).some((f) => f.includes("catalog"))).toBe(false);
+
+    // repeated searches: memory only, no R2 and no provider requests
+    calls = [];
+    for (const q of ["globe", "border beam", "number ticker"]) {
+      await ext.externalSearch({ query: q, providers: ["magicui"] });
+    }
+    expect([r2Gets, r2Puts, calls.length]).toEqual([1, 1, 0]);
+
+    // after a restart the catalog comes back from R2 once, not from the provider
+    ext.resetCatalogMemory();
+    calls = [];
+    expect(first(await ext.externalSearch({ query: "globe", providers: ["magicui"] }), "magicui").status).toBe("ok");
+    await ext.externalSearch({ query: "marquee", providers: ["magicui"] });
+    expect([r2Gets, r2Puts, calls.length]).toEqual([2, 1, 0]);
+  });
+
+  it("uses the catalog in memory when R2 fails, and reports the provider unavailable when there is none", async () => {
+    await ext.externalSearch({ query: "marquee", providers: ["magicui"] });
+    r2Down = true;
+    // in memory: R2 isn't needed
+    expect(first(await ext.externalSearch({ query: "globe", providers: ["magicui"] }), "magicui").status).toBe("ok");
+    // after a restart with R2 down: no catalog, and the provider says why (no download, no local fallback)
+    ext.resetCatalogMemory();
+    calls = [];
+    const down = first(await ext.externalSearch({ query: "globe", providers: ["magicui"] }), "magicui");
+    expect(down).toMatchObject({ status: "unavailable", results: [] });
+    expect(down.message).toMatch(/catalog storage \(R2\) couldn't be read/);
+    expect(calls).toEqual([]);
+    expect((await localFiles()).some((f) => f.includes("catalog"))).toBe(false);
+  });
+
+  it("keeps a fresh sync in memory when R2 can't store it, and keeps the last valid copy when a refresh fails", async () => {
+    // R2 answers reads (nothing there) but refuses the write: results still come, with a note
+    const store = ext.externalSearchDeps.store;
+    ext.externalSearchDeps.store = () => ({
+      ...store(),
+      put: async () => {
+        throw new Error("AccessDenied");
+      },
+    });
     try {
       const magic = first(await ext.externalSearch({ query: "marquee", providers: ["magicui"] }), "magicui");
       expect(magic.status).toBe("ok");
-      const file = path.join(tmp, "data", "catalogs", "magicui.json");
-      const onDisk = JSON.parse(await fs.readFile(file, "utf8"));
-      expect(onDisk.items.length).toBe(10);
-      // and it is read back from there after a restart, still with R2 configured
-      ext.resetCatalogMemory();
-      calls = [];
-      expect(first(await ext.externalSearch({ query: "globe", providers: ["magicui"] }), "magicui").status).toBe("ok");
-      expect(calls).toEqual([]);
+      expect(magic.message).toMatch(/Saved in memory only; R2 couldn't store it \(AccessDenied\)/);
+      expect(magic.results[0].title).toBe("Marquee");
+      expect(await inR2("magicui")).toBeNull();
     } finally {
-      for (const k of Object.keys(r2)) delete process.env[k];
+      ext.externalSearchDeps.store = store;
+    }
+    // a valid copy in R2, then the provider fails a day later: the copy answers, marked stale, and R2 keeps it
+    ext.resetCatalogMemory();
+    await ext.externalSearch({ query: "marquee", providers: ["magicui"] });
+    const putsBefore = r2Puts;
+    clock += 25 * 60 * 60 * 1000;
+    offline.add("https://magicui.design/r/registry.json");
+    const stale = first(await ext.externalSearch({ query: "marquee", providers: ["magicui"] }), "magicui");
+    expect(stale.status).toBe("stale");
+    expect(r2Puts).toBe(putsBefore);
+    expect((await inR2("magicui")).items.length).toBe(10);
+  });
+
+  it("refuses to run without R2 instead of falling back to local disk", async () => {
+    const saved = { ...process.env };
+    for (const k of ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET", "R2_ENDPOINT"]) delete process.env[k];
+    try {
+      calls = [];
+      const magic = first(await ext.externalSearch({ query: "marquee", providers: ["magicui"] }), "magicui");
+      expect(magic).toMatchObject({ status: "unavailable", results: [] });
+      expect(magic.message).toMatch(/R2 isn't configured/);
+      expect(calls).toEqual([]);
+      expect((await localFiles()).some((f) => f.includes("catalog"))).toBe(false);
+    } finally {
+      Object.assign(process.env, saved);
     }
   });
 
@@ -288,7 +420,7 @@ describe("hybrid search: external providers", () => {
     const magic = first(await ext.externalSearch({ query: "rainbow button", providers: ["magicui"] }), "magicui");
     expect(magic.status).toBe("ok");
     expect(magic.results).toEqual([]);
-    const onDisk = JSON.parse(await fs.readFile(path.join(tmp, "data", "catalogs", "magicui.json"), "utf8"));
+    const onDisk = await inR2("magicui");
     expect(onDisk.excluded).toEqual(["rainbow-button"]);
     expect(onDisk.items.map((i: { id: string }) => i.id)).not.toContain("rainbow-button");
 
@@ -302,7 +434,7 @@ describe("hybrid search: external providers", () => {
 
     // no confirmed copy at all: nothing is shown as free
     ext.resetCatalogMemory();
-    await fs.rm(path.join(tmp, "data", "catalogs"), { recursive: true, force: true });
+    await clearR2();
     clock += 2 * 60 * 1000;
     const none = first(await ext.externalSearch({ query: "marquee", providers: ["magicui"] }), "magicui");
     expect(none).toMatchObject({ status: "unavailable", results: [] });

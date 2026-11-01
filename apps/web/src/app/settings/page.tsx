@@ -298,8 +298,11 @@ function SearchSection() {
       <div>
         <h2 className="text-[22px] leading-[1.2] font-medium tracking-[-0.02em]">Search</h2>
         <p className="text-sm text-muted-foreground">
-          Free public catalogs searched directly from the External scope. Searching happens on this computer; only the
-          catalog download goes out. Paid sources and other sites stay as links to their own search.
+          Free public catalogs searched directly from the External scope. Searching happens on this computer, from
+          memory; nothing you type is sent anywhere. The catalogs are kept in your Cloudflare R2 bucket (under{" "}
+          <code className="font-mono text-xs">external-catalogs/</code>), not on this computer: each is read once after
+          PIVOT starts and written at most once a day, which may add small R2 charges. Paid sources and other sites stay
+          as links to their own search.
         </p>
       </div>
       <dl className="rounded-[14px] bg-surface px-5">
@@ -331,6 +334,12 @@ function SearchSection() {
               </a>
               {p.licenceMode === "metadataAndLink" && " (titles, descriptions and links only; no code)"}.
             </p>
+            {p.storageError && (
+              <p role="status" className="mt-1.5 flex items-start gap-1.5 text-xs text-ink-muted">
+                <TriangleAlert className="mt-0.5 size-3 shrink-0 text-warning" aria-hidden />
+                {p.storageError}
+              </p>
+            )}
           </Row>
         ))}
       </dl>

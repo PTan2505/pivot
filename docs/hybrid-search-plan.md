@@ -173,7 +173,7 @@ An isolated Node script outside the repository read `parseQuery` from `packages/
 
 - **Core:** `packages/core/src/external-search.ts`.
   - Providers: Magic UI, React Bits and shadcn/ui, each declared `access: "free"` and `auth: "none"`.
-  - Catalog sync uses `safeFetch` on fixed URLs: on first use, after 24 h, or on refresh (at most once a minute). The last good copy is kept in the blob store at `catalogs/<id>.json`.
+  - Catalog sync uses `safeFetch` on fixed URLs: on first use, after 24 h, or on refresh (at most once a minute). The last good copy is kept (since 2026-11-02 in R2 at `external-catalogs/v1/<id>.json`, see §9).
   - Search is local, with `parseQuery` and the new `toJsRegex`.
   - Results that are already in the library are marked.
   - Link-outs come from `externalSearchLinks`.
@@ -202,9 +202,7 @@ An isolated Node script outside the repository read `parseQuery` from `packages/
 
 ## 8. Pre-merge fixes (2026-11-02)
 
-- **F1:**
-  - Catalogs are read and written through `storeFor("local")`, so they always live in the local data folder, even when R2 is configured.
-  - Regression test: with bogus `R2_*` variables set, the catalog is written to and read back from `<data dir>/catalogs/`.
+- **F1 (superseded 2026-11-02):** catalogs were first forced onto local disk. The owner then chose Cloud-First storage instead; see §9.
 - **F2:** Magic UI keeps only components named in its own free list (`https://magicui.design/llms.txt`). Anything else is left out and recorded in the catalog's `excluded`.
   - **Fail-safe:** if the list can't be read, or names no components, the sync fails. The last confirmed copy stays (`stale`); with none, the provider is `unavailable`.
   - **Evidence:** on 2026-11-02 all 78 components were in the list, and all 78 were also in the public MIT repository.
@@ -213,3 +211,28 @@ An isolated Node script outside the repository read `parseQuery` from `packages/
   - The library view keeps the previous results dimmed under their own query, with "Searching for "…"…", until the new page arrives.
   - The command palette shows no direct results until they match what is typed.
   - Regression test in `external-search.test.ts`.
+
+## 9. Cloud-First catalog storage (owner's decision, 2026-11-02)
+
+This supersedes the local-only requirement (pre-merge fix F1).
+
+- **Persistent storage:** Cloudflare R2, chosen explicitly (`storeFor("r2")`), at `external-catalogs/v1/<provider>.json`. That namespace is separate from reference files (`assets/`, `thumbnails/`…).
+  - No catalog file is ever written to local disk.
+  - If the `R2_*` keys are missing, Direct Search reports "R2 isn't configured" (`unavailable`) instead of falling back to disk.
+- **Memory:** a bounded in-memory cache: one catalog per provider (three today), each capped at 5,000 items. Every search runs on it.
+- **R2 reads and writes:**
+  - A read happens only on a cache miss: once per catalog after a start.
+  - A write happens only after a successful sync from the provider: at most every 24 hours, or on a manual refresh (at most once a minute).
+  - Searches never touch R2.
+  - A catalog already in R2 that is less than a day old is reused after a restart, with no download from the provider.
+- **Failures:**
+
+  | Situation                        | Behaviour                                                                                                            |
+  | -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+  | R2 unreadable, catalog in memory | The memory copy answers                                                                                              |
+  | R2 unreadable, nothing in memory | The provider is `unavailable` ("The catalog storage (R2) couldn't be read…"); no provider download, no disk fallback |
+  | R2 refuses a write               | The freshly synced catalog still answers from memory, with "Saved in memory only…"                                   |
+  | Provider sync fails              | The last valid copy answers as `stale`, and R2 keeps it                                                              |
+
+- **Costs:** R2 operations and storage may incur charges. On 2026-11-02 the three catalogs used 17,996 + 53,946 + 9,855 bytes, read 3 times per start and written at most 3 times a day.
+- **Privacy:** queries never go to R2 or to a provider; R2 holds only the public catalogs.

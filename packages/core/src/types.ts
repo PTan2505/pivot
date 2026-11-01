@@ -686,6 +686,8 @@ export interface DirectProviderInfo {
   enabled: boolean;
   syncedAt: string | null;
   items: number | null;
+  /** Why the catalog storage (R2) couldn't be read, or that it isn't configured. */
+  storageError?: string;
 }
 
 /** How two references relate. Theme, viewport, Original/Latest and states are assets of one reference, not links. */

@@ -29,6 +29,35 @@ Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 - **Partly:** #4 (Motion metadata exists as assets, not as a reference kind), #49 (errors explain cause and next step; there is no collapsed technical-details view), #63 and #65 (QA and consistent states are practised per phase, not finished work items).
 - **Verification limits:** extension flows were driven in headless Chromium with a stubbed active tab or a test-only build with `<all_urls>` standing in for the `activeTab` grant; real-Chrome quick save (⌥⇧D), context menus and the alarm-driven sync weren't clicked through by hand.
 
+### Hybrid Search: Cloud-First catalog storage (2026-11-02)
+
+- **Status:** Done. The owner revised the storage decision; still no PR or merge.
+- **Files changed:**
+  - core: `external-search.ts` (explicit R2 store, namespaced keys, bounded memory cache, R2 failure handling, `storageError` for Settings), `types.ts`;
+  - tests: `external-search.test.ts`, now run against s3rver;
+  - web: `settings/page.tsx`;
+  - docs: SPEC §18, PIVOT_DECISIONS §8 (new row superseding local-only), `hybrid-search-plan.md` §8–9, DESIGN.md.
+- **Checks:**
+  - **Core tests** on s3rver:
+    - catalogs go to `external-catalogs/v1/*`, never to local disk;
+    - repeated searches cost 0 R2 or provider requests;
+    - after a restart, each catalog is read from R2 once;
+    - R2 down: the memory copy answers, or `unavailable` with no download;
+    - an R2 write refused: memory copy plus a note;
+    - a provider refresh failure: the stale copy answers and R2 is unchanged;
+    - no R2 configured: `unavailable`, no fallback.
+  - **Real R2** (temporary test, removed; no credentials printed):
+    - 3 objects written: 17,996 / 53,946 / 9,855 bytes; 78 / 218 / 65 items;
+    - 4 more searches: 0 R2 requests, 0 provider requests;
+    - restart: 3 R2 reads, 0 writes, 0 downloads;
+    - simulated R2 outage: in memory `ok`, after a restart `unavailable`;
+    - simulated provider outage with day-old catalogs: `stale`, 0 R2 writes;
+    - library rows 0 → 0.
+  - **Web app with real R2** (scratch database):
+    - External results load from the R2 copies;
+    - Settings shows the R2 note;
+    - the data folder has no catalog files.
+
 ### Hybrid Search pre-merge fixes F1–F4 (2026-11-02)
 
 - **Status:** Done. The owner approved the audit findings; still no PR or merge.
