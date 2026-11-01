@@ -4,7 +4,14 @@ import { ExternalLink, FolderSync, Layers, Link2, Search, Settings, Trash2 } fro
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { RESOURCE_TYPES, SECTIONS, sourceSearchUrl, TYPE_DEFS, type SearchScope } from "@pivot/core/types";
+import {
+  externalPageFor,
+  RESOURCE_TYPES,
+  SECTIONS,
+  sourceSearchUrl,
+  TYPE_DEFS,
+  type SearchScope,
+} from "@pivot/core/types";
 import { useCreateOfType } from "@/components/add-menu";
 import { ScopeSwitch } from "@/components/external-search";
 import { hostOf } from "@/components/resource-card";
@@ -65,7 +72,8 @@ export function CommandPalette() {
   );
   const shown = scope === "external" ? [] : results.slice(0, debounced ? 20 : 8);
   const external = useExternalSearch(debounced, { enabled: paletteOpen && scope !== "library", limit: 3 });
-  const direct = scope === "library" || !debounced.trim() ? [] : (external.data?.providers ?? []);
+  // only results that answer what is typed now; the previous query's stay out while the new one loads
+  const direct = scope === "library" ? [] : (externalPageFor(external.data, debounced)?.providers ?? []);
   const { data: sources = [], isLoading: loadingSources } = useResources(
     { type: "source", sort: "title" },
     { enabled: paletteOpen },

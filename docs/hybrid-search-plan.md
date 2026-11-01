@@ -112,6 +112,12 @@ There is no new service and no second search engine.
 | SiteInspire                       | Link-out                                                                                                                        | Hotlinking or displaying screenshots; direct results until the licence is verified |
 | Paid and other link-out sources   | Opening their search page                                                                                                       | Calling their API or MCP; scraping; storing their content                          |
 
+**Remaining licensing interpretation risk (React Bits).**
+
+- React Bits is MIT + Commons Clause. The clause forbids selling, sublicensing or redistributing "the components themselves".
+- PIVOT shows only each component's title, description and a link to its page on reactbits.dev, and never stores, serves or shows component code.
+- Reading that as not redistributing the components is PIVOT's own interpretation. React Bits hasn't confirmed it in writing. If they object, switch React Bits off in Settings › Search, or make it link-out only.
+
 ## 6. Proof-of-concept findings (Phase 0.5, 2026-11-01)
 
 An isolated Node script outside the repository read `parseQuery` from `packages/core/src/query.ts` (unchanged), synced
@@ -193,3 +199,17 @@ An isolated Node script outside the repository read `parseQuery` from `packages/
   | Magic UI   | 78         | 78                                                 |
   | React Bits | 218        | 217 (`EvilEye` links to the catalog)               |
   | shadcn/ui  | 65         | 64 (`form` uses the docs URL pattern, unconfirmed) |
+
+## 8. Pre-merge fixes (2026-11-02)
+
+- **F1:**
+  - Catalogs are read and written through `storeFor("local")`, so they always live in the local data folder, even when R2 is configured.
+  - Regression test: with bogus `R2_*` variables set, the catalog is written to and read back from `<data dir>/catalogs/`.
+- **F2:** Magic UI keeps only components named in its own free list (`https://magicui.design/llms.txt`). Anything else is left out and recorded in the catalog's `excluded`.
+  - **Fail-safe:** if the list can't be read, or names no components, the sync fails. The last confirmed copy stays (`stale`); with none, the provider is `unavailable`.
+  - **Evidence:** on 2026-11-02 all 78 components were in the list, and all 78 were also in the public MIT repository.
+- **F3:** a Refresh within a minute of the last download returns `refreshed: false` and `retryInMs`. Settings then says the catalog was updated less than a minute ago, instead of claiming a new download.
+- **F4:** `externalPageFor(page, query)` returns a page only for the query it answers.
+  - The library view keeps the previous results dimmed under their own query, with "Searching for "…"…", until the new page arrives.
+  - The command palette shows no direct results until they match what is typed.
+  - Regression test in `external-search.test.ts`.

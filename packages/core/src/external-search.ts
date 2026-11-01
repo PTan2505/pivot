@@ -4,7 +4,7 @@ import { resources } from "./db/schema";
 import { externalSearchLinks } from "./known-sources";
 import { safeFetch, urlKey } from "./net-guard";
 import { parseQuery, toJsRegex } from "./query";
-import { writeStore } from "./storage";
+import { storeFor } from "./storage";
 import { getSearchSettings } from "./settings";
 import { hostOf } from "./source-match";
 import {
@@ -38,6 +38,8 @@ export interface Catalog {
   provider: DirectProviderId;
   syncedAt: string;
   items: CatalogItem[];
+  /** Catalog entries left out because the provider's own free listing doesn't name them (Magic UI). */
+  excluded?: string[];
 }
 
 interface DirectProvider {
@@ -55,8 +57,18 @@ interface DirectProvider {
   /** The public catalog, plus the provider's sitemap to confirm item pages. Fixed URLs, never from a request. */
   catalogUrl: string;
   sitemapUrl?: string;
-  /** Turns the raw catalog (and the sitemap's page URLs, when there is one) into items. Throws on a bad shape. */
-  parse(raw: unknown, pages: Set<string> | null): CatalogItem[];
+  /**
+   * The provider's own list of its free components. When set, only components named in it are kept, and a sync that
+   * can't read it fails (the last good catalog stays), so nothing unconfirmed is ever shown as free.
+   */
+  freeListUrl?: string;
+  /** Reads the free list into component ids; an empty set means it couldn't be confirmed. */
+  freeIds?(text: string): Set<string>;
+  /**
+   * Turns the raw catalog into items, given the sitemap's page URLs (when there is one) and the confirmed free ids
+   * (when the provider has a free list). Throws on a bad shape.
+   */
+  parse(raw: unknown, pages: Set<string> | null, free: Set<string> | null): CatalogItem[];
 }
 
 const MAX_DESCRIPTION = 280;
@@ -120,12 +132,22 @@ const PROVIDERS: DirectProvider[] = [
     licenceMode: "full",
     catalogUrl: "https://magicui.design/r/registry.json",
     sitemapUrl: "https://magicui.design/sitemap.xml",
-    parse(raw, pages) {
+    // Magic UI's own index of its free, MIT-licensed components (Magic UI Pro lives on pro.magicui.design).
+    freeListUrl: "https://magicui.design/llms.txt",
+    freeIds: (text) =>
+      new Set(
+        [...text.matchAll(/https:\/\/magicui\.design\/docs\/components\/([a-z0-9]+(?:-[a-z0-9]+)*)\)/g)].map(
+          (m) => m[1],
+        ),
+      ),
+    parse(raw, pages, free) {
       const out: CatalogItem[] = [];
       for (const item of itemsOf(raw)) {
         assertNoCode(item);
         // examples and styles aren't components with their own page
         if (item.type !== "registry:ui" || typeof item.name !== "string" || !SLUG.test(item.name)) continue;
+        // not in Magic UI's own list of free components: left out
+        if (!free?.has(item.name)) continue;
         const slug = item.name;
         const page = `${MAGICUI_DOCS}/${MAGICUI_PAGE_OF[slug] ?? slug}`;
         const known = pages ? pages.has(page) : false;
@@ -218,7 +240,13 @@ const PROVIDERS: DirectProvider[] = [
 ];
 
 /** The direct providers, in the order the owner chose (Magic UI, React Bits, shadcn/ui). */
-export const DIRECT_PROVIDERS: readonly Omit<DirectProvider, "parse">[] = PROVIDERS;
+export const DIRECT_PROVIDERS: readonly Omit<DirectProvider, "parse" | "freeIds">[] = PROVIDERS;
+
+/**
+ * Catalogs always live in the local data folder, never in R2 even when R2 is configured: they are a cache of public
+ * data, and keeping them local means no cloud requests or costs come from searching.
+ */
+const catalogStore = () => storeFor("local");
 
 /** Timing and network hooks. Exported so tests can stub the network and the clock. */
 export const externalSearchDeps = {
@@ -235,7 +263,8 @@ export const externalSearchDeps = {
   minRefreshMs: 60 * 1000,
 };
 
-type Loaded = { catalog: Catalog; status: "ok" | "stale"; message?: string };
+/** `synced`: this call downloaded the catalog (false when an existing copy answered). */
+type Loaded = { catalog: Catalog; status: "ok" | "stale"; message?: string; synced: boolean };
 
 const g = globalThis as unknown as { __pivotCatalogs?: Map<DirectProviderId, Catalog> };
 const memory: Map<DirectProviderId, Catalog> = (g.__pivotCatalogs ??= new Map());
@@ -252,7 +281,7 @@ function providerOf(id: DirectProviderId) {
 
 async function stored(id: DirectProviderId): Promise<Catalog | null> {
   if (memory.has(id)) return memory.get(id)!;
-  const buf = await writeStore()
+  const buf = await catalogStore()
     .get(storeKey(id))
     .catch(() => null);
   if (!buf) return null;
@@ -288,12 +317,29 @@ async function syncCatalog(id: DirectProviderId): Promise<Catalog> {
         .then(sitemapPages)
         .catch(() => null)
     : null;
+  // A provider with a free list must be confirmed against it; without it nothing is shown as free.
+  let free: Set<string> | null = null;
+  if (p.freeListUrl && p.freeIds) {
+    const unconfirmed = `Couldn't confirm which ${p.name} components are free`;
+    const text = await externalSearchDeps.fetchText(p.freeListUrl).catch((err: unknown) => {
+      throw new Error(`${unconfirmed} (${err instanceof Error ? err.message : String(err)}).`);
+    });
+    free = p.freeIds(text);
+    if (!free.size) throw new Error(`${unconfirmed}: their list names no components.`);
+  }
+  const items = p.parse(raw, pages, free);
+  const excluded = free
+    ? itemsOf(raw)
+        .filter((i) => i.type === "registry:ui" && typeof i.name === "string" && !free!.has(i.name))
+        .map((i) => String(i.name))
+    : [];
   const catalog: Catalog = {
     provider: id,
     syncedAt: new Date(externalSearchDeps.now()).toISOString(),
-    items: p.parse(raw, pages),
+    items,
+    ...(excluded.length ? { excluded } : {}),
   };
-  await writeStore().put(storeKey(id), Buffer.from(JSON.stringify(catalog)), "application/json");
+  await catalogStore().put(storeKey(id), Buffer.from(JSON.stringify(catalog)), "application/json");
   memory.set(id, catalog);
   return catalog;
 }
@@ -307,14 +353,14 @@ async function loadCatalog(id: DirectProviderId, { refresh = false } = {}): Prom
     const age = have ? externalSearchDeps.now() - Date.parse(have.syncedAt) : Infinity;
     const recentTry = externalSearchDeps.now() - (lastAttempt.get(id) ?? -Infinity) < externalSearchDeps.minRefreshMs;
     if (have && (age < externalSearchDeps.maxAgeMs || recentTry) && !(refresh && !recentTry)) {
-      return { catalog: have, status: "ok" };
+      return { catalog: have, status: "ok", synced: false };
     }
     if (!have && recentTry) throw new Error("The catalog couldn't be downloaded a moment ago; try again shortly.");
     try {
-      return { catalog: await syncCatalog(id), status: "ok" };
+      return { catalog: await syncCatalog(id), status: "ok", synced: true };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      if (have) return { catalog: have, status: "stale", message };
+      if (have) return { catalog: have, status: "stale", message, synced: false };
       throw new Error(message);
     }
   })().finally(() => inflight.delete(id));
@@ -437,8 +483,20 @@ export async function externalSearch({
 
 /** Re-downloads one provider's catalog now (at most once a minute). */
 export async function refreshCatalog(id: DirectProviderId) {
-  const { catalog, status, message } = await loadCatalog(id, { refresh: true });
-  return { id, status, message, syncedAt: catalog.syncedAt, items: catalog.items.length };
+  const { catalog, status, message, synced } = await loadCatalog(id, { refresh: true });
+  // Nothing was downloaded: either a sync ran less than a minute ago, or this one failed and the old copy answered.
+  const waitMs = synced
+    ? 0
+    : Math.max(0, (lastAttempt.get(id) ?? 0) + externalSearchDeps.minRefreshMs - externalSearchDeps.now());
+  return {
+    id,
+    status,
+    message,
+    refreshed: synced,
+    ...(waitMs > 0 && status === "ok" ? { retryInMs: waitMs } : {}),
+    syncedAt: catalog.syncedAt,
+    items: catalog.items.length,
+  };
 }
 
 /** Settings › Search: each provider with its switch and what's synced, without downloading anything. */

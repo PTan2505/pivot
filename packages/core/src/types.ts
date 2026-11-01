@@ -666,6 +666,14 @@ export interface ExternalSearchPage {
   linkOuts: LinkOutResult[];
 }
 
+/**
+ * The page only when it answers this query. While a new query loads, the previous page may still be at hand; it must
+ * never be shown as if it were the new query's results.
+ */
+export function externalPageFor(page: ExternalSearchPage | undefined | null, query: string) {
+  return page && page.query === query.trim() ? page : null;
+}
+
 /** Per-provider switches and catalog state, for Settings › Search. */
 export interface DirectProviderInfo {
   id: DirectProviderId;

@@ -269,12 +269,22 @@ function SearchSection() {
   const refresh = async (p: DirectProviderInfo) => {
     setBusy(p.id);
     try {
-      const r = await api<{ status: string; items: number; message?: string }>("/api/search/providers/refresh", {
-        method: "POST",
-        json: { id: p.id },
-      });
+      const r = await api<{
+        status: string;
+        items: number;
+        refreshed: boolean;
+        message?: string;
+        retryInMs?: number;
+      }>("/api/search/providers/refresh", { method: "POST", json: { id: p.id } });
       if (r.status === "stale") toast.error(`Couldn’t update ${p.name}: ${r.message}. The previous copy is kept.`);
-      else toast.success(`${p.name}: ${r.items} components`);
+      else if (!r.refreshed)
+        toast.info(
+          `${p.name} was updated less than a minute ago, so it wasn’t downloaded again. Try again in ${Math.max(
+            1,
+            Math.ceil((r.retryInMs ?? 0) / 1000),
+          )}s.`,
+        );
+      else toast.success(`${p.name} updated: ${r.items} components`);
       qc.invalidateQueries({ queryKey: keys.providers });
       qc.invalidateQueries({ queryKey: ["external-search"] });
     } catch (err) {

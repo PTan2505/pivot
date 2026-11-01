@@ -3,7 +3,13 @@
 import { Check, ExternalLink, Plus, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
-import type { ExternalResult, LinkOutResult, ProviderResults, SearchScope } from "@pivot/core/types";
+import {
+  externalPageFor,
+  type ExternalResult,
+  type LinkOutResult,
+  type ProviderResults,
+  type SearchScope,
+} from "@pivot/core/types";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -177,12 +183,22 @@ function LinkOuts({ links }: { links: LinkOutResult[] }) {
  */
 export function ExternalResults({ query, compact = false }: { query: string; compact?: boolean }) {
   const { data, isLoading, error } = useExternalSearch(query, { limit: compact ? 3 : 6 });
+  // While a new query loads, the previous results stay (no flicker) but under their own query, dimmed, never as the
+  // new query's results.
+  const current = externalPageFor(data, query);
+  const shown = current ?? data;
+  const updating = !!data && !current;
   return (
-    <div className="space-y-8" aria-busy={isLoading}>
+    <div className="space-y-8" aria-busy={isLoading || updating}>
       <div className="space-y-1">
         <h2 className="text-[22px] leading-tight font-medium tracking-[-0.02em] text-ink">
-          Outside your library for “{query}”
+          Outside your library for “{shown?.query ?? query.trim()}”
         </h2>
+        {updating && (
+          <p role="status" className="text-[13px] text-ink-secondary">
+            Searching for “{query.trim()}”…
+          </p>
+        )}
         <p className="text-[13px] text-ink-muted">
           Direct results come from free public catalogs, searched on this computer. Nothing is saved until you save it.
         </p>
@@ -199,10 +215,14 @@ export function ExternalResults({ query, compact = false }: { query: string; com
           ))}
         </div>
       )}
-      {data?.providers.map((p) => (
-        <ProviderSection key={p.id} provider={p} compact={compact} />
-      ))}
-      {data && <LinkOuts links={data.linkOuts} />}
+      {shown && (
+        <div className={cn("space-y-8 transition-opacity duration-150", updating && "opacity-50")}>
+          {shown.providers.map((p) => (
+            <ProviderSection key={p.id} provider={p} compact={compact} />
+          ))}
+          <LinkOuts links={shown.linkOuts} />
+        </div>
+      )}
     </div>
   );
 }

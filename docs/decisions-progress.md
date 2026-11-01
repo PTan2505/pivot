@@ -29,6 +29,22 @@ Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 - **Partly:** #4 (Motion metadata exists as assets, not as a reference kind), #49 (errors explain cause and next step; there is no collapsed technical-details view), #63 and #65 (QA and consistent states are practised per phase, not finished work items).
 - **Verification limits:** extension flows were driven in headless Chromium with a stubbed active tab or a test-only build with `<all_urls>` standing in for the `activeTab` grant; real-Chrome quick save (⌥⇧D), context menus and the alarm-driven sync weren't clicked through by hand.
 
+### Hybrid Search pre-merge fixes F1–F4 (2026-11-02)
+
+- **Status:** Done. The owner approved the audit findings; still no PR or merge.
+- **Files changed:**
+  - core: `external-search.ts`, `types.ts` (`externalPageFor`);
+  - tests: `external-search.test.ts`, plus the new fixture `magicui-llms.txt`;
+  - web: `external-search.tsx`, `command-palette.tsx`, `settings/page.tsx`;
+  - docs: SPEC §18, DESIGN.md (Hybrid search), `hybrid-search-plan.md` §5 and §8.
+- **Fixes:**
+  - **F1:** catalogs are stored locally whatever the R2 settings.
+  - **F2:** Magic UI is confirmed against its own free list, and fails safe when the list can't be read.
+  - **F3:** an honest message when Refresh is on cooldown.
+  - **F4:** no stale results under a new query, and no flicker.
+  - React Bits stays metadata-only; the licensing interpretation risk is written down in the plan.
+- **Checks:** 3 new regression tests (R2 configured, free-list exclusion and fail-safe, page/query consistency); the refresh test now asserts `refreshed: false` and `retryInMs` on cooldown. See the commit for the full run.
+
 ### Hybrid Search H1–H4 — Free catalogs, scope switch, MCP and skill (2026-11-02)
 
 - **Status:** Done, except one check: the headless `pivot-design` E2E with a thin library hasn't been run (it costs a paid Claude Code run).

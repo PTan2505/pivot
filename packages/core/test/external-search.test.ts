@@ -13,6 +13,7 @@ const FIXTURES = path.resolve(__dirname, "fixtures/catalogs");
 const files: Record<string, string> = {
   "https://magicui.design/r/registry.json": "magicui-registry.json",
   "https://magicui.design/sitemap.xml": "magicui-sitemap.xml",
+  "https://magicui.design/llms.txt": "magicui-llms.txt",
   "https://reactbits.dev/r/registry.json": "reactbits-registry.json",
   "https://reactbits.dev/sitemap.xml": "reactbits-sitemap.xml",
   "https://ui.shadcn.com/r/index.json": "shadcn-index.json",
@@ -81,7 +82,11 @@ describe("hybrid search: external providers", () => {
   it("syncs a catalog once, then searches it locally with no network and no database writes", async () => {
     const before = (await resources.listResources({})).length;
     const page = await ext.externalSearch({ query: "marquee", providers: ["magicui"] });
-    expect(calls).toEqual(["https://magicui.design/r/registry.json", "https://magicui.design/sitemap.xml"]);
+    expect(calls).toEqual([
+      "https://magicui.design/r/registry.json",
+      "https://magicui.design/sitemap.xml",
+      "https://magicui.design/llms.txt",
+    ]);
     const magic = first(page, "magicui");
     expect(magic.status).toBe("ok");
     expect(magic.results[0]).toMatchObject({
@@ -190,6 +195,7 @@ describe("hybrid search: external providers", () => {
   });
 
   it("strips markup from catalog text", async () => {
+    overrides["https://magicui.design/llms.txt"] = "- [Evil](https://magicui.design/docs/components/evil): listed";
     overrides["https://magicui.design/r/registry.json"] = JSON.stringify({
       items: [
         {
@@ -223,12 +229,16 @@ describe("hybrid search: external providers", () => {
     expect((await ext.listDirectProviders()).find((p) => p.id === "reactbits")?.enabled).toBe(false);
 
     calls = [];
-    await ext.refreshCatalog("magicui");
-    expect(calls).toEqual([]); // synced moments ago
+    // synced moments ago: nothing is downloaded, and the answer says so instead of claiming a refresh
+    const blocked = await ext.refreshCatalog("magicui");
+    expect(calls).toEqual([]);
+    expect(blocked).toMatchObject({ status: "ok", refreshed: false });
+    expect(blocked.retryInMs).toBeGreaterThan(0);
     clock += 2 * 60 * 1000;
     const refreshed = await ext.refreshCatalog("magicui");
     expect(calls).toContain("https://magicui.design/r/registry.json");
-    expect(refreshed).toMatchObject({ status: "ok", items: 11 });
+    expect(refreshed).toMatchObject({ status: "ok", refreshed: true, items: 10 });
+    expect(refreshed).not.toHaveProperty("retryInMs");
   });
 
   it("lists link-outs for sites without a catalog, never as verified results, and validates the query", async () => {
@@ -246,5 +256,76 @@ describe("hybrid search: external providers", () => {
 
     await expect(ext.externalSearch({ query: "  " })).rejects.toThrow(/Type something/);
     await expect(ext.externalSearch({ query: "x".repeat(121) })).rejects.toThrow(/120/);
+  });
+
+  it("keeps catalogs in the local data folder even when R2 is configured", async () => {
+    // Bogus R2 settings: any read or write that went to R2 would fail and leave the provider unavailable.
+    const r2 = {
+      R2_ACCOUNT_ID: "audit-account",
+      R2_ACCESS_KEY_ID: "audit-key",
+      R2_SECRET_ACCESS_KEY: "audit-secret",
+      R2_BUCKET: "audit-bucket",
+    };
+    Object.assign(process.env, r2);
+    try {
+      const magic = first(await ext.externalSearch({ query: "marquee", providers: ["magicui"] }), "magicui");
+      expect(magic.status).toBe("ok");
+      const file = path.join(tmp, "data", "catalogs", "magicui.json");
+      const onDisk = JSON.parse(await fs.readFile(file, "utf8"));
+      expect(onDisk.items.length).toBe(10);
+      // and it is read back from there after a restart, still with R2 configured
+      ext.resetCatalogMemory();
+      calls = [];
+      expect(first(await ext.externalSearch({ query: "globe", providers: ["magicui"] }), "magicui").status).toBe("ok");
+      expect(calls).toEqual([]);
+    } finally {
+      for (const k of Object.keys(r2)) delete process.env[k];
+    }
+  });
+
+  it("keeps only Magic UI components its own free list names, and fails safely when the list can't be read", async () => {
+    // rainbow-button is in the registry but not in the (trimmed) llms.txt: it is left out and recorded
+    const magic = first(await ext.externalSearch({ query: "rainbow button", providers: ["magicui"] }), "magicui");
+    expect(magic.status).toBe("ok");
+    expect(magic.results).toEqual([]);
+    const onDisk = JSON.parse(await fs.readFile(path.join(tmp, "data", "catalogs", "magicui.json"), "utf8"));
+    expect(onDisk.excluded).toEqual(["rainbow-button"]);
+    expect(onDisk.items.map((i: { id: string }) => i.id)).not.toContain("rainbow-button");
+
+    // the list can't be read on a later sync: the confirmed copy stays, marked stale
+    clock += 25 * 60 * 60 * 1000;
+    offline.add("https://magicui.design/llms.txt");
+    const stale = first(await ext.externalSearch({ query: "marquee", providers: ["magicui"] }), "magicui");
+    expect(stale.status).toBe("stale");
+    expect(stale.message).toMatch(/Couldn't confirm which Magic UI components are free/);
+    expect(stale.results[0].title).toBe("Marquee");
+
+    // no confirmed copy at all: nothing is shown as free
+    ext.resetCatalogMemory();
+    await fs.rm(path.join(tmp, "data", "catalogs"), { recursive: true, force: true });
+    clock += 2 * 60 * 1000;
+    const none = first(await ext.externalSearch({ query: "marquee", providers: ["magicui"] }), "magicui");
+    expect(none).toMatchObject({ status: "unavailable", results: [] });
+
+    // a list that names no components counts as unconfirmed too
+    offline = new Set();
+    overrides["https://magicui.design/llms.txt"] = "# Magic UI\n\nNothing listed here.";
+    ext.resetCatalogMemory();
+    clock += 2 * 60 * 1000;
+    const empty = first(await ext.externalSearch({ query: "marquee", providers: ["magicui"] }), "magicui");
+    expect(empty).toMatchObject({ status: "unavailable" });
+    expect(empty.message).toMatch(/names no components/);
+  });
+});
+
+describe("hybrid search: result consistency", () => {
+  it("only treats a page as the results of the query it answers", async () => {
+    const { externalPageFor } = await import("../src/types");
+    const page = { query: "marquee", providers: [], linkOuts: [] };
+    expect(externalPageFor(page, "marquee")).toBe(page);
+    expect(externalPageFor(page, "  marquee ")).toBe(page);
+    // the previous query's page, still at hand while the new one loads, is not the new query's results
+    expect(externalPageFor(page, "marquee text")).toBeNull();
+    expect(externalPageFor(undefined, "marquee")).toBeNull();
   });
 });
