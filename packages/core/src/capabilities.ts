@@ -24,6 +24,8 @@ export const API_FEATURES = [
   "design",
   /** Agent suggestions (`/api/resources/[id]/suggestions`, `/api/suggestions`) and notes (`/annotate`). */
   "suggestions",
+  /** Hybrid search: `GET /api/search/external` (free direct catalogs plus link-outs). */
+  "search.external",
 ] as const;
 
 export type ApiFeature = (typeof API_FEATURES)[number];

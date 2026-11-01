@@ -674,6 +674,9 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
               </p>
             </Field>
           )}
+          {typeof draft.meta.externalOrigin === "object" && draft.meta.externalOrigin !== null && (
+            <ExternalOriginInfo origin={draft.meta.externalOrigin as Record<string, unknown>} />
+          )}
           {def.visual && (
             <>
               <Field label="Published by" htmlFor="published-by">
@@ -823,6 +826,21 @@ function ReviewBanner({ id }: { id: string }) {
 }
 
 /** Where a saved section sat on its page. The selector is only a hint: pages change. */
+/** Saved from a hybrid-search result: which free catalog it was found in, and that catalog's licence. */
+function ExternalOriginInfo({ origin }: { origin: Record<string, unknown> }) {
+  const name = typeof origin.providerName === "string" ? origin.providerName : "an external catalog";
+  const licence = typeof origin.licence === "string" ? ` (${origin.licence})` : "";
+  const when = typeof origin.savedAt === "string" ? new Date(origin.savedAt).toLocaleDateString() : null;
+  return (
+    <Field label="Found via" htmlFor="found-via">
+      <p id="found-via" className="text-xs text-ink-secondary">
+        {name}
+        {licence} search{when ? `, saved ${when}` : ""}
+      </p>
+    </Field>
+  );
+}
+
 function SectionInfo({ section }: { section: Record<string, unknown> }) {
   const rect = section.rect as { width?: number; height?: number; y?: number } | undefined;
   const viewport = section.viewport as { width?: number } | undefined;

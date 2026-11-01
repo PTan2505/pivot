@@ -4,6 +4,8 @@ import type {
   DesignMilestone,
   DesignSessionDetailDTO,
   DesignSessionDTO,
+  DirectProviderId,
+  ExternalSearchPage,
   SuggestionDTO,
   SuggestionKind,
   TagKind,
@@ -31,6 +33,15 @@ export interface PivotSource {
   listSources(): Promise<{ id: string; title: string; sourceUrl: string | null; meta: Record<string, unknown> }[]>;
   /** An asset's bytes: its small thumbnail, or the original file. */
   getImage(assetId: string, variant: "thumb" | "original"): Promise<{ data: Buffer; mimeType: string }>;
+  /**
+   * Hybrid search, external side: free public catalogs searched by the app, plus search links for other sites.
+   * Optional, so an older app (or a source without it) makes `search_external` say so instead of failing.
+   */
+  externalSearch?(req: {
+    query: string;
+    providers?: DirectProviderId[];
+    limit?: number;
+  }): Promise<ExternalSearchPage | null>;
 }
 
 /**
@@ -74,7 +85,14 @@ export function canWrite(source: PivotSource): source is PivotSource & PivotWrit
 }
 
 export type ToolErrorCode =
-  "not_found" | "invalid_input" | "invalid_cursor" | "app_unreachable" | "no_images" | "read_only" | "unauthorized";
+  | "not_found"
+  | "invalid_input"
+  | "invalid_cursor"
+  | "app_unreachable"
+  | "no_images"
+  | "read_only"
+  | "unauthorized"
+  | "not_supported";
 
 /** An error the agent can act on: the code says what kind, the message says what to do. */
 export class ToolError extends Error {

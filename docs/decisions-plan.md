@@ -29,19 +29,19 @@ Rules for every phase:
 
 Each is resolved in the phase shown; the decision document's amendments table records them.
 
-| #   | Conflict                                                                                                                                   | Resolution                                                                                                       | Phase |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ----- |
-| C1  | **Load More (#12):** `CLICK_LOAD_MORE` runs on every full-page capture. SPEC #7 describes it as always on.                                 | Off by default; an `expandContent` option turns it on. Scrolling and lazy-load stay.                             | 1     |
-| C2  | **Retake (#18):** `captureOne` and `replaceScreenshot` detach and delete the old shots. SPEC #7 says a retake replaces them.               | Keep the first successful capture as Original and the newest as Latest.                                          | 1     |
-| C3  | **Theme (#11):** the server always emulates `colorScheme: "dark"` and doesn't record it.                                                   | Record the scheme; Light / Dark / Both on request; no simulated theme.                                           | 1     |
-| C4  | **Quick save uploads the tab screenshot at once (#24, #37).**                                                                              | Guess private pages and hold flagged captures locally for approval.                                              | 4     |
-| C5  | **Share links (#41) vs a localhost-only API** (`proxy.ts`, which CLAUDE.md says to keep).                                                  | Build the Share Package (a file) only. A public link needs its own architecture decision.                        | 6     |
-| C6  | **External source search (#6, #7):** Refero, Dribbble and the like have no public search API, and scraping breaks their terms.             | An External tab that opens the `searchUrl` templates in `known-sources.ts`; nothing is stored.                   | Opt.  |
-| C7  | **CLAUDE.md froze MCP and workflows; SPEC §11 lists backup/restore, resource links and AI tagging as out of scope.**                       | CLAUDE.md updated in Phase 0. SPEC §11 is edited as each item is built.                                          | 0+    |
-| C8  | **Security (#62):** `proxy.ts` treats a write with neither `Origin` nor `Sec-Fetch-Site` as same-origin, so it needs no token.             | Require the token for non-browser writes, after checking what relies on the current behaviour.                   | 2     |
-| C9  | **Duplicates (#10):** the server only skips a duplicate with the same URL **and** type.                                                    | Warn on the same URL whatever the type; quick save keeps skipping on URL + type, so the API doesn't change.      | 3     |
-| C10 | **Approval gate (A2.7, A8):** `pivot-design` builds at once when the user says up front to go ahead.                                       | Remove the exception; "just build it" only reduces the mockups to one direction, which still waits for approval. | S     |
-| C11 | **Names before approval (A8):** an earlier draft of this plan named MCP write tools and session tables, but A8 says those are not decided. | Phase 5a writes a proposal; nothing is built until it is approved.                                               | 5a    |
+| #   | Conflict                                                                                                                                   | Resolution                                                                                                                                                                                                                 | Phase   |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| C1  | **Load More (#12):** `CLICK_LOAD_MORE` runs on every full-page capture. SPEC #7 describes it as always on.                                 | Off by default; an `expandContent` option turns it on. Scrolling and lazy-load stay.                                                                                                                                       | 1       |
+| C2  | **Retake (#18):** `captureOne` and `replaceScreenshot` detach and delete the old shots. SPEC #7 says a retake replaces them.               | Keep the first successful capture as Original and the newest as Latest.                                                                                                                                                    | 1       |
+| C3  | **Theme (#11):** the server always emulates `colorScheme: "dark"` and doesn't record it.                                                   | Record the scheme; Light / Dark / Both on request; no simulated theme.                                                                                                                                                     | 1       |
+| C4  | **Quick save uploads the tab screenshot at once (#24, #37).**                                                                              | Guess private pages and hold flagged captures locally for approval.                                                                                                                                                        | 4       |
+| C5  | **Share links (#41) vs a localhost-only API** (`proxy.ts`, which CLAUDE.md says to keep).                                                  | Build the Share Package (a file) only. A public link needs its own architecture decision.                                                                                                                                  | 6       |
+| C6  | **External source search (#6, #7):** Refero, Dribbble and the like have no public search API, and scraping breaks their terms.             | An External tab that opens the `searchUrl` templates in `known-sources.ts`; nothing is stored. **Superseded 2026-11-01** by Hybrid Search (Free-First): Direct Search for free, licensed providers, link-out for the rest. | Opt., H |
+| C7  | **CLAUDE.md froze MCP and workflows; SPEC §11 lists backup/restore, resource links and AI tagging as out of scope.**                       | CLAUDE.md updated in Phase 0. SPEC §11 is edited as each item is built.                                                                                                                                                    | 0+      |
+| C8  | **Security (#62):** `proxy.ts` treats a write with neither `Origin` nor `Sec-Fetch-Site` as same-origin, so it needs no token.             | Require the token for non-browser writes, after checking what relies on the current behaviour.                                                                                                                             | 2       |
+| C9  | **Duplicates (#10):** the server only skips a duplicate with the same URL **and** type.                                                    | Warn on the same URL whatever the type; quick save keeps skipping on URL + type, so the API doesn't change.                                                                                                                | 3       |
+| C10 | **Approval gate (A2.7, A8):** `pivot-design` builds at once when the user says up front to go ahead.                                       | Remove the exception; "just build it" only reduces the mockups to one direction, which still waits for approval.                                                                                                           | S       |
+| C11 | **Names before approval (A8):** an earlier draft of this plan named MCP write tools and session tables, but A8 says those are not decided. | Phase 5a writes a proposal; nothing is built until it is approved.                                                                                                                                                         | 5a      |
 
 ## 3. Part A — skill, MCP and design workflow
 
@@ -71,8 +71,8 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 3   | Brief snapshots inside PIVOT        | Missing  | 5         | [x]  |
 | 4   | One record + optional metadata      | Partial  | 4, 6      | [ ]  |
 | 5   | Collections vs facets               | Partial  | 3         | [x]  |
-| 6   | Source Directory 2.0                | Partial  | Optional  | [ ]  |
-| 7   | Unified search All/Library/External | Partial  | 3, Opt.   | [x]  |
+| 6   | Source Directory 2.0                | Partial  | H         | [x]  |
+| 7   | Unified search All/Library/External | Partial  | H         | [x]  |
 | 8   | Section references                  | Missing  | 4         | [x]  |
 | 9   | Auto / Crop / Select capture        | Partial  | 4         | [x]  |
 | 10  | Duplicates with thumbnails          | Partial  | 3         | [x]  |
@@ -107,7 +107,7 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 39  | Export                              | Partial  | 6         | [x]  |
 | 40  | Import / restore                    | Missing  | 6         | [x]  |
 | 41  | Sharing                             | Missing  | 6         | [ ]  |
-| 42  | Extension search                    | Missing  | 3         | [x]  |
+| 42  | Extension search                    | Partial  | 3, H      | [ ]  |
 | 43  | Notifications                       | Partial  | 2         | [x]  |
 | 44  | Shortcuts and context menu          | Exists   | 4         | [x]  |
 | 45  | Onboarding and connection           | Partial  | 2         | [x]  |
@@ -131,6 +131,11 @@ Status is today's code: **Exists**, **Partial**, **Missing** or **Conflict**. "D
 | 63  | Risk-based QA                       | Partial  | all       | [ ]  |
 | 64  | Core first, advanced phased         | —        | this plan | [x]  |
 | 65  | Unified states and actions          | Partial  | all       | [ ]  |
+
+Re-opened on 2026-11-01 (Hybrid Search, phase **H**, see [hybrid-search-plan.md](hybrid-search-plan.md)):
+
+- **#6, #7:** the link-out (Optional, done) is now only the fallback. Direct Search (free catalogs: Magic UI, React Bits, shadcn/ui) and the `All / Library / External` switch were built and verified on 2026-11-02 (H1–H4). Website-inspiration sources stay link-out: none is free and clearly licensed (SiteInspire waits for licence verification).
+- **#42:** Elsewhere is approved as link-out only (amendment 2026-11-01). The "Possibly related" group is still missing, so #42 isn't done.
 
 ## 5. Phases
 
@@ -240,8 +245,20 @@ Files: `packages/mcp-tools/src/tools.ts`, `apps/mcp/src/http-source.ts`, new rou
 
 ### Optional
 
-- [x] Capture Sessions (#36) and the External link-out (#6, #7).
+- [x] Capture Sessions (#36) and the External link-out (#6, #7). The link-out is now the fallback of Hybrid Search (below), not the whole of #6/#7.
 - [ ] Trusted Websites (#52) and an Advanced settings group (#50): not built.
+
+### Hybrid Search (Free-First), approved 2026-11-01
+
+Plan: [hybrid-search-plan.md](hybrid-search-plan.md). A phase is ticked only once verified.
+
+- [x] H0 — Decisions and docs: PIVOT_DECISIONS §8 rows (Hybrid Search, Free-First, provider order and licensing, #42 Elsewhere, Library-first skill, catalog sync), SPEC §1/§4/§6/§11/§13/§18, this plan.
+- [x] H0.5 — Isolated proof of concept for the Magic UI registry (no app code); findings in [hybrid-search-plan.md](hybrid-search-plan.md) §6.
+- [x] H1 — Provider layer, cost guard, `GET /api/search/external`, web `All / Library / External` switch (library page and ⌘K), link-outs, Settings › Search.
+- [x] H2 — Magic UI direct provider (local index), attribution and licence, Save with provenance (`meta.externalOrigin`).
+- [x] H3 — MCP `search_external` and the `pivot-design` changes. The headless `pivot-design` E2E with a thin library is not run yet (see the progress log).
+- [x] H4 — React Bits (metadata only), then shadcn/ui.
+- Out of scope: paid providers (Mobbin, Refero, Nicely Done, Savee…), paid keys or OAuth, scraping, SiteInspire direct results or screenshots until its licence is verified, extension changes.
 
 ## 6. Verification for each phase
 

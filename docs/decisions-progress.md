@@ -29,6 +29,139 @@ Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 - **Partly:** #4 (Motion metadata exists as assets, not as a reference kind), #49 (errors explain cause and next step; there is no collapsed technical-details view), #63 and #65 (QA and consistent states are practised per phase, not finished work items).
 - **Verification limits:** extension flows were driven in headless Chromium with a stubbed active tab or a test-only build with `<all_urls>` standing in for the `activeTab` grant; real-Chrome quick save (⌥⇧D), context menus and the alarm-driven sync weren't clicked through by hand.
 
+### Hybrid Search: Cloud-First catalog storage (2026-11-02)
+
+- **Status:** Done. The owner revised the storage decision; still no PR or merge.
+- **Files changed:**
+  - core: `external-search.ts` (explicit R2 store, namespaced keys, bounded memory cache, R2 failure handling, `storageError` for Settings), `types.ts`;
+  - tests: `external-search.test.ts`, now run against s3rver;
+  - web: `settings/page.tsx`;
+  - docs: SPEC §18, PIVOT_DECISIONS §8 (new row superseding local-only), `hybrid-search-plan.md` §8–9, DESIGN.md.
+- **Checks:**
+  - **Core tests** on s3rver:
+    - catalogs go to `external-catalogs/v1/*`, never to local disk;
+    - repeated searches cost 0 R2 or provider requests;
+    - after a restart, each catalog is read from R2 once;
+    - R2 down: the memory copy answers, or `unavailable` with no download;
+    - an R2 write refused: memory copy plus a note;
+    - a provider refresh failure: the stale copy answers and R2 is unchanged;
+    - no R2 configured: `unavailable`, no fallback.
+  - **Real R2** (temporary test, removed; no credentials printed):
+    - 3 objects written: 17,996 / 53,946 / 9,855 bytes; 78 / 218 / 65 items;
+    - 4 more searches: 0 R2 requests, 0 provider requests;
+    - restart: 3 R2 reads, 0 writes, 0 downloads;
+    - simulated R2 outage: in memory `ok`, after a restart `unavailable`;
+    - simulated provider outage with day-old catalogs: `stale`, 0 R2 writes;
+    - library rows 0 → 0.
+  - **Web app with real R2** (scratch database):
+    - External results load from the R2 copies;
+    - Settings shows the R2 note;
+    - the data folder has no catalog files.
+
+### Hybrid Search pre-merge fixes F1–F4 (2026-11-02)
+
+- **Status:** Done. The owner approved the audit findings; still no PR or merge.
+- **Files changed:**
+  - core: `external-search.ts`, `types.ts` (`externalPageFor`);
+  - tests: `external-search.test.ts`, plus the new fixture `magicui-llms.txt`;
+  - web: `external-search.tsx`, `command-palette.tsx`, `settings/page.tsx`;
+  - docs: SPEC §18, DESIGN.md (Hybrid search), `hybrid-search-plan.md` §5 and §8.
+- **Fixes:**
+  - **F1:** catalogs are stored locally whatever the R2 settings.
+  - **F2:** Magic UI is confirmed against its own free list, and fails safe when the list can't be read.
+  - **F3:** an honest message when Refresh is on cooldown.
+  - **F4:** no stale results under a new query, and no flicker.
+  - React Bits stays metadata-only; the licensing interpretation risk is written down in the plan.
+- **Checks:** 3 new regression tests (R2 configured, free-list exclusion and fail-safe, page/query consistency); the refresh test now asserts `refreshed: false` and `retryInMs` on cooldown. See the commit for the full run.
+
+### Hybrid Search H1–H4 — Free catalogs, scope switch, MCP and skill (2026-11-02)
+
+- **Status:** Done, except one check: the headless `pivot-design` E2E with a thin library hasn't been run (it costs a paid Claude Code run).
+- **Existing functionality reused:**
+  - `parseQuery` (plus a new `toJsRegex`), `searchResources` unchanged, `externalSearchLinks` and `KNOWN_SOURCES`;
+  - `safeFetch` (SSRF guard), the blob store, `app_settings`;
+  - `/api/clip` for Save (`ifExists: "skip"`, Inbox, server capture);
+  - `findByUrl`'s `urlKey` for "already in your library";
+  - the `PivotSource` / `HttpSource` pattern.
+- **Files changed:**
+  - **core:** `external-search.ts` (new), `types.ts`, `query.ts`, `settings.ts`, `capabilities.ts`; tests `external-search.test.ts` with recorded fixtures in `test/fixtures/catalogs/`;
+  - **web routes:** `api/search/external`, `api/search/providers` (and `/refresh`), `api/clip` (`origin`);
+  - **web components:** `external-search.tsx` (rewritten), `library-view.tsx`, `command-palette.tsx`, `settings/page.tsx`, `resource-detail.tsx`, `lib/api.ts`, `hooks/use-library-params.ts`;
+  - **MCP:** `external-tools.ts` (new) and `source.ts` in `packages/mcp-tools`, `http-source.ts` and `server.ts` in `apps/mcp`, test `external-tools.test.ts`;
+  - **skill and docs:** `.claude/skills/pivot-design/SKILL.md`; SPEC §1, §6, §10, §18; DESIGN.md (Hybrid search); the plan files.
+- **Checks run and results:**
+  - Tests: core 104 of 104 (10 new); MCP 15 of 15 (3 new); extension 12 of 12.
+  - Typecheck and lint clean; Prettier clean on the changed files.
+  - The new core tests cover:
+    - the cost guard (every provider free, keyless, HTTPS on its own host);
+    - one sync, then local search with **zero** network calls and **no** database writes;
+    - page links from the sitemap or catalog;
+    - React Bits variants merged, and acronyms kept ("ASCII Text");
+    - a day-old catalog resynced, a failed sync answered with the last good copy (also after a restart), no copy → `unavailable`;
+    - catalogs that aren't JSON, carry code, or have only unsafe names are refused;
+    - markup stripped;
+    - "already in your library";
+    - a switched-off provider skipped without a request;
+    - refresh at most once a minute;
+    - link-outs are never verified and include paid sources, never the direct providers;
+    - query validation.
+- **Manual verification** (scratch app on port 4400, live catalogs):
+  - **Catalogs:** synced Magic UI 78, React Bits 218 and shadcn/ui 65; confirmed pages 78/78, 217/218 and 64/65; the stored catalogs hold only id, title, description, url, linkVerified and categories.
+  - **Library page:** `animated list` under All shows the library empty state and then Magic UI and React Bits "Animated List".
+  - **Save:** **Save to library** created one reference (Inbox, captured, `meta.externalOrigin` with provider, id, MIT, timestamps); the card turned "In your library"; the detail page shows "Found via Magic UI (MIT) search".
+  - **Scopes:**
+    - External hides the library list, the count and the shelf.
+    - Library with no match offers "Search outside your library", which switches to External (`bento grid` → Bento Grid, Magic Bento).
+  - **⌘K:** the scope switch, plus "Magic UI · Direct · MIT" and "React Bits · Direct · MIT + Commons Clause" groups for `marquee`.
+  - **Settings › Search:**
+    - switching React Bits off made it `disabled` in results; switching it back on restored it;
+    - Refresh catalog re-downloaded Magic UI and showed a toast;
+    - the checkboxes have accessible names.
+  - **API:** an empty query and a 121-character query are refused with 400.
+  - **Phone (375 px):** no horizontal overflow.
+- **Remaining issues:**
+  - The `pivot-design` headless E2E on a thin library (H3 acceptance) hasn't been run.
+  - React Bits `EvilEye` and shadcn `form` have no confirmed page.
+  - Whether the Magic UI free registry ever lists Pro items is still unverified.
+  - SiteInspire stays link-out until its licence is verified.
+  - #42 "Possibly related" is still missing.
+- **Next step:** the owner's review; then the skill E2E if wanted.
+
+### Hybrid Search H0 and H0.5 — Decisions, docs and Magic UI proof of concept (2026-11-01)
+
+- **Status:** Done (docs and an isolated proof of concept). Nothing in the app is built; H1 waits for owner approval.
+- **Existing functionality reused:**
+  - `parseQuery` (`packages/core/src/query.ts`), read-only, by the proof of concept;
+  - the link-out builder and `KNOWN_SOURCES` (unchanged).
+- **Files changed:**
+  - `docs/hybrid-search-plan.md` (new; the plan of record, replacing the two review drafts outside the repo);
+  - `docs/PIVOT_DECISIONS.md` §8: six new rows, and the 2026-10-31 link-out-only row marked superseded but kept;
+  - `docs/SPEC.md`:
+    - §1 row 23, §6 and §13: updated;
+    - §4: Elsewhere stays link-out;
+    - §11: paid providers out of scope;
+    - §18: current link-out behaviour, plus the approved, not-built Hybrid Search;
+  - `docs/decisions-plan.md`:
+    - #6, #7 and #42 re-opened;
+    - C6 marked superseded;
+    - new Hybrid Search phase list H0–H4.
+- **Checks run and results:**
+  - Prettier on the changed docs.
+  - Proof of concept: `node poc.mjs` in a scratch folder outside the repo; all assertions passed:
+    - live sync: 78 components;
+    - local search for `marquee`, `border beam` and `animated list`, each with the right component first and 0 network calls;
+    - docs URLs: 78 of 78 answered 200, after one override;
+    - malformed registries refused;
+    - 500, HTML and 404 fell back to the last good catalog;
+    - a hang timed out at 1.5 s; DNS failure handled;
+    - no cached catalog → `unavailable`.
+- **Manual verification:** read the registry, an item endpoint (it contains code, so it is never fetched) and the licence.
+- **Remaining issues:**
+  - Whether the free registry lists Pro items is unverified.
+  - Docs URLs need a sync-time check and an override map.
+  - SiteInspire's licence is still unverified (link-out only).
+- **Next step:** H1, after the owner approves it.
+
 ### Follow-up — Smooth full-page motion video (A6 feedback, 2026-11-01)
 
 - Status: Done

@@ -3,6 +3,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CollectionDTO,
+  DirectProviderInfo,
+  ExternalResult,
+  ExternalSearchPage,
   ResourceDetailDTO,
   SkillPackDTO,
   ResourceDTO,
@@ -44,6 +47,8 @@ export const keys = {
   skills: ["skills-status"] as const,
   skillPacks: ["skill-packs"] as const,
   sourceStats: ["source-stats"] as const,
+  external: (q: string, limit: number) => ["external-search", q, limit] as const,
+  providers: ["search-providers"] as const,
 };
 
 export interface ResourceQuery {
@@ -249,4 +254,64 @@ export function assetUrl(id: string, opts: { thumb?: boolean; preview?: boolean;
   if (opts.download) sp.set("download", "1");
   const qs = sp.toString();
   return `/api/assets/${id}${qs ? `?${qs}` : ""}`;
+}
+
+// ---- Hybrid search: external side ----
+
+/** Real results from the free catalogs PIVOT searches directly, plus search links for other sites. */
+export function useExternalSearch(q: string, { enabled = true, limit = 6 } = {}) {
+  const query = q.trim();
+  return useQuery({
+    queryKey: keys.external(query, limit),
+    queryFn: () =>
+      api<ExternalSearchPage>(`/api/search/external?${new URLSearchParams({ q: query, limit: String(limit) })}`),
+    enabled: enabled && query.length > 0 && query.length <= 120,
+    // the catalogs change at most daily; the library part ("in your library") is refreshed on save
+    staleTime: 5 * 60_000,
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useSearchProviders() {
+  return useQuery({ queryKey: keys.providers, queryFn: () => api<DirectProviderInfo[]>("/api/search/providers") });
+}
+
+/** Saves one external result to the library through the same path as every other save (duplicates are skipped). */
+export function useSaveExternal() {
+  const qc = useQueryClient();
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (r: ExternalResult) => {
+      const form = new FormData();
+      form.set(
+        "data",
+        JSON.stringify({
+          kind: "page",
+          url: r.url,
+          type: "reference",
+          title: r.title,
+          // the catalog's description is kept only where the licence covers the whole catalog; otherwise the page's
+          description: r.licenceMode === "full" ? r.description : undefined,
+          serverCapture: true,
+          needsReview: true,
+          ifExists: "skip",
+          origin: {
+            provider: r.provider,
+            providerName: r.providerName,
+            externalId: r.externalId,
+            licence: r.licence.name,
+            retrievedAt: r.retrievedAt,
+          },
+        }),
+      );
+      return api<{ id: string; path: string; existing?: boolean; title?: string }>("/api/clip", {
+        method: "POST",
+        body: form,
+      });
+    },
+    onSuccess: () => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["external-search"] });
+    },
+  });
 }

@@ -3,6 +3,8 @@ import { getDb } from "./db/client";
 import { appSettings } from "./db/schema";
 import {
   DEFAULT_CAPTURE_SETTINGS,
+  DIRECT_PROVIDER_IDS,
+  type DirectProviderId,
   type CaptureOptions,
   type CaptureSettings,
   type CaptureTheme,
@@ -46,6 +48,43 @@ export async function setCaptureSettings(patch: unknown): Promise<CaptureSetting
   await db
     .insert(appSettings)
     .values({ key: "capture", value: { ...next } })
+    .onConflictDoUpdate({ target: appSettings.key, set: { value: { ...next }, updatedAt: new Date() } });
+  return next;
+}
+
+/** Hybrid search: which direct providers are switched off. All of them are on unless you turn one off. */
+export interface SearchSettings {
+  disabled: DirectProviderId[];
+}
+
+function cleanSearchSettings(input: unknown): SearchSettings {
+  const v = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
+  const disabled = Array.isArray(v.disabled)
+    ? [
+        ...new Set(
+          v.disabled.filter((x): x is DirectProviderId => (DIRECT_PROVIDER_IDS as readonly unknown[]).includes(x)),
+        ),
+      ]
+    : [];
+  return { disabled };
+}
+
+export async function getSearchSettings(): Promise<SearchSettings> {
+  const db = await getDb();
+  const [row] = await db.select().from(appSettings).where(eq(appSettings.key, "search")).limit(1);
+  return cleanSearchSettings(row?.value);
+}
+
+/** Turns one provider on or off. */
+export async function setProviderEnabled(id: DirectProviderId, enabled: boolean): Promise<SearchSettings> {
+  const current = await getSearchSettings();
+  const next = cleanSearchSettings({
+    disabled: enabled ? current.disabled.filter((d) => d !== id) : [...current.disabled, id],
+  });
+  const db = await getDb();
+  await db
+    .insert(appSettings)
+    .values({ key: "search", value: { ...next } })
     .onConflictDoUpdate({ target: appSettings.key, set: { value: { ...next }, updatedAt: new Date() } });
   return next;
 }
