@@ -3,6 +3,7 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
+import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 // The SSRF guard blocks loopback; let the browser reach the local test server.
@@ -18,7 +19,7 @@ let baseUrl: string;
  * What the test server answers: a page whose colour changes per capture, a block page, a sign-in wall, a 503 the
  * first time it is asked (then the page), a 429 with Retry-After the first time, or a page that never finishes.
  */
-let mode: "page" | "blocked" | "signin" | "flaky" | "limited" | "slow" = "page";
+let mode: "page" | "blocked" | "signin" | "flaky" | "limited" | "slow" | "hover" = "page";
 let hits = 0;
 let failuresLeft = 0;
 
@@ -49,6 +50,12 @@ beforeAll(async () => {
       return res.end("<title>Busy</title><body>Try again</body>");
     }
     if (mode === "slow" && browser) return; // never answers
+    if (mode === "hover") {
+      // anything under a pointer turns red
+      return res.end(
+        `<style>body{margin:0;background:#234;color:#fff;font:64px sans-serif}div{height:600px}div:hover{background:#f00}</style><body><div>One</div><div>Two</div><div>Three</div></body>`,
+      );
+    }
     if (mode === "signin") {
       return res.end(
         `<title>Sign in</title><body style="margin:0;background:#fff"><h1>Sign in</h1><form><input name="u"><input type="password" name="p"></form></body>`,
@@ -333,6 +340,27 @@ describe.skipIf(!(await (await import("../src/capture")).playwrightStatus()).ins
     expect(keyframes.map((k) => k.meta.scrollY)).toEqual([0, expect.any(Number)]);
     // the page is about 1360px tall in a 900px window: the recording reaches its bottom
     expect(keyframes[1].meta.scrollY).toBeGreaterThan(400);
+  });
+
+  it("records motion without a pointer on the page", { timeout: 120_000 }, async () => {
+    mode = "hover";
+    try {
+      const r = await resources.createResource({ type: "reference", title: "Hover", sourceUrl: `${baseUrl}?hover` });
+      await capture.enqueueCapture(r.id, { motion: true });
+      await settled(r.id);
+      const keyframes = (await assets.listResourceAssets(r.id)).filter((a) => a.role === "motion-keyframe");
+      expect(keyframes.length).toBeGreaterThanOrEqual(2);
+      for (const k of keyframes) {
+        const data = await assets.readAssetBytes((await assets.getAsset(k.id))!);
+        const { data: px, info } = await sharp(data!).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+        let red = 0;
+        for (let p = 0; p < px.length; p += info.channels) if (px[p] > 200 && px[p + 1] < 80) red++;
+        // no hovered (red) block anywhere in the frame
+        expect(red).toBe(0);
+      }
+    } finally {
+      mode = "page";
+    }
   });
 
   it("keeps a capture-later request waiting until it is run", { timeout: 60_000 }, async () => {

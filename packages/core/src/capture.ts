@@ -481,8 +481,7 @@ async function recordScroll(page: Page, file: string) {
   await page.evaluate(UNLOCK_INNER_SCROLL).catch(() => {});
   await page.evaluate(EAGER_IMAGES).catch(() => {});
   const vp = page.viewportSize() ?? DESKTOP;
-  // the pointer rests mid-screen, so hover effects show as the page passes under it
-  await page.mouse.move(vp.width / 2, vp.height / 2);
+  // The pointer is never moved onto the page: a resting pointer would light up rows and pop tooltips as they pass under it.
   await page.evaluate(IMAGES_ON_SCREEN).catch(() => {});
 
   const cdp = await page.context().newCDPSession(page);
