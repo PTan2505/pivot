@@ -403,9 +403,15 @@ A surface panel (14px radius) on the Inbox page and at the top of a reference's 
 
 A Settings section: a secondary **Back up the library** pill with the result beside it (counts, then the folder path in mono as a link that shows it in Finder). Under a divider: "Restore from a backup folder", a mono path field and a secondary **Preview** pill. The preview states the counts in a sentence, lists the conflicts in 12px muted text, offers one select for them (Keep is the default), and has a primary **Restore** pill; the result is a status line that says restoring again adds nothing twice.
 
-### Look elsewhere — `components/external-search.tsx`
+### Hybrid search — `components/external-search.tsx` (`ScopeSwitch`, `ExternalResults`)
 
-Under the library's "Nothing matches" state: "Look elsewhere for “…”" in ink-subtle, a two-column grid of surface pills (external-link icon, the site's name, "saved" when it is one of your sources) opening its search in a new tab, and an 11px note that results stay on those sites.
+- **Scope switch:** with a query in the library, the toolbar shows a small outline toggle group **All · Library · External** (the chosen one surface-raised with ink text), between the filter chips and Clear filters. The command palette shows the same switch in a row under its input, above a divider.
+- **Outside your library:** a 22px title "Outside your library for “…”" and one 13px ink-muted line saying direct results come from free public catalogs searched on this computer and nothing is saved until you save it. Under `All` it follows the library results after 40px of space; under `External` it replaces them.
+- **Provider group:** a 15px ink name, a raised "Direct" chip, the licence as an accent-text link, "Catalog from <date>" and "n of N" in 12px ink-subtle. A stale or failed provider adds one 13px ink-muted line with a warning triangle; a provider with no match says so in one line; a switched-off provider is not shown.
+- **Result card:** a solid surface container (14px radius, no border or glass, since there is no screenshot to frame): 15px ink title truncated to one line with category chips on the right, a two-line 13px ink-muted description, an 11px ink-subtle attribution line ("Magic UI (magicui.design) · MIT"), then a secondary **Open** pill and a ghost **Save to library** pill. A result already saved shows a ghost "In your library" link instead; a result without a confirmed page has no Save. No ember fills: Save is never the screen's primary action.
+- **Search on other sites:** a 15px heading, the line "These open each site’s own search page. They aren’t results.", and a wrapping row of 32px surface pills (external-link icon, the site's name, "saved source" in 11px ink-subtle).
+- **Command palette:** direct results are groups headed "<name> · Direct · <licence>" with an external-link icon, the title and the description (or "In your library") in muted text; selecting opens the item's page in a new tab.
+- **Settings › Search:** one row per provider: a checkbox "Search <host>", a ghost Refresh catalog pill (spinner while it runs), and a 12px line with the item count, the catalog date and the licence link ("titles, descriptions and links only; no code" for React Bits).
 
 ### Capture queue — `app/captures/page.tsx`
 

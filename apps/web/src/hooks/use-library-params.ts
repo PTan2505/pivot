@@ -4,11 +4,13 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
 import {
   isResourceType,
+  SEARCH_SCOPES,
   isSectionId,
   SECTIONS,
   sectionOf,
   SOURCE_CATEGORIES,
   type ResourceType,
+  type SearchScope,
   type Section,
   type SourceCategory,
 } from "@pivot/core/types";
@@ -31,6 +33,8 @@ export interface LibraryParams {
   category: SourceCategory | undefined;
   sort: "updated" | "created" | "oldest" | "title";
   view: "grid" | "list";
+  /** Hybrid search: everything (default), only the library, or only outside it. Applies while there's a query. */
+  scope: SearchScope;
 }
 
 type ParamsPatch = Partial<Omit<LibraryParams, "section">> & { section?: Section["id"] };
@@ -67,6 +71,7 @@ export function useLibraryParams() {
     category: type === "source" ? SOURCE_CATEGORIES.find((c) => c.value === sp.get("category"))?.value : undefined,
     sort: sort === "created" || sort === "oldest" || sort === "title" ? sort : "updated",
     view: sp.get("view") === "list" ? "list" : "grid",
+    scope: SEARCH_SCOPES.find((x) => x === sp.get("scope")) ?? "all",
   };
 
   const set = useCallback(
@@ -78,6 +83,7 @@ export function useLibraryParams() {
           !value ||
           (k === "sort" && value === "updated") ||
           (k === "view" && value === "grid") ||
+          (k === "scope" && value === "all") ||
           (k === "section" && value === "library");
         if (isDefault) next.delete(k);
         else next.set(k, String(value));

@@ -9,6 +9,8 @@ import type {
   ResourceDetailDTO,
   ResourceDTO,
   ResourceType,
+  DirectProviderId,
+  ExternalSearchPage,
   SearchPage,
   SearchRequest,
   TagDTO,
@@ -83,6 +85,14 @@ export class HttpSource implements PivotSource, PivotWriter {
     if (req.limit) sp.set("limit", String(req.limit));
     if (req.cursor) sp.set("cursor", req.cursor);
     return (await this.json<SearchPage>(`/api/resources?${sp}`))!;
+  }
+
+  /** Null when the app predates hybrid search (no such route). */
+  externalSearch(req: { query: string; providers?: DirectProviderId[]; limit?: number }) {
+    const sp = new URLSearchParams({ q: req.query });
+    if (req.providers?.length) sp.set("providers", req.providers.join(","));
+    if (req.limit) sp.set("limit", String(req.limit));
+    return this.json<ExternalSearchPage>(`/api/search/external?${sp}`);
   }
 
   getResource(id: string) {

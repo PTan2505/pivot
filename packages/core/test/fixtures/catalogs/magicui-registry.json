@@ -1,0 +1,238 @@
+{
+  "name": "magicui",
+  "homepage": "https://magicui.design",
+  "items": [
+    {
+      "name": "magic-card",
+      "type": "registry:ui",
+      "title": "Magic Card",
+      "description": "A spotlight effect that follows your mouse cursor and highlights borders on hover.",
+      "dependencies": ["motion", "next-themes"],
+      "files": [
+        {
+          "path": "registry/magicui/magic-card.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "smooth-cursor",
+      "type": "registry:ui",
+      "description": "A customizable, physics-based smooth cursor animation component with spring animations and rotation effects",
+      "dependencies": ["motion"],
+      "files": [
+        {
+          "path": "registry/magicui/smooth-cursor.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "marquee",
+      "type": "registry:ui",
+      "title": "Marquee",
+      "description": "An infinite scrolling component that can be used to display text, images, or videos.",
+      "files": [
+        {
+          "path": "registry/magicui/marquee.tsx",
+          "type": "registry:ui"
+        }
+      ],
+      "cssVars": {
+        "theme": {
+          "animate-marquee": "marquee var(--duration) infinite linear",
+          "animate-marquee-vertical": "marquee-vertical var(--duration) linear infinite"
+        }
+      },
+      "css": {
+        "@keyframes marquee": {
+          "from": {
+            "transform": "translateX(0)"
+          },
+          "to": {
+            "transform": "translateX(calc(-100% - var(--gap)))"
+          }
+        },
+        "@keyframes marquee-vertical": {
+          "from": {
+            "transform": "translateY(0)"
+          },
+          "to": {
+            "transform": "translateY(calc(-100% - var(--gap)))"
+          }
+        }
+      }
+    },
+    {
+      "name": "globe",
+      "type": "registry:ui",
+      "title": "Globe",
+      "description": "An autorotating, interactive, and highly performant globe made using WebGL.",
+      "dependencies": ["cobe@^0.6.4", "motion"],
+      "files": [
+        {
+          "path": "registry/magicui/globe.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "shimmer-button",
+      "type": "registry:ui",
+      "title": "Shimmer Button",
+      "description": "A button with a shimmering light which travels around the perimeter.",
+      "files": [
+        {
+          "path": "registry/magicui/shimmer-button.tsx",
+          "type": "registry:ui"
+        }
+      ],
+      "cssVars": {
+        "theme": {
+          "animate-shimmer-slide": "shimmer-slide var(--speed) ease-in-out infinite alternate",
+          "animate-spin-around": "spin-around calc(var(--speed) * 2) infinite linear"
+        }
+      },
+      "css": {
+        "@keyframes shimmer-slide": {
+          "to": {
+            "transform": "translate(calc(100cqw - 100%), 0)"
+          }
+        },
+        "@keyframes spin-around": {
+          "0%": {
+            "transform": "translateZ(0) rotate(0)"
+          },
+          "15%, 35%": {
+            "transform": "translateZ(0) rotate(90deg)"
+          },
+          "65%, 85%": {
+            "transform": "translateZ(0) rotate(270deg)"
+          },
+          "100%": {
+            "transform": "translateZ(0) rotate(360deg)"
+          }
+        }
+      }
+    },
+    {
+      "name": "tweet-card",
+      "type": "registry:ui",
+      "title": "Tweet Card",
+      "description": "A card that displays a tweet with the author's name, handle, and profile picture.",
+      "dependencies": ["react-tweet"],
+      "files": [
+        {
+          "path": "registry/magicui/tweet-card.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "client-tweet-card",
+      "type": "registry:ui",
+      "title": "Client Tweet Card",
+      "description": "A client-side version of the tweet card that displays a tweet with the author's name, handle, and profile picture.",
+      "dependencies": ["react-tweet"],
+      "files": [
+        {
+          "path": "registry/magicui/client-tweet-card.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "number-ticker",
+      "type": "registry:ui",
+      "title": "Number Ticker",
+      "description": "Animate numbers to count up or down to a target number",
+      "dependencies": ["motion"],
+      "files": [
+        {
+          "path": "registry/magicui/number-ticker.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "animated-list",
+      "type": "registry:ui",
+      "title": "Animated List",
+      "description": "A list that animates each item in sequence with a delay. Used to showcase notifications or events on your landing page.",
+      "dependencies": ["motion"],
+      "files": [
+        {
+          "path": "registry/magicui/animated-list.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "border-beam",
+      "type": "registry:ui",
+      "title": "Border Beam",
+      "description": "An animated beam of light which travels along the border of its container.",
+      "dependencies": ["motion"],
+      "files": [
+        {
+          "path": "registry/magicui/border-beam.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "rainbow-button",
+      "type": "registry:ui",
+      "title": "Rainbow Button",
+      "description": "An animated button with a rainbow effect.",
+      "files": [
+        {
+          "path": "registry/magicui/rainbow-button.tsx",
+          "type": "registry:ui"
+        }
+      ],
+      "cssVars": {
+        "theme": {
+          "animate-rainbow": "rainbow var(--speed, 2s) infinite linear"
+        },
+        "light": {
+          "color-1": "oklch(66.2% 0.225 25.9)",
+          "color-2": "oklch(60.4% 0.26 302)",
+          "color-3": "oklch(69.6% 0.165 251)",
+          "color-4": "oklch(80.2% 0.134 225)",
+          "color-5": "oklch(90.7% 0.231 133)"
+        },
+        "dark": {
+          "color-1": "oklch(66.2% 0.225 25.9)",
+          "color-2": "oklch(60.4% 0.26 302)",
+          "color-3": "oklch(69.6% 0.165 251)",
+          "color-4": "oklch(80.2% 0.134 225)",
+          "color-5": "oklch(90.7% 0.231 133)"
+        }
+      },
+      "css": {
+        "@keyframes rainbow": {
+          "0%": {
+            "background-position": "0%"
+          },
+          "100%": {
+            "background-position": "200%"
+          }
+        }
+      }
+    },
+    {
+      "name": "marquee-demo",
+      "type": "registry:example",
+      "title": "Marquee Demo",
+      "description": "Example showing an infinite scrolling component.",
+      "registryDependencies": ["@magicui/marquee"],
+      "files": [
+        {
+          "path": "registry/example/marquee-demo.tsx",
+          "type": "registry:example"
+        }
+      ]
+    }
+  ]
+}

@@ -58,6 +58,11 @@ function wordStart(phrase: string) {
   return `\\m${phrase.split(/\s+/).map(escapeRegex).join("[\\s_-]*")}`;
 }
 
+/** A term's PostgreSQL pattern as a JavaScript regex, for matching in memory (external catalogs). */
+export function toJsRegex(pattern: string) {
+  return new RegExp(pattern.replace(/\\m/g, "(?<![\\p{L}\\p{N}])"), "iu");
+}
+
 /**
  * Splits a query into terms that must all match (AND), each a set of patterns that may match anywhere (OR):
  * synonyms are one term, stop words are dropped, and soft words only count when nothing else is left.

@@ -5,14 +5,21 @@ import Link from "next/link";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { TAG_KIND_LABELS, TAG_KINDS, type CaptureSettings, type CaptureTheme, type TagDTO } from "@pivot/core/types";
+import {
+  TAG_KIND_LABELS,
+  TAG_KINDS,
+  type CaptureSettings,
+  type CaptureTheme,
+  type DirectProviderInfo,
+  type TagDTO,
+} from "@pivot/core/types";
 import { BackupSection } from "@/components/backup-section";
 import { ConfirmButton } from "@/components/confirm-button";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { api, useInvalidate, useSettings, useTags } from "@/lib/api";
+import { api, keys, useInvalidate, useSearchProviders, useSettings, useTags } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
 
 function Row({
@@ -239,6 +246,88 @@ function CaptureSection() {
   );
 }
 
+/**
+ * Hybrid search: the free public catalogs PIVOT searches directly. Each can be switched off; a catalog is downloaded on
+ * first use and then at most once a day, or now with Refresh.
+ */
+function SearchSection() {
+  const qc = useQueryClient();
+  const { data: providers } = useSearchProviders();
+  const [busy, setBusy] = useState<string | null>(null);
+  const toggle = async (p: DirectProviderInfo, enabled: boolean) => {
+    try {
+      const next = await api<DirectProviderInfo[]>("/api/search/providers", {
+        method: "PATCH",
+        json: { id: p.id, enabled },
+      });
+      qc.setQueryData(keys.providers, next);
+      qc.invalidateQueries({ queryKey: ["external-search"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save the setting");
+    }
+  };
+  const refresh = async (p: DirectProviderInfo) => {
+    setBusy(p.id);
+    try {
+      const r = await api<{ status: string; items: number; message?: string }>("/api/search/providers/refresh", {
+        method: "POST",
+        json: { id: p.id },
+      });
+      if (r.status === "stale") toast.error(`Couldn’t update ${p.name}: ${r.message}. The previous copy is kept.`);
+      else toast.success(`${p.name}: ${r.items} components`);
+      qc.invalidateQueries({ queryKey: keys.providers });
+      qc.invalidateQueries({ queryKey: ["external-search"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not refresh the catalog");
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-[22px] leading-[1.2] font-medium tracking-[-0.02em]">Search</h2>
+        <p className="text-sm text-muted-foreground">
+          Free public catalogs searched directly from the External scope. Searching happens on this computer; only the
+          catalog download goes out. Paid sources and other sites stay as links to their own search.
+        </p>
+      </div>
+      <dl className="rounded-[14px] bg-surface px-5">
+        {providers?.map((p) => (
+          <Row key={p.id} label={p.name}>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <label className="flex items-center gap-2">
+                <Checkbox checked={p.enabled} onCheckedChange={(v) => toggle(p, !!v)} aria-label={`Search ${p.name}`} />{" "}
+                Search {p.host}
+              </label>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => refresh(p)}
+                disabled={!p.enabled || busy === p.id}
+                aria-label={`Refresh the ${p.name} catalog`}
+              >
+                {busy === p.id ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />} Refresh
+                catalog
+              </Button>
+            </div>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {p.syncedAt
+                ? `${p.items} components, catalog from ${new Date(p.syncedAt).toLocaleString()}.`
+                : "Not downloaded yet; it is fetched the first time you search."}{" "}
+              Licence:{" "}
+              <a href={p.licence.url} target="_blank" rel="noreferrer" className="text-accent-text hover:underline">
+                {p.licence.name}
+              </a>
+              {p.licenceMode === "metadataAndLink" && " (titles, descriptions and links only; no code)"}.
+            </p>
+          </Row>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
 function ExtensionSection({ serverUrl }: { serverUrl?: string }) {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["api-token"], queryFn: () => api<{ token: string }>("/api/settings/token") });
@@ -347,6 +436,7 @@ export default function SettingsPage() {
       </section>
 
       <CaptureSection />
+      <SearchSection />
 
       <ExtensionSection serverUrl={s?.serverUrl} />
 

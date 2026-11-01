@@ -8,7 +8,7 @@ import { Breadcrumbs, typeCrumbs, type Crumb } from "@/components/breadcrumbs";
 import { FolderShelf } from "@/components/folder-shelf";
 import { ResourceCard, ResourceRow } from "@/components/resource-card";
 import { SelectionBar } from "@/components/selection-bar";
-import { ExternalSearch } from "@/components/external-search";
+import { ExternalResults, ScopeSwitch } from "@/components/external-search";
 import { Suggestions } from "@/components/suggestions";
 import { SkillPackGroups } from "@/components/skill-pack-groups";
 import { SkillSyncPanel } from "@/components/skill-sync-panel";
@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useLibraryParams } from "@/hooks/use-library-params";
 import { assetUrl, useCollections, useCounts, useResource, useResources } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { hostOf } from "@/components/resource-card";
 
 const SHORT_LABEL: Partial<Record<ResourceType, string>> = {
@@ -149,6 +150,9 @@ export function LibraryView({
   // Sections only apply to the library itself; collections and the trash cover every type.
   const library = mode === "library" && !collectionId;
   const typeChoices = library ? params.section.types : RESOURCE_TYPES;
+  // Hybrid search: with a query in the library, look in it, outside it, or both.
+  const searching = library && !!params.q.trim();
+  const scope = searching ? params.scope : "library";
 
   const {
     data: listed,
@@ -220,7 +224,7 @@ export function LibraryView({
     (params.type && params.section.types.length > 1 ? TYPE_DEFS[params.type].plural : params.section.label);
   const filtered = !!(params.q || params.tags.length || params.via || params.collection || params.url);
   // Search, tags, source, collection and page; the type, section, category and Inbox are where you are, not filters.
-  const clearFilters = () => set({ q: "", tags: [], via: "", collection: "", url: "" });
+  const clearFilters = () => set({ q: "", tags: [], via: "", collection: "", url: "", scope: "all" });
   const trail =
     crumbs ??
     (library && params.type ? [...typeCrumbs(params.type), ...(category ? [{ label: category.label }] : [])] : []);
@@ -237,8 +241,8 @@ export function LibraryView({
           <h1 className="text-[clamp(44px,6vw,72px)] leading-[0.96] font-medium tracking-[-0.045em] text-balance text-ink">
             {heading}
           </h1>
-          {/* Just the number: what's listed right now (it follows search and filters). */}
-          {items && (
+          {/* Just the number: what's listed right now (it follows search and filters); none when only searching outside. */}
+          {items && scope !== "external" && (
             <span
               aria-label={countLabel}
               title={countLabel}
@@ -289,6 +293,7 @@ export function LibraryView({
               onClear={() => set({ url: "" })}
             />
           )}
+          {searching && <ScopeSwitch value={params.scope} onChange={(next) => set({ scope: next })} />}
           {filtered && (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
               <X aria-hidden /> Clear filters
@@ -327,96 +332,114 @@ export function LibraryView({
       </section>
 
       <div className="flex-1 space-y-6 px-4 pt-6 pb-16 md:px-10">
-        {params.review && <Suggestions />}
-        {params.type === "skill" && library && <SkillSyncPanel />}
-        {params.type === "source" && library && <SourceToolbar />}
-        {library &&
-          !params.type &&
-          !params.via &&
-          !params.review &&
-          !params.url &&
-          params.section.types.length > 1 &&
-          items && (
-            <div className="pb-10">
-              <TypeShelf types={params.section.types} items={items} />
-            </div>
-          )}
-
-        {error && (
-          <div role="alert" className="rounded-[14px] bg-surface p-4 text-sm text-danger">
-            Could not load the library: {error.message}
-          </div>
-        )}
-
-        {isLoading ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] gap-x-6 gap-y-10">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="flex flex-col gap-3">
-                <Skeleton className="aspect-[16/10] rounded-[14px] bg-surface" />
-                <Skeleton className="h-4 w-2/3 rounded-full bg-surface" />
-              </div>
-            ))}
-          </div>
-        ) : items?.length === 0 ? (
-          <div className="grid place-items-center py-24 text-center">
-            {filtered ? (
-              <div className="flex max-w-sm flex-col items-center gap-3">
-                <div className="space-y-1">
-                  <p className="text-[16px] font-medium">
-                    {params.q ? `Nothing matches “${params.q}”` : "Nothing matches these filters"}
-                  </p>
-                  <p className="text-sm text-ink-muted">
-                    {params.q && (params.tags.length || params.via)
-                      ? "The search and the filters apply together. Try fewer filters or a different search."
-                      : "Try fewer filters or a different search."}
-                  </p>
+        {scope === "external" ? (
+          <ExternalResults query={params.q} />
+        ) : (
+          <>
+            {params.review && <Suggestions />}
+            {params.type === "skill" && library && <SkillSyncPanel />}
+            {params.type === "source" && library && <SourceToolbar />}
+            {library &&
+              !searching &&
+              !params.type &&
+              !params.via &&
+              !params.review &&
+              !params.url &&
+              params.section.types.length > 1 &&
+              items && (
+                <div className="pb-10">
+                  <TypeShelf types={params.section.types} items={items} />
                 </div>
-                <Button variant="secondary" onClick={clearFilters}>
-                  <X aria-hidden /> Clear filters
-                </Button>
-                {params.q && <ExternalSearch query={params.q} />}
+              )}
+
+            {error && (
+              <div role="alert" className="rounded-[14px] bg-surface p-4 text-sm text-danger">
+                Could not load the library: {error.message}
+              </div>
+            )}
+
+            {isLoading ? (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] gap-x-6 gap-y-10">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex flex-col gap-3">
+                    <Skeleton className="aspect-[16/10] rounded-[14px] bg-surface" />
+                    <Skeleton className="h-4 w-2/3 rounded-full bg-surface" />
+                  </div>
+                ))}
+              </div>
+            ) : items?.length === 0 ? (
+              <div
+                className={cn("grid place-items-center text-center", scope === "all" && searching ? "py-10" : "py-24")}
+              >
+                {filtered ? (
+                  <div className="flex max-w-sm flex-col items-center gap-3">
+                    <div className="space-y-1">
+                      <p className="text-[16px] font-medium">
+                        {params.q ? `Nothing matches “${params.q}”` : "Nothing matches these filters"}
+                      </p>
+                      <p className="text-sm text-ink-muted">
+                        {params.q && (params.tags.length || params.via)
+                          ? "The search and the filters apply together. Try fewer filters or a different search."
+                          : "Try fewer filters or a different search."}
+                      </p>
+                    </div>
+                    <Button variant="secondary" onClick={clearFilters}>
+                      <X aria-hidden /> Clear filters
+                    </Button>
+                    {searching && scope === "library" && (
+                      <Button variant="ghost" onClick={() => set({ scope: "external" })}>
+                        Search outside your library
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  (emptyState ?? (
+                    <div className="max-w-sm space-y-2">
+                      <p className="text-[16px] font-medium">
+                        {typeof heading === "string" && library ? `Nothing in ${heading} yet` : "Nothing here yet"}
+                      </p>
+                      <p className="text-sm text-ink-muted">
+                        Paste a URL or an image anywhere with <Kbd>⌘V</Kbd>, drop files on the window, or press Add.
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : params.type === "source" && library && items ? (
+              <SourceGroups items={items} view={params.view} selection={selection} toggle={toggle} shelf={!category} />
+            ) : params.type === "skill" && library && items ? (
+              <SkillPackGroups items={items} view={params.view} selection={selection} toggle={toggle} />
+            ) : params.view === "grid" ? (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] gap-x-6 gap-y-10">
+                {items?.map((r) => (
+                  <ResourceCard
+                    key={r.id}
+                    resource={r}
+                    selected={selection.includes(r.id)}
+                    selecting={selection.length > 0}
+                    onToggle={toggle(r.id)}
+                  />
+                ))}
               </div>
             ) : (
-              (emptyState ?? (
-                <div className="max-w-sm space-y-2">
-                  <p className="text-[16px] font-medium">
-                    {typeof heading === "string" && library ? `Nothing in ${heading} yet` : "Nothing here yet"}
-                  </p>
-                  <p className="text-sm text-ink-muted">
-                    Paste a URL or an image anywhere with <Kbd>⌘V</Kbd>, drop files on the window, or press Add.
-                  </p>
-                </div>
-              ))
+              <div className="flex flex-col gap-1">
+                {items?.map((r) => (
+                  <ResourceRow
+                    key={r.id}
+                    resource={r}
+                    selected={selection.includes(r.id)}
+                    selecting={selection.length > 0}
+                    onToggle={toggle(r.id)}
+                  />
+                ))}
+              </div>
             )}
-          </div>
-        ) : params.type === "source" && library && items ? (
-          <SourceGroups items={items} view={params.view} selection={selection} toggle={toggle} shelf={!category} />
-        ) : params.type === "skill" && library && items ? (
-          <SkillPackGroups items={items} view={params.view} selection={selection} toggle={toggle} />
-        ) : params.view === "grid" ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] gap-x-6 gap-y-10">
-            {items?.map((r) => (
-              <ResourceCard
-                key={r.id}
-                resource={r}
-                selected={selection.includes(r.id)}
-                selecting={selection.length > 0}
-                onToggle={toggle(r.id)}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-1">
-            {items?.map((r) => (
-              <ResourceRow
-                key={r.id}
-                resource={r}
-                selected={selection.includes(r.id)}
-                selecting={selection.length > 0}
-                onToggle={toggle(r.id)}
-              />
-            ))}
-          </div>
+            {scope === "all" && searching && (
+              <div className="pt-10">
+                <ExternalResults query={params.q} compact />
+              </div>
+            )}
+          </>
         )}
       </div>
 

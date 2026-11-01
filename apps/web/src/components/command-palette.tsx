@@ -1,11 +1,12 @@
 "use client";
 
-import { FolderSync, Layers, Link2, Search, Settings, Trash2 } from "lucide-react";
+import { ExternalLink, FolderSync, Layers, Link2, Search, Settings, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { RESOURCE_TYPES, SECTIONS, sourceSearchUrl, TYPE_DEFS } from "@pivot/core/types";
+import { RESOURCE_TYPES, SECTIONS, sourceSearchUrl, TYPE_DEFS, type SearchScope } from "@pivot/core/types";
 import { useCreateOfType } from "@/components/add-menu";
+import { ScopeSwitch } from "@/components/external-search";
 import { hostOf } from "@/components/resource-card";
 import { TypeIcon } from "@/components/type-icon";
 import {
@@ -22,7 +23,7 @@ import {
 import { useUi } from "@/components/ui-store";
 import { useCopyResource } from "@/hooks/use-copy-resource";
 import { sectionHref } from "@/hooks/use-library-params";
-import { api, useCollections, useInvalidate, useResources } from "@/lib/api";
+import { api, useCollections, useExternalSearch, useInvalidate, useResources } from "@/lib/api";
 
 export function CommandPalette() {
   const { paletteOpen, setPaletteOpen, openAddUrl } = useUi();
@@ -30,6 +31,7 @@ export function CommandPalette() {
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [highlighted, setHighlighted] = useState("");
+  const [scope, setScope] = useState<SearchScope>("all");
   const copy = useCopyResource();
   const createOfType = useCreateOfType();
   const invalidate = useInvalidate();
@@ -57,14 +59,19 @@ export function CommandPalette() {
     setPaletteOpen(open);
   };
 
-  const { data: results = [], isFetching: searching } = useResources({ q: debounced }, { enabled: paletteOpen });
-  const shown = results.slice(0, debounced ? 20 : 8);
+  const { data: results = [], isFetching: searching } = useResources(
+    { q: debounced },
+    { enabled: paletteOpen && scope !== "external" },
+  );
+  const shown = scope === "external" ? [] : results.slice(0, debounced ? 20 : 8);
+  const external = useExternalSearch(debounced, { enabled: paletteOpen && scope !== "library", limit: 3 });
+  const direct = scope === "library" || !debounced.trim() ? [] : (external.data?.providers ?? []);
   const { data: sources = [], isLoading: loadingSources } = useResources(
     { type: "source", sort: "title" },
     { enabled: paletteOpen },
   );
   // While the typed query hasn't reached the list yet, an empty list means "not yet", not "nothing".
-  const pending = search !== debounced || searching || loadingSources;
+  const pending = search !== debounced || searching || loadingSources || (scope !== "library" && external.isFetching);
   const searchable = sources.flatMap((s) =>
     typeof s.meta.searchUrl === "string" && s.meta.searchUrl.includes("{q}")
       ? [{ ...s, template: s.meta.searchUrl }]
@@ -92,6 +99,11 @@ export function CommandPalette() {
         }}
       >
         <CommandInput placeholder="Search resources, or type a command…" value={search} onValueChange={setSearch} />
+        {search.trim() && (
+          <div className="flex items-center gap-2 border-b border-divider px-3 py-2">
+            <ScopeSwitch value={scope} onChange={setScope} />
+          </div>
+        )}
         <CommandList className="max-h-[60vh]">
           <CommandEmpty>{pending ? "Searching…" : "No results."}</CommandEmpty>
           {shown.length > 0 && (
@@ -112,8 +124,29 @@ export function CommandPalette() {
               ))}
             </CommandGroup>
           )}
-          {search.trim() && searchable.length > 0 && (
-            <CommandGroup heading={`Search the sources for “${search.trim()}”`}>
+          {direct.map(
+            (p) =>
+              p.results.length > 0 && (
+                <CommandGroup key={p.id} heading={`${p.name} · Direct · ${p.licence.name}`}>
+                  {p.results.map((r) => (
+                    <CommandItem
+                      key={r.externalId}
+                      value={`${p.name} ${r.title} ${r.externalId}`}
+                      keywords={[debounced]}
+                      onSelect={() => run(() => window.open(r.url, "_blank", "noopener,noreferrer"))}
+                    >
+                      <ExternalLink className="text-muted-foreground" />
+                      <span className="truncate">{r.title}</span>
+                      <span className="ml-1 truncate text-xs text-muted-foreground">
+                        {r.saved ? "In your library" : r.description}
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ),
+          )}
+          {search.trim() && scope !== "library" && searchable.length > 0 && (
+            <CommandGroup heading={`Search on your sources’ sites for “${search.trim()}” (opens their search)`}>
               {searchable.map((s) => (
                 <CommandItem
                   key={s.id}

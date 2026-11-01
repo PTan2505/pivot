@@ -65,6 +65,16 @@ const fields = z.object({
    * request saved instead of saving twice.
    */
   clientRequestId: z.string().uuid().optional(),
+  /** Saved from a hybrid-search result: which free catalog it came from, kept as provenance. */
+  origin: z
+    .object({
+      provider: z.string().trim().min(1).max(40),
+      providerName: z.string().trim().min(1).max(80),
+      externalId: z.string().trim().min(1).max(200),
+      licence: z.string().trim().max(80).optional(),
+      retrievedAt: z.string().max(40).optional(),
+    })
+    .optional(),
 });
 
 type ClipInput = z.infer<typeof fields>;
@@ -168,6 +178,7 @@ async function save(form: FormData, input: ClipInput): Promise<Saved> {
         ...capturedFrom(input, pageUrl),
         ...(input.section ? { section: input.section } : {}),
         ...(input.privatePage ? { privatePage: true } : {}),
+        ...(input.origin ? { externalOrigin: { ...input.origin, savedAt: new Date().toISOString() } } : {}),
       },
     });
     id = r.id;

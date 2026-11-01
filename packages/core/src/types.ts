@@ -593,6 +593,93 @@ export interface SearchPage {
   unknownFacets?: { kind: TagKind; name: string }[];
 }
 
+// ---- Hybrid search: external providers (docs/hybrid-search-plan.md) ----
+
+/** One search box, three scopes. `all` is the default. */
+export const SEARCH_SCOPES = ["all", "library", "external"] as const;
+export type SearchScope = (typeof SEARCH_SCOPES)[number];
+
+/** Providers PIVOT searches directly. Free, keyless public catalogs only (Free-First). */
+export const DIRECT_PROVIDER_IDS = ["magicui", "reactbits", "shadcn"] as const;
+export type DirectProviderId = (typeof DIRECT_PROVIDER_IDS)[number];
+
+/** A real result from a direct provider's catalog: a component page, never a search page. */
+export interface ExternalResult {
+  kind: "external";
+  provider: DirectProviderId;
+  providerName: string;
+  /** The provider's own id for the item (its registry name). */
+  externalId: string;
+  title: string;
+  /** Plain text, at most 280 characters; empty when the catalog has none. */
+  description: string;
+  /** The item's page on the provider's site (http/https). */
+  url: string;
+  /** False when the catalog had no confirmed page for this item, so `url` is the provider's catalog page instead. */
+  linkVerified: boolean;
+  categories: string[];
+  licence: { name: string; url: string };
+  /** `metadataAndLink`: the licence restricts the code, so only the title, description and link are shown. */
+  licenceMode: "full" | "metadataAndLink";
+  attribution: string;
+  /** Always true: it came from the provider's own catalog, not from a search URL. */
+  verified: true;
+  /** When the catalog behind this result was synced. */
+  retrievedAt: string;
+  /** Already in the library (same URL): open that instead of saving again. */
+  saved: { resourceId: string } | null;
+}
+
+/** A search page on a site PIVOT doesn't search directly: opens there, never shown as a reference. */
+export interface LinkOutResult {
+  kind: "linkOut";
+  name: string;
+  host: string;
+  category: string;
+  searchUrl: string;
+  /** One of the user's saved sources. */
+  saved: boolean;
+  /** Search pages are never verified references. */
+  verified: false;
+}
+
+export type ProviderSearchStatus = "ok" | "stale" | "unavailable" | "disabled";
+
+export interface ProviderResults {
+  id: DirectProviderId;
+  name: string;
+  host: string;
+  homepage: string;
+  licence: { name: string; url: string };
+  /** `stale`: the last sync failed and an older copy of the catalog answered. */
+  status: ProviderSearchStatus;
+  message?: string;
+  syncedAt: string | null;
+  /** All matches in the catalog; `results` holds the first `limit`. */
+  total: number;
+  results: ExternalResult[];
+}
+
+export interface ExternalSearchPage {
+  query: string;
+  providers: ProviderResults[];
+  linkOuts: LinkOutResult[];
+}
+
+/** Per-provider switches and catalog state, for Settings › Search. */
+export interface DirectProviderInfo {
+  id: DirectProviderId;
+  name: string;
+  host: string;
+  homepage: string;
+  licence: { name: string; url: string };
+  /** What PIVOT may show: everything in the catalog (`full`) or only titles, descriptions and links. */
+  licenceMode: "full" | "metadataAndLink";
+  enabled: boolean;
+  syncedAt: string | null;
+  items: number | null;
+}
+
 /** How two references relate. Theme, viewport, Original/Latest and states are assets of one reference, not links. */
 export const LINK_KINDS = ["same_source_page", "part_of", "related_to", "variant_of", "newer_version_of"] as const;
 export type LinkKind = (typeof LINK_KINDS)[number];
