@@ -1,6 +1,6 @@
 ---
 name: pivot-design
-description: Design or redesign an interface from the user's own PIVOT reference library (the "pivot" MCP server) — search saved UI references, look at them, choose, write a short brief, show 2–3 mockups, wait for the user's approval, then build the approved one and check it. Use whenever the user asks to design, build, restyle or improve a screen, page or component (landing, pricing, dashboard, onboarding, sign-in, docs, settings, checkout, navigation, forms…) and references would help, or mentions PIVOT, references, inspiration or "what others do". Skip for pure logic, backend or copy-only work, and for small explicit fixes that need no design exploration.
+description: Design or redesign an interface from the user's own PIVOT reference library (the "pivot" MCP server) — search saved UI references, look at them, choose, write a short brief, show 2–3 mockups, wait for the user's approval, then build the approved one and check it. Use whenever the user asks to design, build, restyle or improve a screen, page or component (landing, pricing, dashboard, onboarding, sign-in, docs, settings, checkout, navigation, forms…) and references would help, or mentions PIVOT, references, inspiration or "what others do". For redesigning a component or page that already exists in the project, use pivot-redesign instead (it brings this workflow in when references are involved). Skip for pure logic, backend or copy-only work, and for small explicit fixes that need no design exploration.
 ---
 
 # PIVOT design workflow

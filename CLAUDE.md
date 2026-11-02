@@ -6,7 +6,7 @@ Personal UI/UX resource library: pnpm monorepo with `apps/web` (Next.js 16 app +
 
 The reference-first plan ([docs/reference-first-plan.md](docs/reference-first-plan.md)) is done. Work now follows [docs/decisions-plan.md](docs/decisions-plan.md), which implements the approved decisions in [docs/PIVOT_DECISIONS.md](docs/PIVOT_DECISIONS.md): Part A (the `pivot-design` skill, MCP and the design workflow) and Part B (capture, the extension and the library).
 
-- In scope: references, sources, collections, search and filters, capture, the extension, MCP and the `pivot-design` skill. Skill packs, prompts, snippets, rules and checklists are frozen: keep them working, don't extend them.
+- In scope: references, sources, collections, search and filters, capture, the extension, MCP and the `pivot-design` and `pivot-redesign` skills. Skill packs, prompts, snippets, rules and checklists are frozen: keep them working, don't extend them.
 - Go phase by phase: audit → gaps → implement → test → report. Tick a decision as it is verified, not when it's written.
 - Log each phase in [docs/decisions-progress.md](docs/decisions-progress.md) using the plan's report format.
 - Design workflow: no implementation before the user explicitly approves a design direction. Design briefs, decisions and session notes go into PIVOT, never into a target project's repo. Write-tool names and schemas wait for the approved proposal (plan Phase 5a).
@@ -51,7 +51,7 @@ pnpm check             # format:check + lint + typecheck + test
 pnpm db:generate       # after editing packages/core/src/db/schema.ts — commit the new migration
 pnpm ext:build         # build the extension into apps/extension/dist
 pnpm mcp:build         # build the stdio MCP server into apps/mcp/dist (setup: apps/mcp/README.md)
-pnpm skill:install     # link .claude/skills/pivot-design into ~/.claude/skills
+pnpm skill:install     # link .claude/skills/pivot-design and pivot-redesign into ~/.claude/skills
 ```
 
 Run `pnpm check` (format check, lint, typecheck, tests) before saying a change is done. To try the app without touching the real Neon database or R2 bucket, start it with a scratch environment: `DATABASE_URL= PIVOT_DATA_DIR=<tmp dir> PORT=4400 node scripts/start.mjs` (unset the `R2_*` variables the same way).
