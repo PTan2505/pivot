@@ -333,7 +333,7 @@ PT is the core, PIVOT the expansion: the mark starts from the first and last let
 
 ### Top bar — `components/app-shell.tsx` (`TopBar`)
 
-- Logo (PT monogram + wordmark, see Brand mark), section nav, search field, then the Collections menu, round Trash and Settings buttons (inverse when on that page) and the split `Add` button (the screen's primary action).
+- Logo (PT monogram + wordmark, see Brand mark), section nav, search field, then the Collections menu, round Trash and Settings buttons (inverse when on that page) and the split `Add` button (the screen's primary action). On phones (below `sm`) Collections shows only its icon; below 360px the `Add` half shows only its plus too (its name stays for screen readers), so the action row fits a 320px screen.
 - Light glass layer behind the content, ember pool and seam (see Elevation & Depth); 16px padding, 40px side padding from `md`.
 - On phones the Collections button is icon-only and the primary button reads just "New" (its full name stays in `aria-label`), so the action row fits at 375px; the search field takes its own row.
 
@@ -397,7 +397,7 @@ PT is the core, PIVOT the expansion: the mark starts from the first and last let
 - the action pills (Open, Copy, Context, Export, Trash);
 - the title at the display size.
 
-**Below `sm`, visual types only** (reference, UI library, media, icon, animation, typography, source): the actions leave the breadcrumb row and become **one row under the title**. Open, Copy and Context are icon-only pills with their names kept for screen readers, Export keeps its label, and Trash stays round. The other types keep their header as it was.
+**Below `sm`, visual types only** (reference, UI library, media, icon, animation, typography, source): the actions leave the breadcrumb row and become **one row under the title**. Open, Copy and Context are icon-only pills with their names kept for screen readers; they share the row's spare width and may shrink to fit 320px. Export keeps its label, and Trash stays round. The other types keep their header as it was.
 
 **Visual types: image left, grouped panel right** (340px at `xl`, sticky; stacked below it). Each group is a solid surface panel (14px radius, 16px padding, a 12px ink-subtle title, no border or shadow), and fields inside it step up to surface-raised:
 
@@ -452,6 +452,7 @@ A Settings section: a secondary **Back up the library** pill with the result bes
 - **Result card:** a solid surface container (14px radius, no border or glass, since there is no screenshot to frame): 15px ink title truncated to one line with category chips on the right, a two-line 13px ink-muted description, an 11px ink-subtle attribution line ("Magic UI (magicui.design) · MIT"), then a secondary **Open** pill and a ghost **Save to library** pill. A result already saved shows a ghost "In your library" link instead; a result without a confirmed page has no Save. No ember fills: Save is never the screen's primary action.
 - **Search on other sites:** a 15px heading, the line "These open each site’s own search page. They aren’t results.", and a wrapping row of 32px surface pills (external-link icon, the site's name, "saved source" in 11px ink-subtle).
 - **Command palette:** direct results are groups headed "<name> · Direct · <licence>" with an external-link icon, the title and the description (or "In your library") in muted text; selecting opens the item's page in a new tab.
+- **Settings rows:** a 160px ink-subtle label column beside the value from `sm` up; below `sm` the label sits above the value, so wide controls (the capture colour-scheme select) never push the page sideways.
 - **Settings › Search:** the intro says catalogs are kept in the R2 bucket under `external-catalogs/`, not on this computer, and may add small R2 charges; a storage problem shows under the provider as a 12px ink-muted line with a warning triangle. One row per provider: a checkbox "Search <host>", a ghost Refresh catalog pill (spinner while it runs), and a 12px line with the item count, the catalog date and the licence link ("titles, descriptions and links only; no code" for React Bits). After Refresh, a toast says "<name> updated: N components"; within a minute of the last download it says the catalog was updated less than a minute ago and when to try again. While a new query loads, the previous results stay dimmed under their own query with a "Searching for “…”…" line, so nothing flickers and nothing is shown under the wrong query.
 
 ### Capture queue — `app/captures/page.tsx`

@@ -34,7 +34,7 @@ function Row({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-[160px_1fr] items-start gap-4 border-b border-divider py-3.5 last:border-0">
+    <div className="grid items-start gap-1.5 border-b border-divider py-3.5 last:border-0 sm:grid-cols-[160px_1fr] sm:gap-4">
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="min-w-0 text-[14px]">
         {value && (

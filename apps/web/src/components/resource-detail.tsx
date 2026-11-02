@@ -565,7 +565,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
   // The page actions. Visual types get them as one icon row under the title on phones; labels stay as aria-labels.
   const actions = (iconOnly: boolean) => {
     const label = (text: string) => (iconOnly ? <span className="sr-only">{text}</span> : text);
-    const grow = iconOnly ? "flex-1" : undefined;
+    const grow = iconOnly ? "min-w-0 flex-1 shrink px-0" : undefined; // icon-only pills may shrink to fit 320px
     return (
       <>
         {openableUrl(draft.sourceUrl) && (
