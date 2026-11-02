@@ -328,6 +328,7 @@ PT is the core, PIVOT the expansion: the mark starts from the first and last let
 - **Colour:** the P is solid Ember (`--ember`, #ff6a13; 6.9:1 on canvas), everything else Warm White (`currentColor` on ink), in the monogram and the wordmark alike (owner's call, 2026-10-29). The ember O (amber core → ember → ember deep) and the ember seam belong to the app icon and splash or landing use only.
 - **In the top bar:** the monogram at 22px high, then the wordmark at 13px high, 10px apart, inside the home link (`aria-label="PIVOT — library"`).
 - **App icon** (`docs/brand/pivot-app-icon.svg`, copied to `apps/web/src/app/icon.svg`): the monogram (ember P, Warm White T) on a kiln tile (22% radius, a faint warm top light) with the ember seam along its bottom edge. The extension's toolbar PNGs are rendered from it (`pnpm --filter extension icons`).
+- **Repo hero** (`docs/brand/pivot-wordmark-ember.svg`, 1280 × 640, the GitHub social-preview ratio): the wordmark with its ember O, at 1.2×, straight on the kiln with no glass. Behind it the O becomes the light source: a 250px ember ring blurred 38px into a haze with a 1.5px amber hairline, two thin orbits (`#4a3527`) and one amber dot riding the outer orbit; fine grain and a dark vignette over all. A soft dark halo (the letters in Kiln Black, blurred 16px, 75%) lifts the wordmark off the ring.
 - **Tagline** (brand use, not the UI): "Your creative compass" in Geist Mono 500, upper case, 0.62em tracking, Smoke. No ® until the name is registered.
 
 ### Top bar — `components/app-shell.tsx` (`TopBar`)

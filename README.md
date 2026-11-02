@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/brand/pivot-wordmark-ember.svg" alt="PIVOT" width="100%" />
+</p>
+
 # PIVOT
 
 Personal UI/UX resource library that runs on your machine: save websites (with automatic screenshots), images, icons, animations, palettes, prompts, Claude Code skills, snippets, rules, checklists and MCP configs — then copy or export them as context for Claude Code, or let Claude Code design from them directly (see [Design with Claude Code](#design-with-claude-code)).
