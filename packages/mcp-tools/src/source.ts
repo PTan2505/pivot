@@ -3,6 +3,7 @@ import type {
   DesignDecisionKind,
   DesignMilestone,
   DesignSessionDetailDTO,
+  DesignStatus,
   DesignSessionDTO,
   DirectProviderId,
   ExternalSearchPage,
@@ -63,6 +64,8 @@ export interface PivotWriter {
     sessionId: string,
     input: { kind: DesignDecisionKind; summary: string; direction?: string; details?: string },
   ): Promise<{ id: string }>;
+  /** Sets a session's status by hand (PATCH); the app refuses "approved" without an approval record. */
+  setDesignStatus(sessionId: string, status: DesignStatus): Promise<DesignSessionDetailDTO>;
   getDesignSession(id: string): Promise<DesignSessionDetailDTO | null>;
   listDesignSessions(targetProject?: string): Promise<DesignSessionDTO[]>;
   addSuggestions(
@@ -92,7 +95,9 @@ export type ToolErrorCode =
   | "no_images"
   | "read_only"
   | "unauthorized"
-  | "not_supported";
+  | "not_supported"
+  /** The request is valid but the item's current state doesn't allow it (a status out of order). */
+  | "conflict";
 
 /** An error the agent can act on: the code says what kind, the message says what to do. */
 export class ToolError extends Error {

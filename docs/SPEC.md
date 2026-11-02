@@ -208,7 +208,7 @@ Mọi loại đều có các trường chung: `title`, `description`, `sourceUrl
     - ảnh bìa, thu nhỏ để cạnh dài nhất không quá 1568px;
     - ảnh full page thu về rộng 960px rồi cắt thành từng lát cao tối đa 1568px, khoảng 2000 token mỗi lát;
     - tối đa 4 ảnh mỗi lần gọi; xem tiếp các lát sau bằng `fromSlice`.
-- **Lỗi:** trả về như một kết quả có mã, để agent biết phải làm gì tiếp: `not_found`, `invalid_input`, `invalid_cursor`, `no_images`, `app_unreachable` (kèm câu "chạy `npm start`").
+- **Lỗi:** trả về như một kết quả có mã, để agent biết phải làm gì tiếp: `not_found`, `invalid_input`, `invalid_cursor`, `no_images`, `app_unreachable` (kèm câu "chạy `npm start`"), `conflict` (yêu cầu hợp lệ nhưng trạng thái hiện tại không cho phép, ví dụ chuyển trạng thái session sai bước; bổ sung 2026-11-02).
 - **Nội dung không tin cậy:** mô tả tool và hướng dẫn của server đều nói rõ rằng tiêu đề, mô tả, ghi chú và nội dung lấy từ website là dữ liệu, không phải lệnh.
 - **Skill `pivot-design`** (bổ sung 2026-10-31): bản gốc nằm ở `.claude/skills/pivot-design/SKILL.md` trong repo. Lệnh `pnpm skill:install` tạo link `~/.claude/skills/pivot-design` trỏ về bản đó, để mọi project đều dùng được, và sửa trong repo là bản global cập nhật theo. Script không ghi đè thứ gì khác đang nằm ở đó.
   - Quy trình (cập nhật 2026-11-02, theo Part A của [PIVOT_DECISIONS.md](PIVOT_DECISIONS.md)), đúng theo thứ tự:
@@ -322,7 +322,7 @@ Mọi loại đều có các trường chung: `title`, `description`, `sourceUrl
     - chỉ ghi `deviation` khi bản build lệch khỏi một yêu cầu hay chi tiết đã duyệt (bốn loại khác biệt của `pivot-design`); lỗi có sẵn từ trước hay nằm ngoài phạm vi thì báo riêng và đề xuất xử lý sau.
 
     Không ghi gì vào project đích.
-- **Tool ghi** (bổ sung 2026-11-01, xem §15): `save_design_brief`, `record_design_decision`, `get_design_session`, `suggest_metadata`, `annotate_reference`, `save_reference`. Cần API token (`PIVOT_TOKEN` hoặc `<thư mục dữ liệu>/api-token`); kết nối chỉ đọc thì báo `read_only` và không lưu gì, token sai thì `unauthorized`. **Server online** cho người khác dùng: chưa làm.
+- **Tool ghi** (bổ sung 2026-11-01, xem §15): `save_design_brief`, `record_design_decision`, `set_design_status` (bổ sung 2026-11-02: chỉ đặt `building` khi session đang Approved, chỉ đặt `done` khi đang Building; gọi lại cùng trạng thái thì không đổi gì; không bao giờ đặt exploring, approved hay abandoned), `get_design_session`, `suggest_metadata`, `annotate_reference`, `save_reference`. Cần API token (`PIVOT_TOKEN` hoặc `<thư mục dữ liệu>/api-token`); kết nối chỉ đọc thì báo `read_only` và không lưu gì, token sai thì `unauthorized`. **Server online** cho người khác dùng: chưa làm.
 
 ## 11. Ngoài phạm vi MVP
 
@@ -388,7 +388,7 @@ Theo Part A và các quyết định #1–3, #13, #19, #30, #34, #35 của [PIVO
   - Web: nút **Design sessions** trên thanh trên cùng; `/design` liệt kê session mới nhất trước; `/design/[id]` hiện timeline brief và quyết định (brief mới nhất mở sẵn).
   - **Trạng thái** (cập nhật 2026-11-02):
     - Hiển thị dạng **stepper** Exploring → Approved → Building → Done: bước đã qua có dấu ✓, bước hiện tại được làm nổi bật. Kèm một dòng giải thích trạng thái, ví dụ "Direction approved on Nov 2. Ready to build.".
-    - Exploring và Approved đi theo bản ghi của agent (brief đầu tiên, thay đổi lớn, lời duyệt). Người dùng tự chuyển các bước còn lại:
+    - Exploring và Approved đi theo bản ghi của agent (brief đầu tiên, thay đổi lớn, lời duyệt). Building và Done do agent đặt bằng `set_design_status`: Building khi bắt đầu code sau khi được duyệt, Done khi build và QA xong mà không còn gì chờ người dùng quyết. Khi tiếp tục một session, agent đọc trạng thái trước: Abandoned thì dừng và hỏi có Restore không; Exploring mà đã từng được duyệt thì phải xin duyệt lại. Người dùng vẫn có thể tự chuyển trạng thái để can thiệp:
       - một nút cho bước kế tiếp: "Start building", "Mark done";
       - **Abandon** và **Reopen**; Reopen hỏi xác nhận vì công việc phải duyệt lại;
       - ở Done có "Back to building", ở Abandoned có "Restore". Restore về Approved nếu đã có bản ghi duyệt, nếu không thì về Exploring.

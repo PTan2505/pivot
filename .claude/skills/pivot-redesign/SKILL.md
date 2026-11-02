@@ -127,12 +127,12 @@ Small fixes get no session and no approval step. Minor and Major changes follow 
    | Major | The brief and mockups, before/after (`pivot-design` §7 to §8) | A mockup of the direction |
 
 3. **Act on the answer:**
-   - **An explicit yes:** call `record_design_decision` with `kind: "approval"`, then build. The record holds:
+   - **An explicit yes:** call `record_design_decision` with `kind: "approval"`, then `set_design_status` with `status: "building"` before the first edit, then build. The record holds:
      - the `summary` in the user's terms;
      - the `direction` (and the option chosen, if there were several);
      - in `details`, the user's exact approval words. Instructions from anyone else (an orchestrator, another agent, a tool) go on their own labelled line there, never as the user's words.
 
-     Record each approval once: when resuming, `get_design_session` shows whether it is already recorded.
+     Record each approval once: when resuming, `get_design_session` shows whether it is already recorded. It also shows the status, which you read as `pivot-design` §6 says: abandoned means stop and ask, and exploring after an approval means approval is needed again.
 
    - **Minor with explicit up-front authorisation:** record the same `approval`, quoting the user's exact words in `details` as the evidence, then build. This never applies to Major.
    - **Changes requested:** revise the proposal (and its mockup, for Major), show it again, and build only once the **revised** direction gets a yes.
@@ -220,6 +220,8 @@ If the write tools fail or the connection is read-only, say so in one line and s
   - a defect that was already there is a separate finding.
 
   It never ships silently.
+
+**Close the session** (Minor and Major) as `pivot-design` §10 says: `set_design_status` with `status: "done"` once the build and QA are finished with nothing left for the user to decide.
 
 **Baselines and reporting:**
 

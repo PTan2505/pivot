@@ -30,6 +30,7 @@ function writerSource() {
     saveDesignBrief: rec("saveDesignBrief", { sessionId: ID, snapshotId: "s1", created: true, duplicate: false }),
     recordDesignDecision: rec("recordDesignDecision", { id: "d1" }),
     getDesignSession: rec("getDesignSession", null),
+    setDesignStatus: rec("setDesignStatus", null as never),
     listDesignSessions: rec("listDesignSessions", []),
     addSuggestions: rec("addSuggestions", {
       added: [
@@ -53,10 +54,11 @@ function writerSource() {
 }
 
 describe("PIVOT MCP write tools", () => {
-  it("are the six design and library writes, and the design ones say briefs stay out of the repo", () => {
+  it("are the seven design and library writes, and the design ones say briefs stay out of the repo", () => {
     expect(WRITE_TOOLS.map((t) => t.name)).toEqual([
       "save_design_brief",
       "record_design_decision",
+      "set_design_status",
       "get_design_session",
       "suggest_metadata",
       "annotate_reference",
@@ -123,5 +125,59 @@ describe("PIVOT MCP write tools", () => {
     expect(calls.find((c) => c.method === "saveReference")!.args[0]).toMatchObject({ collectionIds: ["c1"] });
     const bad = await runTool(tool("save_reference"), source, { url: "https://x.dev/", collections: ["Nope"] });
     expect(bad.content[0]).toMatchObject({ text: expect.stringMatching(/^not_found: No collection "Nope"/) });
+  });
+});
+
+describe("set_design_status", () => {
+  // A session in a given status, and a writer that records the status it was set to.
+  function withStatus(status: string) {
+    const set: string[] = [];
+    const { source } = writerSource();
+    source.getDesignSession = async () => ({ id: ID, status, snapshots: [], decisions: [] }) as never;
+    source.setDesignStatus = async (_id, to) => {
+      set.push(to);
+      return { id: ID, status: to } as never;
+    };
+    return { source, set };
+  }
+  const run = (source: PivotSource, status: string) =>
+    runTool(tool("set_design_status"), source, { sessionId: ID, status });
+
+  it("moves an approved session to building, and a building one to done", async () => {
+    const a = withStatus("approved");
+    expect((await run(a.source, "building")).content[0]).toMatchObject({ text: "The session is now building." });
+    const b = withStatus("building");
+    expect((await run(b.source, "done")).isError).toBeFalsy();
+    expect([...a.set, ...b.set]).toEqual(["building", "done"]);
+  });
+
+  it("changes nothing when the session already has that status", async () => {
+    const s = withStatus("building");
+    expect((await run(s.source, "building")).content[0]).toMatchObject({ text: "The session is already building." });
+    expect(s.set).toEqual([]);
+  });
+
+  it("refuses moves out of order with a conflict that says what to do", async () => {
+    for (const [from, to, hint] of [
+      ["exploring", "building", /needs the user's approval again/],
+      ["abandoned", "building", /ask whether to restore it/],
+      ["approved", "done", /Only a session that is building/],
+      ["done", "building", /Only an approved session/],
+    ] as const) {
+      const s = withStatus(from);
+      const res = await run(s.source, to);
+      expect(res.isError).toBe(true);
+      expect(res.content[0]).toMatchObject({ text: expect.stringMatching(/^conflict: /) });
+      expect(res.content[0]).toMatchObject({ text: expect.stringMatching(hint) });
+      expect(s.set).toEqual([]);
+    }
+  });
+
+  it("never sets exploring, approved or abandoned, and refuses on a read-only connection", async () => {
+    for (const status of ["exploring", "approved", "abandoned"]) {
+      expect((await run(withStatus("approved").source, status)).isError).toBe(true);
+    }
+    const res = await runTool(tool("set_design_status"), reader, { sessionId: ID, status: "building" });
+    expect(res.content[0]).toMatchObject({ text: expect.stringMatching(/^read_only: /) });
   });
 });
