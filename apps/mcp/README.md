@@ -11,6 +11,12 @@ Lets Claude Code search and look at your PIVOT library while you design and buil
 | `list_facets`          | What the library can be filtered by: types with counts, facet values in use, source categories, collections.                                                                                   |
 | `get_reference_images` | The screenshots as images: the cover (first screen) and the full page in 960px-wide slices (about 2,000 tokens each), paged with `fromSlice`, at most 4 images per call.                       |
 
+## Outside the library
+
+| Tool              | What it does                                                                                                                                                                                                                      |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_external` | Searches the free public component catalogs PIVOT indexes on this computer (Magic UI, React Bits, shadcn/ui) and lists search links for other sites. Read-only. Nothing is saved; the links are places to browse, not references. |
+
 ## Write tools (need the API token)
 
 | Tool                     | What it does                                                                                                                                        |
@@ -41,7 +47,7 @@ Errors come back as tool results with a code the agent can act on: `not_found`, 
    ```bash
    claude mcp add pivot --scope project -- node apps/mcp/dist/server.js
    ```
-4. In Claude Code, `/mcp` should list `pivot` with 4 tools. Ask something like "find dark pricing pages in PIVOT".
+4. In Claude Code, `/mcp` should list `pivot` with 11 tools. Ask something like "find dark pricing pages in PIVOT".
 
 ### Configuration
 
@@ -55,7 +61,7 @@ Pass them with `claude mcp add … -e PIVOT_URL=http://127.0.0.1:4400 -- node �
 ## Troubleshooting
 
 - **`app_unreachable`:** PIVOT isn't running at `PIVOT_URL`. Start it, then retry; the server doesn't need restarting.
-- **Tools missing in `/mcp`:** rebuild (`pnpm mcp:build`) and restart Claude Code. The server logs to stderr: run `node apps/mcp/dist/server.js` by hand and it prints `PIVOT MCP ready (4 tools)`.
+- **Tools missing in `/mcp`:** rebuild (`pnpm mcp:build`) and restart Claude Code. The server logs to stderr: run `node apps/mcp/dist/server.js` by hand and it prints `PIVOT MCP ready (11 tools), reading <PIVOT_URL>`.
 - **Search results differ from the app:** both use `searchResources` / `listResources` in `packages/core`. Check you're pointing at the same app (`PIVOT_URL`) and that it was rebuilt after the last pull.
 
 ## Remove
@@ -64,13 +70,29 @@ Pass them with `claude mcp add … -e PIVOT_URL=http://127.0.0.1:4400 -- node �
 claude mcp remove pivot --scope user
 ```
 
-## Design skill
+## Design skills
 
-The `pivot-design` skill (`.claude/skills/pivot-design/SKILL.md`) tells Claude how to use these tools when designing: search → look → brief with attributed references → 2–3 mockups → build after you pick. Make it available in every project with:
+Two skills in `.claude/skills` tell Claude how to use these tools:
+
+- **`pivot-design`** for new screens. The flow is:
+  1. understand;
+  2. `list_facets`, search and look;
+  3. a brief with attributed references, saved as `initial`;
+  4. 2–3 mockups;
+  5. your explicit approval;
+  6. build;
+  7. QA.
+- **`pivot-redesign`** for existing UI. It sets a path and a risk level (small fix / Minor / Major) that decides the approval step. It also checks the impact on shared code, and compares the result with "before" screenshots.
+
+Both share an optional-specialist policy (`pivot-design/specialists.md`).
+
+Link them into every project with:
 
 ```bash
 pnpm skill:install
 ```
+
+The links point at this repo, so editing the skills here updates them everywhere. The full walkthrough is in the root [README](../../README.md#design-with-claude-code).
 
 ## Develop
 
