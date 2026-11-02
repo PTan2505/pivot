@@ -378,19 +378,45 @@ PT is the core, PIVOT the expansion: the mark starts from the first and last let
 
 ### Screenshot gallery — `components/asset-gallery.tsx`
 
-- The main preview, then a row of 56px thumbnails (10px radius, the cover marked with a star) and, at the right of that row, secondary pills **Replace screenshot** (uploads one image that replaces the captured shots and becomes the cover) and **Retake screenshot** for types that are captured (reference, UI library, animation, source).
+- The main preview, then **one row**: 56px thumbnails (10px radius, the cover marked with a star) and an add tile on the left; on the right, secondary pills **Annotate** (images), **Replace** (uploads one image that replaces the captured shots and becomes the cover) and **Retake** for types that are captured (reference, UI library, animation, source). Below `sm` those pills show only their icons; the words stay as accessible names. The compact gallery of text types keeps the longer labels ("Replace screenshot", "Retake screenshot").
+- **File details** (updated 2026-11-02): under that row, a collapsed `<details>` like the capture history. Its summary is "File details · Screenshot · file name · 1440×900 · 68 KB" (name and size in mono); opened, it holds **Set as cover**, Open original, Download, Remove and the file note. The compact gallery keeps these in an open row.
 - **Full-size viewer:** an image preview has a solid surface-raised round **View at full size** button (maximize icon) top-right, and clicking the image does the same. It opens a sheet 16px from the top, the full screen height and at most 1440px wide (the capture width) on a canvas background, so a full-page shot reads at its real size and scrolls top to bottom. A solid surface bar stays at its top: file name and size in mono ink-muted, an **Original file** ghost pill, and a round close button. Escape closes it.
 - While capturing, a surface status pill with a spinner reads "Capturing screenshots…" with a small **Cancel** pill. A failed capture turns it into a danger line "Screenshot failed: <reason>" with two small pills, **Upload one** and **Retry**. A partial or doubtful capture (or a retake that kept the previous shot) shows the same pill in ink-muted with an info icon, the note, and a **Retake** pill.
 - **Retake** is a split pill: the main half retakes with the saved defaults; a chevron half opens a menu ("Capture once with": Expand content, Light theme, Dark theme, Both themes).
 - Thumbnails are labelled with their role and colour scheme ("Original", "Screenshot · dark", "Other theme · light"). When a retake has replaced the first capture, the Original is the one shown first.
 - The Retake menu adds "Tablet and mobile too", "Record motion (video and keyframes)" and "Capture later…". Tablet and mobile shots, the motion video and keyframes appear as more thumbnails, labelled "Viewport · mobile · dark", "Motion", "Keyframe 3". When the last capture saw animation, a 12px ink-muted line above the history offers a small **Record motion** pill.
-- **Notes** (a ghost pill beside the selected image's label, "Notes (2)"; secondary and pressed while on): swaps the preview for the full image with its notes as a layer. Regions are 2px ember outlines with a 10% ember fill and a numbered ember badge at the top-left; pins are 24px ember circles with the number. Drag on the picture for a box, click for a pin; under it a small "Add a box" pill and the numbered list of notes as 32px inputs with a remove button ("agent" in ink-subtle for an agent's). Markers are focusable buttons (accent-text ring) moved with the arrow keys.
+- **Annotate** (the secondary pill in the gallery row, "Annotate (2)"; "Done" and pressed while on; in the compact gallery a ghost "Notes (2)" pill beside the image's label): swaps the preview for the full image with its notes as a layer. Regions are 2px ember outlines with a 10% ember fill and a numbered ember badge at the top-left; pins are 24px ember circles with the number. Drag on the picture for a box, click for a pin; under it a small "Add a box" pill and the numbered list of notes as 32px inputs with a remove button ("agent" in ink-subtle for an agent's). Markers are focusable buttons (accent-text ring) moved with the arrow keys.
 - **Compare Original and Latest** (collapsed `<details>`, only when an Original exists): the share of changed pixels in ink with the capture times in ink-muted, the difference image (Latest dimmed to grey, changed pixels in ember, 10px radius), and a pill to save the Latest as a new design version (secondary and preceded by "This looks like a redesign." above 25%, ghost below).
 - **Capture history** sits under the gallery as a collapsed `<details>` ("Capture history (n)"), each run a surface row: status in ink-secondary, the time in mono, the scheme and options, the error on its own line.
 
+### Resource detail page — `components/resource-detail.tsx` (updated 2026-11-02)
+
+**Header, all types:**
+
+- the back button, breadcrumbs and the save state;
+- the action pills (Open, Copy, Context, Export, Trash);
+- the title at the display size.
+
+**Below `sm`, visual types only** (reference, UI library, media, icon, animation, typography, source): the actions leave the breadcrumb row and become **one row under the title**. Open, Copy and Context are icon-only pills with their names kept for screen readers, Export keeps its label, and Trash stays round. The other types keep their header as it was.
+
+**Visual types: image left, grouped panel right** (340px at `xl`, sticky; stacked below it). Each group is a solid surface panel (14px radius, 16px padding, a 12px ink-subtle title, no border or shadow), and fields inside it step up to surface-raised:
+
+1. **Classification:** the facet rows and tags.
+2. **Notes & collections:** the notes field, then the collection chips with **Add**.
+3. **Source:** the source URL field (mono; its label is screen-reader only), then "Captured from", section and catalogue info when present.
+   - The description clamped to three ink-muted lines, with an accent-text ghost **Show all and edit** that opens the field. An empty description shows a ghost **+ Description**.
+   - Ghost **+ Published by** and **+ Original source** pills that reveal their field, focused. Filled fields always show.
+   - The type's own fields.
+   - Links.
+4. A source's "Saved from this source" panel follows on its own.
+
+Under the groups, a quiet footer above a divider: the Type select, then Added, Edited and Files in ink-subtle with mono values.
+
+**Non-visual types** keep the single flat side panel: Description, Source URL, the type's fields, Links, Classification, Notes, Collections, Type and dates.
+
 ### Links — `components/resource-links.tsx`
 
-In the detail sidebar, above Classification: "Links" in ink-subtle with a ghost "+ Link" button. Each link is a surface row (10px radius): a link icon, the relation in ink-muted ("Part of", "Has section", "Same page as"…), the other reference's title as a link, and for a suggestion "suggested" with a ✓ to accept; a × removes it. "+ Link" opens a surface panel with the relation select, a search field and the matching titles.
+In the detail sidebar: for visual types at the end of the **Source** group, otherwise above Classification. "Links" in ink-subtle with a ghost "+ Link" button. Each link is a surface row (10px radius; surface-raised inside a group): a link icon, the relation in ink-muted ("Part of", "Has section", "Same page as"…), the other reference's title as a link, and for a suggestion "suggested" with a ✓ to accept; a × removes it. "+ Link" opens a surface panel with the relation select, a search field and the matching titles.
 
 ### Design sessions — `app/design/page.tsx`, `components/design-session.tsx`
 
