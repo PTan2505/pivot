@@ -74,6 +74,20 @@ describe("design sessions", () => {
       first.sessionId,
     ]);
   });
+
+  it("only lets a session be marked approved by hand once it has a recorded approval", async () => {
+    const { sessionId } = await design.saveDesignBrief({ title: "Onboarding", milestone: "initial", markdown: "## B" });
+    await expect(design.setDesignSessionStatus(sessionId, "approved")).rejects.toThrow(/no recorded approval/);
+    expect((await design.getDesignSession(sessionId))!.status).toBe("exploring");
+    // the other statuses stay free to set by hand
+    await design.setDesignSessionStatus(sessionId, "abandoned");
+    expect((await design.getDesignSession(sessionId))!.status).toBe("abandoned");
+
+    await design.recordDesignDecision({ sessionId, kind: "approval", summary: "Direction 2" });
+    await design.setDesignSessionStatus(sessionId, "building");
+    await design.setDesignSessionStatus(sessionId, "approved");
+    expect((await design.getDesignSession(sessionId))!.status).toBe("approved");
+  });
 });
 
 describe("agent suggestions", () => {

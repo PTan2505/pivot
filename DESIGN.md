@@ -420,7 +420,21 @@ In the detail sidebar: for visual types at the end of the **Source** group, othe
 
 ### Design sessions — `app/design/page.tsx`, `components/design-session.tsx`
 
-A pen-tool icon button in the top bar (between Trash and Settings; inverse when on `/design`). The list page: display title "Design sessions", one ink-muted line, then surface rows (14px radius) with the title in 15px ink, a status chip, and a second line with project, surface and date. A session page: a ghost "Design sessions" back pill, the title at the detail-page size, a meta line, a radiogroup of status pills (the current one inverse), then the timeline: each brief is a collapsible surface card (the newest open) rendered as Markdown with reference chips; each decision is a surface card with its kind ("Approved", "Changed", "Deviation found in QA") in ink-secondary, the summary in ink and the direction under it.
+A pen-tool icon button in the top bar (between Trash and Settings; inverse when on `/design`). The list page: display title "Design sessions", one ink-muted line, then surface rows (14px radius) with the title in 15px ink, a status chip, and a second line with project, surface and date. A session page: a ghost "Design sessions" back pill, the title at the detail-page size, a meta line, the **status stepper** (below), then the timeline: each brief is a collapsible surface card (the newest open) rendered as Markdown with reference chips; each decision is a surface card with its kind ("Approved", "Changed", "Deviation found in QA") in ink-secondary, the summary in ink and the direction under it.
+
+**Status stepper** (updated 2026-11-02):
+
+- **Steps:** an `<ol aria-label="Status">` of Exploring → Approved → Building → Done.
+  - Each step is a 32px pill in 13px label type, 10px side padding below `sm` and 12px above.
+  - The current step is surface-raised in ink, weight 500, with an 8px status dot: ink-muted for Exploring, success for Approved, warning for Building, ink for Done. It carries `aria-current="step"`.
+  - Past steps are ink-secondary with a check; future steps are ink-muted.
+  - Between steps runs a 2px connector (12px below `sm`, 28px above), success up to the current step and divider after it. Below 340px the steps wrap.
+  - **Abandoned:** the four steps drop to 50% and a fifth current pill "Abandoned" follows, with an ink-subtle dot.
+- **Note:** a 14px ink-muted live line saying what the state means. On Exploring and Approved it adds "Exploring and Approved follow the brief and your approval; you move the rest."
+- **Actions:**
+  - The next manual step is an inverse pill with an arrow ("Start building", "Mark done"). It is never ember: the top bar's Add stays the screen's only primary.
+  - Then ghost pills: "Back to building" (Done), Abandon or Restore, and Reopen, which opens the destructive confirm dialog.
+  - While saving, the current dot becomes a spinner and the pills are disabled. A success toast "Status: Building" has **Undo**; a failure reverts and shows the reason in an error toast.
 
 ### Suggestions — `components/suggestions.tsx`
 

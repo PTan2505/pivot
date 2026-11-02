@@ -385,8 +385,16 @@ Theo Part A và các quyết định #1–3, #13, #19, #30, #34, #35 của [PIVO
   - **Snapshot của brief** (`design_snapshots`, Markdown): chỉ ở ba mốc `initial`, `approved`, `major_change` (kèm ghi chú thay đổi). Lưu lại đúng brief đó ở cùng mốc thì nhận lại snapshot cũ. Một `major_change` đưa session về `exploring`: phải duyệt lại trước khi làm tiếp.
   - **Quyết định** (`design_decisions`): `approval` (đặt session thành `approved`; agent chỉ ghi khi người dùng đã duyệt rõ ràng), `change` (người dùng đổi quyết định đã duyệt), `deviation` (QA thấy kết quả lệch hướng đã duyệt).
   - Brief, quyết định và ghi chú session chỉ nằm trong PIVOT, **không bao giờ** ghi vào repo của project đích; mockup vẫn là file nháp, không được copy vào PIVOT.
-  - Web: nút **Design sessions** trên thanh trên cùng; `/design` liệt kê session mới nhất trước; `/design/[id]` hiện timeline brief và quyết định (brief mới nhất mở sẵn) và cho đổi trạng thái.
-  - API: `POST /api/design/briefs`, `GET /api/design/sessions`, `GET|PATCH /api/design/sessions/[id]`, `POST /api/design/sessions/[id]/decisions`.
+  - Web: nút **Design sessions** trên thanh trên cùng; `/design` liệt kê session mới nhất trước; `/design/[id]` hiện timeline brief và quyết định (brief mới nhất mở sẵn).
+  - **Trạng thái** (cập nhật 2026-11-02):
+    - Hiển thị dạng **stepper** Exploring → Approved → Building → Done: bước đã qua có dấu ✓, bước hiện tại được làm nổi bật. Kèm một dòng giải thích trạng thái, ví dụ "Direction approved on Nov 2. Ready to build.".
+    - Exploring và Approved đi theo bản ghi của agent (brief đầu tiên, thay đổi lớn, lời duyệt). Người dùng tự chuyển các bước còn lại:
+      - một nút cho bước kế tiếp: "Start building", "Mark done";
+      - **Abandon** và **Reopen**; Reopen hỏi xác nhận vì công việc phải duyệt lại;
+      - ở Done có "Back to building", ở Abandoned có "Restore". Restore về Approved nếu đã có bản ghi duyệt, nếu không thì về Exploring.
+    - Bấm là stepper đổi ngay, có spinner nhỏ cho tới khi lưu xong; lưu lỗi thì quay về trạng thái cũ và báo lý do; lưu xong có toast với **Undo**.
+    - Việc đổi trạng thái không được ghi vào timeline.
+  - API: `POST /api/design/briefs`, `GET /api/design/sessions`, `GET|PATCH /api/design/sessions/[id]`, `POST /api/design/sessions/[id]/decisions`. `PATCH` với `status: "approved"` trả **409** khi session chưa có bản ghi `approval` (cập nhật 2026-11-02): duyệt là lời của người dùng, được ghi bằng `record_design_decision`, không phải một trạng thái bấm tay.
 - **Gợi ý của agent** (bảng `resource_suggestions`): agent (Claude Code qua MCP `suggest_metadata`) gợi ý facet, collection, tiêu đề hoặc mô tả hình ảnh cho một reference. App không giữ API key của mô hình nào.
   - Gợi ý ở trạng thái **pending** cho tới khi người dùng chấp nhận hoặc từ chối; không bao giờ tự áp dụng hay ghi đè dữ liệu đã xác nhận. Tên facet được khớp với tên đã có (không phân biệt hoa thường) để không sinh từ đồng nghĩa; tên mới được đánh dấu "(new)". Gợi ý trùng hoặc facet reference đã có thì bỏ qua.
   - Chữ của gợi ý đang pending **tìm được** trong library và MCP; bị từ chối thì thôi.
