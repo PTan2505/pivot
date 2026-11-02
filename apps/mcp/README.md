@@ -23,6 +23,7 @@ Lets Claude Code search and look at your PIVOT library while you design and buil
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `save_design_brief`      | Saves a design brief in PIVOT at a milestone: `initial` (opens a design session), `approved`, `major_change`. The same brief twice is one snapshot. |
 | `record_design_decision` | Records an `approval`, a `change` after approval, or a `deviation` found in QA.                                                                     |
+| `set_design_status`      | Moves a session to `building` (only from approved) or `done` (only from building). The same status twice changes nothing. Never sets the others.    |
 | `get_design_session`     | Reads a session's briefs and decisions, or lists sessions (read-only, listed here because it belongs with the two above).                           |
 | `suggest_metadata`       | Suggests facets, a collection, a title or a visual description for a reference. They wait in the Inbox until you accept them.                       |
 | `annotate_reference`     | Appends a dated "agent" line to a reference's notes; your own text isn't changed.                                                                   |
@@ -30,7 +31,7 @@ Lets Claude Code search and look at your PIVOT library while you design and buil
 
 Briefs and decisions are kept in PIVOT, never written into the project you are working on. Nothing an agent writes overwrites what you confirmed.
 
-Errors come back as tool results with a code the agent can act on: `not_found`, `invalid_input`, `invalid_cursor`, `no_images`, `app_unreachable`, `read_only`, `unauthorized` (the token is missing or wrong).
+Errors come back as tool results with a code the agent can act on: `not_found`, `invalid_input`, `invalid_cursor`, `no_images`, `app_unreachable`, `read_only`, `unauthorized` (the token is missing or wrong), `conflict` (the item's current state doesn't allow it, e.g. a status out of order).
 
 ## Set up
 
@@ -47,7 +48,7 @@ Errors come back as tool results with a code the agent can act on: `not_found`, 
    ```bash
    claude mcp add pivot --scope project -- node apps/mcp/dist/server.js
    ```
-4. In Claude Code, `/mcp` should list `pivot` with 11 tools. Ask something like "find dark pricing pages in PIVOT".
+4. In Claude Code, `/mcp` should list `pivot` with 12 tools. Ask something like "find dark pricing pages in PIVOT".
 
 ### Configuration
 
@@ -61,7 +62,7 @@ Pass them with `claude mcp add â€¦ -e PIVOT_URL=http://127.0.0.1:4400 -- node â€
 ## Troubleshooting
 
 - **`app_unreachable`:** PIVOT isn't running at `PIVOT_URL`. Start it, then retry; the server doesn't need restarting.
-- **Tools missing in `/mcp`:** rebuild (`pnpm mcp:build`) and restart Claude Code. The server logs to stderr: run `node apps/mcp/dist/server.js` by hand and it prints `PIVOT MCP ready (11 tools), reading <PIVOT_URL>`.
+- **Tools missing in `/mcp`:** rebuild (`pnpm mcp:build`) and restart Claude Code. The server logs to stderr: run `node apps/mcp/dist/server.js` by hand and it prints `PIVOT MCP ready (12 tools), reading <PIVOT_URL>`.
 - **Search results differ from the app:** both use `searchResources` / `listResources` in `packages/core`. Check you're pointing at the same app (`PIVOT_URL`) and that it was rebuilt after the last pull.
 
 ## Remove

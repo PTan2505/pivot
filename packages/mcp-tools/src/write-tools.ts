@@ -95,6 +95,57 @@ const recordDesignDecision: PivotTool<typeof decisionInput> = {
   },
 };
 
+// ---- set_design_status ------------------------------------------------------------------------------------------
+
+const statusInput = {
+  sessionId: z.string().regex(UUID).describe("The design session."),
+  status: z
+    .enum(["building", "done"])
+    .describe(
+      "building: you are starting to build the approved direction (only from approved). done: the build and its QA are finished with nothing left for the user to decide (only from building).",
+    ),
+};
+
+// The two moves an agent makes; exploring and approved follow briefs and approvals, abandoned is the user's call.
+const FROM: Record<"building" | "done", { from: string; why: string }> = {
+  building: {
+    from: "approved",
+    why: "Only an approved session can start building: show the direction and record the user's approval first.",
+  },
+  done: { from: "building", why: "Only a session that is building can be marked done." },
+};
+
+const setDesignStatus: PivotTool<typeof statusInput> = {
+  name: "set_design_status",
+  title: "Set a design session's status",
+  description:
+    "Moves a design session to building when you start implementing its approved direction, and to done when the build and QA are finished with nothing left for the user to decide. Setting the status it already has changes nothing. It never sets exploring, approved or abandoned.",
+  inputSchema: statusInput,
+  async run(source, { sessionId, status }) {
+    const w = writer(source);
+    const s = await w.getDesignSession(sessionId);
+    if (!s) throw new ToolError("not_found", `No design session ${sessionId}.`);
+    if (s.status === status) {
+      return { content: [text(`The session is already ${status}.`)], structuredContent: { sessionId, status } };
+    }
+    const rule = FROM[status];
+    if (s.status !== rule.from) {
+      const hint =
+        s.status === "abandoned"
+          ? " The user abandoned it: ask whether to restore it before doing more."
+          : s.status === "exploring"
+            ? " It is exploring: the direction needs the user's approval again."
+            : "";
+      throw new ToolError("conflict", `The session is ${s.status}. ${rule.why}${hint}`);
+    }
+    const updated = await w.setDesignStatus(sessionId, status);
+    return {
+      content: [text(`The session is now ${updated.status}.`)],
+      structuredContent: { sessionId, status: updated.status },
+    };
+  },
+};
+
 // ---- get_design_session -----------------------------------------------------------------------------------------
 
 const sessionInput = {
@@ -253,6 +304,7 @@ const saveReference: PivotTool<typeof saveInput> = {
 export const WRITE_TOOLS = [
   saveDesignBrief,
   recordDesignDecision,
+  setDesignStatus,
   getDesignSession,
   suggestMetadata,
   annotateReference,

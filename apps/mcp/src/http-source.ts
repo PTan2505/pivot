@@ -5,6 +5,7 @@ import { ToolError, type PivotSource, type PivotWriter } from "@pivot/mcp-tools/
 import type {
   CollectionDTO,
   DesignSessionDetailDTO,
+  DesignStatus,
   DesignSessionDTO,
   ResourceDetailDTO,
   ResourceDTO,
@@ -57,6 +58,10 @@ export class HttpSource implements PivotSource, PivotWriter {
       );
     }
     if (res.status === 404) return null;
+    if (res.status === 409) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new ToolError("conflict", body.error ?? "PIVOT refused the change in its current state.");
+    }
     if (res.status === 400) {
       const body = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
       throw new ToolError(
@@ -131,6 +136,14 @@ export class HttpSource implements PivotSource, PivotWriter {
 
   recordDesignDecision(sessionId: string, input: Parameters<PivotWriter["recordDesignDecision"]>[1]) {
     return this.post<{ id: string }>(`/api/design/sessions/${encodeURIComponent(sessionId)}/decisions`, input);
+  }
+
+  setDesignStatus(sessionId: string, status: DesignStatus) {
+    return this.post<DesignSessionDetailDTO>(
+      `/api/design/sessions/${encodeURIComponent(sessionId)}`,
+      { status },
+      "PATCH",
+    );
   }
 
   getDesignSession(id: string) {

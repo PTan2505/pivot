@@ -86,6 +86,7 @@ Two pieces let Claude Code design and redesign screens in any project from **you
 | `search_external`        | read  | Free public component catalogs (Magic UI, React Bits, shadcn/ui), only when the library falls short |
 | `save_design_brief`      | write | Store the brief at a milestone: `initial` (opens a design session), `approved`, `major_change`      |
 | `record_design_decision` | write | Record your `approval`, a `change` after approval, or a QA `deviation`                              |
+| `set_design_status`      | write | Mark an approved session `building` when Claude starts coding, and `done` after the build and QA    |
 | `get_design_session`     | read  | Read a session to continue earlier work                                                             |
 | `suggest_metadata`       | write | Suggest facets or a title for a reference; it waits in your Inbox                                   |
 | `annotate_reference`     | write | Add a dated agent note to a reference; your notes stay as they are                                  |
@@ -140,7 +141,7 @@ Claude usually picks the right skill. Start with "Use pivot-design…" or "Use p
    - "Pick A, keep the group labels" approves.
    - A mix or a change gets a revised proposal.
    - A "no" means nothing is built.
-8. **Build.** Only the approved direction, with your project's tokens and components. A new token, variant or shared-component change is proposed separately and needs its own approval.
+8. **Build.** Claude marks the session **Building**, then builds only the approved direction, with your project's tokens and components. A new token, variant or shared-component change is proposed separately and needs its own approval.
 9. **QA.** Checks scale with risk. A Major redesign covers:
    - 1440 and 390 px, plus 768 when there's a breakpoint there;
    - no horizontal scroll at 320 and 375;
@@ -163,7 +164,9 @@ Claude usually picks the right skill. Start with "Use pivot-design…" or "Use p
 
    The report separates screenshots generated, inspected and delivered. Anything blocked or not run is marked **unverified**, never passed.
 
-To pick up earlier work, say "continue the Ledgerly pricing session". Claude reads it with `get_design_session` and doesn't record the approval twice. The full rules are in the skills and in [docs/SPEC.md](docs/SPEC.md) §10.
+When QA is finished with nothing left for you to decide, Claude marks the session **Done**. The status stepper on the session page shows where the work is. Abandon or Reopen it there to tell Claude to stop, or to ask for a new approval.
+
+To pick up earlier work, say "continue the Ledgerly pricing session". Claude reads it with `get_design_session`, checks its status first, and doesn't record the approval twice. The full rules are in the skills and in [docs/SPEC.md](docs/SPEC.md) §10.
 
 ## Layout
 

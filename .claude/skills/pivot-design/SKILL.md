@@ -16,6 +16,7 @@ PIVOT is the user's library of saved UI references: screenshots of real websites
 | `search_external`        | Outside the library: free component catalogs (Magic UI, React Bits, shadcn/ui) plus links to other sites' search. |
 | `save_design_brief`      | Save the brief in PIVOT at a milestone (`initial` opens the session, `approved`, `major_change`).                 |
 | `record_design_decision` | Record the user's approval, a change after approval, or a deviation found in QA.                                  |
+| `set_design_status`      | Mark an approved session `building` when you start, and `done` when the build and QA are finished.                |
 | `get_design_session`     | Read an earlier session (its briefs and decisions) to continue that work.                                         |
 | `suggest_metadata`       | Suggest facets, a collection, a title or a visual description for a reference you looked at.                      |
 | `annotate_reference`     | Add a short, dated agent note to a reference (the user's notes stay as they are).                                 |
@@ -145,7 +146,10 @@ Write this before any mockup and show it to the user in this shape, table includ
 
 A design session starts with the first completed brief. It groups the chosen references, the brief, the mockups and the decisions for this piece of work. Small fixes don't get one.
 
-- Continuing earlier work? `get_design_session` (no id) lists sessions; read the matching one and keep its `sessionId`.
+- Continuing earlier work? `get_design_session` (no id) lists sessions; read the matching one and keep its `sessionId`. **Read its status before doing anything:**
+  - `abandoned`: the user stopped this work. Don't continue; ask whether to restore it.
+  - `exploring` with an earlier approval: the user reopened it, or a major change was saved. The old approval no longer covers building, so show the direction again and wait for a new approval (§8).
+  - `building` or `done`: carry on, or ask what's next.
 - Save the brief with `save_design_brief` at three moments only: the **first completed brief**, right after you show it and before the mockups (`milestone: "initial"`, no `sessionId`: this opens the session; pass `targetProject` and `surface`), the **approved brief** (`approved`), and any **major change** after approval (`major_change`, with a `note` on what changed). Not on every small edit. Pass the ids of the references the brief uses.
 - If a write fails or the tools aren't there (`read_only`, `unauthorized`, `app_unreachable`), tell the user in one line that the brief isn't saved in PIVOT, and why. Don't write it into the target project instead, and don't pretend it was saved.
 
@@ -185,6 +189,7 @@ Mockups are **temporary design prototypes**, not the implementation.
 
 ## 9. Build
 
+- **Before the first edit,** call `set_design_status` with `status: "building"`. It only succeeds on an approved session; if it refuses, follow its message instead of building.
 - Implement the approved direction in the project's stack and conventions; follow its repo rules (branches, specs, checks). Rebuild it properly rather than pasting the mockup in.
 - List the references that shaped it in the PR description or the summary to the user (title + link). Code comments don't need them.
 
@@ -224,6 +229,9 @@ Mockups are **temporary design prototypes**, not the implementation.
   - Say which results come from your own checks and which from a tool's or someone else's report.
   - A check that was blocked or not run is **unverified**, never a pass.
   - Don't present a width or a state you didn't look at.
+- **Close the session:** when the build and its QA are finished and nothing is left for the user to decide, call `set_design_status` with `status: "done"`. Leave it `building`, and say why, in either case:
+  - a departure waits for the user's decision;
+  - you stopped for a new approval (§8).
 
 ## Helping the library (optional)
 
