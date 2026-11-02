@@ -215,10 +215,10 @@ Mọi loại đều có các trường chung: `title`, `description`, `sourceUrl
     1. hiểu yêu cầu;
     2. tìm: gọi `list_facets` một lần cho mỗi task cần tìm trong thư viện, trước lần tìm chung đầu tiên, và dùng lại kết quả khi resume; tra reference người dùng nêu tên thì có thể làm trước;
     3. xem chi tiết và ảnh (khoảng 12 ảnh mỗi lần);
-    4. chọn 2–4 reference;
+    4. đưa ra **shortlist** 6–10 ứng viên, mỗi cái có link tới trang của nó trong PIVOT, lý do khớp và đã xem ảnh nào, rồi **dừng để người dùng chọn**. Người dùng nói "cứ chọn giúp tôi" thì Claude tự chọn 2–4 và nói rõ đã chọn gì (cập nhật 2026-11-02);
     5. viết và trình bày **brief** có bảng Take / Leave, mỗi reference ghi tên và link;
     6. lưu brief `initial`, tức mở **design session**;
-    7. dựng **2–3 mockup** bằng design system của project đích;
+    7. dựng **khoảng 5 mockup** khác nhau về cấu trúc (hoặc đúng số người dùng yêu cầu) bằng design system của project đích, kèm một **viewer** dạng tab (`viewer/make-viewer.mjs` trong folder skill tạo `index.html`): xem ở desktop, tablet hoặc điện thoại, phím 1–9 để chuyển, nút "Choose this version" chép sẵn câu trả lời để dán vào chat (cập nhật 2026-11-02);
     8. **duyệt**;
     9. code;
     10. **QA**.
@@ -232,6 +232,10 @@ Mọi loại đều có các trường chung: `title`, `description`, `sourceUrl
     - **lệch khỏi một yêu cầu hay chi tiết đã duyệt**: báo người dùng và ghi `deviation`, không tự định nghĩa lại quyết định;
     - **thay đổi đáng kể về hướng, phạm vi hay hành vi**: dừng và xin duyệt lại;
     - **lỗi có sẵn từ trước hoặc không liên quan**: báo riêng, không phải `deviation`, không mở rộng phạm vi.
+  - **Kiểm tra AI slop** (bổ sung 2026-11-02): thiết kế mới, mức Nhỏ và mức Lớn luôn có, dù dòng specialist ghi gì.
+    - Chạy `impeccable detect` trên các file đã đổi nếu đã cài: chạy tại máy, không gọi API.
+    - Đối chiếu ảnh after với `DESIGN.md` theo checklist: giá trị hard-code thay vì token, nhiều hành động chính trên một màn hình, khoảng cách lệch thang, icon hoặc bo góc không đồng bộ, gradient, glow hay glass thừa, câu chữ chung chung, mọi thứ nặng ngang nhau.
+    - Thiết kế mới và mức Lớn thêm phần critique theo tiêu chí trong `reference/critique.md` của impeccable, chỉ đánh giá bằng chữ, không lưu báo cáo critique.
   - Báo cáo bằng chứng tách riêng ảnh đã tạo, ảnh thực sự đã xem và thứ giao cho người dùng; nói rõ kết quả nào tự kiểm, kết quả nào lấy từ báo cáo khác. Bước bị chặn hay chưa làm ghi là chưa kiểm chứng, không bao giờ coi là đạt. Mockup không có bản điện thoại, hoặc có mà chưa xem, thì phải nói ra.
   - Brief, quyết định và ghi chú của session thuộc về PIVOT, **không bao giờ** ghi vào repo của project đích. Brief được lưu ở ba mốc: brief hoàn chỉnh đầu tiên (mở session), brief đã duyệt, và khi có thay đổi lớn. Khi MCP chưa có tool ghi, skill nói rõ là chưa lưu được.
   - Sửa nhỏ, rõ ràng (căn lại icon, tăng độ tương phản, đổi nhãn, chỉnh một khoảng cách) không cần khám phá thiết kế thì bỏ qua quy trình: sửa theo design system rồi kiểm tra. Yêu cầu còn để ngỏ thiết kế (màn mới, đổi giao diện, đổi bố cục, "làm cho đẹp hơn") thì đi đủ quy trình.
@@ -248,7 +252,7 @@ Mọi loại đều có các trường chung: `title`, `description`, `sourceUrl
   - Đường A theo quy trình của `pivot-design` (brief, design session, mockup, duyệt, build, QA), nhưng tìm **trước** những reference người dùng nêu: component hoặc trang cần nhất quán là reference chính (dùng lại đúng component và token của nó); reference trong PIVOT tìm bằng `search_references`; URL không có trong PIVOT vẫn là reference hợp lệ, ghi "given by the user, not saved". Chỉ tìm thêm (PIVOT trước, rồi `search_external`) khi còn thiếu, tổng 2–4 reference. Brief có thêm dòng Keep, Impact, dòng trạng thái hiện tại và dòng mục tiêu nhất quán; mockup đặt before và after cạnh nhau.
   - Đường B: không tìm thư viện (trừ khi người dùng xin reference, khi đó chuyển sang A). Liệt kê vấn đề của bản hiện tại kèm vị trí trong code, đề xuất một hướng (kèm mockup nếu là mức Lớn).
   - **Thứ tự** (cập nhật 2026-11-02):
-    - Đường A: phân loại và phân tích ảnh hưởng → tìm và xem reference → viết và trình bày brief → lưu `initial` → mockup → duyệt → build → QA.
+    - Đường A: phân loại và phân tích ảnh hưởng → tìm và xem reference → shortlist và chờ người dùng chọn → viết và trình bày brief → lưu `initial` → mockup → duyệt → build → QA.
     - Đường B: liệt kê vấn đề → đề xuất hướng (brief ngắn) → lưu `initial` → mockup nếu là mức Lớn → duyệt → build → kiểm tra.
     - Tìm trong thư viện ở đường A theo quy tắc `list_facets` của `pivot-design`. Sửa nhỏ và đường B không tìm thêm trong thư viện.
   - **Design memory và vòng đời duyệt** (cả hai đường, mức Nhỏ và Lớn; sửa nhỏ không có session): lưu đề xuất bằng `save_design_brief` (`initial`) ngay sau khi trình bày, **trước** mockup và trước khi xin duyệt. "Trước khi xin duyệt" là mốc muộn nhất, không cho phép viết brief sau mockup. `initial` chỉ là hướng đề xuất, chưa được duyệt.
@@ -294,7 +298,7 @@ Mọi loại đều có các trường chung: `title`, `description`, `sourceUrl
     - sửa nhỏ không dùng, trừ khi người dùng yêu cầu;
     - mức Nhỏ dùng tối đa một specialist ở giai đoạn thiết kế; cái thứ hai chỉ khi giải quyết một vấn đề riêng mà cái đầu không làm được, và phải nêu lý do;
     - mức Lớn có thể dùng nhiều specialist nếu vai trò bổ sung cho nhau;
-    - ở bước QA có thể dùng một specialist audit, không tính vào giới hạn của giai đoạn thiết kế.
+    - ở bước QA luôn có phần kiểm tra AI slop (`impeccable detect` nếu đã cài, checklist, critique cho mức Lớn); có thể thêm một specialist audit khác. Cả hai đều không tính vào giới hạn của giai đoạn thiết kế.
 
     Taste dành cho trang công khai. Với dashboard, trang admin hay màn hình app, chỉ dùng khi người dùng yêu cầu rõ: skill giải thích các quy tắc dễ xung đột, chờ xác nhận, rồi chỉ áp dụng phần phù hợp. Không bao giờ thay bằng biến thể Taste khác.
 

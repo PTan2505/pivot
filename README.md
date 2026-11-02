@@ -131,9 +131,11 @@ Claude usually picks the right skill. Start with "Use pivot-design…" or "Use p
    - references you named come first;
    - then `list_facets` once and 2–3 library searches;
    - about 12 images at most;
-   - 2–4 references chosen.
+   - a **shortlist** of 6–10 candidates, each linked to its PIVOT page. Claude stops so you can pick, for example "2, 5, 7: the table of 5". Say "you choose" to skip the pause.
 5. **Brief, then save.** A short brief with a Take / Leave table per reference, shown to you, then saved as `initial` (this opens the design session). The brief always comes before the mockups.
-6. **Mockups.** 2–3 directions as throwaway HTML in a scratch folder, never in your project. For a redesign, before and after are side by side.
+6. **Mockups.** About 5 distinct directions (or the number you ask for) as throwaway HTML in a scratch folder, never in your project. For a redesign, before and after are side by side.
+   - A generated **viewer** (`index.html` in the same folder) shows them as tabs at desktop, tablet or phone width; keys 1–9 switch versions.
+   - **Choose this version** copies a reply you paste in the chat.
 7. **Approval.** Claude stops and asks. Your reply is recorded **word for word**, and instructions from anyone else are labelled separately.
    - "Pick A, keep the group labels" approves.
    - A mix or a change gets a revised proposal.
@@ -153,6 +155,11 @@ Claude usually picks the right skill. Start with "Use pivot-design…" or "Use p
    | Departure from an approved requirement or detail | Reported and recorded as a `deviation`                 |
    | Material change of direction, scope or behaviour | Claude stops and asks for re-approval (`major_change`) |
    | Pre-existing or unrelated defect                 | Reported separately as a follow-up                     |
+
+   Every new design and every Minor or Major redesign also gets a **slop check**:
+   - `impeccable detect` on the changed files when it's installed (local, no API calls);
+   - a checklist against `DESIGN.md` (tokens, one primary action, spacing scale, icons, stray gradients or glows, placeholder copy, flat hierarchy);
+   - for Major work, a critique against `impeccable`'s criteria.
 
    The report separates screenshots generated, inspected and delivered. Anything blocked or not run is marked **unverified**, never passed.
 

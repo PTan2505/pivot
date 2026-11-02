@@ -21,10 +21,11 @@ PIVOT is the user's library of saved UI references: screenshots of real websites
 | `annotate_reference`     | Add a short, dated agent note to a reference (the user's notes stay as they are).                                 |
 | `save_reference`         | Save a page to the library, only when the user asks for it.                                                       |
 
-The flow is **understand → search → inspect → choose → brief → design session → mockups → approval → build → QA**, in that order:
+The flow is **understand → search → inspect → shortlist (the user picks) → brief → design session → mockups → approval → build → QA**, in that order:
 
 - The brief is written and shown before any mockup, and the mockups illustrate its directions.
 - Saving it (§6) comes right after you show it, before the mockups.
+- The shortlist (§4) is the one pause before the brief: the user picks the references, unless they told you to choose.
 - Showing the brief is not an approval gate: unless an open question blocks the mockups, carry on to them in the same turn. The approval gate is §8.
 
 **Nothing is built before the user approves a direction.** "Just build it" or "skip mockups" doesn't remove the approval: it means one mockup, or a one-paragraph direction, instead of 2–3, and you still stop and wait for a yes.
@@ -41,7 +42,9 @@ The flow is **understand → search → inspect → choose → brief → design 
 
 Without any specialist, this workflow is complete. The user's requirements, the project's design system and this workflow's gates always win.
 
-**Specialist checkpoint.** After §1, write one line, and write it again at §10 for a QA audit:
+The §10 **slop check** (`impeccable`'s detector when it is installed, a checklist, and a critique for Major work) is part of this workflow, not a specialist choice. It runs whatever the checkpoint below says.
+
+**Specialist checkpoint.** After §1, write one line, and write it again at §10 for any QA audit beyond the slop check:
 
 - `Specialists: none — <reason>`, or
 - `Specialists: <name> — <stage> — <purpose>`.
@@ -95,9 +98,23 @@ Pin down, from the request and the codebase (ask only for what you can't infer):
 - Screenshots have limits: an element cut between two captured screens can look half revealed, and pages behind a login only have the user's own view. Don't read meaning into those artefacts.
 - External references have no screenshot in PIVOT. Open the page only if you have a tool to (and the user is fine with it); otherwise judge from the catalog's title and description and mark it **metadata only**. Never describe how something looks unless you saw it.
 
-## 4. Choose
+## 4. Shortlist, and let the user pick
 
-Pick 2–4 references. For each, decide what to **take** and what to **leave**, judging:
+**Show what you found, then stop for the user's pick.** This is a choice, not an approval: nothing is recorded, and no brief or mockup is made before the answer.
+
+1. **Show 6–10 candidates as a numbered table**, the best first. Include those the user named, marked "named by you". Columns:
+   - `#`;
+   - the title, linked to its PIVOT page (`<PIVOT_URL>/r/<id>`, default `http://127.0.0.1:4321`) so the user can look at it there;
+   - the site;
+   - its facets;
+   - one line on why it matches this request;
+   - what you looked at (cover / full page / metadata only).
+2. **Order them by the criteria below,** and say in a line what you'd take from the strongest two or three.
+3. **Ask the user to pick,** for example "2, 5, 7: the table of 5, the cards of 2". Their picks, and what they liked in each, become the brief's references and Take column.
+4. **Skip the pause only when the user said so** ("you choose", "use the ones you think fit"). Then pick 2–4 yourself, and say which and why.
+5. **A thin library:** with fewer than 3 relevant candidates, say so, show what there is, and offer `search_external` (§2) before asking.
+
+**How to judge candidates** (for the order, and for what to take or leave):
 
 - fit to this surface's job and content, not just looks;
 - hierarchy: what the eye lands on first, second, third;
@@ -120,7 +137,7 @@ Write this before any mockup and show it to the user in this shape, table includ
 | ------------------ | ---------------------------------------- | --------------------------------- | ----------- | ------------------------ | ------------------------ |
 | [Title](sourceUrl) | PIVOT / <provider> (external, not saved) | screenshot / page / metadata only | <one line>  | <structure/pattern idea> | <brand, art, copy, etc.> |
 
-**Directions:** 1. <name: one line> 2. <…> (3. <…>)
+**Directions:** 1. <name: one line> 2. <…> … 5. <…>
 **Open questions:** <only what blocks the mockups>
 ```
 
@@ -136,10 +153,18 @@ A design session starts with the first completed brief. It groups the chosen ref
 
 Mockups are **temporary design prototypes**, not the implementation.
 
-- Build 2–3 **distinct** directions (different structure or emphasis, not three colourways), in the target project's tokens, type and components, with real content from the project, not lorem ipsum. If the user said "just build it" or "skip mockups", show one.
-- Keep them out of production code: a standalone HTML file in a scratch folder, or the host's artifact or preview tool. Don't add them to the project's routes, components or styles, and don't commit them.
-- Show them side by side (or one file each, with the paths listed together), each labelled on the page with the references that shaped it.
-- Look at every screenshot you present. When a mockup has no phone view, or you didn't look at one, say so.
+- **How many:** about **5 distinct** directions, or the number the user asked for. "Distinct" means a different structure or emphasis, not five colourways.
+  - If you can't make five that really differ, make fewer and say why.
+  - "Just build it" or "skip mockups" means one.
+- **What they're made of:** the target project's tokens, type and components, with real content from the project, not lorem ipsum.
+- **Keep them out of production code:** one standalone HTML file per direction, named `mockup-<n>-<slug>.html`, in a scratch folder. Don't add them to the project's routes, components or styles, and don't commit them.
+  - Give each file a short `<title>` naming the direction ("Raised Pro card").
+  - Label each on the page with the references that shaped it.
+- **Viewer:** after writing them, run `node <skill>/viewer/make-viewer.mjs <folder> --title "<surface>"`, where `<skill>` is this skill's folder. It writes `<folder>/index.html`, a tab per version.
+  - Desktop, tablet and phone widths; keys 1–9 to switch.
+  - A **Choose this version** button that copies a reply for the chat.
+  - Open the viewer in the browser tool you have, and give the user its path. The approval is still the user's own message (§8).
+- **Look at every version** at the desktop and phone widths before you present them. When you didn't look at one, say so.
 
 ## 8. Approval
 
@@ -176,7 +201,19 @@ Mockups are **temporary design prototypes**, not the implementation.
   | **Material change to the approved direction, scope or behaviour.**                                                                                                            | Stop and go back to §8 for a new approval.                                                                                                  |
   | **Pre-existing or unrelated defect.**                                                                                                                                         | Report it as a separate finding and suggest a follow-up. Not a `deviation`, and not a reason to widen the scope.                            |
 
-- **The QA specialist checkpoint (see top).** A specialist audit is optional and only adds to these checks (`specialists.md` §3–§4).
+- **Slop check.** Every design, and Minor or Major redesign, gets one, whatever the specialist checkpoint said. Generic, templated output can pass every functional check.
+  1. **Detector:** when `impeccable` is installed, run its `detect` on the changed UI files, as `specialists.md` §4 says (a resolved binary, files not URLs). It is static, local and makes no API calls. Not installed: say so, and do steps 2–3 anyway.
+  2. **Checklist,** against the after screenshots and the project's `DESIGN.md`:
+     - values hard-coded where a token exists;
+     - more than one primary action per screen;
+     - spacing off the project's scale;
+     - an icon set or radius that doesn't match the rest of the project;
+     - decorative gradients, glows, glass or shadows the design system doesn't use;
+     - generic or placeholder copy;
+     - everything given the same weight, so nothing leads.
+  3. **Critique, for new designs and Major redesigns:** read `impeccable`'s `reference/critique.md`. Judge the after screenshots against its criteria, as text only: never its `critique-storage write`.
+  - Findings from all three follow the classes above: fix a bug, and report a refinement, a departure or a pre-existing issue as such.
+- **The QA specialist checkpoint (see top)** covers anything beyond the slop check: another audit is optional and only adds to these checks (`specialists.md` §3–§4).
   - Report functional defects and aesthetic findings separately.
   - Propose anything outside the approved scope; don't build it.
 - **Report the evidence as it is.**
