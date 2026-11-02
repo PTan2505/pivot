@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api, useResources } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 /** Kinds you can add by hand; "same page" is made by PIVOT when two saves share a URL. */
 const MANUAL_KINDS = LINK_KINDS.filter((k) => k !== "same_source_page");
@@ -18,7 +19,8 @@ const MANUAL_KINDS = LINK_KINDS.filter((k) => k !== "same_source_page");
  * Links to other references: the page a section belongs to, other saves of the same page, related ones, variants and
  * newer versions. Suggestions (not confirmed) can be accepted or removed.
  */
-export function ResourceLinks({ resourceId }: { resourceId: string }) {
+/** `nested`: shown inside a surface panel, so its rows step up to surface-raised. */
+export function ResourceLinks({ resourceId, nested = false }: { resourceId: string; nested?: boolean }) {
   const qc = useQueryClient();
   const key = ["links", resourceId];
   const { data } = useQuery({
@@ -59,7 +61,13 @@ export function ResourceLinks({ resourceId }: { resourceId: string }) {
       {links.length === 0 && !adding && <p className="text-xs text-ink-subtle">No links yet.</p>}
       <ul className="space-y-1.5">
         {links.map((l) => (
-          <li key={l.id} className="flex items-center gap-2 rounded-[10px] bg-surface px-3 py-2 text-xs">
+          <li
+            key={l.id}
+            className={cn(
+              "flex items-center gap-2 rounded-[10px] px-3 py-2 text-xs",
+              nested ? "bg-surface-raised" : "bg-surface",
+            )}
+          >
             <Link2 className="size-3.5 shrink-0 text-ink-subtle" aria-hidden />
             <span className="shrink-0 text-ink-muted">{LINK_LABELS[l.kind][l.direction]}</span>
             <Link href={`/r/${l.other.id}`} className="min-w-0 flex-1 truncate text-ink hover:underline">
@@ -91,7 +99,7 @@ export function ResourceLinks({ resourceId }: { resourceId: string }) {
         ))}
       </ul>
       {adding && (
-        <div className="space-y-2 rounded-[14px] bg-surface p-3">
+        <div className={cn("space-y-2 rounded-[14px] p-3", nested ? "bg-surface-raised" : "bg-surface")}>
           <Select value={kind} onValueChange={(v) => setKind(v as LinkKind)}>
             <SelectTrigger size="sm" className="w-full" aria-label="Kind of link">
               <SelectValue />

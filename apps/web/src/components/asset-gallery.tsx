@@ -142,6 +142,76 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
   // A partial capture, a suspicious one, or a retake that kept the previous shot leaves a note.
   const note = !capturing && resource.captureStatus !== "failed" ? resource.captureError : null;
   const capturable = !!resource.sourceUrl && ["reference", "library", "animation", "source"].includes(resource.type);
+  const annotatable = !!selected && selected.kind === "image" && !selected.missing;
+  const annotationCount = (resource.annotations ?? []).filter((a) => a.assetId === selected?.id).length;
+  // On phones the full gallery's row keeps only the icons; the words stay for screen readers.
+  const rowLabel = (text: string) => <span className={cn(!compact && "max-sm:sr-only")}>{text}</span>;
+
+  const annotateButton = annotatable && (
+    <Button
+      size={compact ? "xs" : "default"}
+      variant={annotating ? "secondary" : compact ? "ghost" : "secondary"}
+      aria-pressed={annotating}
+      onClick={() => setAnnotating((a) => !a)}
+    >
+      <MessageSquarePlus />
+      {rowLabel(
+        annotating ? "Done" : `${compact ? "Notes" : "Annotate"}${annotationCount ? ` (${annotationCount})` : ""}`,
+      )}
+    </Button>
+  );
+
+  const fileActions = selected && (
+    <>
+      {(selected.kind === "image" || selected.kind === "svg") && selected.id !== resource.coverAssetId && (
+        <Button size="xs" variant="ghost" onClick={() => update.mutate({ coverAssetId: selected.id })}>
+          <Star /> Set as cover
+        </Button>
+      )}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button size="icon-xs" variant="ghost" asChild aria-label="Open original">
+            <a href={assetUrl(selected.id)} target="_blank" rel="noreferrer">
+              <ExternalLink />
+            </a>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Open original</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button size="icon-xs" variant="ghost" asChild aria-label="Download">
+            <a href={assetUrl(selected.id, { download: true })}>
+              <Download />
+            </a>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Download</TooltipContent>
+      </Tooltip>
+      <ConfirmButton
+        title="Remove this file?"
+        description="It is detached from this resource. The file is deleted from disk if no other resource uses it."
+        confirmLabel="Remove"
+        onConfirm={() => remove(selected)}
+      >
+        <Button size="icon-xs" variant="ghost" aria-label="Remove file" className="hover:text-danger">
+          <Trash2 />
+        </Button>
+      </ConfirmButton>
+    </>
+  );
+
+  const fileMeta = selected && (
+    <>
+      <span className="max-w-60 truncate font-mono" title={selected.fileName}>
+        {selected.fileName}
+      </span>
+      <span className="font-mono tabular-nums">
+        {selected.width && selected.height ? `${selected.width}×${selected.height} · ` : ""}
+        {formatBytes(selected.size)}
+      </span>
+    </>
+  );
 
   return (
     <section
@@ -313,118 +383,93 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
         >
           <Plus />
         </Button>
-        {capturable && (
+        {(capturable || (!compact && annotateButton)) && (
           <div className="ml-auto flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => shotRef.current?.click()} disabled={capturing}>
-              <ImageUp /> Replace screenshot
-            </Button>
-            <div className="flex">
-              <Button variant="secondary" className="rounded-r-none" onClick={() => recapture()} disabled={capturing}>
-                <Camera />{" "}
-                {resource.captureStatus === "done" || resource.captureStatus === "partial"
-                  ? "Retake screenshot"
-                  : "Capture screenshot"}
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+            {!compact && annotateButton}
+            {capturable && (
+              <>
+                <Button variant="secondary" onClick={() => shotRef.current?.click()} disabled={capturing}>
+                  <ImageUp /> {rowLabel(compact ? "Replace screenshot" : "Replace")}
+                </Button>
+                <div className="flex">
                   <Button
                     variant="secondary"
-                    size="icon"
-                    className="rounded-l-none border-l border-canvas"
-                    aria-label="Capture options"
+                    className="rounded-r-none"
+                    onClick={() => recapture()}
                     disabled={capturing}
                   >
-                    <ChevronDown />
+                    <Camera />{" "}
+                    {rowLabel(
+                      resource.captureStatus === "done" || resource.captureStatus === "partial"
+                        ? compact
+                          ? "Retake screenshot"
+                          : "Retake"
+                        : compact
+                          ? "Capture screenshot"
+                          : "Capture",
+                    )}
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-60">
-                  <DropdownMenuLabel>Capture once with</DropdownMenuLabel>
-                  <DropdownMenuItem onSelect={() => recapture({ expandContent: true })}>
-                    Expand content (click “Load more”)
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={() => recapture({ theme: "light" })}>Light theme</DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => recapture({ theme: "dark" })}>Dark theme</DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => recapture({ theme: "both" })}>Both themes</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={() => recapture({ viewports: ["tablet", "mobile"] })}>
-                    Tablet and mobile too
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => recapture({ motion: true })}>
-                    Record motion (video and keyframes)
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={() => recapture({ defer: true })}>Capture later…</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        className="rounded-l-none border-l border-canvas"
+                        aria-label="Capture options"
+                        disabled={capturing}
+                      >
+                        <ChevronDown />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-60">
+                      <DropdownMenuLabel>Capture once with</DropdownMenuLabel>
+                      <DropdownMenuItem onSelect={() => recapture({ expandContent: true })}>
+                        Expand content (click “Load more”)
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => recapture({ theme: "light" })}>Light theme</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => recapture({ theme: "dark" })}>Dark theme</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => recapture({ theme: "both" })}>Both themes</DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => recapture({ viewports: ["tablet", "mobile"] })}>
+                        Tablet and mobile too
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => recapture({ motion: true })}>
+                        Record motion (video and keyframes)
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => recapture({ defer: true })}>Capture later…</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
 
-      {selected && (
-        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-subtle">
-          <span className="rounded-full bg-surface px-2.5 py-0.5 text-ink-secondary">{labelOf(selected)}</span>
-          {selected.kind === "image" && !selected.missing && (
-            <Button
-              size="xs"
-              variant={annotating ? "secondary" : "ghost"}
-              aria-pressed={annotating}
-              onClick={() => setAnnotating((a) => !a)}
-            >
-              <MessageSquarePlus />
-              {annotating
-                ? "Done"
-                : `Notes${(resource.annotations ?? []).filter((a) => a.assetId === selected.id).length ? ` (${(resource.annotations ?? []).filter((a) => a.assetId === selected.id).length})` : ""}`}
-            </Button>
-          )}
-          <span className="max-w-60 truncate font-mono" title={selected.fileName}>
-            {selected.fileName}
-          </span>
-          <span className="font-mono tabular-nums">
-            {selected.width && selected.height ? `${selected.width}×${selected.height} · ` : ""}
-            {formatBytes(selected.size)}
-          </span>
-          <div className="ml-auto flex items-center gap-0.5">
-            {(selected.kind === "image" || selected.kind === "svg") && selected.id !== resource.coverAssetId && (
-              <Button size="xs" variant="ghost" onClick={() => update.mutate({ coverAssetId: selected.id })}>
-                <Star /> Set as cover
-              </Button>
-            )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button size="icon-xs" variant="ghost" asChild aria-label="Open original">
-                  <a href={assetUrl(selected.id)} target="_blank" rel="noreferrer">
-                    <ExternalLink />
-                  </a>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Open original</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button size="icon-xs" variant="ghost" asChild aria-label="Download">
-                  <a href={assetUrl(selected.id, { download: true })}>
-                    <Download />
-                  </a>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Download</TooltipContent>
-            </Tooltip>
-            <ConfirmButton
-              title="Remove this file?"
-              description="It is detached from this resource. The file is deleted from disk if no other resource uses it."
-              confirmLabel="Remove"
-              onConfirm={() => remove(selected)}
-            >
-              <Button size="icon-xs" variant="ghost" aria-label="Remove file" className="hover:text-danger">
-                <Trash2 />
-              </Button>
-            </ConfirmButton>
+      {selected &&
+        (compact ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-ink-subtle">
+            <span className="rounded-full bg-surface px-2.5 py-0.5 text-ink-secondary">{labelOf(selected)}</span>
+            {annotateButton}
+            {fileMeta}
+            <div className="ml-auto flex items-center gap-0.5">{fileActions}</div>
+            <AssetNotes key={selected.id} asset={selected} resourceId={resource.id} />
           </div>
-          <AssetNotes key={selected.id} asset={selected} resourceId={resource.id} />
-        </div>
-      )}
+        ) : (
+          // The file's name, size, note and actions: rarely needed, so folded like the capture history.
+          <details key={selected.id} className="text-xs text-ink-muted">
+            <summary className="w-fit max-w-full cursor-pointer rounded-full px-2 py-1 hover:text-ink">
+              File details <span className="text-ink-subtle">· {labelOf(selected)} · </span>
+              <span className="text-ink-subtle [&>span]:mr-2">{fileMeta}</span>
+            </summary>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-ink-subtle">
+              <div className="flex items-center gap-0.5">{fileActions}</div>
+              <AssetNotes asset={selected} resourceId={resource.id} />
+            </div>
+          </details>
+        ))}
 
       {capturable && assets.some((a) => a.role === "screenshot-original") && (
         <CompareOriginal resourceId={resource.id} />
