@@ -100,7 +100,12 @@ Don't install, update or download skills or their binaries.
   A second is allowed only for a distinct, justified problem the first can't cover (e.g. Taste for the type, plus `ui-ux-pro-max` for a form's error pattern). Say why in one line.
 
 - **Major, or a new design:** several when their jobs complement each other (e.g. `ui-ux-pro-max` for structure and Taste for the visual direction of a public page). No two may do the same job.
-- **QA:** an audit specialist (`impeccable`, or Taste's `lint.mjs`/`inspect.mjs` on a public page) may be used at the Minor and Major levels whatever was used at the design stage. It doesn't count toward the design-stage limit.
+- **QA:** every new design and Minor or Major redesign gets the **slop check** (`pivot-design` §10). It runs whatever was chosen above:
+  - `impeccable detect` when installed;
+  - a checklist against `DESIGN.md`;
+  - for Major work, a text critique against `impeccable`'s `reference/critique.md`.
+
+  A further audit specialist (Taste's `lint.mjs`/`inspect.mjs` on a public page, or a fuller `impeccable` audit) may be added at the Minor and Major levels whatever was used at the design stage. Neither counts toward the design-stage limit.
 
 **By cost:** prefer reading a reference file, then a single read-only command, and only then a script that renders pages.
 

@@ -17,7 +17,7 @@ A redesign changes how something **that already exists** looks and is laid out. 
 
 A specialist never replaces this skill's approval, design-system or impact rules.
 
-**Specialist checkpoint.** Right after the classification line (§0), write one line, and write it again at §6 for a QA audit:
+**Specialist checkpoint.** Right after the classification line (§0), write one line, and write it again at §6 for any QA audit beyond the slop check:
 
 - `Specialists: none — <reason>`, or
 - `Specialists: <name> — <stage> — <purpose>`.
@@ -70,12 +70,13 @@ Follow `pivot-design` §2–§10 in this order:
 
 1. Classify and assess impact (§0–§1).
 2. Find and inspect references.
-3. Write and show the redesign brief.
-4. Save it as `initial` (§4 step 1).
-5. Make the mockups.
-6. Get approval (§4).
-7. Build (§5).
-8. QA (§6).
+3. Show the shortlist and wait for the user's pick (`pivot-design` §4).
+4. Write and show the redesign brief.
+5. Save it as `initial` (§4 step 1).
+6. Make the mockups.
+7. Get approval (§4).
+8. Build (§5).
+9. QA (§6).
 
 These steps differ from `pivot-design`:
 
@@ -91,7 +92,7 @@ These steps differ from `pivot-design`:
 - **Brief:** `pivot-design`'s shape, titled "Redesign brief", plus:
   - **Keep** and **Impact** lines (the consumers from §1);
   - a reference row for the current state ("this project, screenshot/code"), and one for the consistency target.
-- **Mockups:** show before and after side by side.
+- **Mockups:** as `pivot-design` §7 says (about 5 directions for a Major change, and the viewer), each showing before and after side by side.
 - **Session and approval** follow §4, which replaces `pivot-design` §6 and §8 where they differ.
 
 ## 3. Path B: direct
@@ -106,7 +107,7 @@ No library search unless the user asks for references (then switch to path A).
    - which tokens and components it uses;
    - its impact.
 3. **Save** it as `initial` (§4 step 1).
-4. **Mockup:** for a Major change, make a mockup of it (or 2–3 small directions when the look is open).
+4. **Mockup:** for a Major change, follow `pivot-design` §7: about 5 directions when the look is open, or one when the direction is already settled. Build the viewer either way.
 5. **Ask and wait** as §4 says.
 6. **Build** (§5) and **check** (§6).
 
@@ -169,6 +170,8 @@ If the write tools fail or the connection is read-only, say so in one line and s
 - the same scroll position.
 
 **Escalate:** when a check finds a problem, or the change reaches further than expected, move up to the next level.
+
+**Slop check** (Minor and Major): always run `pivot-design` §10's slop check on the changed files and the after screenshots. That is the detector when `impeccable` is installed, the checklist, and for Major the critique. It runs whatever the specialist checkpoint said.
 
 **Specialist audits** (the QA checkpoint, then `specialists.md`) are optional additions at the Minor and Major levels, never replacements for these checks. Report their functional and aesthetic findings separately. Pre-existing or out-of-scope findings are follow-ups, not deviations (`pivot-design` §10).
 
