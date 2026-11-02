@@ -29,6 +29,14 @@ The flow is **understand → search → inspect → choose → brief → design 
 
 **Design documents live in PIVOT, never in the target project.** Briefs, decisions and session notes are not written into the project's repository, not even as a fallback. Only the implementation (source code and the files the project itself needs) goes there. If PIVOT can't store them yet (see §6), say so.
 
+**Specialists are optional.** Other installed skills (`ui-ux-pro-max`, `design-taste-frontend`, `impeccable`) can advise at some steps. Before using one, read [specialists.md](specialists.md) in this folder. It covers:
+
+- which specialist suits which interface and risk;
+- how to run it without installs, downloads or writes to the project;
+- how to record its influence.
+
+The user's requirements, the project's design system and this workflow's gates always win. Without any specialist, this workflow is complete.
+
 ## 0. Before you start
 
 - If the `pivot` tools aren't available, or a call returns `app_unreachable`, tell the user PIVOT isn't running (`npm start` in the PIVOT repo) and ask whether to wait or continue **without references**. If they continue, say plainly that nothing below comes from their library.
@@ -129,6 +137,7 @@ Mockups are **temporary design prototypes**, not the implementation.
 
 - Check the result in the browser against the approved direction, at desktop and phone widths, in the states that matter (empty, error, long content, keyboard focus).
 - Fix what is a bug. Where the result departs from the approved direction, **report the deviation** to the user, and why, instead of quietly redefining the decision; record it with `record_design_decision` (`kind: "deviation"`). A material deviation goes back to §8.
+- A specialist audit is optional and only adds to these checks (`specialists.md` §3–§4). Report functional defects and aesthetic findings separately, and propose (don't build) anything outside the approved scope. Pre-existing or out-of-scope findings are follow-ups, not deviations.
 - Say what you checked and what you couldn't check.
 
 ## Helping the library (optional)

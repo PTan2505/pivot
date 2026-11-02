@@ -235,6 +235,47 @@ Mọi loại đều có các trường chung: `title`, `description`, `sourceUrl
     - **Vùng chạm:** nên ít nhất 44×44 CSS px khi làm được, nhất là nút chính trên điện thoại. 24×24 CSS px là mức tối thiểu của WCAG 2.2 AA (2.5.8), có ngoại lệ (đủ khoảng trống quanh vùng nhỏ, có nút tương đương, link trong đoạn văn…), là ngưỡng để đạt chuẩn chứ không phải kích thước để thiết kế theo. Không thu nhỏ vùng chạm đang có nếu chưa được duyệt.
     - Baseline chỉ cập nhật cho khác biệt có chủ đích; không commit ảnh so sánh nếu project chưa làm vậy.
   - Free-First như `pivot-design`; tài liệu thiết kế nằm trong PIVOT, không ghi vào project đích.
+- **Specialist tùy chọn cho hai skill thiết kế** (bổ sung 2026-11-02): `pivot-design` và `pivot-redesign` có thể hỏi ý kiến các skill khác đang cài trên máy (`ui-ux-pro-max`, `design-taste-frontend` tức Taste Skill v2, `impeccable`) theo một chính sách chung ở `.claude/skills/pivot-design/specialists.md`.
+  - PIVOT vẫn điều phối. Specialist chỉ góp ý: không duyệt thay người dùng, không lưu tài liệu thiết kế, không tự sửa code.
+  - **Thứ tự ưu tiên:** yêu cầu rõ ràng của người dùng → hướng dẫn của project đích → quy trình và quy tắc an toàn của PIVOT → brief và quyết định đã duyệt → gợi ý của specialist.
+  - **Các quy tắc không được bỏ qua.** Hướng dẫn của project đích và specialist đều không được lặng lẽ vượt qua những quy tắc sau:
+    - bước duyệt bắt buộc;
+    - kiểm soát phạm vi và ảnh hưởng;
+    - tính toàn vẹn của các bản ghi duyệt;
+    - không lưu tài liệu thiết kế lâu dài trong project đích khi chưa được cho phép;
+    - không chạy thao tác trả phí, không tải, không cài khi chưa được duyệt;
+    - không sửa component dùng chung hay nền tảng design system khi chưa được duyệt.
+
+    Khi hướng dẫn của project đích xung đột với một quy tắc trong số này, skill nêu rõ xung đột, không làm theo bên nào, và hỏi người dùng.
+
+  - **Chọn specialist.** Chỉ dùng skill đã kiểm tra là có cài (đọc thẳng `SKILL.md`, không tin kết quả rỗng của Glob vì skill hay được cài qua symlink). Không cài, không cập nhật, không tải gì. Không dùng chỉ vì skill có cài. Mặc định:
+    - sửa nhỏ không dùng, trừ khi người dùng yêu cầu;
+    - mức Nhỏ dùng tối đa một specialist ở giai đoạn thiết kế; cái thứ hai chỉ khi giải quyết một vấn đề riêng mà cái đầu không làm được, và phải nêu lý do;
+    - mức Lớn có thể dùng nhiều specialist nếu vai trò bổ sung cho nhau;
+    - ở bước QA có thể dùng một specialist audit, không tính vào giới hạn của giai đoạn thiết kế.
+
+    Taste dành cho trang công khai. Với dashboard, trang admin hay màn hình app, chỉ dùng khi người dùng yêu cầu rõ: skill giải thích các quy tắc dễ xung đột, chờ xác nhận, rồi chỉ áp dụng phần phù hợp. Không bao giờ thay bằng biến thể Taste khác.
+
+  - **Lệnh an toàn:**
+    - `ui-ux-pro-max`: tìm kiếm chỉ đọc.
+    - Taste: `lint.mjs`; `draw.mjs` ghi vào `<scratchpad>/taste` (lịch sử đổi hướng qua `TASTE_SKILL_HISTORY`); `inspect.mjs` ghi vào `<scratchpad>/taste/inspect`, nhờ vậy đọc được `direction.json`. Scratchpad nằm ngoài project.
+    - `impeccable detect`: chỉ chạy binary đúng phiên bản trong `scripts/VERSION`, tức binary đi kèm hoặc bản cache đúng phiên bản, kiểm tra bằng `engine-probe` và gọi thẳng binary. Binary thiếu hoặc lệch phiên bản thì phải xin phép trước khi tải.
+  - **Mạng, ghi riêng từng loại:**
+    - **Telemetry:** tắt bằng `DO_NOT_TRACK=1` và `IMPECCABLE_NO_TELEMETRY=1`.
+    - **Kiểm tra phiên bản:** có biến `IMPECCABLE_NO_UPDATE_CHECK`, nhưng chưa xác minh được tác dụng.
+    - **Request do chính trang được kiểm tra gửi đi** (font, script, ảnh…): không biến nào chặn được, nên phải hỏi trước nếu task không cho phép tải tài nguyên từ xa.
+    - **Tải asset bên ngoài** (`assets.mjs`, ảnh `picsum.photos`): chỉ khi được cho phép.
+
+    Không biến môi trường nào tắt được toàn bộ lưu lượng mạng.
+
+  - **Cấm nếu chưa được phép:** `--persist`, `polish`, `init`, `document`, `hooks`, và việc lưu báo cáo critique.
+  - **Ghi nhận:**
+    - specialist nào ảnh hưởng đáng kể tới hướng thiết kế thì được ghi vào brief và vào `details` của quyết định, trong cùng design session (đã chấp nhận, đã sửa hay bị bỏ);
+    - ở mức Nhỏ, lời cho phép nguyên văn của người dùng được giữ nguyên;
+    - sửa nhỏ có dùng specialist thì không mở session, chỉ nêu trong phần tóm tắt;
+    - chỉ ghi `deviation` khi bản build lệch khỏi hướng đã duyệt; lỗi có sẵn từ trước hay nằm ngoài phạm vi thì báo riêng và đề xuất xử lý sau.
+
+    Không ghi gì vào project đích.
 - **Tool ghi** (bổ sung 2026-11-01, xem §15): `save_design_brief`, `record_design_decision`, `get_design_session`, `suggest_metadata`, `annotate_reference`, `save_reference`. Cần API token (`PIVOT_TOKEN` hoặc `<thư mục dữ liệu>/api-token`); kết nối chỉ đọc thì báo `read_only` và không lưu gì, token sai thì `unauthorized`. **Server online** cho người khác dùng: chưa làm.
 
 ## 11. Ngoài phạm vi MVP

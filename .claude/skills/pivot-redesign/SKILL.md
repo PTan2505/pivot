@@ -9,6 +9,8 @@ A redesign changes how something **that already exists** looks and is laid out. 
 
 **Design documents live in PIVOT, never in the target project.** Briefs, decisions and session notes are not written into the project's repository.
 
+**Specialists are optional.** Other installed skills (`ui-ux-pro-max`, `design-taste-frontend`, `impeccable`) can advise on Minor and Major redesigns; small fixes use none unless the user asks. Before using one, read `specialists.md` in the `pivot-design` skill folder (`../pivot-design/specialists.md` from this skill's folder). It says which specialist suits which interface and risk, and how to run it safely. A specialist never replaces this skill's approval, design-system or impact rules.
+
 ## 0. Classify the request
 
 Pick a **path** and a **risk level**, and say both in one line before doing anything else. When unsure between two risk levels, take the higher one. If the work grows into a higher level while you build, stop and go back to its approval step.
@@ -107,6 +109,8 @@ If the write tools fail or the connection is read-only, say so in one line and s
 - the same scroll position.
 
 **Escalate:** when a check finds a problem, or the change reaches further than expected, move up to the next level.
+
+**Specialist audits** (`specialists.md`) are optional additions at the Minor and Major levels, never replacements for these checks. Report their functional and aesthetic findings separately. Pre-existing or out-of-scope findings are follow-ups, not deviations (`specialists.md` §5).
 
 **Small fix: minimal.** Check the changed thing where it's used, at the widths it affects, and that nothing next to it moved. No screenshot matrix, no session.
 
