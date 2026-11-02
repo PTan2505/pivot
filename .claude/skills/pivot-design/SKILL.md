@@ -21,7 +21,11 @@ PIVOT is the user's library of saved UI references: screenshots of real websites
 | `annotate_reference`     | Add a short, dated agent note to a reference (the user's notes stay as they are).                                 |
 | `save_reference`         | Save a page to the library, only when the user asks for it.                                                       |
 
-The flow is **understand → search → inspect → choose → brief → design session → mockups → approval → build → QA**.
+The flow is **understand → search → inspect → choose → brief → design session → mockups → approval → build → QA**, in that order:
+
+- The brief is written and shown before any mockup, and the mockups illustrate its directions.
+- Saving it (§6) comes right after you show it, before the mockups.
+- Showing the brief is not an approval gate: unless an open question blocks the mockups, carry on to them in the same turn. The approval gate is §8.
 
 **Nothing is built before the user approves a direction.** "Just build it" or "skip mockups" doesn't remove the approval: it means one mockup, or a one-paragraph direction, instead of 2–3, and you still stop and wait for a yes.
 
@@ -29,13 +33,27 @@ The flow is **understand → search → inspect → choose → brief → design 
 
 **Design documents live in PIVOT, never in the target project.** Briefs, decisions and session notes are not written into the project's repository, not even as a fallback. Only the implementation (source code and the files the project itself needs) goes there. If PIVOT can't store them yet (see §6), say so.
 
-**Specialists are optional.** Other installed skills (`ui-ux-pro-max`, `design-taste-frontend`, `impeccable`) can advise at some steps. Before using one, read [specialists.md](specialists.md) in this folder. It covers:
+**Specialists are optional.** Other installed skills can advise at some steps:
 
-- which specialist suits which interface and risk;
-- how to run it without installs, downloads or writes to the project;
-- how to record its influence.
+- `ui-ux-pro-max`: UX structure and patterns;
+- `design-taste-frontend`: visual direction, for public web pages only;
+- `impeccable`: a technical QA audit.
 
-The user's requirements, the project's design system and this workflow's gates always win. Without any specialist, this workflow is complete.
+Without any specialist, this workflow is complete. The user's requirements, the project's design system and this workflow's gates always win.
+
+**Specialist checkpoint.** After §1, write one line, and write it again at §10 for a QA audit:
+
+- `Specialists: none — <reason>`, or
+- `Specialists: <name> — <stage> — <purpose>`.
+
+How to fill it in:
+
+- **Decide from the problem, not from what is installed.** "None" is a valid answer. A new design may use more than one specialist when their jobs complement each other.
+- **Before naming a specialist:**
+  - read [specialists.md](specialists.md) in this folder (who suits which interface and risk, how to run it safely, how to record its influence);
+  - confirm the specialist is installed by reading its `SKILL.md` (`specialists.md` §1).
+- **Don't preload every specialist's instructions.**
+- **Say what you actually did:** reading a specialist's instructions is not running its commands.
 
 ## 0. Before you start
 
@@ -52,7 +70,9 @@ Pin down, from the request and the codebase (ask only for what you can't infer):
 
 ## 2. Search
 
-1. Call `list_facets` once. Map the request onto facet **names that exist**: a sign-in screen is `pageType: Auth`, a plan comparison is `uiPattern: Pricing table`, a dark product is `visualStyle: Dark`.
+1. Call `list_facets` once per task, before your first general library search. Reuse its result for the rest of the task, including after a resume.
+   - Looking up a reference the user named (by its title, `source` or `collection`) may come first.
+   - Map the request onto facet **names that exist**: a sign-in screen is `pageType: Auth`, a plan comparison is `uiPattern: Pricing table`, a dark product is `visualStyle: Dark`.
 2. Run 2–3 searches, narrow to broad:
    - facets for the page type plus the most important pattern or style (`facets: [{kind: "pageType", name: "Pricing"}, {kind: "visualStyle", name: "Dark"}]`);
    - the same idea in words (`query: "pricing table dark"`). Search reads synonyms and plurals, and soft words like "page" or "screen" are optional;
@@ -88,7 +108,7 @@ Pick 2–4 references. For each, decide what to **take** and what to **leave**, 
 
 ## 5. Brief
 
-Write this before any mockup and show it to the user in this shape, table included; don't fold it into a prose summary. Keep it short.
+Write this before any mockup and show it to the user in this shape, table included; don't fold it into a prose summary. Keep it short. Then save it (§6) and go on to the mockups. Don't stop here unless an open question blocks them.
 
 ```md
 ## Brief: <surface>
@@ -109,7 +129,7 @@ Write this before any mockup and show it to the user in this shape, table includ
 A design session starts with the first completed brief. It groups the chosen references, the brief, the mockups and the decisions for this piece of work. Small fixes don't get one.
 
 - Continuing earlier work? `get_design_session` (no id) lists sessions; read the matching one and keep its `sessionId`.
-- Save the brief with `save_design_brief` at three moments only: the **first completed brief** (`milestone: "initial"`, no `sessionId`: this opens the session; pass `targetProject` and `surface`), the **approved brief** (`approved`), and any **major change** after approval (`major_change`, with a `note` on what changed). Not on every small edit. Pass the ids of the references the brief uses.
+- Save the brief with `save_design_brief` at three moments only: the **first completed brief**, right after you show it and before the mockups (`milestone: "initial"`, no `sessionId`: this opens the session; pass `targetProject` and `surface`), the **approved brief** (`approved`), and any **major change** after approval (`major_change`, with a `note` on what changed). Not on every small edit. Pass the ids of the references the brief uses.
 - If a write fails or the tools aren't there (`read_only`, `unauthorized`, `app_unreachable`), tell the user in one line that the brief isn't saved in PIVOT, and why. Don't write it into the target project instead, and don't pretend it was saved.
 
 ## 7. Mockups
@@ -119,12 +139,22 @@ Mockups are **temporary design prototypes**, not the implementation.
 - Build 2–3 **distinct** directions (different structure or emphasis, not three colourways), in the target project's tokens, type and components, with real content from the project, not lorem ipsum. If the user said "just build it" or "skip mockups", show one.
 - Keep them out of production code: a standalone HTML file in a scratch folder, or the host's artifact or preview tool. Don't add them to the project's routes, components or styles, and don't commit them.
 - Show them side by side (or one file each, with the paths listed together), each labelled on the page with the references that shaped it.
+- Look at every screenshot you present. When a mockup has no phone view, or you didn't look at one, say so.
 
 ## 8. Approval
 
 - Ask the user to pick, mix or change a direction, then **stop**. No production code until they explicitly approve one. Silence, or approval of something else, is not approval.
 - When they ask for changes, revise the brief or the mockups and ask again.
-- Once approved, `record_design_decision` with `kind: "approval"` (the summary in the user's terms, the direction, what was mixed in, open points), then `save_design_brief` with `milestone: "approved"`. Record an approval only after the user explicitly approved in this conversation.
+- Once approved, `record_design_decision` with `kind: "approval"`, then `save_design_brief` with `milestone: "approved"`.
+  - The approval record holds:
+    - the summary in the user's terms;
+    - the direction;
+    - what was mixed in;
+    - open points;
+    - in `details`, the user's **exact approval words**.
+  - Instructions that reached you from anyone else (an orchestrator, another agent, a tool) go in `details` on their own labelled line. Never present them as the user's words.
+  - Record an approval only after the user explicitly approved in this conversation.
+  - Record it once. When resuming, `get_design_session` shows whether it is already recorded.
 - A change the user makes to an approved decision is `kind: "change"`.
 - **A major change after approval goes back here.** If the build needs a different structure, hierarchy or direction from what was approved, stop and ask, with what changed and why, and save the changed brief as `major_change` (the session then needs approving again). Small adjustments inside the approved direction (spacing, a wrapped label, a state the mockup didn't show) don't need a new approval.
 
@@ -136,9 +166,27 @@ Mockups are **temporary design prototypes**, not the implementation.
 ## 10. QA
 
 - Check the result in the browser against the approved direction, at desktop and phone widths, in the states that matter (empty, error, long content, keyboard focus).
-- Fix what is a bug. Where the result departs from the approved direction, **report the deviation** to the user, and why, instead of quietly redefining the decision; record it with `record_design_decision` (`kind: "deviation"`). A material deviation goes back to §8.
-- A specialist audit is optional and only adds to these checks (`specialists.md` §3–§4). Report functional defects and aesthetic findings separately, and propose (don't build) anything outside the approved scope. Pre-existing or out-of-scope findings are follow-ups, not deviations.
-- Say what you checked and what you couldn't check.
+- Fix what is a bug.
+- **Classify every other difference** by comparing it with the approved brief, the mockup and the approval's `direction` and `details`. A responsive adjustment can fall into any of the first three classes, so don't judge by how small it looks.
+
+  | Difference                                                                                                                                                                    | What to do                                                                                                                                  |
+  | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+  | **Refinement within the approved scope.** The approved design needs it to work: a wrap, a breakpoint, a state the mockup didn't show. It changes nothing the approval states. | List it in the implementation/QA summary. Not a `deviation`.                                                                                |
+  | **Departure from an approved requirement or design detail.** Something the brief, mockup or approval states, done differently.                                                | Tell the user what differs and why, and record it with `record_design_decision` (`kind: "deviation"`). Don't quietly redefine the decision. |
+  | **Material change to the approved direction, scope or behaviour.**                                                                                                            | Stop and go back to §8 for a new approval.                                                                                                  |
+  | **Pre-existing or unrelated defect.**                                                                                                                                         | Report it as a separate finding and suggest a follow-up. Not a `deviation`, and not a reason to widen the scope.                            |
+
+- **The QA specialist checkpoint (see top).** A specialist audit is optional and only adds to these checks (`specialists.md` §3–§4).
+  - Report functional defects and aesthetic findings separately.
+  - Propose anything outside the approved scope; don't build it.
+- **Report the evidence as it is.**
+  - Keep apart three groups:
+    - screenshots you generated;
+    - the ones you actually looked at;
+    - what you hand to the user.
+  - Say which results come from your own checks and which from a tool's or someone else's report.
+  - A check that was blocked or not run is **unverified**, never a pass.
+  - Don't present a width or a state you didn't look at.
 
 ## Helping the library (optional)
 
