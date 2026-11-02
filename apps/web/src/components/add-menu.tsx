@@ -92,18 +92,19 @@ export function AddMenu({ preferType }: { preferType?: ResourceType }) {
       />
       <Button
         size="lg"
-        className="rounded-r-none pr-4"
+        // below 360px the label goes (the name stays for screen readers), like Collections, so the top-bar row fits
+        className="rounded-r-none pr-4 max-[359px]:px-3"
         aria-label={preferType ? `New ${TYPE_DEFS[preferType].label.toLowerCase()}` : undefined}
         onClick={() => (preferType ? createOfType(preferType, pickFile) : openAddUrl())}
       >
         <Plus />
         {preferType ? (
           // "New source" doesn't fit next to the other top-bar buttons on a phone; "New" does
-          <span>
+          <span className="max-[359px]:sr-only">
             New<span className="max-sm:hidden"> {TYPE_DEFS[preferType].label.toLowerCase()}</span>
           </span>
         ) : (
-          "Add"
+          <span className="max-[359px]:sr-only">Add</span>
         )}
       </Button>
       <DropdownMenu>
