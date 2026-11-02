@@ -149,7 +149,21 @@ export async function recordDesignDecision(input: {
   return row.id;
 }
 
+/**
+ * Changes a session's status by hand. "approved" is only allowed once the session has an approval record: an approval
+ * is the user's decision, recorded with record_design_decision, never a status flipped in the UI.
+ */
 export async function setDesignSessionStatus(sessionId: string, status: DesignStatus) {
+  if (status === "approved") {
+    const db = await getDb();
+    const [approval] = await db
+      .select({ id: designDecisions.id })
+      .from(designDecisions)
+      .where(and(eq(designDecisions.sessionId, sessionId), eq(designDecisions.kind, "approval")))
+      .limit(1);
+    if (!approval)
+      throw new DesignError("This session has no recorded approval yet. Approve a direction to mark it approved.");
+  }
   await touch(sessionId, { status });
 }
 
