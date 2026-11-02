@@ -1,6 +1,9 @@
 # Optional specialists
 
-Shared by `pivot-design` and `pivot-redesign`. Read this file only when a step would use a specialist.
+Shared by `pivot-design` and `pivot-redesign`. Their **specialist checkpoint** line is `Specialists: none — <reason>`, or `<name> — <stage> — <purpose>`.
+
+- A "none" line needs nothing from this file.
+- Read this file before naming or using a specialist.
 
 PIVOT runs the workflow. A specialist is another installed skill that can give advice:
 
@@ -58,7 +61,7 @@ The first time a step would use a specialist in a session (not for a small fix u
 - **Don't trust a Glob, `find` or `ls` miss.** Skills are often symlinks (Taste lives in `~/.agents/skills/` behind `~/.claude/skills/design-taste-frontend`). Glob doesn't follow them, and Bash may not list folders outside the project.
 - **A skill in the session's skill list is a strong hint,** not proof: the Read decides.
 
-If the Read fails, continue with PIVOT alone. Mention that only if the user asked for that specialist.
+Name a specialist on the checkpoint line only after this Read succeeds. If it fails, continue with PIVOT alone. Mention that only if the user asked for that specialist.
 
 Don't install, update or download skills or their binaries.
 
@@ -200,8 +203,8 @@ Record a specialist's influence only when it **materially** shaped the direction
   - no design session;
   - name the specialist and what it contributed in the final summary;
   - the small fix's scope and checks stay as they are.
-- **QA findings:**
-  - Record a `deviation` only when the implementation departs from the approved direction.
+- **QA findings** are classified as `pivot-design` §10 says.
+  - A `deviation` is recorded only for a departure from an approved requirement or design detail.
   - Pre-existing defects, unrelated accessibility findings and out-of-scope issues are not deviations: report them separately as findings and recommend follow-up work.
   - Never widen the implementation to fix them without approval.
 
