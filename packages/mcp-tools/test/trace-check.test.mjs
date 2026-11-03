@@ -44,7 +44,7 @@ describe("trace-check on a recorded-shape design run", () => {
   const report = analyze(loadSession(fixture), { ...opts, specialists: ["find-animation-opportunities"] });
 
   it("reads the subagent transcripts with the session", () => {
-    expect(report.specialists.animate).toMatchObject({ label: "ran (skill)", where: ["subagent:abc123"] });
+    expect(report.specialists.animate).toMatchObject({ label: "ran (skill)", where: ["subagent"] });
     expect(report.mcp.get_design_session).toBe(1);
   });
 
@@ -157,6 +157,7 @@ describe("trace-check approval gate", () => {
       trace([
         ["Bash", { command: "git status --porcelain && cat src/a.tsx 2>/dev/null" }],
         ["Bash", { command: "pnpm test >&2" }],
+        ["Bash", { command: 'node -e "const ok = (x) => x >= 1; console.log(ok(2))"' }],
       ]),
       opts,
     );

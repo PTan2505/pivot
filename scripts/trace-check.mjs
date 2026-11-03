@@ -21,7 +21,7 @@ const WRITE_TOOLS = new Set(["Edit", "Write", "NotebookEdit", "MultiEdit"]);
 const READ_TOOLS = new Set(["Read", "Grep", "Glob"]);
 /** Shell commands that change files. A heuristic: the report marks these counts as such. */
 const SHELL_WRITE =
-  /(^|[;&|(]\s*|\s)(>>?\s*[^&\s]|tee\b|sed\s+-i|perl\s+-i|mv\b|cp\b|rm\b|touch\b|mkdir\b|truncate\b|ln\b|git\s+(commit|apply|checkout|restore|reset|stash|merge|rebase)\b|(npm|pnpm|yarn|bun)\s+(i|install|add|remove)\b)/;
+  /(^|[;&|(]\s*|\s)(>>?(?!=)\s*[^&\s]|tee\b|sed\s+-i|perl\s+-i|mv\b|cp\b|rm\b|touch\b|mkdir\b|truncate\b|ln\b|git\s+(commit|apply|checkout|restore|reset|stash|merge|rebase)\b|(npm|pnpm|yarn|bun)\s+(i|install|add|remove)\b)/;
 const SHELL_READ = /^\s*(cat|head|tail|sed\s+-n|less|grep|rg|ls|find|wc|file|stat)\b/;
 
 /**
@@ -42,7 +42,8 @@ export function parseTranscript(text, file = "main") {
     }
     const content = line?.message?.content;
     if (!Array.isArray(content)) continue;
-    const where = line.isSidechain || line.agentId ? `subagent:${line.agentId ?? file}` : "main";
+    // Which subagent isn't reported: its id is an internal handle, and "main" vs "subagent" is what the checks need.
+    const where = line.isSidechain || line.agentId ? "subagent" : "main";
     for (const block of content) {
       if (block?.type === "tool_use") {
         events.push({
