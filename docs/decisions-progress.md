@@ -9,11 +9,46 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
 | Phase | Name                                   | Status        |
 | ----- | -------------------------------------- | ------------- |
 | P0a   | Skill contract tests and trace checker | Done (PR #61) |
-| P0b   | Specialist spike, then routing         | Spike blocked |
+| P0b   | Specialist spike, then routing         | Done (PR #62) |
+| P0c   | Motion foundation                      | In review     |
+
+### P0c — Motion foundation (2026-11-03)
+
+- Status: In review (PR into `dev`).
+- Existing functionality reused:
+  - the brief template;
+  - the gate-2 approval record (`details` after the user's words);
+  - the local viewer and its tabs and keys;
+  - PIVOT's mockup sandbox;
+  - PIVOT's own Playwright and Chromium for the browser checks.
+- Files changed:
+  - new `.claude/skills/pivot-design/motion.md`: levels, classification, reference evidence, the Motion brief block, previewing, approval criteria, technology order, build rules, QA, budgets, the redesign mapping;
+  - `pivot-design` §1, §4, §5, §7, §8, §9, §10 and `pivot-redesign` §0 and §6, which follow it;
+  - `specialists.md` (motion specialists are keyed to the motion level);
+  - the local viewer `make-viewer.mjs`, hardened: each version is embedded and sandboxed with a strict policy, local assets inside the folder are inlined, remote or outside references are removed and listed, navigating links are removed, a self-navigating version is stopped, scripts run only with `--interactive`, and there is a Replay button and a live reduced-motion indicator;
+  - new `scripts/qa/preview-checks.mjs` (browser checks, dev-only);
+  - new tests `viewer.test.mjs` and the motion contract checks in `skills.test.ts`;
+  - SPEC, README, PIVOT_DECISIONS.
+- Checks run and results: see the PR. Browser checks, twice from a clean load:
+  - **local viewer, 17 of 17 passed**:
+    - static versions run no script or handler;
+    - CSS animation plays and local CSS applies;
+    - the interactive version's own script runs;
+    - fetch to the network and reading another local file are blocked;
+    - runtime images, stylesheets, WebSocket, `sendBeacon` and form posts reach nothing (the counting server got zero requests);
+    - popups and top navigation are blocked, and the viewer page and storage can't be read;
+    - a version that navigates itself is stopped, and Replay restores it;
+  - **A3 on a scratch PIVOT** (port 4400): a CSS animation plays inside the sandboxed mockup frame on the session page.
+- Remaining issues:
+  - Interactive motion can't be shown in PIVOT itself until P1b. Advanced previews are local and approved in the chat, or in PIVOT on the static stand-in.
+  - Self-navigation by a script can't be blocked by policy. The viewer stops the version afterwards; in the checks the request didn't reach the server, but that isn't guaranteed.
+  - DevTools' reduced-motion emulation may not reach a sandboxed frame; the OS setting does (to confirm in P0d).
+  - Motion QA is still a manual checklist until `motion-qa.mjs` (P1c).
+- Next step: P0d, once authorised.
 
 ### P0b — Specialist capability spike, then routing (2026-11-03)
 
-- Status: In review (PR into `dev`).
+- Status: Done. Merged in PR #62 (`6978019`).
 - First attempt, in the session that created the agent: blocked. Claude Code loads agent definitions only when a session starts, and returned "Agent type not found". No fallback was used. The spike ran in a new session.
 - Spike setup:
   - a scratch PIVOT on port 4321, using PGlite in a scratch folder with no Neon or R2. The user-level `pivot` MCP server listed only the seeded scratch session, so it was reading scratch data;

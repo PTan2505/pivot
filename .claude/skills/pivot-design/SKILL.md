@@ -1,6 +1,6 @@
 ---
 name: pivot-design
-description: Design or redesign an interface from the user's own PIVOT reference library (the "pivot" MCP server) — search saved UI references, look at them, choose, write a short brief, show mockups in PIVOT, wait for the user's approval, then build the approved one and check it. Use whenever the user asks to design, build, restyle or improve a screen, page or component (landing, pricing, dashboard, onboarding, sign-in, docs, settings, checkout, navigation, forms…) and references would help, or mentions PIVOT, references, inspiration or "what others do". For redesigning a component or page that already exists in the project, use pivot-redesign instead (it brings this workflow in when references are involved). Skip for pure logic, backend or copy-only work, and for small explicit fixes that need no design exploration.
+description: Design or redesign an interface from the user's own PIVOT reference library (the "pivot" MCP server) — search saved UI references, look at them, choose, write a short brief (with its motion, when it has any), show mockups in PIVOT, wait for the user's approval, then build the approved one and check it. Use whenever the user asks to design, build, restyle or improve a screen, page or component (landing, pricing, dashboard, onboarding, sign-in, docs, settings, checkout, navigation, forms…) and references would help, or mentions PIVOT, references, inspiration or "what others do". For redesigning a component or page that already exists in the project, use pivot-redesign instead (it brings this workflow in when references are involved). Skip for pure logic, backend or copy-only work, and for small explicit fixes that need no design exploration.
 ---
 
 # PIVOT design workflow
@@ -41,7 +41,7 @@ The flow is **understand → search → inspect → shortlist (the user picks) �
 - `ui-ux-pro-max`: UX structure and patterns;
 - `design-taste-frontend`: visual direction, for public web pages only;
 - `impeccable`: a technical QA audit;
-- a motion specialist (`animate`, `find-animation-opportunities`…), when the request is about motion.
+- a motion specialist (`animate`, `find-animation-opportunities`…), when the motion level is standard or advanced ([motion.md](motion.md)).
 
 You don't ask the user to invoke them: you decide, and you run them for real through the `pivot-specialist` agent (`specialists.md` §1).
 
@@ -75,7 +75,8 @@ Pin down, from the request and the codebase (ask only for what you can't infer):
 
 - the surface (a page type, or a component and the page or container it lives in) and its single job: what the visitor must do or understand;
 - the product's domain and audience;
-- hard constraints: platform, breakpoints, the existing layout it lives in, content that must appear.
+- hard constraints: platform, breakpoints, the existing layout it lives in, content that must appear;
+- **the motion level:** write `Motion: none | standard | advanced — <reason> (auto | set by you)` as [motion.md](motion.md) §2 says. The user's words override; none is the default and needs nothing more. For standard or advanced, follow motion.md through the brief, mockups, approval, build and QA.
 
 ## 2. Search
 
@@ -117,8 +118,9 @@ Pin down, from the request and the codebase (ask only for what you can't infer):
    - what you looked at (cover / full page / metadata only).
 2. **Order them by the criteria below,** and say in a line what you'd take from the strongest two or three.
 3. **Ask the user to pick,** for example "2, 5, 7: the table of 5, the cards of 2". Their picks, and what they liked in each, become the brief's references and Take column.
-4. **Skip the pause only when the user said so** ("you choose", "use the ones you think fit"). Then pick 2–4 yourself, and say which and why.
-5. **A thin library:** with fewer than 3 relevant candidates, say so, show what there is, and offer `search_external` (§2) before asking.
+4. **Re-check the motion level** once their picks are known (motion.md §2): references can raise it, the user can lower it.
+5. **Skip the pause only when the user said so** ("you choose", "use the ones you think fit"). Then pick 2–4 yourself, and say which and why.
+6. **A thin library:** with fewer than 3 relevant candidates, say so, show what there is, and offer `search_external` (§2) before asking.
 
 **How to judge candidates** (for the order, and for what to take or leave):
 
@@ -144,11 +146,11 @@ Write this before any mockup and show it to the user in this shape, table includ
 | ------------------ | ---------------------------------------- | --------------------------------- | ----------- | ------------------------ | ------------------------ |
 | [Title](sourceUrl) | PIVOT / <provider> (external, not saved) | screenshot / page / metadata only | <one line>  | <structure/pattern idea> | <brand, art, copy, etc.> |
 
-**Directions:** 1. <name: one line> 2. <…> … 5. <…>
+**Directions:** 1. <name: one line> 2. <…> 3. <…>
 **Open questions:** <only what blocks the mockups>
 ```
 
-Leave out the **Component API** line for a page.
+Leave out the **Component API** line for a page. When the motion level isn't none, add the **Motion** block from motion.md §4 (each item tagged essential or detail) and mark each reference's motion evidence in its Inspected cell (motion.md §3).
 
 ## 6. Design session
 
@@ -176,19 +178,23 @@ Mockups are **temporary design prototypes**, not the implementation.
   - Label each on the page with the references that shaped it.
 - **When the surface is a component,** a version has to show what decides the design, not the component alone in an empty frame:
   - **In context:** place it at its real size in the page or container it will live in, with that page's real content around it. The width switch then shows how it behaves inside the layout.
-  - **Its states on the same page:** the ones it has, side by side and drawn statically (scripts don't run in PIVOT): default, hover and keyboard focus, active or selected, disabled, loading, empty, error, long content.
+  - **Its states on the same page:** the ones it has, side by side and drawn statically (scripts don't run in PIVOT; CSS motion does, motion.md §5): default, hover and keyboard focus, active or selected, disabled, loading, empty, error, long content.
   - **How many:** versions differ in structure or behaviour, not colour. A small component often has only 2–3 that really differ: make those and say so rather than padding the count.
   - **Reuse first:** check whether the project already has this component, or a primitive to extend (its UI kit), before designing a new one. The brief's **Component API** line says which.
+- **Motion** (level standard or advanced): show each essential item as motion.md §5 says: CSS motion in the PIVOT mockups, and for Advanced an executable preview of the top 1–2 directions in the local viewer (`--interactive`). Never fake reduced motion; the user previews it with their real browser setting.
 - **Look at every version** at the desktop and phone widths before you present them. When you didn't look at one, say so.
 - **Show them in PIVOT:** call `save_design_mockups` with the session id and the files (`{ path, title }` each, in order; absolute paths). It inlines local CSS, images and fonts; scripts and remote files don't load there, and the result lists any it removed: fix a mockup that depended on them. Each call is a new round; earlier rounds stay on the page.
   - Give the user the link it returns. On the session page they switch versions (tabs, keys 1–9, ←/→) at desktop, tablet and phone width, and can press **Approve this version** with a note, or answer in the chat.
   - **Then wait for the decision without the user having to come back to the chat.** Start `node <skill>/scripts/wait-for-decision.mjs <sessionId>` with the Bash tool's `run_in_background` (add `--url` when PIVOT isn't at `http://127.0.0.1:4321`), where `<skill>` is this skill's folder. It only reads PIVOT and exits when the session leaves `exploring`, which wakes you up (§8). Keep its task id, end your turn with the link and one line saying you start building once they approve a version there or reply here.
   - Without background tasks (another agent, or no Bash), skip the watcher and ask the user to tell you in the chat after approving in PIVOT.
-- **Fallback viewer:** when `save_design_mockups` can't store them (`read_only`, `unauthorized`, `app_unreachable`, `not_found`), say why in one line and run `node <skill>/viewer/make-viewer.mjs <folder> --title "<surface>"` instead. It writes `<folder>/index.html`, a tab per version, with the same widths and keys and a **Choose this version** button that copies a reply for the chat. Open it in the browser tool you have and give the user its path; the approval is then the user's message (§8).
+- **Local viewer:** `node <skill>/viewer/make-viewer.mjs <folder> --title "<surface>" [--interactive <n,…>]` writes `<folder>/index.html`, a tab per version, with the same widths and keys, Replay, and a **Choose this version** button that copies a reply for the chat. Every version runs sandboxed (no network, no other files, no navigation or popups); scripts run only in the versions named with `--interactive`, and the command lists what it removed. Open it in the browser tool you have and give the user its path; an approval made there is the user's message (§8).
+  - **Fallback:** use it instead of PIVOT when `save_design_mockups` can't store them (`read_only`, `unauthorized`, `app_unreachable`, `not_found`); say why in one line.
+  - **Executable motion preview:** use it alongside PIVOT for Advanced motion (motion.md §5).
 
 ## 8. Approval
 
 - Ask the user to pick, mix or change a direction, then **stop**. No production code until they explicitly approve one. Silence, or approval of something else, is not approval.
+- **Motion is approved here too, not in a separate step** (motion.md §6). For standard and advanced, the gate-2 message lists the essential motion items and where each can be seen. Advanced needs every essential item in the executable preview; if one can't be previewed, say so in the same message and ask once for an explicit exception. Without the preview or that yes, don't build. Add the `Motion: …` line (and any exception, word for word) to the approval's `details` after the user's words.
 - **An approval the user made in PIVOT** is an explicit approval. It is the approval record with `source: "owner"` that `get_design_session` shows, and the watcher (§7) prints it when it exits:
   - Don't record it again; it already holds the version as `direction` and the user's note, word for word, as `details`.
   - Read the session with `get_design_session` to confirm it, then treat the note as the user's instructions for the build: follow what it asks inside the chosen version (keep, drop or borrow a part from another version).
@@ -214,11 +220,13 @@ Mockups are **temporary design prototypes**, not the implementation.
 
 - **Before the first edit,** call `set_design_status` with `status: "building"`. It only succeeds on an approved session; if it refuses, follow its message instead of building.
 - Implement the approved direction in the project's stack and conventions; follow its repo rules (branches, specs, checks). Rebuild it properly rather than pasting the mockup in.
+- **Motion:** use the technology the approved brief names (motion.md §7: the project's existing tools first, then CSS, then the Web Animations API; a new library only with the reason in the brief) and the build rules in motion.md §8.
 - List the references that shaped it in the PR description or the summary to the user (title + link). Code comments don't need them.
 
 ## 10. QA
 
 - Check the result in the browser against the approved direction, at desktop and phone widths, in the states that matter (empty, error, long content, keyboard focus).
+- **Motion** (standard or advanced): check every approved item with the motion.md §9 list, reduced motion included. What you couldn't trigger or measure is unverified; a real device is unverified unless the user checked it.
 - Fix what is a bug.
 - **Classify every other difference** by comparing it with the approved brief, the mockup and the approval's `direction` and `details`. A responsive adjustment can fall into any of the first three classes, so don't judge by how small it looks.
 

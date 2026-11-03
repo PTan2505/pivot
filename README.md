@@ -122,6 +122,8 @@ Claude usually picks the right skill. Start with "Use pivot-design…" or "Use p
 
    New designs with `pivot-design` follow the Major path.
 
+   Both also state a **motion level**: `none` (the default), `standard` (micro-interactions, transitions) or `advanced` (scroll storytelling, pinning, morphing…). Your words decide it when you say anything about motion. Changing how something moves is always Major. The rules live in `.claude/skills/pivot-design/motion.md`.
+
 2. **Specialist checkpoint.** One line: `Specialists: none — <reason>`, or `<name> — <stage> — <purpose>`.
    - The installed specialists are `ui-ux-pro-max`, `design-taste-frontend` (public pages only) and `impeccable` (QA audit).
    - "None" is a valid answer. Ask for one by name if you want it.
@@ -134,16 +136,18 @@ Claude usually picks the right skill. Start with "Use pivot-design…" or "Use p
    - then `list_facets` once and 2–3 library searches;
    - about 12 images at most;
    - a **shortlist** of 6–10 candidates, each linked to its PIVOT page. Claude stops so you can pick, for example "2, 5, 7: the table of 5". Say "you choose" to skip the pause.
-5. **Brief, then save.** A short brief with a Take / Leave table per reference, shown to you, then saved as `initial` (this opens the design session). The brief always comes before the mockups.
+5. **Brief, then save.** A short brief with a Take / Leave table per reference (and a **Motion** block when the level isn't none, each item marked essential or detail), shown to you, then saved as `initial` (this opens the design session). The brief always comes before the mockups.
 6. **Mockups.** 2–3 genuinely different directions by default, 4–5 when broad exploration helps (or the number you ask for), as static HTML, never in your project. For a redesign, before and after are side by side. A component is shown in the page it lives in, with its states (hover, focus, disabled, loading, error, long content), and the brief adds its props and variants; a small one often gets 2–3 versions that really differ instead of five.
    - Claude saves them to the design session (`save_design_mockups`) and gives you its link. The **Mockups** section shows them as tabs at desktop, tablet or phone width; keys 1–9 switch versions. Each new round is kept, older ones a click away.
-   - If PIVOT can't store them, Claude makes a local **viewer** instead (`index.html` in the scratch folder) whose **Choose this version** copies a reply for the chat.
+   - **Motion:** standard motion is shown with CSS in the PIVOT mockups. Advanced motion also gets an executable preview of the top 1–2 directions in the local viewer. You preview reduced motion with your OS or DevTools setting; nothing fakes it.
+   - The local **viewer** (`index.html` in the scratch folder) runs every version sandboxed: no network, no other files, no navigation or popups. Scripts run only in versions marked interactive. It is also the fallback when PIVOT can't store the mockups. Its **Choose this version** copies a reply for the chat.
 7. **Approval.** Claude stops and waits, in either place:
    - **In PIVOT:** press **Approve this version**, optionally with a note ("keep the table of version 2"). Claude is waiting on it in the background and starts building straight away; you don't go back to the chat. A note that asks for a different structure makes Claude ask first.
    - **In the chat:** your reply is recorded **word for word**, and instructions from anyone else are labelled separately.
    - "Pick A, keep the group labels" approves.
    - A mix or a change gets a revised proposal.
    - A "no" means nothing is built.
+   - Motion is approved here too, not in a separate step. For advanced motion, every essential item must have been previewed and runnable, unless you explicitly accept an exception in the same message.
 8. **Build.** Claude marks the session **Building**, then builds only the approved direction, with your project's tokens and components. A new token, variant or shared-component change is proposed separately and needs its own approval.
 9. **QA.** Checks scale with risk. A Major redesign covers:
    - 1440 and 390 px, plus 768 when there's a breakpoint there;
