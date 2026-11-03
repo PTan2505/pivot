@@ -135,7 +135,7 @@ Claude usually picks the right skill. Start with "Use pivot-design…" or "Use p
    - about 12 images at most;
    - a **shortlist** of 6–10 candidates, each linked to its PIVOT page. Claude stops so you can pick, for example "2, 5, 7: the table of 5". Say "you choose" to skip the pause.
 5. **Brief, then save.** A short brief with a Take / Leave table per reference, shown to you, then saved as `initial` (this opens the design session). The brief always comes before the mockups.
-6. **Mockups.** About 5 distinct directions (or the number you ask for) as static HTML, never in your project. For a redesign, before and after are side by side.
+6. **Mockups.** About 5 distinct directions (or the number you ask for) as static HTML, never in your project. For a redesign, before and after are side by side. A component is shown in the page it lives in, with its states (hover, focus, disabled, loading, error, long content), and the brief adds its props and variants; a small one often gets 2–3 versions that really differ instead of five.
    - Claude saves them to the design session (`save_design_mockups`) and gives you its link. The **Mockups** section shows them as tabs at desktop, tablet or phone width; keys 1–9 switch versions. Each new round is kept, older ones a click away.
    - If PIVOT can't store them, Claude makes a local **viewer** instead (`index.html` in the scratch folder) whose **Choose this version** copies a reply for the chat.
 7. **Approval.** Claude stops and waits, in either place:

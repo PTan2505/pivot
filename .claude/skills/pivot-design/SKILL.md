@@ -1,6 +1,6 @@
 ---
 name: pivot-design
-description: Design or redesign an interface from the user's own PIVOT reference library (the "pivot" MCP server) — search saved UI references, look at them, choose, write a short brief, show 2–3 mockups, wait for the user's approval, then build the approved one and check it. Use whenever the user asks to design, build, restyle or improve a screen, page or component (landing, pricing, dashboard, onboarding, sign-in, docs, settings, checkout, navigation, forms…) and references would help, or mentions PIVOT, references, inspiration or "what others do". For redesigning a component or page that already exists in the project, use pivot-redesign instead (it brings this workflow in when references are involved). Skip for pure logic, backend or copy-only work, and for small explicit fixes that need no design exploration.
+description: Design or redesign an interface from the user's own PIVOT reference library (the "pivot" MCP server) — search saved UI references, look at them, choose, write a short brief, show mockups in PIVOT, wait for the user's approval, then build the approved one and check it. Use whenever the user asks to design, build, restyle or improve a screen, page or component (landing, pricing, dashboard, onboarding, sign-in, docs, settings, checkout, navigation, forms…) and references would help, or mentions PIVOT, references, inspiration or "what others do". For redesigning a component or page that already exists in the project, use pivot-redesign instead (it brings this workflow in when references are involved). Skip for pure logic, backend or copy-only work, and for small explicit fixes that need no design exploration.
 ---
 
 # PIVOT design workflow
@@ -30,7 +30,7 @@ The flow is **understand → search → inspect → shortlist (the user picks) �
 - The shortlist (§4) is the one pause before the brief: the user picks the references, unless they told you to choose.
 - Showing the brief is not an approval gate: unless an open question blocks the mockups, carry on to them in the same turn. The approval gate is §8.
 
-**Nothing is built before the user approves a direction.** "Just build it" or "skip mockups" doesn't remove the approval: it means one mockup, or a one-paragraph direction, instead of 2–3, and you still stop and wait for a yes.
+**Nothing is built before the user approves a direction.** "Just build it" or "skip mockups" doesn't remove the approval: it means one mockup, or a one-paragraph direction, instead of several, and you still stop and wait for a yes.
 
 **Small, explicit fixes skip the flow.** When the request already says what to change and there is nothing to explore (fix a misaligned icon, raise a contrast, rename a label, tighten one gap, match a button to its neighbours), don't search the library, write a brief or open a design session: make the fix in the project's design system and verify it. Use the full flow when the request leaves the design open: a new screen or component, a restyle, a layout or hierarchy change, "make this better", or when the user asks for references. If it's unclear which one a request is, ask.
 
@@ -69,7 +69,7 @@ How to fill it in:
 
 Pin down, from the request and the codebase (ask only for what you can't infer):
 
-- the surface (page type) and its single job: what the visitor must do or understand;
+- the surface (a page type, or a component and the page or container it lives in) and its single job: what the visitor must do or understand;
 - the product's domain and audience;
 - hard constraints: platform, breakpoints, the existing layout it lives in, content that must appear.
 
@@ -132,8 +132,9 @@ Write this before any mockup and show it to the user in this shape, table includ
 ```md
 ## Brief: <surface>
 
-**Goal:** <the page's single job, for whom>
+**Goal:** <the surface's single job, for whom>
 **Constraints:** <design system, stack, breakpoints, required content>
+**Component API:** <a component only: props, variants and states; which existing component or primitive it extends, or why it is new>
 
 | Reference          | Source                                   | Inspected                         | Why it fits | Take                     | Leave                    |
 | ------------------ | ---------------------------------------- | --------------------------------- | ----------- | ------------------------ | ------------------------ |
@@ -142,6 +143,8 @@ Write this before any mockup and show it to the user in this shape, table includ
 **Directions:** 1. <name: one line> 2. <…> … 5. <…>
 **Open questions:** <only what blocks the mockups>
 ```
+
+Leave out the **Component API** line for a page.
 
 ## 6. Design session
 
@@ -165,6 +168,11 @@ Mockups are **temporary design prototypes**, not the implementation.
 - **Keep them out of production code:** one standalone HTML file per direction, named `mockup-<n>-<slug>.html`, in a scratch folder. Don't add them to the project's routes, components or styles, and don't commit them.
   - Give each file a short `<title>` naming the direction ("Raised Pro card").
   - Label each on the page with the references that shaped it.
+- **When the surface is a component,** a version has to show what decides the design, not the component alone in an empty frame:
+  - **In context:** place it at its real size in the page or container it will live in, with that page's real content around it. The width switch then shows how it behaves inside the layout.
+  - **Its states on the same page:** the ones it has, side by side and drawn statically (scripts don't run in PIVOT): default, hover and keyboard focus, active or selected, disabled, loading, empty, error, long content.
+  - **How many:** versions differ in structure or behaviour, not colour. A small component often has only 2–3 that really differ: make those and say so rather than padding to five.
+  - **Reuse first:** check whether the project already has this component, or a primitive to extend (its UI kit), before designing a new one. The brief's **Component API** line says which.
 - **Look at every version** at the desktop and phone widths before you present them. When you didn't look at one, say so.
 - **Show them in PIVOT:** call `save_design_mockups` with the session id and the files (`{ path, title }` each, in order; absolute paths). It inlines local CSS, images and fonts; scripts and remote files don't load there, and the result lists any it removed: fix a mockup that depended on them. Each call is a new round; earlier rounds stay on the page.
   - Give the user the link it returns. On the session page they switch versions (tabs, keys 1–9, ←/→) at desktop, tablet and phone width, and can press **Approve this version** with a note, or answer in the chat.
