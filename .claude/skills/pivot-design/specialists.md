@@ -86,6 +86,7 @@ Use the cheapest way that answers the question. Each has a **run label**, and a 
   - consult or run a script instead, and label it so;
   - never use a general-purpose or other agent in its place;
   - never start another Claude process (`claude -p`).
+- **A specialist that is `unavailable`** (not installed, or refused by the Skill tool) is skipped and reported as such. Nothing stands in for it: no other agent, no other Claude process, no invented advice.
 - **One run per specialist per phase.** A specialist already in the brief's Specialists ledger (§5) isn't run again for the same phase, after a resume included.
 
 **What to give `pivot-specialist`:** the specialist's exact name, the phase, the one question it should answer, and a **handoff folder** in your scratchpad (never in the target project):
@@ -96,7 +97,7 @@ Use the cheapest way that answers the question. Each has a **run label**, and a 
 - the paths of the mockup files, when it reviews mockups;
 - a PIVOT session id when it needs the saved decisions. It may fetch at most two reference images and never searches the library.
 
-**The contract it returns** (asked for at most 400 words; real specialists have come back at 470–520, so read it for its verdicts and keep only the ledger line):
+**The contract it returns** (about 400 words is a soft budget, not a limit: real specialists have come back at 470–520):
 
 ```
 Specialist: <name> · phase: <brief|mockups|build|qa> · run: <ran (skill) | consulted | unavailable>
@@ -109,7 +110,7 @@ Verify: <how QA checks each recommendation>
 Outcome (orchestrator): pending
 ```
 
-You fill in the outcome: `adopted`, `partially adopted`, `rejected` or `not applicable`, with the reason (Authority above decides conflicts). A contract is advice: it never approves anything, and only you change files, inside the approved scope.
+If a contract is long, you may summarise it, but keep every recommendation, constraint, conflict and verification item. You fill in the outcome: `adopted`, `partially adopted`, `rejected` or `not applicable`, with the reason (Authority above decides conflicts). A contract is advice: it never approves anything, and only you change files, inside the approved scope.
 
 ## 2. Who does what
 

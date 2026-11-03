@@ -332,6 +332,19 @@ describe("specialists run for real, labelled by what happened", () => {
     expect(specialists).toContain("never start another Claude process (`claude -p`)");
     expect(r).toContain("never use another agent or Claude process");
   });
+  it("a missing specialist is skipped, never replaced", () => {
+    expect(specialists).toContain(
+      "Nothing stands in for it: no other agent, no other Claude process, no invented advice.",
+    );
+  });
+  it("the 400-word contract budget is soft, and summaries keep every recommendation, constraint, conflict and check", () => {
+    expect(specialists).toContain("about 400 words is a soft budget, not a limit");
+    expect(specialists).toContain("keep every recommendation, constraint, conflict and verification item");
+    expect(read(".claude/agents/pivot-specialist.md")).toContain(
+      "never drop a recommendation, constraint, conflict or verification item to fit",
+    );
+    expect(read("docs/decisions-progress.md")).toContain("Structure: PASS");
+  });
   it("skills report run labels, keep a ledger and don't re-run ledgered specialists", () => {
     expect(d).toContain("`ran (skill)` only when `pivot-specialist` loaded the specialist");
     expect(r).toContain("`ran (skill)` only through `pivot-specialist`");
