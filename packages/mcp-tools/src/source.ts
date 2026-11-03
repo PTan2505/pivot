@@ -64,6 +64,13 @@ export interface PivotWriter {
     sessionId: string,
     input: { kind: DesignDecisionKind; summary: string; direction?: string; details?: string },
   ): Promise<{ id: string }>;
+  /** Stores a round of self-contained mockup versions; the app refuses it unless the session is exploring. */
+  saveDesignMockups(
+    sessionId: string,
+    input: { snapshotId?: string; mockups: { title: string; html: string }[] },
+  ): Promise<{ round: number; ids: string[]; created: boolean }>;
+  /** Where the user opens PIVOT, for links to a session page. */
+  readonly appUrl?: string;
   /** Sets a session's status by hand (PATCH); the app refuses "approved" without an approval record. */
   setDesignStatus(sessionId: string, status: DesignStatus): Promise<DesignSessionDetailDTO>;
   getDesignSession(id: string): Promise<DesignSessionDetailDTO | null>;

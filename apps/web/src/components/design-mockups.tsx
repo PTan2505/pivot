@@ -1,0 +1,301 @@
+"use client";
+
+import { Check, ExternalLink, Loader2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import type { DesignMockupDTO, DesignSessionDetailDTO } from "@pivot/core/types";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
+
+const WIDTHS = { desktop: 1440, tablet: 834, phone: 390 } as const;
+type Width = keyof typeof WIDTHS;
+const WIDTH_LABEL: Record<Width, string> = { desktop: "Desktop", tablet: "Tablet", phone: "Phone" };
+
+/** The direction an approval of this version records (the same words as the app's owner approvals). */
+const directionOf = (m: DesignMockupDTO) => `Version ${m.n}: ${m.title} (round ${m.round})`;
+
+function Pill({ active, className, ...props }: React.ComponentProps<"button"> & { active: boolean }) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text focus-visible:outline-solid",
+        active ? "bg-inverse text-on-inverse" : "bg-surface text-ink-secondary hover:bg-surface-raised",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+/**
+ * A mockup at a device width, scaled down to fit the column (never up), about 80% of the window tall and scrolling
+ * inside. It is served sandboxed: no scripts, no other hosts, no access to the app.
+ */
+function Frame({ mockup, width }: { mockup: DesignMockupDTO; width: Width }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [avail, setAvail] = useState(0);
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setAvail(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const device = WIDTHS[width];
+  const scale = avail ? Math.min(1, avail / device) : 1;
+  return (
+    <div ref={box} className="h-[80vh] overflow-hidden rounded-[14px] bg-surface">
+      {avail > 0 && (
+        <iframe
+          key={mockup.id}
+          src={`/api/design/mockups/${mockup.id}`}
+          title={`Version ${mockup.n}: ${mockup.title}`}
+          sandbox=""
+          referrerPolicy="no-referrer"
+          className="mx-auto block origin-top-left border-0 bg-white"
+          style={{
+            width: device,
+            height: `calc(80vh / ${scale})`,
+            transform: `scale(${scale})`,
+            marginLeft: scale < 1 ? 0 : undefined,
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Approve one version with an optional note for the build. The dialog keeps a stray click from approving. */
+function ApproveDialog({
+  mockup,
+  sessionId,
+  open,
+  onOpenChange,
+}: {
+  mockup: DesignMockupDTO;
+  sessionId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const qc = useQueryClient();
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const approve = async () => {
+    setSaving(true);
+    try {
+      const s = await api<DesignSessionDetailDTO>(`/api/design/mockups/${mockup.id}/approve`, {
+        method: "POST",
+        json: { note },
+      });
+      qc.setQueryData(["design-session", sessionId], s);
+      await qc.invalidateQueries({ queryKey: ["design-sessions"] });
+      onOpenChange(false);
+      setNote("");
+      toast.success(`Approved version ${mockup.n}`, {
+        description: "A Claude Code session waiting on this starts building it.",
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not approve this version");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
+      <DialogContent
+        className="sm:max-w-lg"
+        // the dialog has no Radix trigger: focus goes back to the button, or to the chosen version once it is approved
+        onCloseAutoFocus={(e) => {
+          e.preventDefault();
+          (
+            document.querySelector<HTMLElement>("[data-approve-trigger]") ??
+            document.querySelector<HTMLElement>("[role=tab][aria-selected=true]")
+          )?.focus();
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>
+            Approve version {mockup.n}, “{mockup.title}”?
+          </DialogTitle>
+          <DialogDescription>
+            Claude builds this version. Add what it should change or keep from the others; the note is kept word for
+            word.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1.5">
+          <Label htmlFor="approve-note">Note for the build (optional)</Label>
+          <Textarea
+            id="approve-note"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={5000}
+            rows={4}
+            placeholder="Keep the table from version 2."
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" disabled={saving} onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button disabled={saving} onClick={approve}>
+            {saving ? <Loader2 className="animate-spin" /> : <Check />} Approve
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * The session's mockup rounds: version tabs (1–9, ←/→), a width switch, the sandboxed mockup, "Open alone", and while
+ * the session is exploring, "Approve this version". The latest round shows first; `?round=` picks another.
+ */
+export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO }) {
+  const rounds = [...new Set(s.mockups.map((m) => m.round))].sort((a, b) => a - b);
+  const latest = rounds.at(-1) ?? 0;
+  const asked = Number(useSearchParams().get("round"));
+  const [round, setRound] = useState(rounds.includes(asked) ? asked : latest);
+  const [n, setN] = useState(1);
+  const [width, setWidth] = useState<Width>("desktop");
+  const [approving, setApproving] = useState(false);
+
+  // a new round arriving (the page refreshes while exploring) opens on its first version
+  const seen = useRef(latest);
+  useEffect(() => {
+    if (latest > seen.current) {
+      seen.current = latest;
+      setRound(latest);
+      setN(1);
+    }
+  }, [latest]);
+
+  const versions = s.mockups.filter((m) => m.round === round);
+  const current = versions.find((m) => m.n === n) ?? versions[0];
+  const approvals = s.decisions.filter((d) => d.kind === "approval");
+  const approvedDirection = approvals.at(-1)?.direction;
+  const canApprove = s.status === "exploring";
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || approving) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("input, textarea, select, [contenteditable], [role=dialog]")) return;
+      const count = versions.length;
+      if (/^[1-9]$/.test(e.key) && Number(e.key) <= count) setN(Number(e.key));
+      else if (e.key === "ArrowRight" && count > 1) setN((x) => (x % count) + 1);
+      else if (e.key === "ArrowLeft" && count > 1) setN((x) => ((x + count - 2) % count) + 1);
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [versions.length, approving]);
+
+  if (!current) return null;
+
+  return (
+    <section aria-labelledby="mockups-title" className="space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 id="mockups-title" className="text-xl font-medium tracking-[-0.02em]">
+          Mockups
+        </h2>
+        <p className="text-sm text-ink-muted">
+          Round {round} · {versions.length} version{versions.length === 1 ? "" : "s"}
+          <span className="max-sm:hidden"> · 1–{versions.length} or ← → to switch</span>
+        </p>
+      </div>
+
+      {rounds.length > 1 && (
+        <div role="radiogroup" aria-label="Round" className="flex flex-wrap gap-1.5">
+          {rounds.map((r) => (
+            <Pill
+              key={r}
+              role="radio"
+              aria-checked={r === round}
+              active={r === round}
+              onClick={() => {
+                setRound(r);
+                setN(1);
+              }}
+            >
+              Round {r}
+              {r === latest && <span className="opacity-70">latest</span>}
+            </Pill>
+          ))}
+        </div>
+      )}
+
+      <div role="tablist" aria-label="Versions" className="flex gap-1.5 overflow-x-auto pb-1">
+        {versions.map((m) => {
+          const approved = approvedDirection === directionOf(m);
+          return (
+            <Pill
+              key={m.id}
+              role="tab"
+              aria-selected={m.id === current.id}
+              aria-controls="mockup-panel"
+              active={m.id === current.id}
+              onClick={() => setN(m.n)}
+            >
+              <span className="font-mono tabular-nums opacity-70">{m.n}</span>
+              {m.title}
+              {approved && (
+                <span className="flex items-center gap-1 rounded-full bg-success px-1.5 text-[12px] text-on-inverse">
+                  <Check className="size-3" aria-hidden /> Approved
+                </span>
+              )}
+            </Pill>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div role="radiogroup" aria-label="Width" className="flex gap-1.5">
+          {(Object.keys(WIDTHS) as Width[]).map((w) => (
+            <Pill key={w} role="radio" aria-checked={w === width} active={w === width} onClick={() => setWidth(w)}>
+              {WIDTH_LABEL[w]}
+            </Pill>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button size="sm" variant="ghost" asChild>
+            <a href={`/api/design/mockups/${current.id}`} target="_blank" rel="noopener noreferrer">
+              Open alone <ExternalLink />
+            </a>
+          </Button>
+          {canApprove && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="rounded-full bg-inverse text-on-inverse hover:bg-inverse/90 hover:text-on-inverse"
+              data-approve-trigger
+              onClick={() => setApproving(true)}
+            >
+              <Check /> Approve this version
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div id="mockup-panel" role="tabpanel" aria-label={`Version ${current.n}: ${current.title}`}>
+        <Frame mockup={current} width={width} />
+      </div>
+
+      <ApproveDialog mockup={current} sessionId={s.id} open={approving} onOpenChange={setApproving} />
+    </section>
+  );
+}

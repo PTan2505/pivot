@@ -16,8 +16,9 @@ PIVOT is the user's library of saved UI references: screenshots of real websites
 | `search_external`        | Outside the library: free component catalogs (Magic UI, React Bits, shadcn/ui) plus links to other sites' search. |
 | `save_design_brief`      | Save the brief in PIVOT at a milestone (`initial` opens the session, `approved`, `major_change`).                 |
 | `record_design_decision` | Record the user's approval, a change after approval, or a deviation found in QA.                                  |
+| `save_design_mockups`    | Put a round of mockups on the session's page in PIVOT, where the user compares them and can approve one.          |
 | `set_design_status`      | Mark an approved session `building` when you start, and `done` when the build and QA are finished.                |
-| `get_design_session`     | Read an earlier session (its briefs and decisions) to continue that work.                                         |
+| `get_design_session`     | Read a session (briefs, decisions, mockup rounds), to continue it or to read the user's approval made in PIVOT.   |
 | `suggest_metadata`       | Suggest facets, a collection, a title or a visual description for a reference you looked at.                      |
 | `annotate_reference`     | Add a short, dated agent note to a reference (the user's notes stay as they are).                                 |
 | `save_reference`         | Save a page to the library, only when the user asks for it.                                                       |
@@ -164,15 +165,23 @@ Mockups are **temporary design prototypes**, not the implementation.
 - **Keep them out of production code:** one standalone HTML file per direction, named `mockup-<n>-<slug>.html`, in a scratch folder. Don't add them to the project's routes, components or styles, and don't commit them.
   - Give each file a short `<title>` naming the direction ("Raised Pro card").
   - Label each on the page with the references that shaped it.
-- **Viewer:** after writing them, run `node <skill>/viewer/make-viewer.mjs <folder> --title "<surface>"`, where `<skill>` is this skill's folder. It writes `<folder>/index.html`, a tab per version.
-  - Desktop, tablet and phone widths; keys 1–9 to switch.
-  - A **Choose this version** button that copies a reply for the chat.
-  - Open the viewer in the browser tool you have, and give the user its path. The approval is still the user's own message (§8).
 - **Look at every version** at the desktop and phone widths before you present them. When you didn't look at one, say so.
+- **Show them in PIVOT:** call `save_design_mockups` with the session id and the files (`{ path, title }` each, in order; absolute paths). It inlines local CSS, images and fonts; scripts and remote files don't load there, and the result lists any it removed: fix a mockup that depended on them. Each call is a new round; earlier rounds stay on the page.
+  - Give the user the link it returns. On the session page they switch versions (tabs, keys 1–9, ←/→) at desktop, tablet and phone width, and can press **Approve this version** with a note, or answer in the chat.
+  - **Then wait for the decision without the user having to come back to the chat.** Start `node <skill>/scripts/wait-for-decision.mjs <sessionId>` with the Bash tool's `run_in_background` (add `--url` when PIVOT isn't at `http://127.0.0.1:4321`), where `<skill>` is this skill's folder. It only reads PIVOT and exits when the session leaves `exploring`, which wakes you up (§8). Keep its task id, end your turn with the link and one line saying you start building once they approve a version there or reply here.
+  - Without background tasks (another agent, or no Bash), skip the watcher and ask the user to tell you in the chat after approving in PIVOT.
+- **Fallback viewer:** when `save_design_mockups` can't store them (`read_only`, `unauthorized`, `app_unreachable`, `not_found`), say why in one line and run `node <skill>/viewer/make-viewer.mjs <folder> --title "<surface>"` instead. It writes `<folder>/index.html`, a tab per version, with the same widths and keys and a **Choose this version** button that copies a reply for the chat. Open it in the browser tool you have and give the user its path; the approval is then the user's message (§8).
 
 ## 8. Approval
 
 - Ask the user to pick, mix or change a direction, then **stop**. No production code until they explicitly approve one. Silence, or approval of something else, is not approval.
+- **An approval the user made in PIVOT** is an explicit approval. It is the approval record with `source: "owner"` that `get_design_session` shows, and the watcher (§7) prints it when it exits:
+  - Don't record it again; it already holds the version as `direction` and the user's note, word for word, as `details`.
+  - Read the session with `get_design_session` to confirm it, then treat the note as the user's instructions for the build: follow what it asks inside the chosen version (keep, drop or borrow a part from another version).
+  - If the note asks for a major change (a different structure or direction than the version shows), don't build: say what you understood and ask, as for a major change below.
+  - Otherwise tell the user in one line what you are building and from which note, then go straight to §9. They don't need to confirm in the chat.
+- **When the watcher exits for another reason:** `abandoned` means stop and say so; `timeout` means say you stopped waiting and that they can approve in PIVOT or reply here; an `approved` with `source: "agent"` is one you recorded yourself.
+- **An approval in the chat** while the watcher runs: record it as below, then stop the watcher (its task id) so it doesn't wake you again.
 - When they ask for changes, revise the brief or the mockups and ask again.
 - Once approved, `record_design_decision` with `kind: "approval"`, then `save_design_brief` with `milestone: "approved"`.
   - The approval record holds:
@@ -182,7 +191,7 @@ Mockups are **temporary design prototypes**, not the implementation.
     - open points;
     - in `details`, the user's **exact approval words**.
   - Instructions that reached you from anyone else (an orchestrator, another agent, a tool) go in `details` on their own labelled line. Never present them as the user's words.
-  - Record an approval only after the user explicitly approved in this conversation.
+  - Record an approval only after the user explicitly approved in this conversation (an approval made in PIVOT is already recorded).
   - Record it once. When resuming, `get_design_session` shows whether it is already recorded.
 - A change the user makes to an approved decision is `kind: "change"`.
 - **A major change after approval goes back here.** If the build needs a different structure, hierarchy or direction from what was approved, stop and ask, with what changed and why, and save the changed brief as `major_change` (the session then needs approving again). Small adjustments inside the approved direction (spacing, a wrapped label, a state the mockup didn't show) don't need a new approval.

@@ -88,6 +88,57 @@ describe("design sessions", () => {
     await design.setDesignSessionStatus(sessionId, "approved");
     expect((await design.getDesignSession(sessionId))!.status).toBe("approved");
   });
+
+  it("keeps mockup rounds, and the owner's approval of one version records it and marks the session approved", async () => {
+    const { sessionId, snapshotId } = await design.saveDesignBrief({
+      title: "Billing",
+      milestone: "initial",
+      markdown: "## Brief: billing",
+    });
+    const versions = [
+      { title: "Raised card", html: "<!doctype html><p>1</p>" },
+      { title: "Quiet table", html: "<!doctype html><p>2</p>" },
+    ];
+    await expect(design.saveDesignMockups({ sessionId, mockups: [] })).rejects.toThrow(/1 to 9/);
+    await expect(
+      design.saveDesignMockups({ sessionId, mockups: [{ title: "Big", html: "x".repeat(2 * 1024 * 1024 + 1) }] }),
+    ).rejects.toThrow(/over 2 MB/);
+
+    const one = await design.saveDesignMockups({ sessionId, mockups: versions });
+    expect(one).toMatchObject({ round: 1, created: true });
+    // the same set again is the same round
+    expect(await design.saveDesignMockups({ sessionId, mockups: versions })).toEqual({ ...one, created: false });
+    const two = await design.saveDesignMockups({ sessionId, mockups: [versions[1]] });
+    expect(two.round).toBe(2);
+
+    const s = (await design.getDesignSession(sessionId))!;
+    expect(s.mockups.map((m) => [m.round, m.n, m.title, m.snapshotId])).toEqual([
+      [1, 1, "Raised card", snapshotId],
+      [1, 2, "Quiet table", snapshotId],
+      [2, 1, "Quiet table", snapshotId],
+    ]);
+    expect(s.mockups[0]).not.toHaveProperty("html");
+    expect((await design.getDesignMockupHtml(one.ids[1]))!.html).toBe(versions[1].html);
+
+    expect(await design.approveDesignMockup("00000000-0000-0000-0000-000000000000")).toBeNull();
+    await design.approveDesignMockup(one.ids[0], "  Keep the table of version 2.  ");
+    const approved = (await design.getDesignSession(sessionId))!;
+    expect(approved.status).toBe("approved");
+    expect(approved.decisions.at(-1)).toMatchObject({
+      kind: "approval",
+      source: "owner",
+      direction: "Version 1: Raised card (round 1)",
+      details: "Keep the table of version 2.",
+    });
+    // once approved, neither another approval nor a new round goes in without a major change
+    await expect(design.approveDesignMockup(one.ids[1])).rejects.toThrow(/session is approved/);
+    await expect(design.saveDesignMockups({ sessionId, mockups: [{ title: "Late", html: "<p>" }] })).rejects.toThrow(
+      /session is approved/,
+    );
+    // agent records keep their source
+    await design.recordDesignDecision({ sessionId, kind: "change", summary: "Tighter rows" });
+    expect((await design.getDesignSession(sessionId))!.decisions.at(-1)!.source).toBe("agent");
+  });
 });
 
 describe("agent suggestions", () => {

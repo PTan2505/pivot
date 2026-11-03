@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { DesignSessionDetailDTO, DesignStatus } from "@pivot/core/types";
 import { ConfirmButton } from "@/components/confirm-button";
+import { DesignMockups } from "@/components/design-mockups";
 import { Markdown } from "@/components/markdown";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -52,7 +53,9 @@ function StatusStepper({
   const note: Record<DesignStatus, string> = {
     exploring: approvals.length
       ? "Changed since the last approval: approve the new direction to go on."
-      : "Waiting for you to approve a direction.",
+      : s.mockups.length
+        ? "Waiting for you to approve a version below, or a direction in the chat."
+        : "Waiting for you to approve a direction.",
     approved: `Direction approved on ${approvedOn}. Ready to build.`,
     building: "The approved direction is being built.",
     done: "Built and checked.",
@@ -184,6 +187,9 @@ export function DesignSessionView({ id }: { id: string }) {
   } = useQuery({
     queryKey: ["design-session", id],
     queryFn: () => api<DesignSessionDetailDTO>(`/api/design/sessions/${id}`),
+    // while the agent is working, new rounds and status moves show up without a reload
+    refetchInterval: (q) =>
+      q.state.data && ["exploring", "approved", "building"].includes(q.state.data.status) ? 5000 : false,
   });
   const [saving, setSaving] = useState(false);
   // Optimistic: the stepper moves on click, a spinner shows until saved, a failure puts it back and says why.
@@ -219,8 +225,8 @@ export function DesignSessionView({ id }: { id: string }) {
   const lastSnapshot = s.snapshots.at(-1)?.id;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8 px-4 pt-8 pb-16 md:px-10">
-      <div className="space-y-3">
+    <div className="mx-auto max-w-6xl space-y-8 px-4 pt-8 pb-16 md:px-10">
+      <div className="max-w-4xl space-y-3">
         <Button variant="ghost" size="sm" asChild>
           <Link href="/design">
             <ArrowLeft /> Design sessions
@@ -234,13 +240,17 @@ export function DesignSessionView({ id }: { id: string }) {
         </p>
         <StatusStepper session={s} saving={saving} onChange={setStatus} />
       </div>
-      <ol className="space-y-3">
+      {s.mockups.length > 0 && <DesignMockups session={s} />}
+      <ol className="max-w-4xl space-y-3">
         {timeline.map((item) =>
           item.kind === "decision" ? (
             <li key={item.d.id} className="space-y-1 rounded-[14px] bg-surface px-4 py-3">
               <p className="text-xs text-ink-muted">
-                <span className="text-ink-secondary">{DECISION_LABEL[item.d.kind]}</span> ·{" "}
-                {new Date(item.at).toLocaleString()}
+                <span className="text-ink-secondary">
+                  {DECISION_LABEL[item.d.kind]}
+                  {item.d.source === "owner" && " in PIVOT"}
+                </span>{" "}
+                · {new Date(item.at).toLocaleString()}
               </p>
               <p className="text-sm text-ink">{item.d.summary}</p>
               {item.d.direction && <p className="text-sm text-ink-secondary">Direction: {item.d.direction}</p>}

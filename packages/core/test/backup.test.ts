@@ -61,7 +61,8 @@ describe("backup and restore", () => {
     await resources.addToCollection(col.id, [a.id, b.id]);
     await links.createLink({ fromId: a.id, toId: b.id, kind: "related_to" });
     await annotations.addAnnotation(a.id, { assetId: shot.id, x: 0.1, y: 0.1, width: 0.2, height: 0.2, note: "Tiers" });
-    await design.saveDesignBrief({ title: "Pricing", milestone: "initial", markdown: "## Brief" });
+    const brief = await design.saveDesignBrief({ title: "Pricing", milestone: "initial", markdown: "## Brief" });
+    await design.saveDesignMockups({ sessionId: brief.sessionId, mockups: [{ title: "Tiers", html: "<p>1</p>" }] });
 
     const made = await backup.createBackup({ targetDir: path.join(tmp, "out") });
     expect(made.counts).toMatchObject({
@@ -74,7 +75,11 @@ describe("backup and restore", () => {
     });
     const manifest = JSON.parse(await fs.readFile(path.join(made.path, "manifest.json"), "utf8"));
     expect(manifest.format).toBe("pivot-backup");
-    expect(await fs.readFile(path.join(made.path, "data.json"), "utf8")).not.toMatch(/api-token/);
+    const data = JSON.parse(await fs.readFile(path.join(made.path, "data.json"), "utf8"));
+    expect(JSON.stringify(data)).not.toMatch(/api-token/);
+    expect(data.designMockups.map((m: { title: string; html: string }) => [m.title, m.html])).toEqual([
+      ["Tiers", "<p>1</p>"],
+    ]);
 
     // lose A for good, then restore
     await resources.trashResources([a.id]);

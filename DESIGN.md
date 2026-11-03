@@ -436,6 +436,18 @@ A pen-tool icon button in the top bar (between Trash and Settings; inverse when 
   - Then ghost pills: "Back to building" (Done), Abandon or Restore, and Reopen, which opens the destructive confirm dialog.
   - While saving, the current dot becomes a spinner and the pills are disabled. A success toast "Status: Building" has **Undo**; a failure reverts and shows the reason in an error toast.
 
+**Mockups** (added 2026-11-03, `components/design-mockups.tsx`): between the stepper and the timeline, only when the session has mockups. The session page widens to `max-w-6xl` for it; the header and timeline keep their `max-w-4xl` reading width.
+
+- **Header:** "Mockups" (20px, weight 500) and, on the right, an ink-muted line "Round 2 · 5 versions · 1–5 or ← → to switch" (the key hint hides on phones).
+- **Pills:** 32px, 13px label, weight 500; inactive surface in ink-secondary (hover surface-raised), active inverse.
+  - **Round** radiogroup, only with more than one round; the latest is marked "latest" at 70% opacity.
+  - **Version** tablist: the number in mono at 70% opacity, then the title; it scrolls sideways on narrow screens instead of wrapping. The approved version carries a small success chip "Approved" with a check, in on-inverse text.
+  - **Width** radiogroup: Desktop (1440), Tablet (834), Phone (390).
+- **Actions** on the right of the width row: a ghost "Open alone" pill with an external-link icon, and, only while the session is Exploring, **Approve this version** as an inverse pill with a check. It is never ember: the top bar's Add stays the screen's only primary.
+- **Frame:** a surface panel (14px radius), 80vh tall, holding the mockup in a sandboxed iframe at the chosen device width, scaled down to fit the column (never up) and scrolling inside.
+- **Approve dialog:** title "Approve version 3, “Raised card”?", one line on what happens, a labelled optional textarea "Note for the build", then ghost Cancel and the default **Approve** button. A success toast says a waiting Claude Code session starts building.
+- The timeline labels an approval made here "Approved in PIVOT". The stepper's Exploring note reads "Waiting for you to approve a version below, or a direction in the chat." when there are mockups.
+
 ### Suggestions — `components/suggestions.tsx`
 
 A surface panel (14px radius) on the Inbox page and at the top of a reference's detail page: a sparkles icon, "3 suggestions from an agent" and an ink-muted note that nothing changes until you accept. Each suggestion is a surface-raised row with a checkbox, what it suggests ("Style: Dark", "Collection: Pricing pages (new)", "Title: …"), the reference it is for (Inbox only), the reason in ink-muted, and ✓ / × icon buttons. With some checked, "Accept n" and "Reject n" appear at the right of the header.

@@ -86,15 +86,16 @@ Two pieces let Claude Code design and redesign screens in any project from **you
 | `search_external`        | read  | Free public component catalogs (Magic UI, React Bits, shadcn/ui), only when the library falls short |
 | `save_design_brief`      | write | Store the brief at a milestone: `initial` (opens a design session), `approved`, `major_change`      |
 | `record_design_decision` | write | Record your `approval`, a `change` after approval, or a QA `deviation`                              |
+| `save_design_mockups`    | write | Put a round of mockups on the session's page in PIVOT, where you compare them and approve one       |
 | `set_design_status`      | write | Mark an approved session `building` when Claude starts coding, and `done` after the build and QA    |
-| `get_design_session`     | read  | Read a session to continue earlier work                                                             |
+| `get_design_session`     | read  | Read a session to continue earlier work, or the approval you made in PIVOT                          |
 | `suggest_metadata`       | write | Suggest facets or a title for a reference; it waits in your Inbox                                   |
 | `annotate_reference`     | write | Add a dated agent note to a reference; your notes stay as they are                                  |
 | `save_reference`         | write | Save a page to the library, only when you ask                                                       |
 
 **Where things live:**
 
-- Briefs and decisions live in PIVOT (the **Design sessions** button, `/design`), never in the project being designed.
+- Briefs, mockups and decisions live in PIVOT (the **Design sessions** button, `/design`), never in the project being designed.
 - Nothing Claude writes overwrites what you confirmed.
 
 ### Which skill
@@ -134,10 +135,12 @@ Claude usually picks the right skill. Start with "Use pivot-design…" or "Use p
    - about 12 images at most;
    - a **shortlist** of 6–10 candidates, each linked to its PIVOT page. Claude stops so you can pick, for example "2, 5, 7: the table of 5". Say "you choose" to skip the pause.
 5. **Brief, then save.** A short brief with a Take / Leave table per reference, shown to you, then saved as `initial` (this opens the design session). The brief always comes before the mockups.
-6. **Mockups.** About 5 distinct directions (or the number you ask for) as throwaway HTML in a scratch folder, never in your project. For a redesign, before and after are side by side.
-   - A generated **viewer** (`index.html` in the same folder) shows them as tabs at desktop, tablet or phone width; keys 1–9 switch versions.
-   - **Choose this version** copies a reply you paste in the chat.
-7. **Approval.** Claude stops and asks. Your reply is recorded **word for word**, and instructions from anyone else are labelled separately.
+6. **Mockups.** About 5 distinct directions (or the number you ask for) as static HTML, never in your project. For a redesign, before and after are side by side.
+   - Claude saves them to the design session (`save_design_mockups`) and gives you its link. The **Mockups** section shows them as tabs at desktop, tablet or phone width; keys 1–9 switch versions. Each new round is kept, older ones a click away.
+   - If PIVOT can't store them, Claude makes a local **viewer** instead (`index.html` in the scratch folder) whose **Choose this version** copies a reply for the chat.
+7. **Approval.** Claude stops and waits, in either place:
+   - **In PIVOT:** press **Approve this version**, optionally with a note ("keep the table of version 2"). Claude is waiting on it in the background and starts building straight away; you don't go back to the chat. A note that asks for a different structure makes Claude ask first.
+   - **In the chat:** your reply is recorded **word for word**, and instructions from anyone else are labelled separately.
    - "Pick A, keep the group labels" approves.
    - A mix or a change gets a revised proposal.
    - A "no" means nothing is built.
