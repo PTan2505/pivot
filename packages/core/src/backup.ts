@@ -12,6 +12,7 @@ import {
   collectionItems,
   collections,
   designDecisions,
+  designMockups,
   designSessions,
   designSnapshots,
   resourceAssets,
@@ -46,6 +47,8 @@ export interface BackupData {
   designSessions: Rows<typeof designSessions>;
   designSnapshots: Rows<typeof designSnapshots>;
   designDecisions: Rows<typeof designDecisions>;
+  /** Missing in backups made before mockups were stored in PIVOT. */
+  designMockups?: Rows<typeof designMockups>;
   suggestions: Rows<typeof resourceSuggestions>;
   settings: Rows<typeof appSettings>;
 }
@@ -88,6 +91,7 @@ export async function createBackup({ targetDir }: { targetDir?: string } = {}) {
     designSessions: await db.select().from(designSessions),
     designSnapshots: await db.select().from(designSnapshots),
     designDecisions: await db.select().from(designDecisions),
+    designMockups: await db.select().from(designMockups),
     suggestions: inIds(await db.select().from(resourceSuggestions).where(eq(resourceSuggestions.status, "pending"))),
     settings: await db.select().from(appSettings),
   };
@@ -426,6 +430,12 @@ export async function restoreBackup(
     await db
       .insert(designDecisions)
       .values({ ...d, createdAt: new Date(d.createdAt) })
+      .onConflictDoNothing();
+  }
+  for (const m of data.designMockups ?? []) {
+    await db
+      .insert(designMockups)
+      .values({ ...m, createdAt: new Date(m.createdAt) })
       .onConflictDoNothing();
   }
   return summary;

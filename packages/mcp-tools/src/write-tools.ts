@@ -7,6 +7,7 @@ import {
   TAG_KINDS,
   type DesignSessionDetailDTO,
 } from "@pivot/core/types";
+import { inlineMockup } from "./mockups";
 import { canWrite, ToolError, type PivotSource, type PivotWriter } from "./source";
 import type { PivotTool, ToolResult } from "./tools";
 
@@ -95,6 +96,78 @@ const recordDesignDecision: PivotTool<typeof decisionInput> = {
   },
 };
 
+// ---- save_design_mockups ----------------------------------------------------------------------------------------
+
+const MOCKUP_BYTES = 2 * 1024 * 1024;
+
+const mockupsInput = {
+  sessionId: z.string().regex(UUID).describe("The design session (exploring: a new brief, or a major change)."),
+  mockups: z
+    .array(
+      z.object({
+        title: z.string().min(1).max(120).describe('The direction\'s name, e.g. "Raised Pro card".'),
+        path: z
+          .string()
+          .optional()
+          .describe("Absolute path of the mockup's HTML file. Local CSS, images and fonts are inlined."),
+        html: z.string().optional().describe("The mockup's HTML instead of a path, already self-contained."),
+      }),
+    )
+    .min(1)
+    .max(9)
+    .describe("The versions of this round, in the order they are shown (1 to 9)."),
+  snapshotId: z.string().regex(UUID).optional().describe("The brief they illustrate; defaults to the latest."),
+};
+
+const saveDesignMockups: PivotTool<typeof mockupsInput> = {
+  name: "save_design_mockups",
+  title: "Save mockups to a design session",
+  description: `Stores a round of mockup versions (static HTML) in the design session, where the user compares them as tabs at desktop, tablet and phone width and can approve one with a note. Local stylesheets, images and fonts are inlined; scripts and remote files are removed (they don't load in PIVOT). Each call is a new round; the same set again returns the same round. Only while the session is exploring. Returns the page's link. ${NOT_IN_REPO}`,
+  inputSchema: mockupsInput,
+  async run(source, { sessionId, snapshotId, mockups }) {
+    const w = writer(source);
+    const dropped = new Set<string>();
+    const missing = new Set<string>();
+    const versions = [];
+    for (const [i, m] of mockups.entries()) {
+      if ((m.path == null) === (m.html == null))
+        throw new ToolError("invalid_input", `Version ${i + 1}: give either path or html.`);
+      let html = m.html ?? "";
+      if (m.path != null) {
+        if (!m.path.startsWith("/") && !/^[a-z]:[\\/]/i.test(m.path))
+          throw new ToolError("invalid_input", `Version ${i + 1}: path must be absolute.`);
+        try {
+          const r = await inlineMockup(m.path);
+          html = r.html;
+          r.dropped.forEach((d) => dropped.add(d));
+          r.missing.forEach((d) => missing.add(d));
+        } catch {
+          throw new ToolError("invalid_input", `Version ${i + 1}: can't read ${m.path}.`);
+        }
+      }
+      if (Buffer.byteLength(html) > MOCKUP_BYTES)
+        throw new ToolError(
+          "invalid_input",
+          `Version ${i + 1} is over 2 MB once inlined: use smaller or fewer images (screenshots as WebP or JPEG).`,
+        );
+      versions.push({ title: m.title, html });
+    }
+    const res = await w.saveDesignMockups(sessionId, { snapshotId, mockups: versions });
+    const url = w.appUrl ? `${w.appUrl}/design/${sessionId}?round=${res.round}` : undefined;
+    const lines = [
+      `${res.created ? "Saved" : "Already saved as"} round ${res.round} with ${versions.length} version${versions.length === 1 ? "" : "s"}.`,
+      url ? `The user opens it at ${url}` : "",
+      "The user can approve a version there, with a note; get_design_session then shows that approval with source owner.",
+      dropped.size ? `Removed (scripts and remote files don't load in PIVOT): ${[...dropped].join(", ")}` : "",
+      missing.size ? `Missing local files: ${[...missing].join(", ")}` : "",
+    ];
+    return {
+      content: [text(lines.filter(Boolean).join("\n"))],
+      structuredContent: { ...res, sessionId, url, dropped: [...dropped], missing: [...missing] },
+    };
+  },
+};
+
 // ---- set_design_status ------------------------------------------------------------------------------------------
 
 const statusInput = {
@@ -157,8 +230,31 @@ function sessionText(s: DesignSessionDetailDTO) {
   const lines = [
     `${s.title} — ${s.status}${s.targetProject ? ` — ${s.targetProject}` : ""}${s.surface ? ` (${s.surface})` : ""}`,
     `Snapshots: ${s.snapshots.map((x) => `${x.milestone} ${x.createdAt.slice(0, 10)}`).join(", ") || "none"}`,
-    `Decisions: ${s.decisions.map((d) => `${d.kind}: ${d.summary}`).join(" | ") || "none"}`,
+    `Decisions: ${
+      s.decisions
+        .map(
+          (d) =>
+            `${d.kind}${d.source === "owner" ? " (by the user, in PIVOT)" : ""}: ${d.summary}` +
+            (d.direction ? ` Direction: ${d.direction}.` : "") +
+            (d.source === "owner" && d.details ? ` The user's note: "${d.details}"` : ""),
+        )
+        .join(" | ") || "none"
+    }`,
   ];
+  const rounds = [...new Set((s.mockups ?? []).map((m) => m.round))];
+  if (rounds.length) {
+    lines.push(
+      `Mockups: ${rounds
+        .map(
+          (r) =>
+            `round ${r}: ${s.mockups
+              .filter((m) => m.round === r)
+              .map((m) => `${m.n}. ${m.title}`)
+              .join(", ")}`,
+        )
+        .join(" | ")}`,
+    );
+  }
   const last = s.snapshots.at(-1);
   if (last) lines.push("", `Latest brief (${last.milestone}):`, last.markdown);
   return lines.join("\n");
@@ -168,7 +264,7 @@ const getDesignSession: PivotTool<typeof sessionInput> = {
   name: "get_design_session",
   title: "Get a design session",
   description:
-    "Reads a design session (its brief snapshots and decisions) to continue earlier work, or lists sessions, most recent first. Snapshot text is the agent's and the user's own design notes.",
+    "Reads a design session (its brief snapshots, decisions and mockup rounds) to continue earlier work, or lists sessions, most recent first. An approval with source owner was made by the user in PIVOT: it is the user's explicit approval, and its note is their instruction for the build. Snapshot text is the agent's and the user's own design notes.",
   inputSchema: sessionInput,
   async run(source, { sessionId, targetProject }) {
     const w = writer(source);
@@ -304,6 +400,7 @@ const saveReference: PivotTool<typeof saveInput> = {
 export const WRITE_TOOLS = [
   saveDesignBrief,
   recordDesignDecision,
+  saveDesignMockups,
   setDesignStatus,
   getDesignSession,
   suggestMetadata,

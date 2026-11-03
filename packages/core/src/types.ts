@@ -741,6 +741,10 @@ export interface DesignSnapshotDTO {
   createdAt: string;
 }
 
+/** Who recorded a decision: the agent through MCP, or the owner by pressing Approve on a mockup in PIVOT. */
+export const DESIGN_DECISION_SOURCES = ["agent", "owner"] as const;
+export type DesignDecisionSource = (typeof DESIGN_DECISION_SOURCES)[number];
+
 export interface DesignDecisionDTO {
   id: string;
   sessionId: string;
@@ -748,12 +752,26 @@ export interface DesignDecisionDTO {
   summary: string;
   direction: string;
   details: string;
+  source: DesignDecisionSource;
+  createdAt: string;
+}
+
+/** One mockup version (without its HTML, which is served sandboxed from /api/design/mockups/[id]). */
+export interface DesignMockupDTO {
+  id: string;
+  sessionId: string;
+  snapshotId: string | null;
+  round: number;
+  n: number;
+  title: string;
   createdAt: string;
 }
 
 export interface DesignSessionDetailDTO extends DesignSessionDTO {
   snapshots: DesignSnapshotDTO[];
   decisions: DesignDecisionDTO[];
+  /** Every saved version, oldest round first. */
+  mockups: DesignMockupDTO[];
 }
 
 export const SUGGESTION_KINDS = ["facet", "collection", "title", "description"] as const;

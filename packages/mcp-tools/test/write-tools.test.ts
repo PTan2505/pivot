@@ -1,4 +1,8 @@
-import { describe, expect, it } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { inlineMockup } from "../src/mockups";
 import type { PivotSource, PivotWriter } from "../src/source";
 import { runTool } from "../src/tools";
 import { WRITE_TOOLS } from "../src/write-tools";
@@ -29,6 +33,8 @@ function writerSource() {
   const writer: PivotWriter = {
     saveDesignBrief: rec("saveDesignBrief", { sessionId: ID, snapshotId: "s1", created: true, duplicate: false }),
     recordDesignDecision: rec("recordDesignDecision", { id: "d1" }),
+    saveDesignMockups: rec("saveDesignMockups", { round: 2, ids: ["m1", "m2"], created: true }),
+    appUrl: "http://127.0.0.1:4321",
     getDesignSession: rec("getDesignSession", null),
     setDesignStatus: rec("setDesignStatus", null as never),
     listDesignSessions: rec("listDesignSessions", []),
@@ -54,17 +60,18 @@ function writerSource() {
 }
 
 describe("PIVOT MCP write tools", () => {
-  it("are the seven design and library writes, and the design ones say briefs stay out of the repo", () => {
+  it("are the eight design and library writes, and the design ones say briefs stay out of the repo", () => {
     expect(WRITE_TOOLS.map((t) => t.name)).toEqual([
       "save_design_brief",
       "record_design_decision",
+      "save_design_mockups",
       "set_design_status",
       "get_design_session",
       "suggest_metadata",
       "annotate_reference",
       "save_reference",
     ]);
-    for (const name of ["save_design_brief", "record_design_decision"]) {
+    for (const name of ["save_design_brief", "record_design_decision", "save_design_mockups"]) {
       expect(tool(name).description).toMatch(/never write them into the project's repository/);
     }
     expect(tool("record_design_decision").description).toMatch(/only after the user explicitly approved/);
@@ -179,5 +186,84 @@ describe("set_design_status", () => {
     }
     const res = await runTool(tool("set_design_status"), reader, { sessionId: ID, status: "building" });
     expect(res.content[0]).toMatchObject({ text: expect.stringMatching(/^read_only: /) });
+  });
+});
+
+describe("save_design_mockups", () => {
+  let dir: string;
+  beforeAll(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), "pivot-mockups-"));
+    await fs.writeFile(path.join(dir, "dot.png"), Buffer.from("89504e47", "hex"));
+    await fs.writeFile(path.join(dir, "base.css"), "body{color:red}");
+    await fs.writeFile(
+      path.join(dir, "site.css"),
+      '@import "base.css"; @import url(https://fonts.example/x.css); .hero{background:url(dot.png)}',
+    );
+    await fs.writeFile(
+      path.join(dir, "a.html"),
+      `<!doctype html><link rel="stylesheet" href="site.css"><link rel="stylesheet" href="https://cdn.example/t.css">
+<script src="app.js"></script><script>alert(1)</script>
+<style>.x{background:url('./dot.png')}</style>
+<img src="dot.png" alt="Dot"><img src="https://img.example/y.png" alt=""><img src="gone.png" alt="">
+<div style="background:url(dot.png)"></div>`,
+    );
+  });
+  afterAll(() => fs.rm(dir, { recursive: true, force: true }));
+
+  it("inlines local CSS, images and imports, and removes scripts and remote files", async () => {
+    const r = await inlineMockup(path.join(dir, "a.html"));
+    expect(r.html).not.toMatch(/<script|<link|https:\/\/|dot\.png/);
+    expect(r.html).toContain("body{color:red}");
+    expect(r.html.match(/data:image\/png;base64,iVBORw==/g)).toHaveLength(4);
+    expect(r.dropped).toEqual(
+      expect.arrayContaining([
+        "app.js",
+        "inline <script>",
+        "https://cdn.example/t.css",
+        "https://fonts.example/x.css",
+        "https://img.example/y.png",
+      ]),
+    );
+    expect(r.missing).toEqual([path.join(dir, "gone.png")]);
+  });
+
+  it("uploads the inlined round and returns the session page's link", async () => {
+    const { source, calls } = writerSource();
+    const res = await runTool(tool("save_design_mockups"), source, {
+      sessionId: ID,
+      mockups: [
+        { title: "Raised card", path: path.join(dir, "a.html") },
+        { title: "Quiet table", html: "<p>2</p>" },
+      ],
+    });
+    expect(res.isError).toBeFalsy();
+    const sent = calls.find((c) => c.method === "saveDesignMockups")!.args[1] as {
+      mockups: { title: string; html: string }[];
+    };
+    expect(sent.mockups.map((m) => m.title)).toEqual(["Raised card", "Quiet table"]);
+    expect(sent.mockups[0].html).toContain("data:image/png");
+    const out = (res.content[0] as { text: string }).text;
+    expect(out).toContain(`http://127.0.0.1:4321/design/${ID}?round=2`);
+    expect(out).toMatch(/Removed .*app\.js/);
+  });
+
+  it("needs exactly one of path or html, an absolute path, and at most 9 versions", async () => {
+    const { source } = writerSource();
+    const run = (mockups: unknown[]) => runTool(tool("save_design_mockups"), source, { sessionId: ID, mockups });
+    expect((await run([{ title: "x" }])).content[0]).toMatchObject({
+      text: expect.stringMatching(/either path or html/),
+    });
+    expect((await run([{ title: "x", path: "a.html" }])).content[0]).toMatchObject({
+      text: expect.stringMatching(/must be absolute/),
+    });
+    expect((await run(Array.from({ length: 10 }, (_, i) => ({ title: `v${i}`, html: "<p>" })))).isError).toBe(true);
+  });
+
+  it("refuses on a read-only connection", async () => {
+    const res = await runTool(tool("save_design_mockups"), reader, {
+      sessionId: ID,
+      mockups: [{ title: "x", html: "<p>" }],
+    });
+    expect(res.content[0]).toMatchObject({ text: expect.stringMatching(/^read_only/) });
   });
 });

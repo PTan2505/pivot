@@ -51,6 +51,8 @@ If a write fails, the skill says so in one line and never writes the brief into 
 
 Unchanged from Step 3: temporary HTML in a scratch folder or the host's artifact tool, never in the target project's routes, components or styles, never committed. Mockup files are **not** copied into PIVOT; the brief snapshot can name their paths. Storing mockup images in a session is left for later, if it proves useful.
 
+> **Amended 2026-11-03:** mockups are now stored in the design session and can be approved there; see [mockups-in-pivot-proposal.md](mockups-in-pivot-proposal.md).
+
 ## 5. QA
 
 No automation is added. The skill checks the build in a browser at desktop and phone widths against the approved direction, reports deviations to the user and records them (`deviation`). Automated visual comparison belongs with Phase 6's visual diff (#58).
@@ -66,5 +68,5 @@ The agent is the AI: it looks at a reference through MCP and calls `suggest_meta
 ## 7. Still open
 
 - **"Workflow Config" (#1).** It isn't defined anywhere. Possible meanings: the skill's defaults (how many references and mockups, where mockups go); per-project settings (design system path, breakpoints to check); turning the skill on or off per project. Nothing is built for it; the owner should say which, if any.
-- Whether a session should keep mockup screenshots (§4).
+- Whether a session should keep mockup screenshots (§4). Settled 2026-11-03: it keeps the mockups themselves ([mockups-in-pivot-proposal.md](mockups-in-pivot-proposal.md)).
 - An MCP prompt or slash command for the skill. Today the skill triggers on its description; no command syntax was decided.

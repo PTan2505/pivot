@@ -37,6 +37,10 @@ export class HttpSource implements PivotSource, PivotWriter {
 
   constructor(private base = (process.env.PIVOT_URL ?? "http://127.0.0.1:4321").replace(/\/+$/, "")) {}
 
+  get appUrl() {
+    return this.base;
+  }
+
   private async call(pathAndQuery: string, init: RequestInit = {}): Promise<Response | null> {
     let res: Response;
     try {
@@ -136,6 +140,13 @@ export class HttpSource implements PivotSource, PivotWriter {
 
   recordDesignDecision(sessionId: string, input: Parameters<PivotWriter["recordDesignDecision"]>[1]) {
     return this.post<{ id: string }>(`/api/design/sessions/${encodeURIComponent(sessionId)}/decisions`, input);
+  }
+
+  saveDesignMockups(sessionId: string, input: Parameters<PivotWriter["saveDesignMockups"]>[1]) {
+    return this.post<Awaited<ReturnType<PivotWriter["saveDesignMockups"]>>>(
+      `/api/design/sessions/${encodeURIComponent(sessionId)}/mockups`,
+      input,
+    );
   }
 
   setDesignStatus(sessionId: string, status: DesignStatus) {

@@ -279,9 +279,37 @@ export const designDecisions = pgTable(
     summary: text("summary").notNull(),
     direction: text("direction").notNull().default(""),
     details: text("details").notNull().default(""),
+    /** agent (recorded through MCP) | owner (the user pressed Approve on a mockup in PIVOT) */
+    source: text("source").notNull().default("agent"),
     createdAt: createdAt(),
   },
   (t) => [index("design_decisions_session_idx").on(t.sessionId, t.createdAt)],
+);
+
+/**
+ * A mockup version an agent saved for a session: standalone, self-contained HTML (CSS inlined, images from PIVOT or
+ * data URIs), grouped in rounds. Served sandboxed, never run on the app's origin.
+ */
+export const designMockups = pgTable(
+  "design_mockups",
+  {
+    id: id(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => designSessions.id, { onDelete: "cascade" }),
+    /** The brief it illustrates, when known. */
+    snapshotId: text("snapshot_id"),
+    /** 1, 2… per session: each save is a new round; earlier rounds stay as history. */
+    round: integer("round").notNull(),
+    /** The version number inside the round, from 1. */
+    n: integer("n").notNull(),
+    title: text("title").notNull(),
+    html: text("html").notNull(),
+    /** sha256 of the round's titles and HTML, so saving the same set again returns the same round. */
+    roundDigest: text("round_digest").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("design_mockups_version_idx").on(t.sessionId, t.round, t.n)],
 );
 
 /**

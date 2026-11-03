@@ -218,15 +218,15 @@ Mọi loại đều có các trường chung: `title`, `description`, `sourceUrl
     4. đưa ra **shortlist** 6–10 ứng viên, mỗi cái có link tới trang của nó trong PIVOT, lý do khớp và đã xem ảnh nào, rồi **dừng để người dùng chọn**. Người dùng nói "cứ chọn giúp tôi" thì Claude tự chọn 2–4 và nói rõ đã chọn gì (cập nhật 2026-11-02);
     5. viết và trình bày **brief** có bảng Take / Leave, mỗi reference ghi tên và link;
     6. lưu brief `initial`, tức mở **design session**;
-    7. dựng **khoảng 5 mockup** khác nhau về cấu trúc (hoặc đúng số người dùng yêu cầu) bằng design system của project đích, kèm một **viewer** dạng tab (`viewer/make-viewer.mjs` trong folder skill tạo `index.html`): xem ở desktop, tablet hoặc điện thoại, phím 1–9 để chuyển, nút "Choose this version" chép sẵn câu trả lời để dán vào chat (cập nhật 2026-11-02);
-    8. **duyệt**;
+    7. dựng **khoảng 5 mockup** khác nhau về cấu trúc (hoặc đúng số người dùng yêu cầu) bằng design system của project đích, rồi lưu vào design session bằng `save_design_mockups` và đưa người dùng link trang session trong PIVOT (cập nhật 2026-11-03, xem §15). Sau đó agent chạy nền script `scripts/wait-for-decision.mjs` trong folder skill: script chỉ đọc PIVOT và thoát khi session rời `exploring`, việc thoát đánh thức agent. Khi PIVOT không lưu được (`read_only`, app không chạy…), agent dùng **viewer** cục bộ (`viewer/make-viewer.mjs` tạo `index.html`: desktop, tablet, điện thoại, phím 1–9, nút "Choose this version" chép sẵn câu trả lời cho chat);
+    8. **duyệt**: trong chat, hoặc bằng nút **Approve this version** trên trang session (kèm ghi chú). Duyệt trong PIVOT là lời duyệt rõ ràng của người dùng: agent không ghi lại lần nữa, làm theo ghi chú (trừ khi ghi chú đòi thay đổi lớn thì hỏi lại) và build luôn, người dùng không cần quay lại chat;
     9. code;
     10. **QA**.
 
     Brief phải có trước mockup. Trình bày brief không phải một bước duyệt: nếu không có câu hỏi nào chặn thì làm tiếp mockup ngay.
 
   - **Không code trước khi người dùng duyệt một hướng** (cập nhật 2026-10-31). "Just build it" hay "skip mockups" chỉ rút xuống còn một mockup hoặc một đoạn mô tả hướng, vẫn phải chờ duyệt. Thay đổi lớn sau khi đã duyệt (đổi cấu trúc, thứ bậc hay hướng) thì quay lại bước duyệt; chỉnh nhỏ trong hướng đã duyệt thì không cần.
-  - Mockup là bản thử tạm: file HTML riêng trong thư mục nháp hoặc artifact, không đưa vào route, component hay style của project, không commit.
+  - Mockup là bản thử tạm: file HTML riêng trong thư mục nháp, không đưa vào route, component hay style của project, không commit. Bản để người dùng xem và duyệt được lưu vào design session trong PIVOT (cập nhật 2026-11-03).
   - QA so kết quả với hướng đã duyệt ở màn hình desktop và điện thoại, đối chiếu với brief, mockup và bản ghi duyệt (cập nhật 2026-11-02). Mỗi khác biệt được xếp vào một trong bốn loại:
     - **tinh chỉnh trong phạm vi đã duyệt** (thiết kế cần nó để chạy được và nó không đổi điều gì bản duyệt đã nêu): ghi trong phần tóm tắt, không phải `deviation`;
     - **lệch khỏi một yêu cầu hay chi tiết đã duyệt**: báo người dùng và ghi `deviation`, không tự định nghĩa lại quyết định;
@@ -322,7 +322,7 @@ Mọi loại đều có các trường chung: `title`, `description`, `sourceUrl
     - chỉ ghi `deviation` khi bản build lệch khỏi một yêu cầu hay chi tiết đã duyệt (bốn loại khác biệt của `pivot-design`); lỗi có sẵn từ trước hay nằm ngoài phạm vi thì báo riêng và đề xuất xử lý sau.
 
     Không ghi gì vào project đích.
-- **Tool ghi** (bổ sung 2026-11-01, xem §15): `save_design_brief`, `record_design_decision`, `set_design_status` (bổ sung 2026-11-02: chỉ đặt `building` khi session đang Approved, chỉ đặt `done` khi đang Building; gọi lại cùng trạng thái thì không đổi gì; không bao giờ đặt exploring, approved hay abandoned), `get_design_session`, `suggest_metadata`, `annotate_reference`, `save_reference`. Cần API token (`PIVOT_TOKEN` hoặc `<thư mục dữ liệu>/api-token`); kết nối chỉ đọc thì báo `read_only` và không lưu gì, token sai thì `unauthorized`. **Server online** cho người khác dùng: chưa làm.
+- **Tool ghi** (bổ sung 2026-11-01, xem §15): `save_design_brief`, `record_design_decision`, `save_design_mockups` (bổ sung 2026-11-03: 1–9 phiên bản mỗi lần gọi, mỗi bản là `{ title, path }` hoặc `{ title, html }`; inline CSS, ảnh và font cục bộ ngay trên máy agent, bỏ script và file từ host khác rồi liệt kê lại; chỉ khi session đang Exploring; mỗi lần gọi là một vòng mới, gửi lại đúng bộ cũ thì nhận lại vòng cũ; trả về link trang session), `set_design_status` (bổ sung 2026-11-02: chỉ đặt `building` khi session đang Approved, chỉ đặt `done` khi đang Building; gọi lại cùng trạng thái thì không đổi gì; không bao giờ đặt exploring, approved hay abandoned), `get_design_session`, `suggest_metadata`, `annotate_reference`, `save_reference`. Cần API token (`PIVOT_TOKEN` hoặc `<thư mục dữ liệu>/api-token`); kết nối chỉ đọc thì báo `read_only` và không lưu gì, token sai thì `unauthorized`. **Server online** cho người khác dùng: chưa làm.
 
 ## 11. Ngoài phạm vi MVP
 
@@ -384,7 +384,14 @@ Theo Part A và các quyết định #1–3, #13, #19, #30, #34, #35 của [PIVO
 - **Design session** (bảng `design_sessions`): một phần việc thiết kế làm với skill `pivot-design`, có tiêu đề, project đích (tên thư mục hoặc repo), bề mặt ("pricing page") và trạng thái `exploring` → `approved` → `building` → `done` (hoặc `abandoned`). Session chỉ mở khi có **brief hoàn chỉnh đầu tiên**; sửa nhỏ không tạo session.
   - **Snapshot của brief** (`design_snapshots`, Markdown): chỉ ở ba mốc `initial`, `approved`, `major_change` (kèm ghi chú thay đổi). Lưu lại đúng brief đó ở cùng mốc thì nhận lại snapshot cũ. Một `major_change` đưa session về `exploring`: phải duyệt lại trước khi làm tiếp.
   - **Quyết định** (`design_decisions`): `approval` (đặt session thành `approved`; agent chỉ ghi khi người dùng đã duyệt rõ ràng), `change` (người dùng đổi quyết định đã duyệt), `deviation` (QA thấy kết quả lệch hướng đã duyệt).
-  - Brief, quyết định và ghi chú session chỉ nằm trong PIVOT, **không bao giờ** ghi vào repo của project đích; mockup vẫn là file nháp, không được copy vào PIVOT.
+  - Brief, quyết định, mockup và ghi chú session chỉ nằm trong PIVOT, **không bao giờ** ghi vào repo của project đích.
+  - **Mockup trong session** (cập nhật 2026-11-03; thay quyết định cũ "mockup không được copy vào PIVOT", chủ dự án duyệt; chi tiết ở [mockups-in-pivot-proposal.md](mockups-in-pivot-proposal.md)):
+    - Bảng `design_mockups`: mỗi lần `save_design_mockups` là một **vòng** (round 1, 2…) gồm 1–9 phiên bản (`n`, tiêu đề, HTML tự chứa, tối đa 2 MB mỗi bản), gắn với brief mới nhất. HTML lưu thẳng trong database như Markdown của brief, không qua blob store. Chỉ thêm được khi session đang Exploring. Các vòng cũ được giữ làm lịch sử. Backup có cả bảng này.
+    - Phục vụ ở `GET /api/design/mockups/[id]` với CSP chặt (`default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; sandbox`) và hiện trong `<iframe sandbox>`: mockup không chạy được script, không gọi được host khác, không chạm được vào app.
+    - Trang session có phần **Mockups**: chọn vòng (vòng mới nhất mặc định, `?round=` chọn vòng khác), tab từng phiên bản (phím 1–9, ←/→), chọn độ rộng Desktop/Tablet/Phone (thu nhỏ cho vừa cột, không phóng to), "Open alone". Trang tự làm mới mỗi 5 giây khi session đang Exploring, Approved hoặc Building.
+    - Khi session đang Exploring, nút **Approve this version** mở hộp thoại với ghi chú tuỳ chọn. Xác nhận thì ghi một `approval` với `source: "owner"`: `direction` là "Version n: tiêu đề (round r)", `details` là nguyên văn ghi chú; session thành Approved. Phiên bản được duyệt có nhãn "Approved", timeline ghi "Approved in PIVOT".
+    - Cột `design_decisions.source`: `agent` (mặc định, bản ghi qua MCP) hoặc `owner` (người dùng bấm trong PIVOT). `get_design_session` hiện nguồn của mỗi lần duyệt, ghi chú của người dùng và danh sách vòng mockup.
+    - Từ chối hoặc xin sửa vẫn nói trong chat; agent lưu vòng mới.
   - Web: nút **Design sessions** trên thanh trên cùng; `/design` liệt kê session mới nhất trước; `/design/[id]` hiện timeline brief và quyết định (brief mới nhất mở sẵn).
   - **Trạng thái** (cập nhật 2026-11-02):
     - Hiển thị dạng **stepper** Exploring → Approved → Building → Done: bước đã qua có dấu ✓, bước hiện tại được làm nổi bật. Kèm một dòng giải thích trạng thái, ví dụ "Direction approved on Nov 2. Ready to build.".
@@ -394,7 +401,7 @@ Theo Part A và các quyết định #1–3, #13, #19, #30, #34, #35 của [PIVO
       - ở Done có "Back to building", ở Abandoned có "Restore". Restore về Approved nếu đã có bản ghi duyệt, nếu không thì về Exploring.
     - Bấm là stepper đổi ngay, có spinner nhỏ cho tới khi lưu xong; lưu lỗi thì quay về trạng thái cũ và báo lý do; lưu xong có toast với **Undo**.
     - Việc đổi trạng thái không được ghi vào timeline.
-  - API: `POST /api/design/briefs`, `GET /api/design/sessions`, `GET|PATCH /api/design/sessions/[id]`, `POST /api/design/sessions/[id]/decisions`. `PATCH` với `status: "approved"` trả **409** khi session chưa có bản ghi `approval` (cập nhật 2026-11-02): duyệt là lời của người dùng, được ghi bằng `record_design_decision`, không phải một trạng thái bấm tay.
+  - API: `POST /api/design/briefs`, `GET /api/design/sessions`, `GET|PATCH /api/design/sessions/[id]`, `POST /api/design/sessions/[id]/decisions`, `POST /api/design/sessions/[id]/mockups` (409 khi session không ở Exploring), `GET /api/design/mockups/[id]`, `POST /api/design/mockups/[id]/approve` (`{ note? }`, 409 khi session không ở Exploring) (bổ sung 2026-11-03). `PATCH` với `status: "approved"` trả **409** khi session chưa có bản ghi `approval` (cập nhật 2026-11-02): duyệt là lời của người dùng, được ghi bằng `record_design_decision`, không phải một trạng thái bấm tay.
 - **Gợi ý của agent** (bảng `resource_suggestions`): agent (Claude Code qua MCP `suggest_metadata`) gợi ý facet, collection, tiêu đề hoặc mô tả hình ảnh cho một reference. App không giữ API key của mô hình nào.
   - Gợi ý ở trạng thái **pending** cho tới khi người dùng chấp nhận hoặc từ chối; không bao giờ tự áp dụng hay ghi đè dữ liệu đã xác nhận. Tên facet được khớp với tên đã có (không phân biệt hoa thường) để không sinh từ đồng nghĩa; tên mới được đánh dấu "(new)". Gợi ý trùng hoặc facet reference đã có thì bỏ qua.
   - Chữ của gợi ý đang pending **tìm được** trong library và MCP; bị từ chối thì thôi.
@@ -402,7 +409,7 @@ Theo Part A và các quyết định #1–3, #13, #19, #30, #34, #35 của [PIVO
   - API: `GET|POST /api/resources/[id]/suggestions`, `GET /api/suggestions`, `POST /api/suggestions/decide`.
 - **Ghi chú của agent** (`annotate_reference`, `POST /api/resources/[id]/annotate`): thêm một dòng `agent (YYYY-MM-DD): …` vào cuối ghi chú; phần người dùng viết không bị sửa.
 - `GET /api/capabilities` có thêm `design` và `suggestions` (API version 4).
-- **Chưa làm:** "Workflow Config" (#1) chưa được định nghĩa ở đâu nên chưa xây; lưu ảnh mockup vào session; lệnh slash cho skill.
+- **Chưa làm:** "Workflow Config" (#1) chưa được định nghĩa ở đâu nên chưa xây; lệnh slash cho skill; ghim bình luận lên mockup, so sánh hai vòng, xin sửa ngay trên trang session; duyệt từ máy khác (API chỉ trả lời localhost).
 
 ## 16. Ghi chú trên ảnh, trạng thái tương tác, trích asset (bổ sung 2026-11-01)
 

@@ -1,11 +1,13 @@
 import crypto from "node:crypto";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { getDb } from "./db/client";
-import { designDecisions, designSessions, designSnapshots } from "./db/schema";
+import { designDecisions, designMockups, designSessions, designSnapshots } from "./db/schema";
 import type {
   DesignDecisionDTO,
   DesignDecisionKind,
+  DesignDecisionSource,
   DesignMilestone,
+  DesignMockupDTO,
   DesignSessionDetailDTO,
   DesignSessionDTO,
   DesignSnapshotDTO,
@@ -48,8 +50,23 @@ function decisionDTO(r: typeof designDecisions.$inferSelect): DesignDecisionDTO 
     summary: r.summary,
     direction: r.direction,
     details: r.details,
+    source: r.source as DesignDecisionSource,
     createdAt: r.createdAt.toISOString(),
   };
+}
+
+const MOCKUP_COLUMNS = {
+  id: designMockups.id,
+  sessionId: designMockups.sessionId,
+  snapshotId: designMockups.snapshotId,
+  round: designMockups.round,
+  n: designMockups.n,
+  title: designMockups.title,
+  createdAt: designMockups.createdAt,
+};
+
+function mockupDTO(r: Omit<DesignMockupDTO, "createdAt"> & { createdAt: Date }): DesignMockupDTO {
+  return { ...r, createdAt: r.createdAt.toISOString() };
 }
 
 async function touch(sessionId: string, set: Partial<typeof designSessions.$inferInsert> = {}) {
@@ -131,6 +148,8 @@ export async function recordDesignDecision(input: {
   summary: string;
   direction?: string;
   details?: string;
+  /** "owner" when the user approved in PIVOT; the agent's records are "agent". */
+  source?: DesignDecisionSource;
 }) {
   const db = await getDb();
   const [s] = await db.select().from(designSessions).where(eq(designSessions.id, input.sessionId)).limit(1);
@@ -143,6 +162,7 @@ export async function recordDesignDecision(input: {
       summary: input.summary,
       direction: input.direction ?? "",
       details: input.details ?? "",
+      source: input.source ?? "agent",
     })
     .returning({ id: designDecisions.id });
   await touch(input.sessionId, input.kind === "approval" ? { status: "approved" } : {});
@@ -195,5 +215,121 @@ export async function getDesignSession(id: string): Promise<DesignSessionDetailD
     .from(designDecisions)
     .where(eq(designDecisions.sessionId, id))
     .orderBy(asc(designDecisions.createdAt));
-  return { ...sessionDTO(s), snapshots: snapshots.map(snapshotDTO), decisions: decisions.map(decisionDTO) };
+  const mockups = await db
+    .select(MOCKUP_COLUMNS)
+    .from(designMockups)
+    .where(eq(designMockups.sessionId, id))
+    .orderBy(asc(designMockups.round), asc(designMockups.n));
+  return {
+    ...sessionDTO(s),
+    snapshots: snapshots.map(snapshotDTO),
+    decisions: decisions.map(decisionDTO),
+    mockups: mockups.map(mockupDTO),
+  };
+}
+
+export const MOCKUP_LIMITS = { versions: 9, bytes: 2 * 1024 * 1024, title: 120 } as const;
+
+/**
+ * Saves a round of mockup versions while the session is exploring (a new direction or a major change). Each call is a
+ * new round; the same titles and HTML again return the round already saved. The HTML must be self-contained: it is
+ * served sandboxed, without scripts or other hosts.
+ */
+export async function saveDesignMockups(input: {
+  sessionId: string;
+  snapshotId?: string;
+  mockups: { title: string; html: string }[];
+}): Promise<{ round: number; ids: string[]; created: boolean }> {
+  const { mockups } = input;
+  if (mockups.length < 1 || mockups.length > MOCKUP_LIMITS.versions)
+    throw new DesignError(`Save 1 to ${MOCKUP_LIMITS.versions} mockup versions at a time.`);
+  for (const [i, m] of mockups.entries()) {
+    if (!m.title.trim() || m.title.length > MOCKUP_LIMITS.title)
+      throw new DesignError(`Version ${i + 1} needs a title of 1 to ${MOCKUP_LIMITS.title} characters.`);
+    if (Buffer.byteLength(m.html) > MOCKUP_LIMITS.bytes)
+      throw new DesignError(`Version ${i + 1} is over ${MOCKUP_LIMITS.bytes / 1024 / 1024} MB.`);
+  }
+  const db = await getDb();
+  const [s] = await db.select().from(designSessions).where(eq(designSessions.id, input.sessionId)).limit(1);
+  if (!s) throw new DesignError(`No design session ${input.sessionId}.`);
+  const digest = crypto
+    .createHash("sha256")
+    .update(JSON.stringify(mockups.map((m) => [m.title.trim(), m.html])))
+    .digest("hex");
+  const same = await db
+    .select({ id: designMockups.id, round: designMockups.round })
+    .from(designMockups)
+    .where(and(eq(designMockups.sessionId, input.sessionId), eq(designMockups.roundDigest, digest)))
+    .orderBy(asc(designMockups.n));
+  if (same.length) return { round: same[0].round, ids: same.map((r) => r.id), created: false };
+  if (s.status !== "exploring")
+    throw new DesignError(
+      `The session is ${s.status}. Mockups are saved while a direction is explored: a new brief, or a major change after approval.`,
+    );
+  const [last] = await db
+    .select({ round: designMockups.round })
+    .from(designMockups)
+    .where(eq(designMockups.sessionId, input.sessionId))
+    .orderBy(desc(designMockups.round))
+    .limit(1);
+  const round = (last?.round ?? 0) + 1;
+  let snapshotId = input.snapshotId ?? null;
+  if (!snapshotId) {
+    const [snap] = await db
+      .select({ id: designSnapshots.id })
+      .from(designSnapshots)
+      .where(eq(designSnapshots.sessionId, input.sessionId))
+      .orderBy(desc(designSnapshots.createdAt))
+      .limit(1);
+    snapshotId = snap?.id ?? null;
+  }
+  const rows = await db
+    .insert(designMockups)
+    .values(
+      mockups.map((m, i) => ({
+        sessionId: input.sessionId,
+        snapshotId,
+        round,
+        n: i + 1,
+        title: m.title.trim(),
+        html: m.html,
+        roundDigest: digest,
+      })),
+    )
+    .returning({ id: designMockups.id });
+  await touch(input.sessionId);
+  return { round, ids: rows.map((r) => r.id), created: true };
+}
+
+/** One mockup's HTML, for the sandboxed route. */
+export async function getDesignMockupHtml(id: string) {
+  const db = await getDb();
+  const [m] = await db
+    .select({ html: designMockups.html, title: designMockups.title })
+    .from(designMockups)
+    .where(eq(designMockups.id, id))
+    .limit(1);
+  return m ?? null;
+}
+
+/**
+ * The owner approves one mockup version in PIVOT: an `approval` decision with source "owner", the version as the
+ * direction and the owner's note, verbatim, as the details. Only while the session is exploring.
+ */
+export async function approveDesignMockup(mockupId: string, note = "") {
+  const db = await getDb();
+  const [m] = await db.select(MOCKUP_COLUMNS).from(designMockups).where(eq(designMockups.id, mockupId)).limit(1);
+  if (!m) return null;
+  const [s] = await db.select().from(designSessions).where(eq(designSessions.id, m.sessionId)).limit(1);
+  if (s?.status !== "exploring")
+    throw new DesignError(`The session is ${s?.status}. A version can be approved while the session is exploring.`);
+  const id = await recordDesignDecision({
+    sessionId: m.sessionId,
+    kind: "approval",
+    summary: `The owner approved version ${m.n}, "${m.title}" (round ${m.round}), in PIVOT.`,
+    direction: `Version ${m.n}: ${m.title} (round ${m.round})`,
+    details: note.trim(),
+    source: "owner",
+  });
+  return { id, sessionId: m.sessionId };
 }

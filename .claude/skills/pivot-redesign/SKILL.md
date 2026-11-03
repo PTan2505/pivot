@@ -92,7 +92,7 @@ These steps differ from `pivot-design`:
 - **Brief:** `pivot-design`'s shape, titled "Redesign brief", plus:
   - **Keep** and **Impact** lines (the consumers from §1);
   - a reference row for the current state ("this project, screenshot/code"), and one for the consistency target.
-- **Mockups:** as `pivot-design` §7 says (about 5 directions for a Major change, and the viewer), each showing before and after side by side.
+- **Mockups:** as `pivot-design` §7 says (about 5 directions for a Major change, saved to the session in PIVOT with `save_design_mockups`, the local viewer only as its fallback), each showing before and after side by side.
 - **Session and approval** follow §4, which replaces `pivot-design` §6 and §8 where they differ.
 
 ## 3. Path B: direct
@@ -107,7 +107,7 @@ No library search unless the user asks for references (then switch to path A).
    - which tokens and components it uses;
    - its impact.
 3. **Save** it as `initial` (§4 step 1).
-4. **Mockup:** for a Major change, follow `pivot-design` §7: about 5 directions when the look is open, or one when the direction is already settled. Build the viewer either way.
+4. **Mockup:** for a Major change, follow `pivot-design` §7: about 5 directions when the look is open, or one when the direction is already settled. Save them to the session in PIVOT either way and start the watcher, so the user can approve there.
 5. **Ask and wait** as §4 says.
 6. **Build** (§5) and **check** (§6).
 
@@ -134,6 +134,7 @@ Small fixes get no session and no approval step. Minor and Major changes follow 
 
      Record each approval once: when resuming, `get_design_session` shows whether it is already recorded. It also shows the status, which you read as `pivot-design` §6 says: abandoned means stop and ask, and exploring after an approval means approval is needed again.
 
+   - **An approval made in PIVOT** (the user pressed **Approve this version**; the watcher wakes you, or `get_design_session` shows an approval with `source: "owner"`): it is the explicit yes, already recorded with the user's note word for word. Don't record it again. Follow `pivot-design` §8: build the chosen version with what the note asks, unless the note asks for a major change, then ask. A Major change approved this way still needs the before/after comparison in QA.
    - **Minor with explicit up-front authorisation:** record the same `approval`, quoting the user's exact words in `details` as the evidence, then build. This never applies to Major.
    - **Changes requested:** revise the proposal (and its mockup, for Major), show it again, and build only once the **revised** direction gets a yes.
    - **A rejection:** don't build. Ask what they want instead; a new direction goes back to step 2, in the same session.
