@@ -2,6 +2,37 @@
 
 Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 
+## Design Orchestrator v2
+
+Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is authorised separately.
+
+| Phase | Name                                   | Status         |
+| ----- | -------------------------------------- | -------------- |
+| P0a   | Skill contract tests and trace checker | In review      |
+| P0b   | Specialist spike, then routing         | Not authorised |
+
+### P0a — Skill contract tests and trace checker (2026-11-03)
+
+- Status: In review (PR into `dev`).
+- Existing functionality reused: the static skill checker kept in a session scratchpad during the skill work (109 checks); the transcript layout Claude Code writes (`<session>.jsonl` plus `<session>/subagents/agent-*.jsonl`, with `tool_use` and `tool_result` blocks, `isSidechain` and `agentId`), confirmed by reading key names and counts only.
+- Files changed:
+  - new `packages/mcp-tools/test/skills.test.ts`: the static checks as L1 contract tests;
+  - new `scripts/trace-check.mjs`: the read-only trace checker and its CLI;
+  - new `packages/mcp-tools/test/trace-check.test.mjs`;
+  - new synthetic fixtures under `packages/mcp-tools/test/fixtures/traces/`;
+  - new `docs/design-orchestrator-v2.md`: the approved plan, with the owner's requirements for later phases;
+  - this log.
+- Checks run and results: see the PR.
+- Manual verification: the trace checker ran on a real session transcript of this repo. It printed names, counts and categories only.
+  - It exposed two leaks, both fixed and covered by tests: command text reached the report as a "skill name", and any word after `/skills/` was named.
+  - The CLI now names only skills installed in `~/.claude/skills`, `~/.agents/skills` or the target's `.claude/skills`.
+- Remaining issues:
+  - Shell writes are detected heuristically and are counted separately.
+  - An owner approval made in PIVOT isn't visible in a trace. The gate is judged by a successful `set_design_status building`, which the server allows only for an approved session.
+  - The checks prove what the files say, not what an agent does.
+  - The symlink checks against `~/.claude/skills` were left out because they depend on the machine.
+- Next step: P0b, once authorised. It starts with the specialist capability spike.
+
 ## Status
 
 | Phase | Name                               | Status                       |
