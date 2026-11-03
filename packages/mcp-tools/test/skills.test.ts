@@ -223,9 +223,12 @@ describe("shortlist, mockups and slop check", () => {
     expect(d).toContain("/r/<id>");
     expect(d).toContain("This is a choice, not an approval");
   });
-  it("mockup count: about 5 distinct, or the user's number", () => {
-    expect(d).toContain("about **5 distinct** directions");
+  it("mockup count: 2–3 by default, 4–5 only when breadth helps, or the user's number", () => {
+    expect(d).toContain("**2–3 genuinely different** directions by default");
+    expect(d).toContain("Go to 4–5 only when the task gains from broader exploration");
     expect(d).toContain("the number the user asked for");
+    for (const t of [d, r, read("README.md")]) expect(t).not.toMatch(/about \*?\*?5 (distinct )?directions/i);
+    expect(r).toContain("2–3 directions for a Major change");
   });
   it("an approval is the user's message or their own click in PIVOT", () => {
     expect(d).toContain("the approval is then the user's message");
@@ -243,7 +246,8 @@ describe("shortlist, mockups and slop check", () => {
     expect(r).toContain("start the watcher");
   });
   it("SPEC describes the shortlist, mockups, viewer and slop check", () => {
-    for (const s of ["shortlist", "khoảng 5 mockup", "make-viewer.mjs", "Kiểm tra AI slop"]) expect(spec).toContain(s);
+    for (const s of ["shortlist", "**2–3 mockup**", "make-viewer.mjs", "Kiểm tra AI slop"])
+      expect(spec.includes(s), s).toBe(true);
   });
 });
 
@@ -292,5 +296,62 @@ describe("components", () => {
   it("SPEC and PIVOT_DECISIONS document component mockups", () => {
     expect(spec).toContain("Component API");
     expect(read("docs/PIVOT_DECISIONS.md")).toContain("Mockup count and components");
+  });
+});
+
+describe("specialists run for real, labelled by what happened", () => {
+  const agent = read(".claude/agents/pivot-specialist.md");
+  const agentTools = (/^tools: (.+)$/m.exec(agent)?.[1] ?? "").split(",").map((t) => t.trim());
+  const labels = ["`ran (skill)`", "`ran (script)`", "`consulted`", "`unavailable`"];
+
+  it("the pivot-specialist agent can read and load skills but never write or run commands", () => {
+    expect(agentTools).toEqual(expect.arrayContaining(["Read", "Skill", "mcp__pivot__get_design_session"]));
+    for (const banned of ["Edit", "Write", "NotebookEdit", "Bash", "Agent"]) expect(agentTools).not.toContain(banned);
+    expect(agentTools.filter((t) => t.startsWith("mcp__pivot__") && !/__(get|list|search)_/.test(t))).toEqual([]);
+  });
+  it("the agent returns the contract, and is linked by pnpm skill:install without overwriting", () => {
+    for (const f of ["Specialist:", "Why:", "Input:", "Recommendations:", "Constraints:", "Conflicts:", "Verify:"])
+      expect(agent).toContain(f);
+    expect(agent).toContain("Outcome (orchestrator): pending");
+    const install = read("scripts/install-skill.mjs");
+    expect(install).toContain(".claude/agents/pivot-specialist.md");
+    expect(install).toContain("isn't a link to this repo");
+  });
+  it("specialists.md defines the three ways, the four labels and the contract", () => {
+    for (const l of labels) expect(specialists).toContain(l);
+    expect(specialists).toContain('subagent_type: "pivot-specialist"');
+    for (const f of ["Recommendations:", "Conflicts:", "Verify:", "Outcome (orchestrator): pending"])
+      expect(specialists).toContain(f);
+    expect(specialists).toContain("`adopted`, `partially adopted`, `rejected` or `not applicable`");
+  });
+  it("no main-thread Skill call, no fallback to another agent or Claude process", () => {
+    for (const t of [d, r, specialists]) expect(t).toContain("Skill tool");
+    expect(specialists).toContain("**Never invoke a specialist with the Skill tool in your own session.**");
+    expect(d).toContain("**Never invoke a specialist with the Skill tool yourself.**");
+    expect(specialists).toContain("never use a general-purpose or other agent in its place");
+    expect(specialists).toContain("never start another Claude process (`claude -p`)");
+    expect(r).toContain("never use another agent or Claude process");
+  });
+  it("skills report run labels, keep a ledger and don't re-run ledgered specialists", () => {
+    expect(d).toContain("`ran (skill)` only when `pivot-specialist` loaded the specialist");
+    expect(r).toContain("`ran (skill)` only through `pivot-specialist`");
+    expect(specialists).toContain("`<name> — <phase> — <run label> — <outcome>:");
+    expect(d).toContain("already in the latest brief's Specialists ledger isn't run again");
+    expect(specialists).toContain("**One run per specialist per phase.**");
+  });
+  it("conflicts: domain owner wins, accessibility and reduced motion win, approved decisions aren't overridden", () => {
+    expect(specialists).toContain("the one that owns the domain wins");
+    expect(specialists).toContain("Accessibility and reduced motion always win");
+    expect(specialists).toContain("It is never applied silently.");
+  });
+  it("motion specialists are routed, and non-invocable skills are only consulted", () => {
+    for (const n of ["`animate`", "`find-animation-opportunities`", "`review-animations`", "`gsap-*`"])
+      expect(specialists).toContain(n);
+    expect(specialists).toContain("Skills that can't be model-invoked");
+  });
+  it("SPEC and PIVOT_DECISIONS describe the mechanism", () => {
+    for (const x of ["pivot-specialist", "`ran (skill)`", "`consulted`", "claude -p"])
+      expect(spec.includes(x), x).toBe(true);
+    expect(read("docs/PIVOT_DECISIONS.md")).toContain("**Orchestrator v2, P0b**");
   });
 });

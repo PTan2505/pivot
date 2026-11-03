@@ -73,7 +73,7 @@ Two pieces let Claude Code design and redesign screens in any project from **you
    ```bash
    pnpm skill:install
    ```
-   This **symlinks** `~/.claude/skills/pivot-design` and `pivot-redesign` to `.claude/skills/` in this repo. There is one copy, kept in git: edit the skills here and every project picks up the change. Claude Code reads whatever branch this checkout is on, so keep it on `dev` for day-to-day use.
+   This **symlinks** `~/.claude/skills/pivot-design` and `pivot-redesign` to `.claude/skills/` in this repo, and `~/.claude/agents/pivot-specialist.md` (the read-only agent that runs specialist skills for them) to `.claude/agents/`. It never replaces a file that's already there. There is one copy, kept in git: edit the skills here and every project picks up the change. Claude Code reads whatever branch this checkout is on, so keep it on `dev` for day-to-day use. Agents are loaded when a Claude Code session starts, so open a new session after the first install.
 
 ### Tools (the `pivot` MCP server)
 
@@ -135,7 +135,7 @@ Claude usually picks the right skill. Start with "Use pivot-design…" or "Use p
    - about 12 images at most;
    - a **shortlist** of 6–10 candidates, each linked to its PIVOT page. Claude stops so you can pick, for example "2, 5, 7: the table of 5". Say "you choose" to skip the pause.
 5. **Brief, then save.** A short brief with a Take / Leave table per reference, shown to you, then saved as `initial` (this opens the design session). The brief always comes before the mockups.
-6. **Mockups.** About 5 distinct directions (or the number you ask for) as static HTML, never in your project. For a redesign, before and after are side by side. A component is shown in the page it lives in, with its states (hover, focus, disabled, loading, error, long content), and the brief adds its props and variants; a small one often gets 2–3 versions that really differ instead of five.
+6. **Mockups.** 2–3 genuinely different directions by default, 4–5 when broad exploration helps (or the number you ask for), as static HTML, never in your project. For a redesign, before and after are side by side. A component is shown in the page it lives in, with its states (hover, focus, disabled, loading, error, long content), and the brief adds its props and variants; a small one often gets 2–3 versions that really differ instead of five.
    - Claude saves them to the design session (`save_design_mockups`) and gives you its link. The **Mockups** section shows them as tabs at desktop, tablet or phone width; keys 1–9 switch versions. Each new round is kept, older ones a click away.
    - If PIVOT can't store them, Claude makes a local **viewer** instead (`index.html` in the scratch folder) whose **Choose this version** copies a reply for the chat.
 7. **Approval.** Claude stops and waits, in either place:
@@ -189,7 +189,7 @@ pnpm typecheck
 pnpm lint
 pnpm db:generate   # after editing packages/core/src/db/schema.ts
 pnpm mcp:build     # build the MCP server into apps/mcp/dist
-pnpm skill:install # link the design skills into ~/.claude/skills
+pnpm skill:install # link the design skills and the pivot-specialist agent into ~/.claude
 ```
 
 ## Security

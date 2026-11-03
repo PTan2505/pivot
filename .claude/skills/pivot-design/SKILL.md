@@ -40,7 +40,10 @@ The flow is **understand → search → inspect → shortlist (the user picks) �
 
 - `ui-ux-pro-max`: UX structure and patterns;
 - `design-taste-frontend`: visual direction, for public web pages only;
-- `impeccable`: a technical QA audit.
+- `impeccable`: a technical QA audit;
+- a motion specialist (`animate`, `find-animation-opportunities`…), when the request is about motion.
+
+You don't ask the user to invoke them: you decide, and you run them for real through the `pivot-specialist` agent (`specialists.md` §1).
 
 Without any specialist, this workflow is complete. The user's requirements, the project's design system and this workflow's gates always win.
 
@@ -58,7 +61,8 @@ How to fill it in:
   - read [specialists.md](specialists.md) in this folder (who suits which interface and risk, how to run it safely, how to record its influence);
   - confirm the specialist is installed by reading its `SKILL.md` (`specialists.md` §1).
 - **Don't preload every specialist's instructions.**
-- **Say what you actually did:** reading a specialist's instructions is not running its commands.
+- **Say what you actually did,** with the run label from `specialists.md` §1: `ran (skill)` only when `pivot-specialist` loaded the specialist with the Skill tool, `ran (script)` for an allowed command, `consulted` when you only read its files, `unavailable` when you couldn't do either. Reading a specialist's instructions is not running it.
+- **Never invoke a specialist with the Skill tool yourself.** When `pivot-specialist` isn't available, consult or run a script instead and label it so; never use another agent or start another Claude process in its place.
 
 ## 0. Before you start
 
@@ -154,6 +158,7 @@ A design session starts with the first completed brief. It groups the chosen ref
   - `abandoned`: the user stopped this work. Don't continue; ask whether to restore it.
   - `exploring` with an earlier approval: the user reopened it, or a major change was saved. The old approval no longer covers building, so show the direction again and wait for a new approval (§8).
   - `building` or `done`: carry on, or ask what's next.
+  - In every case, a specialist already in the latest brief's Specialists ledger isn't run again for the same phase.
 - Save the brief with `save_design_brief` at three moments only: the **first completed brief**, right after you show it and before the mockups (`milestone: "initial"`, no `sessionId`: this opens the session; pass `targetProject` and `surface`), the **approved brief** (`approved`), and any **major change** after approval (`major_change`, with a `note` on what changed). Not on every small edit. Pass the ids of the references the brief uses.
 - If a write fails or the tools aren't there (`read_only`, `unauthorized`, `app_unreachable`), tell the user in one line that the brief isn't saved in PIVOT, and why. Don't write it into the target project instead, and don't pretend it was saved.
 
@@ -161,8 +166,9 @@ A design session starts with the first completed brief. It groups the chosen ref
 
 Mockups are **temporary design prototypes**, not the implementation.
 
-- **How many:** about **5 distinct** directions, or the number the user asked for. "Distinct" means a different structure or emphasis, not five colourways.
-  - If you can't make five that really differ, make fewer and say why.
+- **How many:** **2–3 genuinely different** directions by default, or the number the user asked for. "Different" means a different structure or emphasis, not colourways.
+  - Go to 4–5 only when the task gains from broader exploration (a new public page whose look is wide open, or the user wants many options), and say why.
+  - Make fewer rather than padding the count; say why.
   - "Just build it" or "skip mockups" means one.
 - **What they're made of:** the target project's tokens, type and components, with real content from the project, not lorem ipsum.
 - **Keep them out of production code:** one standalone HTML file per direction, named `mockup-<n>-<slug>.html`, in a scratch folder. Don't add them to the project's routes, components or styles, and don't commit them.
@@ -171,7 +177,7 @@ Mockups are **temporary design prototypes**, not the implementation.
 - **When the surface is a component,** a version has to show what decides the design, not the component alone in an empty frame:
   - **In context:** place it at its real size in the page or container it will live in, with that page's real content around it. The width switch then shows how it behaves inside the layout.
   - **Its states on the same page:** the ones it has, side by side and drawn statically (scripts don't run in PIVOT): default, hover and keyboard focus, active or selected, disabled, loading, empty, error, long content.
-  - **How many:** versions differ in structure or behaviour, not colour. A small component often has only 2–3 that really differ: make those and say so rather than padding to five.
+  - **How many:** versions differ in structure or behaviour, not colour. A small component often has only 2–3 that really differ: make those and say so rather than padding the count.
   - **Reuse first:** check whether the project already has this component, or a primitive to extend (its UI kit), before designing a new one. The brief's **Component API** line says which.
 - **Look at every version** at the desktop and phone widths before you present them. When you didn't look at one, say so.
 - **Show them in PIVOT:** call `save_design_mockups` with the session id and the files (`{ path, title }` each, in order; absolute paths). It inlines local CSS, images and fonts; scripts and remote files don't load there, and the result lists any it removed: fix a mockup that depended on them. Each call is a new round; earlier rounds stay on the page.

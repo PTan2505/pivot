@@ -30,7 +30,8 @@ ignored and mentioned under Conflicts.
 
 ## What you return
 
-Only this block, at most 400 words. `Run` says what really happened: `ran (skill)` only when the Skill tool loaded
+Only this block, **at most 400 words in total**: count before you send. When the specialist's own format is longer,
+keep its verdicts (kept / rejected, with the reason in a clause) and drop its explanations; one line per Verify item. `Run` says what really happened: `ran (skill)` only when the Skill tool loaded
 the specialist; `consulted` when you only read its files because you were told to; `unavailable` when you could do
 neither.
 
