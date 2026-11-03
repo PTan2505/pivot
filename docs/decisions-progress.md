@@ -6,14 +6,36 @@ Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 
 Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is authorised separately.
 
-| Phase | Name                                   | Status         |
-| ----- | -------------------------------------- | -------------- |
-| P0a   | Skill contract tests and trace checker | In review      |
-| P0b   | Specialist spike, then routing         | Not authorised |
+| Phase | Name                                   | Status        |
+| ----- | -------------------------------------- | ------------- |
+| P0a   | Skill contract tests and trace checker | Done (PR #61) |
+| P0b   | Specialist spike, then routing         | Spike blocked |
+
+### P0b — Specialist capability spike (2026-11-03, blocked)
+
+- Status: Spike not run. The restricted agent couldn't be started in the session that created it. No routing was changed.
+- What was set up:
+  - `.claude/agents/pivot-specialist.md`, the restricted advisory agent: `Read, Grep, Glob, Skill` and three PIVOT read tools, with no Edit, Write or Bash;
+  - `scripts/install-skill.mjs`, which now also links it into `~/.claude/agents`, never replacing an existing file (tested in temporary folders);
+  - a scratch PIVOT on port 4321 (PGlite in a scratch folder, no Neon or R2), so the user-level `pivot` MCP server reads scratch data;
+  - one seeded session;
+  - a throwaway target repo with a baseline commit;
+  - a temporary canary skill holding a per-run nonce;
+  - a handoff folder.
+- Finding: Claude Code loads agent definitions when a session starts.
+  - `Agent(subagent_type: "pivot-specialist")` answered "Agent type not found", whether the definition was project-level or linked at user level.
+  - Skills, by contrast, are picked up mid-session: the canary skill was listed at once.
+- Fallbacks not used, as the owner required: no `claude -p` subprocess and no unrestricted general-purpose agent.
+- Clean-up:
+  - the scratch server was stopped;
+  - the canary skill was removed;
+  - the throwaway target's `git status` was clean;
+  - the user-level link `~/.claude/agents/pivot-specialist.md` was kept for the next session.
+- Next step: run C1–C7 from a new Claude Code session opened in this repo on `feat/orchestrator-routing`, with the same setup (§4.2 of the plan).
 
 ### P0a — Skill contract tests and trace checker (2026-11-03)
 
-- Status: In review (PR into `dev`).
+- Status: Done. Merged in PR #61 (`d044d21`).
 - Existing functionality reused: the static skill checker kept in a session scratchpad during the skill work (109 checks); the transcript layout Claude Code writes (`<session>.jsonl` plus `<session>/subagents/agent-*.jsonl`, with `tool_use` and `tool_result` blocks, `isSidechain` and `agentId`), confirmed by reading key names and counts only.
 - Files changed:
   - new `packages/mcp-tools/test/skills.test.ts`: the static checks as L1 contract tests;
