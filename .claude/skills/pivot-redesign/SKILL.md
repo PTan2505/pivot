@@ -13,9 +13,10 @@ A redesign changes how something **that already exists** looks and is laid out. 
 
 - `ui-ux-pro-max`: UX structure and patterns;
 - `design-taste-frontend`: visual direction, for public web pages only;
-- `impeccable`: a technical QA audit.
+- `impeccable`: a technical QA audit;
+- a motion specialist, when the change is about motion.
 
-A specialist never replaces this skill's approval, design-system or impact rules.
+You decide and run them yourself, through the `pivot-specialist` agent (`specialists.md` §1); the user doesn't invoke them. A specialist never replaces this skill's approval, design-system or impact rules.
 
 **Specialist checkpoint.** Right after the classification line (§0), write one line, and write it again at §6 for any QA audit beyond the slop check:
 
@@ -35,7 +36,7 @@ Before naming a specialist:
 - read `specialists.md` in the `pivot-design` skill folder (`../pivot-design/specialists.md` from this skill's folder);
 - confirm the specialist is installed by reading its `SKILL.md` (`specialists.md` §1).
 
-Don't preload every specialist's instructions. Reading a specialist's instructions is not running its commands, so say which one you did.
+Don't preload every specialist's instructions. Report each with its run label (`specialists.md` §1): `ran (skill)` only through `pivot-specialist`, `ran (script)`, `consulted` or `unavailable`. Reading a specialist's instructions is not running it. Never invoke a specialist with the Skill tool yourself, and never use another agent or Claude process when `pivot-specialist` isn't available.
 
 ## 0. Classify the request
 
@@ -92,7 +93,7 @@ These steps differ from `pivot-design`:
 - **Brief:** `pivot-design`'s shape, titled "Redesign brief", plus:
   - **Keep** and **Impact** lines (the consumers from §1);
   - a reference row for the current state ("this project, screenshot/code"), and one for the consistency target.
-- **Mockups:** as `pivot-design` §7 says (about 5 directions for a Major change, saved to the session in PIVOT with `save_design_mockups`, the local viewer only as its fallback), each showing before and after side by side. For a component, follow §7's component rules too: in its page, with its states.
+- **Mockups:** as `pivot-design` §7 says (2–3 directions for a Major change, 4–5 only when broad exploration helps, saved to the session in PIVOT with `save_design_mockups`, the local viewer only as its fallback), each showing before and after side by side. For a component, follow §7's component rules too: in its page, with its states.
 - **Session and approval** follow §4, which replaces `pivot-design` §6 and §8 where they differ.
 
 ## 3. Path B: direct
@@ -107,7 +108,7 @@ No library search unless the user asks for references (then switch to path A).
    - which tokens and components it uses;
    - its impact.
 3. **Save** it as `initial` (§4 step 1).
-4. **Mockup:** for a Major change, follow `pivot-design` §7: about 5 directions when the look is open, or one when the direction is already settled. Save them to the session in PIVOT either way and start the watcher, so the user can approve there.
+4. **Mockup:** for a Major change, follow `pivot-design` §7: 2–3 directions when the look is open (4–5 only when broad exploration helps), or one when the direction is already settled. Save them to the session in PIVOT either way and start the watcher, so the user can approve there.
 5. **Ask and wait** as §4 says.
 6. **Build** (§5) and **check** (§6).
 

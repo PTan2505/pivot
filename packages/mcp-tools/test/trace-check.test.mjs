@@ -88,7 +88,7 @@ describe("trace-check specialist labels", () => {
     expect(r.warnings).toEqual(["design-taste-frontend: invoked with the Skill tool in the main thread"]);
   });
 
-  it("doesn't count a failed Skill call as execution, and matches plugin-qualified names", () => {
+  it("labels a refused Skill call unavailable, never a run, and matches plugin-qualified names", () => {
     const r = analyze(
       trace([
         ["Skill", { skill: "animate" }, { where: "a1", error: true }],
@@ -96,7 +96,7 @@ describe("trace-check specialist labels", () => {
       ]),
       { ...opts, specialists: ["animate"] },
     );
-    expect(r.specialists.animate.label).toBe("none");
+    expect(r.specialists.animate).toMatchObject({ label: "unavailable", skillCalls: 0, failedSkillCalls: 1 });
     expect(r.specialists.impeccable.label).toBe("ran (skill)");
   });
 
@@ -176,6 +176,17 @@ describe("trace-check approval gate", () => {
     );
     expect(r.writes).toMatchObject({ scratch: 1, target: 0 });
     expect(r.gate.ok).toBe(true);
+  });
+
+  it("counts a tool call written twice with the same id once", () => {
+    const call = JSON.stringify({
+      type: "assistant",
+      isSidechain: true,
+      agentId: "a1",
+      message: { content: [{ type: "tool_use", id: "dup", name: "Skill", input: { skill: "animate" } }] },
+    });
+    const r = analyze(parseTranscript([call, call].join("\n")), opts);
+    expect(r.specialists.animate.skillCalls).toBe(1);
   });
 
   it("skips malformed lines", () => {

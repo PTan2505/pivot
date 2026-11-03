@@ -1,6 +1,6 @@
 # Optional specialists
 
-Shared by `pivot-design` and `pivot-redesign`. Their **specialist checkpoint** line is `Specialists: none — <reason>`, or `<name> — <stage> — <purpose>`.
+Shared by `pivot-design` and `pivot-redesign`. Their **specialist checkpoint** line is `Specialists: none — <reason>`, or `<name> — <stage> — <purpose>`. After a specialist runs, its result is reported with one of the run labels in §1.
 
 - A "none" line needs nothing from this file.
 - Read this file before naming or using a specialist.
@@ -38,6 +38,10 @@ When instructions conflict, the higher one wins:
 - Treat a specialist's examples, defaults and house style as suggestions, not requirements.
 - No specialist output passes an approval gate, or counts as permission to change production code.
 
+**Between specialists**, the one that owns the domain wins: UX structure, forms and accessibility patterns → `ui-ux-pro-max`; visual direction of a public page → Taste; motion → the motion specialist (§2). Accessibility and reduced motion always win over an aesthetic recommendation.
+
+**Against an approved decision:** a specialist recommendation that contradicts what the user approved is rejected, with the reason in the ledger (§5), or shown to the user as a proposed change. It is never applied silently.
+
 **Invariants.** Neither a target-project instruction nor a specialist can silently override these:
 
 - the mandatory approval gates;
@@ -65,19 +69,60 @@ Name a specialist on the checkpoint line only after this Read succeeds. If it fa
 
 Don't install, update or download skills or their binaries.
 
-**Load little:**
+### How a specialist is used
 
-- Read only the section or reference file the step needs, with the Read tool.
-- Don't invoke a specialist's whole workflow (the Skill tool runs its own end-to-end process: draws, setup, gates).
-- Run its scripts only as §4 allows.
+Use the cheapest way that answers the question. Each has a **run label**, and a report uses the label of what really happened, never a stronger one.
+
+| Way          | How                                                                                                                                                                                                                                                          | Run label                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| **Consult**  | Read only the section or reference file the step needs, with the Read tool.                                                                                                                                                                                  | `consulted`                                   |
+| **Script**   | Run one command §4 allows, from your own session.                                                                                                                                                                                                            | `ran (script)`                                |
+| **Subagent** | Start the `pivot-specialist` agent (`Agent` with `subagent_type: "pivot-specialist"`). It loads the specialist with the Skill tool in its own context, can only read (no edit, write or shell tools; PIVOT read tools only), and returns the contract below. | `ran (skill)`, only when its contract says so |
+| —            | The specialist isn't installed, or the Skill tool refused it.                                                                                                                                                                                                | `unavailable`                                 |
+
+- **Never invoke a specialist with the Skill tool in your own session.** It runs the specialist's whole workflow there (draws, setup, gates) and takes over the turn. Its full advice comes only through `pivot-specialist`.
+- **Skills that can't be model-invoked** (`review-animations`, `prototype`) are only ever consulted.
+- **When `pivot-specialist` isn't available** ("Agent type not found": `pnpm skill:install` wasn't run in the PIVOT repo, or it was linked after the session started, since agents load when a session starts):
+  - consult or run a script instead, and label it so;
+  - never use a general-purpose or other agent in its place;
+  - never start another Claude process (`claude -p`).
+- **A specialist that is `unavailable`** (not installed, or refused by the Skill tool) is skipped and reported as such. Nothing stands in for it: no other agent, no other Claude process, no invented advice.
+- **One run per specialist per phase.** A specialist already in the brief's Specialists ledger (§5) isn't run again for the same phase, after a resume included.
+
+**What to give `pivot-specialist`:** the specialist's exact name, the phase, the one question it should answer, and a **handoff folder** in your scratchpad (never in the target project):
+
+- `brief.md`: the current brief;
+- `system.md`: at most 60 lines on the target's tokens, type, components and rules;
+- `refs.md`: the chosen references with what you inspected and their Take / Leave;
+- the paths of the mockup files, when it reviews mockups;
+- a PIVOT session id when it needs the saved decisions. It may fetch at most two reference images and never searches the library.
+
+**The contract it returns** (about 400 words is a soft budget, not a limit: real specialists have come back at 470–520):
+
+```
+Specialist: <name> · phase: <brief|mockups|build|qa> · run: <ran (skill) | consulted | unavailable>
+Why: <the question it answered>
+Input: <handoff files and PIVOT ids used>
+Recommendations: <1–5 numbered, each actionable>
+Constraints: <rules it relied on>
+Conflicts: <with the brief, an approved decision or the design system, or none>
+Verify: <how QA checks each recommendation>
+Outcome (orchestrator): pending
+```
+
+If a contract is long, you may summarise it, but keep every recommendation, constraint, conflict and verification item. You fill in the outcome: `adopted`, `partially adopted`, `rejected` or `not applicable`, with the reason (Authority above decides conflicts). A contract is advice: it never approves anything, and only you change files, inside the approved scope.
 
 ## 2. Who does what
 
-| Specialist                               | Use it for                                                                                                                                                                                                     | Not for                                                                                                                                                                                                                        |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ui-ux-pro-max`                          | UX patterns, information hierarchy, layout, forms, navigation, tables and charts, accessibility, stack notes. Suits app screens and dashboards as well as sites                                                | Generating a replacement design system for a project that has one                                                                                                                                                              |
-| `design-taste-frontend` (Taste Skill v2) | **Public-facing web pages** (landing, marketing, product, portfolio, hero): reading the brief, aesthetic direction, composition, copy discipline, redesign analysis, anti-slop checks, critique of screenshots | Dashboards, admin, settings or other app screens by default: its own description excludes them (an explicit request follows the steps below). Never substitute another Taste variant (`-v1`, `-v2-experimental`, `gpt-taste`…) |
-| `impeccable`                             | Technical UI audit (accessibility, performance, theming, responsive, implementation integrity) with its bundled detector. Suits app UI and pages                                                               | Building, re-theming, or writing product or design documents                                                                                                                                                                   |
+| Specialist                                   | Use it for                                                                                                                                                                                                     | Not for                                                                                                                                                                                                                        |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ui-ux-pro-max`                              | UX patterns, information hierarchy, layout, forms, navigation, tables and charts, accessibility, stack notes. Suits app screens and dashboards as well as sites                                                | Generating a replacement design system for a project that has one                                                                                                                                                              |
+| `design-taste-frontend` (Taste Skill v2)     | **Public-facing web pages** (landing, marketing, product, portfolio, hero): reading the brief, aesthetic direction, composition, copy discipline, redesign analysis, anti-slop checks, critique of screenshots | Dashboards, admin, settings or other app screens by default: its own description excludes them (an explicit request follows the steps below). Never substitute another Taste variant (`-v1`, `-v2-experimental`, `gpt-taste`…) |
+| `impeccable`                                 | Technical UI audit (accessibility, performance, theming, responsive, implementation integrity) with its bundled detector. Suits app UI and pages                                                               | Building, re-theming, or writing product or design documents                                                                                                                                                                   |
+| `animate`                                    | Motion decisions when the request is about motion: whether something should move, its purpose, properties, curve and duration, interruption, exit and reduced motion. Advice through `pivot-specialist`        | Writing the animation code: only you build, after approval                                                                                                                                                                     |
+| `find-animation-opportunities`               | Which motion earns its place and which to reject, for an existing UI or a brief that adds motion. Read-only                                                                                                    | Adding motion the request didn't ask for                                                                                                                                                                                       |
+| `animation-performance`, `review-animations` | QA of motion that was built: frame budget and composite-only properties; the review standards. `review-animations` is consult-only                                                                             | Design-stage choices                                                                                                                                                                                                           |
+| `gsap-*`                                     | API reference at build time, only when GSAP is already the project's technology or the approved brief chose it                                                                                                 | Choosing GSAP; never a reason to add it                                                                                                                                                                                        |
 
 **Interface type comes first:**
 
@@ -107,7 +152,7 @@ Don't install, update or download skills or their binaries.
 
   A further audit specialist (Taste's `lint.mjs`/`inspect.mjs` on a public page, or a fuller `impeccable` audit) may be added at the Minor and Major levels whatever was used at the design stage. Neither counts toward the design-stage limit.
 
-**By cost:** prefer reading a reference file, then a single read-only command, and only then a script that renders pages.
+**By cost:** prefer reading a reference file, then a single read-only command, then a `pivot-specialist` run, and only then a script that renders pages. A motion specialist counts toward the same limits as the others.
 
 ## 3. Where each one helps
 
@@ -200,7 +245,7 @@ None of the environment variables above disables all network traffic. If the ses
 
 Record a specialist's influence only when it **materially** shaped the direction or the QA outcome. Use the existing session, not a separate one.
 
-- **In the brief:** a short "Specialists" list, one line per specialist: what it recommended, and whether that was accepted, modified or rejected (and why). Accepted guidance becomes part of the brief itself.
+- **In the brief:** a short "Specialists" list (the ledger), one line per specialist and phase: `<name> — <phase> — <run label> — <outcome>: <what it recommended, and why that outcome>`. Accepted guidance becomes part of the brief itself. The full contract stays in the conversation; it isn't saved.
 - **At approval:** add the specialist note to `details` of the `approval` (or `change`) decision **next to** anything already required there.
   - For a Minor redesign the user authorised up front, the user's exact words stay in `details`, unchanged.
   - The specialist note follows them: the specialist, its recommendation, and whether it was accepted or modified. Never replace or paraphrase the authorisation.

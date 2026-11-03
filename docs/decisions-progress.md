@@ -6,14 +6,50 @@ Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 
 Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is authorised separately.
 
-| Phase | Name                                   | Status         |
-| ----- | -------------------------------------- | -------------- |
-| P0a   | Skill contract tests and trace checker | In review      |
-| P0b   | Specialist spike, then routing         | Not authorised |
+| Phase | Name                                   | Status        |
+| ----- | -------------------------------------- | ------------- |
+| P0a   | Skill contract tests and trace checker | Done (PR #61) |
+| P0b   | Specialist spike, then routing         | Spike blocked |
+
+### P0b — Specialist capability spike, then routing (2026-11-03)
+
+- Status: In review (PR into `dev`).
+- First attempt, in the session that created the agent: blocked. Claude Code loads agent definitions only when a session starts, and returned "Agent type not found". No fallback was used. The spike ran in a new session.
+- Spike setup:
+  - a scratch PIVOT on port 4321, using PGlite in a scratch folder with no Neon or R2. The user-level `pivot` MCP server listed only the seeded scratch session, so it was reading scratch data;
+  - a throwaway target repo with a baseline commit;
+  - a temporary `pivot-canary` skill holding a per-run nonce that appeared in no prompt;
+  - a handoff folder;
+  - 6 runs of `pivot-specialist`.
+- How runs were judged: from the real subagent transcripts, with `scripts/trace-check.mjs` plus `git status` of the target. Output was limited to tool names, labels and booleans.
+
+| #   | Capability                                                   | Run(s)                                                      | Result                                                                                                                                                                                                                                                           |
+| --- | ------------------------------------------------------------ | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1  | Subagent invokes an installed specialist with the Skill tool | R1, R2, R2b, R5                                             | Pass: a `Skill` call for `pivot-canary` or `find-animation-opportunities` in each subagent trace                                                                                                                                                                 |
+| C2  | The specialist's real instructions are applied               | R1, R5 (nonce), R2, R2b (gates, kept and rejected verdicts) | Pass: the nonce reached the output only through the Skill call (no Read of the skill file)                                                                                                                                                                       |
+| C3  | PIVOT MCP read access                                        | R1                                                          | Pass: `get_design_session` on the scratch session; its marker appeared in the contract                                                                                                                                                                           |
+| C4  | Advisory only, target untouched                              | all; R5 was asked to edit and write                         | Pass: no Edit/Write/Bash tool exists in the agent; zero writes in traces; target `git status` clean; R5 declined and said why                                                                                                                                    |
+| C5  | Structured result                                            | all                                                         | **Partial.** Structure: PASS (all 8 contract fields every time). Length: EXCEEDED. The canary runs stayed within 400 words (179–272); the real specialist didn't (519, then 470). The 400 words are now a soft budget, not a hard failure. Not re-run for length |
+| C6  | Trace tells execution from reading                           | R1 vs R3                                                    | Pass: `ran (skill)` vs `consulted` (Read only), matching each run's own label                                                                                                                                                                                    |
+| C7  | Unavailable specialist                                       | R4                                                          | Pass: the Skill call was refused ("Unknown skill"); label `unavailable`; no advice invented, no substitute chosen                                                                                                                                                |
+
+- Trace-checker fixes found by the real traces:
+  - a refused Skill call is now labelled `unavailable` (it was `none`);
+  - a tool call written twice with the same id is counted once.
+- Routing implemented against the proven mechanism:
+  - `specialists.md`: the three ways (consult, script, `pivot-specialist`), the four run labels, the contract and the handoff folder; no Skill call in the main thread and no fallback to other agents or `claude -p`; one run per specialist per phase; domain-owner and accessibility/reduced-motion conflict rules; motion specialists in the routing table; the ledger line format.
+  - `pivot-design` and `pivot-redesign` follow it, and the mockup count is 2–3 by default (4–5 when breadth helps).
+  - SPEC, README, `apps/mcp/README.md`, `CLAUDE.md` and PIVOT_DECISIONS are updated.
+- Clean-up: the scratch server was stopped and the canary skill removed; the throwaway target stayed clean.
+- Remaining issues:
+  - C5 is partial: the 400-word budget is soft, and the orchestrator may summarise a long contract but keeps every recommendation, constraint, conflict and verification item;
+  - run labels in the contract are self-reported, though they matched the traces in every spike run (L3 behavioural tests check them against traces);
+  - a new or changed agent definition needs a new session.
+- Next step: P0c, once authorised.
 
 ### P0a — Skill contract tests and trace checker (2026-11-03)
 
-- Status: In review (PR into `dev`).
+- Status: Done. Merged in PR #61 (`d044d21`).
 - Existing functionality reused: the static skill checker kept in a session scratchpad during the skill work (109 checks); the transcript layout Claude Code writes (`<session>.jsonl` plus `<session>/subagents/agent-*.jsonl`, with `tool_use` and `tool_result` blocks, `isSidechain` and `agentId`), confirmed by reading key names and counts only.
 - Files changed:
   - new `packages/mcp-tools/test/skills.test.ts`: the static checks as L1 contract tests;

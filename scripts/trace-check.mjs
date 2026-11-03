@@ -31,6 +31,8 @@ const SHELL_READ = /^\s*(cat|head|tail|sed\s+-n|less|grep|rg|ls|find|wc|file|sta
  */
 export function parseTranscript(text, file = "main") {
   const events = [];
+  // A streamed message can be written more than once with the same tool_use id; count each call once.
+  const seen = new Set();
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i++) {
     if (!lines[i].trim()) continue;
@@ -46,6 +48,8 @@ export function parseTranscript(text, file = "main") {
     const where = line.isSidechain || line.agentId ? "subagent" : "main";
     for (const block of content) {
       if (block?.type === "tool_use") {
+        if (seen.has(block.id)) continue;
+        seen.add(block.id);
         events.push({
           kind: "call",
           id: block.id,
@@ -118,6 +122,7 @@ export function analyze(events, { target, scratch, specialists = [], knownSkills
         scriptRuns: 0,
         reads: 0,
         failedReads: 0,
+        failedSkillCalls: 0,
         where: new Set(),
       });
     return spec.get(name);
@@ -142,8 +147,14 @@ export function analyze(events, { target, scratch, specialists = [], knownSkills
     }
     if (name === "Skill") {
       const s = skillName(c.input.skill);
-      if (OWN_SKILLS.has(s) || failed(c)) return;
+      if (OWN_SKILLS.has(s)) return;
       const e = entry(s);
+      // A refused Skill call (unknown or not installed) counts as unavailable, never as a run.
+      if (failed(c)) {
+        e.failedSkillCalls++;
+        e.where.add(c.where);
+        return;
+      }
       e.skillCalls++;
       e.where.add(c.where);
       if (c.where === "main") e.mainThreadSkillCalls++;
@@ -197,7 +208,7 @@ export function analyze(events, { target, scratch, specialists = [], knownSkills
         ? "ran (script)"
         : e.reads > 0
           ? "consulted"
-          : e.failedReads > 0
+          : e.failedReads > 0 || e.failedSkillCalls > 0
             ? "unavailable"
             : "none";
   const specialistsOut = Object.fromEntries(

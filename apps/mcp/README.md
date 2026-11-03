@@ -80,7 +80,7 @@ Two skills in `.claude/skills` tell Claude how to use these tools:
   1. understand;
   2. `list_facets`, search and look;
   3. a brief with attributed references, saved as `initial`;
-  4. about 5 mockups, saved to the session in PIVOT;
+  4. 2–3 mockups by default, saved to the session in PIVOT;
   5. your explicit approval, in the chat or with **Approve this version** in PIVOT (Claude waits on it in the background and builds right away);
   6. build;
   7. QA.
