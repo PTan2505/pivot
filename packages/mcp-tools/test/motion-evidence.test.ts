@@ -197,11 +197,18 @@ describe("get_reference_images keyframes and states", () => {
     expect(text(r)).toContain("Keyframe 2 of 3 at scroll 900px");
     expect(text(r)).toContain("Call again with fromSlice 2");
     expect(text(r)).toContain("Timing and easing weren't measured");
+    // Claude Code shows only structuredContent when present: it must carry the labels, paging and limits too
     expect(r.structuredContent).toEqual({
       which: "keyframes",
       classification: "observed",
       total: 3,
       returned: ["k0", "k1"],
+      images: [
+        { assetId: "k0", label: "Keyframe 1 of 3 at scroll 0px (observed, PIVOT scroll recording)" },
+        { assetId: "k1", label: "Keyframe 2 of 3 at scroll 900px (observed, PIVOT scroll recording)" },
+      ],
+      next: 2,
+      limitations: motionEvidenceOf(detail([cover, video, ...keyframes, ...states])).limitations,
     });
     const rest = await runTool(tool("get_reference_images"), source, { id: ID, which: "keyframes", fromSlice: 2 });
     expect(rest.structuredContent).toMatchObject({ returned: ["k2"] });
@@ -213,7 +220,19 @@ describe("get_reference_images keyframes and states", () => {
     const r = await runTool(tool("get_reference_images"), source, { id: ID, which: "states" });
     expect(r.content.filter((c) => c.type === "image")).toHaveLength(2);
     expect(text(r)).toContain("State 1 of 2: Pricing toggle: Yearly (a still: how the state looks, not how it moves)");
-    expect(r.structuredContent).toMatchObject({ which: "states", classification: null });
+    expect(r.structuredContent).toMatchObject({
+      which: "states",
+      classification: null,
+      images: [
+        {
+          assetId: "s1",
+          label: "State 1 of 2: Pricing toggle: Yearly (a still: how the state looks, not how it moves)",
+        },
+        { assetId: "s2", label: "State 2 of 2 (a still: how the state looks, not how it moves)" },
+      ],
+      next: null,
+      limitations: [],
+    });
   });
 
   it("says plainly when there is no evidence", async () => {
@@ -252,5 +271,108 @@ describe("get_reference_images keyframes and states", () => {
     const r = await runTool(tool("get_reference_images"), source, { id: ID });
     expect(fetched).toEqual(["cover"]);
     expect(r.structuredContent).toBeUndefined();
+  });
+});
+
+describe("motion evidence edge cases", () => {
+  it("video but no keyframes: observed, nothing to look at, and keyframes never claim 'no recording'", async () => {
+    const m = motionEvidenceOf(detail([cover, video]));
+    expect(m).toMatchObject({ classification: "observed", scope: "scroll", keyframes: [], keyframesTotal: 0 });
+    const { source } = sourceFor([cover, video]);
+    const ref = await runTool(tool("get_reference"), source, { id: ID });
+    expect(text(ref)).toContain("No keyframes kept: nothing from the recording can be looked at");
+    const k = await runTool(tool("get_reference_images"), source, { id: ID, which: "keyframes" });
+    expect(k.structuredContent).toMatchObject({ error: { code: "no_images" } });
+    expect(text(k)).toContain("PIVOT holds a scroll recording, but its video can't be viewed");
+    expect(text(k)).not.toContain("unknown");
+  });
+
+  it("keyframes but no video: observed, provenance from the keyframes, no invented duration or URL", () => {
+    const m = motionEvidenceOf(detail([cover, ...keyframes]));
+    expect(m.recording).toBeNull();
+    expect(m.source).toEqual({
+      kind: "pivot-scroll-recording",
+      method: null,
+      capturedAt: null, // keyframes carry no date and there is no video to date it
+      viewport: { width: 1440, height: 900 }, // the keyframe's own viewport
+      finalUrl: null,
+    });
+    expect(m.keyframesTotal).toBe(3);
+  });
+
+  it("invalid or missing capture metadata is dropped, never shown as a fact", () => {
+    const m = motionEvidenceOf(
+      detail([
+        asset("v", "motion-video", {
+          capturedAt: "yesterday",
+          durationMs: -5,
+          viewport: { width: -1440, height: 900 },
+          finalUrl: 42,
+          method: "",
+        }),
+        asset("k", "motion-keyframe", { scrollY: -300, keyframe: "one" }),
+        asset("k2", "motion-keyframe", null as unknown as Record<string, unknown>),
+      ]),
+    );
+    expect(m.source).toEqual({
+      kind: "pivot-scroll-recording",
+      method: null,
+      capturedAt: "2026-11-01T09:00:00.000Z", // the asset's own date, not "yesterday"
+      viewport: null,
+      finalUrl: null,
+    });
+    expect(m.recording).toEqual({ assetId: "v", durationMs: null });
+    expect(m.keyframes.map((k) => [k.assetId, k.scrollY, k.index])).toEqual([
+      ["k", null, null],
+      ["k2", null, null],
+    ]);
+  });
+
+  it("duplicate or missing scrollY: a stable order, positions only where known", async () => {
+    const frames = [
+      asset("late", "motion-keyframe", { keyframe: 4 }),
+      asset("b", "motion-keyframe", { keyframe: 3, scrollY: 900 }),
+      asset("a", "motion-keyframe", { keyframe: 2, scrollY: 900 }),
+      asset("top", "motion-keyframe", { keyframe: 1, scrollY: 0 }),
+    ];
+    expect(motionEvidenceOf(detail([video, ...frames])).keyframes.map((k) => k.assetId)).toEqual([
+      "top",
+      "a",
+      "b",
+      "late",
+    ]);
+    const { source } = sourceFor([video, ...frames]);
+    const r = await runTool(tool("get_reference_images"), source, { id: ID, which: "keyframes", maxImages: 4 });
+    const t = text(r);
+    expect(t).toContain("Keyframe 2 of 4 at scroll 900px");
+    expect(t).toContain("Keyframe 3 of 4 at scroll 900px");
+    expect(t).toContain("Keyframe 4 of 4 (observed, PIVOT scroll recording)");
+    const ref = await runTool(tool("get_reference"), source, { id: ID });
+    expect(text(ref)).toContain("4 keyframes at scroll 0–900px");
+  });
+
+  it("more than 12 keyframes or states: capped lists, true totals, the rest reachable by paging", async () => {
+    const many = Array.from({ length: 15 }, (_, i) => asset(`k${i}`, "motion-keyframe", { scrollY: i * 100 }));
+    const stills = Array.from({ length: 14 }, (_, i) => asset(`s${i}`, "state", { state: `State ${i}` }));
+    const m = motionEvidenceOf(detail([video, ...many, ...stills]));
+    expect([m.keyframes.length, m.keyframesTotal, m.states.length, m.statesTotal]).toEqual([12, 15, 12, 14]);
+    const { source } = sourceFor([video, ...many, ...stills]);
+    const ref = await runTool(tool("get_reference"), source, { id: ID });
+    expect(text(ref)).toContain("15 keyframes (the first 12 at scroll 0–1100px)");
+    const last = await runTool(tool("get_reference_images"), source, {
+      id: ID,
+      which: "keyframes",
+      fromSlice: 12,
+      maxImages: 4,
+    });
+    expect(last.structuredContent).toMatchObject({ total: 15, returned: ["k12", "k13", "k14"] });
+    const lastStates = await runTool(tool("get_reference_images"), source, { id: ID, which: "states", fromSlice: 12 });
+    expect(lastStates.structuredContent).toMatchObject({ total: 14, returned: ["s12", "s13"] });
+  });
+
+  it("an old reference without motion assets is unknown and claims nothing about scrolling", () => {
+    const m = motionEvidenceOf(detail([cover, asset("full", "screenshot-full")]));
+    expect(m).toMatchObject({ classification: "unknown", scope: null, source: null, recording: null });
+    expect(m.limitations.join(" ")).not.toMatch(/scroll/i);
   });
 });

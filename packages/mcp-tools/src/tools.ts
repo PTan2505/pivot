@@ -192,7 +192,14 @@ function screenshotsOf(r: ResourceDetailDTO) {
 /** At most this many keyframes and interaction states are listed, to keep a reply small. */
 const MOTION_LIST_MAX = 12;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const nonNegative = (v: unknown) => (num(v) !== null && (v as number) >= 0 ? (v as number) : null);
+const positive = (v: unknown) => (num(v) !== null && (v as number) > 0 ? (v as number) : null);
 const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 200) : null);
+/** An ISO date as saved by capture; anything else (a number, "yesterday") is no date. */
+const isoDate = (v: unknown) => {
+  const s = str(v);
+  return s && /^\d{4}-\d{2}-\d{2}/.test(s) && !Number.isNaN(Date.parse(s)) ? s : null;
+};
 
 export interface MotionEvidence {
   /** observed: PIVOT recorded the page moving; unknown: it holds no recording. PIVOT never labels motion inferred. */
@@ -223,10 +230,14 @@ export interface MotionEvidence {
   limitations: string[];
 }
 
+/** An asset's saved meta, or nothing when it isn't an object (a JSON null from an old import). */
+const metaOf = (a: AssetDTO): Record<string, unknown> =>
+  a.meta && typeof a.meta === "object" && !Array.isArray(a.meta) ? a.meta : {};
+
 const viewportOf = (v: unknown) => {
   const o = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
-  const width = num(o.width);
-  const height = num(o.height);
+  const width = positive(o.width);
+  const height = positive(o.height);
   return width && height ? { width, height } : null;
 };
 
@@ -242,15 +253,15 @@ export function motionEvidenceOf(r: ResourceDetailDTO, limit = MOTION_LIST_MAX):
     .filter((a) => a.role === "motion-keyframe" && (a.kind === "image" || a.kind === "svg"))
     .map((a) => ({
       assetId: a.id,
-      index: num(a.meta.keyframe),
-      scrollY: num(a.meta.scrollY),
+      index: num(metaOf(a).keyframe),
+      scrollY: nonNegative(metaOf(a).scrollY),
       width: a.width,
       height: a.height,
     }))
     .sort((a, b) => (a.scrollY ?? Infinity) - (b.scrollY ?? Infinity) || (a.index ?? 0) - (b.index ?? 0));
   const allStates = live
     .filter((a) => a.role === "state" && (a.kind === "image" || a.kind === "svg"))
-    .map((a) => ({ assetId: a.id, state: str(a.meta.state) }));
+    .map((a) => ({ assetId: a.id, state: str(metaOf(a).state) }));
   const states = allStates.slice(0, limit);
   const stateNote = allStates.length ? ["Interaction-state stills show how a state looks, not how it animates."] : [];
 
@@ -270,18 +281,18 @@ export function motionEvidenceOf(r: ResourceDetailDTO, limit = MOTION_LIST_MAX):
       ],
     };
   }
-  const meta = (video ?? live.find((a) => a.role === "motion-keyframe"))!.meta;
+  const meta = metaOf((video ?? live.find((a) => a.role === "motion-keyframe"))!);
   return {
     classification: "observed",
     scope: "scroll",
     source: {
       kind: "pivot-scroll-recording",
       method: str(meta.method),
-      capturedAt: str(meta.capturedAt) ?? video?.createdAt ?? null,
+      capturedAt: isoDate(meta.capturedAt) ?? video?.createdAt ?? null,
       viewport: viewportOf(meta.viewport),
       finalUrl: str(meta.finalUrl),
     },
-    recording: video ? { assetId: video.id, durationMs: num(video.meta.durationMs) } : null,
+    recording: video ? { assetId: video.id, durationMs: positive(metaOf(video).durationMs) } : null,
     keyframes: allKeyframes.slice(0, limit),
     keyframesTotal: allKeyframes.length,
     states,
@@ -305,12 +316,17 @@ function motionLine(m: MotionEvidence) {
   const vp = m.source?.viewport ? `, ${m.source.viewport.width}×${m.source.viewport.height}` : "";
   const length = m.recording?.durationMs ? `, ${(m.recording.durationMs / 1000).toFixed(1)} s` : "";
   const ys = m.keyframes.map((k) => k.scrollY).filter((y): y is number => y !== null);
-  const range = ys.length ? ` at scroll ${Math.min(...ys)}–${Math.max(...ys)}px` : "";
+  const span = ys.length ? `at scroll ${Math.min(...ys)}–${Math.max(...ys)}px` : "";
+  const range = !span
+    ? ""
+    : m.keyframes.length < m.keyframesTotal
+      ? ` (the first ${m.keyframes.length} ${span})`
+      : ` ${span}`;
   return [
     `Motion: observed while scrolling (PIVOT scroll recording${length}${vp}${m.source?.capturedAt ? `, ${m.source.capturedAt.slice(0, 10)}` : ""}).`,
     m.keyframesTotal
       ? `${m.keyframesTotal} keyframe${m.keyframesTotal === 1 ? "" : "s"}${range}: get_reference_images which=keyframes.`
-      : "No keyframes kept.",
+      : "No keyframes kept: nothing from the recording can be looked at, so cite it as a video that exists, not viewed.",
     m.statesTotal ? `${m.statesTotal} interaction-state still${m.statesTotal === 1 ? "" : "s"}: which=states.` : "",
     `Limits: ${m.limitations.join(" ")}`,
   ]
@@ -503,9 +519,11 @@ const getReferenceImages: PivotTool<typeof imagesInput> = {
       if (!total) {
         throw new ToolError(
           "no_images",
-          which === "keyframes"
-            ? `${r.title} has no motion keyframes: its motion evidence is unknown (PIVOT holds no scroll recording).`
-            : `${r.title} has no interaction-state stills.`,
+          which === "states"
+            ? `${r.title} has no interaction-state stills.`
+            : motion.classification === "observed"
+              ? `${r.title} has no motion keyframes: PIVOT holds a scroll recording, but its video can't be viewed through these tools and no keyframes were kept, so there is nothing to look at.`
+              : `${r.title} has no motion keyframes: its motion evidence is unknown (PIVOT holds no scroll recording).`,
         );
       }
       // the full lists (not just the listed first 12), in the same order
@@ -531,13 +549,18 @@ const getReferenceImages: PivotTool<typeof imagesInput> = {
       else if (fromSlice + picked.length < total)
         notes.push(`Call again with fromSlice ${fromSlice + picked.length} for the rest.`);
       if (which === "keyframes") notes.push(`Limits: ${motion.limitations.join(" ")}`);
+      const next = picked.length && fromSlice + picked.length < total ? fromSlice + picked.length : null;
       return {
         content: [text(`${r.title}${r.sourceUrl ? ` (${hostOf(r.sourceUrl)})` : ""}\n${notes.join("\n")}`), ...parts],
+        // Some clients (Claude Code) show only this when it is present, so it carries the labels and limits too.
         structuredContent: {
           which,
           classification: which === "keyframes" ? motion.classification : null,
           total,
           returned: picked.map((x) => x.assetId),
+          images: picked.map((x) => ({ assetId: x.assetId, label: x.label })),
+          next,
+          limitations: which === "keyframes" ? motion.limitations : [],
         },
       };
     }

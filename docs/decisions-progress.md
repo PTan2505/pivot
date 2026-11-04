@@ -36,6 +36,20 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
   - malformed metadata is dropped, never guessed;
   - lists are capped at 12, with totals.
 - Checks run and results: see the PR.
+- Acceptance review (2026-11-04):
+  - Setup: a scratch PIVOT on 127.0.0.1:4321 (no Neon, no R2). Linear (`https://linear.app/`) was captured through the normal capture API with `motion: true`, giving 1 `motion-video` (12.6 s) and 8 `motion-keyframe` stills (scroll 0–9060). Vercel was captured without motion. A throwaway target repo held a synthetic `DESIGN.md`.
+  - Edge cases found and fixed:
+    - with a video but no keyframes, `which: "keyframes"` said "unknown, no recording", contradicting `observed`;
+    - invalid dates, a negative duration, viewport or `scrollY`, and a non-object `meta` (which crashed) are now dropped;
+    - the Motion line now says when its scroll range covers only the first 12 keyframes;
+    - **Claude Code shows only `structuredContent` when a reply has it**, so the keyframe labels and limits in the text never reached the agent. `structuredContent` now carries `images` (with labels), `next` and `limitations`.
+  - L3: two runs of a fresh general-purpose subagent, given a neutral user prompt with the `pivot-design` skill and the real MCP, stopping after the brief, judged from their transcripts by `trace-check`.
+    - Run 1 used the pre-fix build; run 2 used the fixed build and received the labels.
+    - Both runs called `get_reference`, read `motionEvidence` (observed, 12.6 s, 8 keyframes), and called `get_reference_images` with `which: "keyframes"` (keyframes 1–4).
+    - Both labelled each claim observed or inferred, cited the reference and the keyframes, and left hover, click and focus "not exercised" and timing and easing "inferred".
+    - Images used: 7 and 8 of about 12.
+    - Neither run wrote anything to the target.
+    - The brief save was refused in both runs: the MCP reads the real `~/.pivot/api-token`, which the scratch instance doesn't share. The brief text was checked from the transcripts instead.
 - Remaining issues:
   - Recordings only cover scrolling; hover, click and focus motion have no captured evidence. Interaction-state stills are static.
   - The video itself can't be viewed through MCP.
