@@ -500,6 +500,8 @@ describe("motion QA traces to the approved brief and never passes on missing evi
   it("motion QA never drives PIVOT, blocks writes and other hosts, and its evidence can be re-checked", () => {
     expect(flat).toContain("never PIVOT's own app");
     expect(flat).toContain("redirects, WebSockets and workers included");
+    expect(flat).toContain("The browser can reach only the preview's exact origin");
+    expect(flat).toContain("only the command line grants them: a field in the plan never does.");
     expect(flat).toContain("`--allow-writes` lifts that, only with the user's permission");
     expect(flat).toContain("which must be a new, empty folder");
     expect(flat).toContain("It proves the files match the report, not that the report is genuine.");
@@ -507,7 +509,9 @@ describe("motion QA traces to the approved brief and never passes on missing evi
   });
   it("emulation, the OS setting and devices stay apart; remote requests need permission", () => {
     expect(flat).toContain("Reduced motion checked by the script is **browser emulation**");
-    expect(flat).toContain("`--allow-remote`, which needs the user's permission");
+    expect(flat).toContain(
+      "`--allow-remote` adds public hosts (never this machine or a private network); each needs the user's permission",
+    );
   });
   it("pivot-design §10 and pivot-redesign use it; SPEC and PIVOT_DECISIONS describe it", () => {
     expect(d).toContain("`scripts/motion-qa.mjs` against the build");

@@ -227,9 +227,13 @@ intended, what was observed running, what is inferred or unverified, and what de
      empty folder, with a run id, their sha256, the browser, the preview's identity and the brief's.
      `node <skill>/scripts/motion-qa.mjs --verify <out>/report.json` re-checks the files later: missing, changed or
      stray ones are named. It proves the files match the report, not that the report is genuine.
-   - Previews must be local (a loopback URL, a file or a mockup folder), never PIVOT's own app. Other hosts are cut
-     off in the browser's network stack (redirects, WebSockets and workers included) unless `--allow-remote`, which
-     needs the user's permission, as `specialists.md` §4 says for pages that load remote resources.
+   - Previews must be local (a loopback URL, a file or a mockup folder), never PIVOT's own app. The browser can reach
+     only the preview's exact origin (its own WebSocket, such as a dev server's reload channel, included): not another
+     port or another name for this machine, and not other hosts, redirects, WebSockets and workers included. Every
+     connection goes through a gate the script runs. `--allow-origin <origin>` adds another local origin the preview
+     needs (an API on another port), and `--allow-remote` adds public hosts (never this machine or a private network);
+     each needs the user's permission, as `specialists.md` §4 says for pages that load remote resources, and only
+     the command line grants them: a field in the plan never does.
    - Requests that could change data (anything but GET, HEAD and OPTIONS) are blocked, so a click can't delete or
      submit anything; the report lists them. `--allow-writes` lifts that, only with the user's permission and against
      data that may change.

@@ -61,9 +61,20 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
   - **Evidence:** each run gets a new, empty `--out` and a run id. `--verify` re-checks the files (missing, changed or stray) and caught screenshots dropped from early-stopped observations, which now stay.
   - **Timing check** renamed "declared timing", and the report says it isn't measured on screen.
   - **L3:** the agent's plan, re-run with the hardened runner, gives the same results, so the L3 conclusions stand.
+- Final security check (2026-11-04):
+  - **Loopback isolation (defect):** the dead proxy let every loopback address go direct, and routing let any loopback port through. A Chromium probe showed an unrelated service on this machine receiving a GET, an alias (`localhost`), a redirect and a WebSocket.
+  - Fix: every connection now goes through a gate the script runs (an HTTP proxy, with `<-loopback>` so Chromium sends loopback through it too). It allows only:
+    - the preview's exact origin;
+    - origins given with `--allow-origin`;
+    - with `--allow-remote`, public hosts, resolved once and refused if any address is local or private.
+
+    The plan can't grant any of these.
+
+  - A regression test shows the unrelated service gets nothing (other port, `localhost`, `[::1]`, `0.0.0.0`, a redirect, a WebSocket), while the preview's own reload socket works.
 - Remaining issues:
   - Chromium only; reduced motion is emulation; the phone viewport is a narrow window, not touch.
-  - WebSockets to loopback (a dev server's reload) are allowed, and their messages aren't inspected. The browser's own DNS prefetching isn't covered by the block.
+  - WebSockets to the preview's own origin are allowed, and their messages aren't inspected. GET requests to the preview's own server reach it as a user's browser would.
+  - Whether Chromium makes DNS lookups of its own (prefetching) wasn't verified; the gate resolves names only with `--allow-remote`.
   - `--verify` proves the files match report.json, not that report.json is genuine (it isn't signed).
   - On-screen timing and smoothness aren't measured; screenshots are near the named moments, not exact.
   - Cleanup after leaving the view, keyboard order, fallbacks and fidelity to the approved preview are hand checks.

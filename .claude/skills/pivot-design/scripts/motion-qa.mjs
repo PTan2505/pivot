@@ -18,14 +18,18 @@
 // Writes report.json, report.md and screenshots (and videos with --video) to --out: a new, empty folder in the
 // scratchpad, never in the target project. `--verify report.json` re-checks the evidence files against their sha256.
 // Previews must be local: a loopback URL, a file, or a mockup folder shown through the pivot-design viewer (its sandbox
-// and policy); never PIVOT's own app. Other hosts are cut off in the browser's network stack (redirects, WebSockets
-// and workers included) unless --allow-remote, and requests that could change data (anything but GET, HEAD, OPTIONS)
-// are blocked unless --allow-writes. Both need the user's permission. The plan holds selectors and expectations only:
-// no shell command or page script comes from it.
+// and policy); never PIVOT's own app. Every connection goes through a local gate that lets the browser reach only the
+// preview's exact origin (redirects, WebSockets and workers included; not other ports or names of this machine), plus
+// local origins given with --allow-origin and public hosts with --allow-remote. Requests that could change data
+// (anything but GET, HEAD, OPTIONS) are blocked unless --allow-writes. Each flag needs the user's permission and comes
+// only from the command line: the plan holds selectors and expectations, no permission, shell command or page script.
 // Exit code: 0 Pass, 1 Fail, 2 Not Verified, 3 couldn't run (bad plan, no Playwright or Chromium, a used --out).
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
+import dns from "node:dns/promises";
 import fs from "node:fs";
+import http from "node:http";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -69,6 +73,160 @@ export function isPivotApp(url) {
 }
 /** Methods that can't change anything on a server; anything else is blocked unless writes are allowed. */
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+const bare = (host) =>
+  String(host)
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "");
+/** "host:port" as the gate compares it: lower case, IPv6 without brackets, the scheme's default port filled in. */
+export function originKey(url) {
+  const u = new URL(url);
+  return `${bare(u.hostname)}:${portOf(u)}`;
+}
+const V4_LOCAL = [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["100.64.0.0", 10],
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16],
+  ["172.16.0.0", 12],
+  ["192.168.0.0", 16],
+];
+const v4num = (ip) => ip.split(".").reduce((n, x) => n * 256 + Number(x), 0);
+/** True for this machine, private networks, link-local and unspecified addresses (IPv4, IPv6, IPv4-mapped IPv6). */
+export function isLocalAddress(ip) {
+  const a = bare(ip);
+  if (net.isIPv4(a))
+    return V4_LOCAL.some(
+      ([base, bits]) => Math.floor(v4num(a) / 2 ** (32 - bits)) === Math.floor(v4num(base) / 2 ** (32 - bits)),
+    );
+  if (!net.isIPv6(a)) return false;
+  const mapped = /^(?:0*:)*:?ffff:(.+)$/.exec(a)?.[1];
+  if (mapped) {
+    if (net.isIPv4(mapped)) return isLocalAddress(mapped);
+    const [hi, lo] = mapped.split(":").map((h) => parseInt(h, 16));
+    return isLocalAddress([hi >> 8, hi & 255, lo >> 8, lo & 255].join("."));
+  }
+  const first = parseInt(a.split(":")[0] || "0", 16);
+  return a === "::" || a === "::1" || (first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80;
+}
+
+/**
+ * Decides where the QA browser may connect. Allowed: the preview's exact origin and origins the user allowed
+ * (--allow-origin), never PIVOT. With --allow-remote, also public hosts: a name is resolved here and refused if any
+ * address is local, so a name can't alias this machine or the private network; the connection goes to the address
+ * that was checked. Everything else is refused, including other ports and other names of this machine.
+ */
+export function destinationPolicy({ allowed, allowRemote = false, lookup = (h) => dns.lookup(h, { all: true }) }) {
+  const keys = new Set([...allowed].map((k) => k.toLowerCase()));
+  return async (host, port) => {
+    const h = bare(host);
+    const key = `${h}:${port}`;
+    const label = `${net.isIPv6(h) ? `[${h}]` : h}:${port}`;
+    if (isPivotApp(`http://${label}/`)) return { ok: false, reason: `${label} (PIVOT)` };
+    if (keys.has(key)) return { ok: true, host: h };
+    if (!allowRemote) return { ok: false, reason: label };
+    let addresses;
+    try {
+      addresses = net.isIP(h) ? [{ address: h }] : await lookup(h);
+    } catch {
+      return { ok: false, reason: `${label} (doesn't resolve)` };
+    }
+    if (!addresses.length || addresses.some((a) => isLocalAddress(a.address)))
+      return { ok: false, reason: `${label} (a local or private address)` };
+    return { ok: true, host: addresses[0].address };
+  };
+}
+
+/**
+ * The only way out of the QA browser: an HTTP proxy on loopback that applies `decide` to every connection, plain
+ * requests, CONNECT tunnels (HTTPS, WebSockets) and upgrades alike, and refuses writes unless they are allowed. The
+ * browser is told to send even loopback through it, so redirects, WebSockets and workers can't go around it.
+ */
+export async function startGate({ decide, allowWrites = false, blocked, blockedWrites }) {
+  // Tunnels outlive their request, so closing the gate ends every socket it holds.
+  const sockets = new Set();
+  const hold = (sock) => {
+    sockets.add(sock);
+    sock.on("close", () => sockets.delete(sock));
+    return sock;
+  };
+  const server = http.createServer(async (req, res) => {
+    let u;
+    try {
+      u = new URL(req.url);
+    } catch {
+      res.writeHead(400).end();
+      return;
+    }
+    const port = Number(portOf(u));
+    const d = await decide(u.hostname, port);
+    if (!d.ok) {
+      blocked.add(d.reason);
+      res.writeHead(403).end();
+      return;
+    }
+    if (!allowWrites && !SAFE_METHODS.has(req.method)) {
+      blockedWrites.add(`${req.method} ${u.protocol}//${u.host}${u.pathname}`);
+      res.writeHead(403).end();
+      return;
+    }
+    const headers = { ...req.headers };
+    delete headers["proxy-connection"];
+    delete headers["proxy-authorization"];
+    const up = http.request({ host: d.host, port, method: req.method, path: u.pathname + u.search, headers }, (r) => {
+      res.writeHead(r.statusCode ?? 502, r.headers);
+      r.pipe(res);
+    });
+    up.on("error", () => (res.headersSent ? res.destroy() : res.writeHead(502).end()));
+    req.pipe(up);
+  });
+  const tunnel = async (target, socket, head, firstBytes) => {
+    const m = /^\[?([^\]]+?)\]?:(\d+)$/.exec(target);
+    const d = m ? await decide(m[1], Number(m[2])) : { ok: false, reason: String(target) };
+    if (!d.ok) {
+      blocked.add(d.reason);
+      socket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
+      return;
+    }
+    const up = hold(
+      net.connect(Number(m[2]), d.host, () => {
+        if (firstBytes) up.write(firstBytes);
+        else socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+        if (head?.length) up.write(head);
+        up.pipe(socket);
+        socket.pipe(up);
+      }),
+    );
+    up.on("error", () => socket.destroy());
+    socket.on("error", () => up.destroy());
+  };
+  server.on("connect", (req, socket, head) => tunnel(req.url, socket, head));
+  // A WebSocket sent as a plain proxied request (ws:// by absolute URL): same rule, then the request goes through.
+  server.on("upgrade", (req, socket, head) => {
+    let u;
+    try {
+      u = new URL(req.url);
+    } catch {
+      socket.destroy();
+      return;
+    }
+    const lines = [`${req.method} ${u.pathname}${u.search} HTTP/1.1`];
+    for (let i = 0; i < req.rawHeaders.length; i += 2)
+      if (!/^proxy-/i.test(req.rawHeaders[i])) lines.push(`${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}`);
+    tunnel(`${u.hostname}:${portOf(u)}`, socket, head, `${lines.join("\r\n")}\r\n\r\n`);
+  });
+  server.on("connection", hold);
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  return {
+    server: `http://127.0.0.1:${server.address().port}`,
+    close: () =>
+      new Promise((r) => {
+        server.close(() => r());
+        for (const sock of sockets) sock.destroy();
+      }),
+  };
+}
 
 const sha256 = (data) => crypto.createHash("sha256").update(data).digest("hex");
 const kebab = (p) => p.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
@@ -848,7 +1006,15 @@ async function observeOnce(page, scopeOf, item, ctx, label) {
 /** Runs every item at every viewport, with full and reduced motion, each twice (the second time is the Replay). */
 export async function runPlan(
   rawPlan,
-  { out, briefText = null, briefFile = null, video = false, allowRemote = false, allowWrites = false } = {},
+  {
+    out,
+    briefText = null,
+    briefFile = null,
+    video = false,
+    allowRemote = false,
+    allowWrites = false,
+    allowOrigins = [],
+  } = {},
 ) {
   const { plan, errors } = validatePlan(rawPlan);
   if (errors.length) throw new Error(`Plan errors:\n- ${errors.join("\n- ")}`);
@@ -905,14 +1071,31 @@ export async function runPlan(
     }
   }
 
-  // Other hosts are cut off in the network stack, not only by request routing, which misses redirects, WebSockets and
-  // workers: everything but loopback goes to a proxy that doesn't exist. WebRTC may only use that proxy (so no UDP).
-  const browser = await chromium.launch({
-    ...(allowRemote
-      ? {}
-      : { proxy: { server: "http://127.0.0.1:9", bypass: "127.0.0.1,localhost,[::1],*.localhost" } }),
-    args: allowRemote ? [] : ["--force-webrtc-ip-handling-policy=disable_non_proxied_udp"],
+  // Every connection, loopback included, goes through the gate: request routing alone misses redirects, WebSockets and
+  // workers. The preview's own origin is allowed, plus what the user allowed on the command line; never the plan.
+  const allowed = new Set(plan.target.url ? [originKey(plan.target.url)] : []);
+  for (const o of allowOrigins) {
+    const u = new URL(o);
+    if (!isLoopback(u.hostname) || isPivotApp(u.href))
+      throw new Error(`--allow-origin must be a local origin other than PIVOT: ${o}`);
+    allowed.add(originKey(o));
+  }
+  const gate = await startGate({
+    decide: destinationPolicy({ allowed, allowRemote }),
+    allowWrites,
+    blocked,
+    blockedWrites,
   });
+  const browser = await chromium
+    .launch({
+      // "<-loopback>" stops Chromium sending this machine's addresses around the proxy. WebRTC may only use the proxy.
+      proxy: { server: gate.server, bypass: "<-loopback>" },
+      args: ["--force-webrtc-ip-handling-policy=disable_non_proxied_udp"],
+    })
+    .catch(async (err) => {
+      await gate.close();
+      throw err;
+    });
   const browserVersion = browser.version();
   const viewer = !!plan.target.viewer;
   const results = [];
@@ -946,20 +1129,10 @@ export async function runPlan(
                 blockedWrites.add(`${req.method()} ${u.protocol}//${u.host}${u.pathname}`);
                 return route.abort("blockedbyclient");
               }
-              if (!web || allowRemote || isLoopback(u.hostname)) return route.continue();
-              blocked.add(`${u.protocol}//${u.host}`);
-              return route.abort("blockedbyclient");
+              // Where it may go is the gate's decision, for every connection.
+              return route.continue();
             });
             const page = await context.newPage();
-            // What routing doesn't see (a redirect, a WebSocket) the proxy stops; list it too.
-            page.on("requestfailed", (r) => {
-              const u = new URL(r.url());
-              if (/^https?:$/.test(u.protocol) && !isLoopback(u.hostname)) blocked.add(`${u.protocol}//${u.host}`);
-            });
-            page.on("websocket", (ws) => {
-              const u = new URL(ws.url());
-              if (!isLoopback(u.hostname) || isPivotApp(u.href)) blocked.add(`${u.protocol}//${u.host}`);
-            });
             const scopeOf = viewer
               ? async () => (await page.waitForSelector("#frame", { timeout: 3000 })).contentFrame()
               : async () => page.mainFrame();
@@ -984,7 +1157,7 @@ export async function runPlan(
                   settled = await settle(scopeOf, item.target, watchedProps(item));
                 }
                 const at = new URL(page.url());
-                if (!["file:", "about:"].includes(at.protocol) && (!isLoopback(at.hostname) || isPivotApp(at.href)))
+                if (!["file:", "about:"].includes(at.protocol) && !allowed.has(originKey(at.href)))
                   throw new Error(`the preview went to ${at.protocol}//${at.host}, which isn't the local preview`);
                 o = await observeOnce(page, scopeOf, item, { out, evidence }, label);
                 if (!settled && o.executed) o.unsettled = true;
@@ -1037,6 +1210,7 @@ export async function runPlan(
     }
   } finally {
     await browser.close();
+    await gate.close();
   }
 
   const briefItems = briefText != null ? parseBriefMotion(briefText) : null;
@@ -1061,7 +1235,7 @@ export async function runPlan(
       `Requests that could change data were blocked, so what they would have done wasn't observed: ${[...blockedWrites].join(", ")}.`,
     );
   limitations.push(
-    "WebSockets to loopback (a dev server's reload channel) are allowed and their messages aren't inspected. DNS lookups the browser makes on its own (prefetching) aren't covered by the network block.",
+    "WebSockets to an allowed origin (a dev server's reload channel) are allowed and their messages aren't inspected. Requests to an allowed origin, GET included, reach that server as a user's browser would. Whether Chromium makes DNS lookups of its own (prefetching) wasn't verified; the gate itself resolves names only with --allow-remote.",
   );
   if (blocked.size)
     limitations.push(
@@ -1098,7 +1272,10 @@ export async function runPlan(
     limitations,
     blocked: [...blocked],
     network: {
-      remote: allowRemote ? "allowed (--allow-remote)" : "blocked: only loopback; other hosts go to a dead proxy",
+      allowedOrigins: [...allowed],
+      remote: allowRemote
+        ? "public hosts allowed (--allow-remote); this machine and private networks still refused"
+        : "blocked: only the allowed origins, through the gate",
       writes: allowWrites ? "allowed (--allow-writes)" : "blocked: only GET, HEAD and OPTIONS requests leave the page",
       blockedWrites: [...blockedWrites],
     },
@@ -1382,10 +1559,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(path.re
       console.log(`Self-test ${r.ok ? "passed" : "FAILED"}; evidence in ${r.out}`);
       process.exit(r.ok ? 0 : 1);
     }
-    const planFile = args.find((a, i) => !a.startsWith("--") && !/^--(out|brief|verify)$/.test(args[i - 1] ?? ""));
+    const planFile = args.find(
+      (a, i) => !a.startsWith("--") && !/^--(out|brief|verify|allow-origin)$/.test(args[i - 1] ?? ""),
+    );
     if (!planFile || !opt("--out")) {
       console.error(
-        "Usage: node motion-qa.mjs <plan.json> --out <new scratch folder> [--brief <brief.md>] [--video] [--allow-remote] [--allow-writes]\n       node motion-qa.mjs --verify <report.json>\n       node motion-qa.mjs --self-test [--out <folder>]",
+        "Usage: node motion-qa.mjs <plan.json> --out <new scratch folder> [--brief <brief.md>] [--video] [--allow-origin <origin>]… [--allow-remote] [--allow-writes]\n       node motion-qa.mjs --verify <report.json>\n       node motion-qa.mjs --self-test [--out <folder>]",
       );
       process.exit(3);
     }
@@ -1397,6 +1576,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(path.re
       video: args.includes("--video"),
       allowRemote: args.includes("--allow-remote"),
       allowWrites: args.includes("--allow-writes"),
+      allowOrigins: args.flatMap((a, i) => (a === "--allow-origin" ? [args[i + 1]] : [])),
     });
     for (const i of report.items) console.log(`${i.id} ${i.result.padEnd(12)} ${i.tag.padEnd(9)} ${i.name}`);
     for (const m of report.trace.missing)

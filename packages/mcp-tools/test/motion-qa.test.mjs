@@ -411,6 +411,152 @@ describe("evidence", () => {
   });
 });
 
+describe("where the QA browser may connect", () => {
+  const { destinationPolicy, isLocalAddress, originKey } = qa;
+  it("names an origin one way, whatever the spelling", () => {
+    expect(originKey("http://127.0.0.1:5173/x")).toBe("127.0.0.1:5173");
+    expect(originKey("http://LOCALHOST/")).toBe("localhost:80");
+    expect(originKey("https://[::1]/")).toBe("::1:443");
+  });
+
+  it("knows this machine and private networks in every form", () => {
+    for (const ip of [
+      "127.0.0.1",
+      "127.9.9.9",
+      "0.0.0.0",
+      "10.1.2.3",
+      "172.20.0.1",
+      "192.168.1.1",
+      "169.254.1.1",
+      "::1",
+      "[::1]",
+      "::",
+      "fd00::1",
+      "fe80::1",
+      "::ffff:127.0.0.1",
+      "::ffff:7f00:1",
+      "::ffff:c0a8:101",
+    ])
+      expect(isLocalAddress(ip), ip).toBe(true);
+    for (const ip of ["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111", "172.32.0.1", "::ffff:808:808"])
+      expect(isLocalAddress(ip), ip).toBe(false);
+  });
+
+  it("by default allows only the preview's exact origin: not another port, not another name for this machine, never PIVOT", async () => {
+    const decide = destinationPolicy({ allowed: ["127.0.0.1:5173"] });
+    expect(await decide("127.0.0.1", 5173)).toEqual({ ok: true, host: "127.0.0.1" });
+    for (const [h, p] of [
+      ["127.0.0.1", 6379],
+      ["localhost", 5173],
+      ["::1", 5173],
+      ["[::1]", 5173],
+      ["127.0.0.2", 5173],
+      ["0.0.0.0", 5173],
+      ["example.com", 443],
+      ["127.0.0.1", 4321],
+    ])
+      expect((await decide(h, p)).ok, `${h}:${p}`).toBe(false);
+    expect((await destinationPolicy({ allowed: ["127.0.0.1:4321"] })("127.0.0.1", 4321)).reason).toContain("PIVOT");
+  });
+
+  it("with --allow-remote, public hosts only: a name that resolves to this machine or a private network is refused", async () => {
+    const names = {
+      "cdn.example": ["93.184.216.34"],
+      "rebind.example": ["93.184.216.34", "127.0.0.1"],
+      "lan.example": ["10.0.0.5"],
+    };
+    const lookup = async (h) => {
+      if (!names[h]) throw new Error("ENOTFOUND");
+      return names[h].map((address) => ({ address }));
+    };
+    const decide = destinationPolicy({ allowed: ["127.0.0.1:5173"], allowRemote: true, lookup });
+    // the connection goes to the address that was checked, not to a second lookup
+    expect(await decide("cdn.example", 443)).toEqual({ ok: true, host: "93.184.216.34" });
+    expect(await decide("8.8.8.8", 443)).toEqual({ ok: true, host: "8.8.8.8" });
+    for (const h of ["rebind.example", "lan.example", "127.0.0.1", "localhost.example", "::ffff:127.0.0.1"])
+      expect((await decide(h, 80)).ok, h).toBe(false);
+  });
+
+  it("the plan can't grant itself remote access, writes or another origin, and --allow-origin takes only local origins", async () => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), "motion-qa-perm-"));
+    try {
+      const plan = { target: { url: "http://127.0.0.1:5173/" }, items: [item()] };
+      for (const o of ["https://cdn.example.com", "http://127.0.0.1:4321"])
+        await expect(qa.runPlan(plan, { out: path.join(out, String(o.length)), allowOrigins: [o] })).rejects.toThrow(
+          "--allow-origin must be a local origin other than PIVOT",
+        );
+    } finally {
+      fs.rmSync(out, { recursive: true, force: true });
+    }
+  });
+
+  it("an unrelated service on this machine gets nothing: other ports, other names, redirects and WebSockets; the preview's own reload socket works", async () => {
+    const other = [];
+    const own = [];
+    const svc = http.createServer((req, res) => {
+      other.push(`${req.method} ${req.url}`);
+      res.end("svc");
+    });
+    svc.on("upgrade", (req, sock) => {
+      other.push(`WS ${req.url}`);
+      sock.destroy();
+    });
+    await new Promise((r) => svc.listen(0, "::", r));
+    const sp = svc.address().port;
+    const prev = http.createServer((req, res) => {
+      own.push(`${req.method} ${req.url}`);
+      if (req.url === "/hop") {
+        res.writeHead(302, { location: `http://127.0.0.1:${sp}/via-redirect` });
+        return res.end();
+      }
+      res.setHeader("content-type", "text/html");
+      res.end(`<!doctype html><div id="box"></div><img src="/hop"><img src="http://localhost:${sp}/alias">
+<img src="http://[::1]:${sp}/v6"><img src="http://0.0.0.0:${sp}/unspecified">
+<script>fetch("http://127.0.0.1:${sp}/get").catch(() => {});
+try { new WebSocket("ws://127.0.0.1:${sp}/ws"); } catch {}
+new WebSocket("ws://" + location.host + "/hmr");</script>`);
+    });
+    prev.on("upgrade", (req, sock) => {
+      own.push(`WS ${req.url}`);
+      const accept = crypto
+        .createHash("sha1")
+        .update(req.headers["sec-websocket-key"] + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
+        .digest("base64");
+      sock.write(
+        `HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`,
+      );
+    });
+    await new Promise((r) => prev.listen(0, "127.0.0.1", r));
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), "motion-qa-loop-"));
+    try {
+      const report = await qa.runPlan(
+        {
+          target: { url: `http://127.0.0.1:${prev.address().port}/` },
+          viewports: ["desktop"],
+          // a plan can't grant these; they are ignored
+          allowRemote: true,
+          allowWrites: true,
+          allowOrigins: [`http://127.0.0.1:${sp}`],
+          items: [
+            { id: "M1", name: "x", tag: "essential", trigger: "load", target: "#box", expect: { animates: false } },
+          ],
+        },
+        { out: path.join(out, "qa") },
+      );
+      await new Promise((r) => setTimeout(r, 300));
+      expect(other).toEqual([]);
+      expect(own).toContain("WS /hmr");
+      expect(report.network.allowedOrigins).toEqual([`127.0.0.1:${prev.address().port}`]);
+      for (const b of [`127.0.0.1:${sp}`, `localhost:${sp}`, `[::1]:${sp}`, `0.0.0.0:${sp}`])
+        expect(report.blocked).toContain(b);
+    } finally {
+      svc.close();
+      prev.close();
+      fs.rmSync(out, { recursive: true, force: true });
+    }
+  }, 120_000);
+});
+
 describe("in a transcript", () => {
   const line = (i, name, input, error = false) => [
     JSON.stringify({
