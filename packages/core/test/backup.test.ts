@@ -138,6 +138,63 @@ describe("backup and restore", () => {
     expect(s.decisions.at(-1)!.binding!.status).toBe("changed");
   });
 
+  it("keeps a session's approval reset through backup and restore, and never lets missing or bad reset data revive an approval", async () => {
+    const { designSessions, designMockups } = await import("../src/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const sessionRow = async (id: string) =>
+      (await (await db.getDb()).select().from(designSessions).where(eq(designSessions.id, id)))[0];
+    const drop = async (id: string) => (await db.getDb()).delete(designSessions).where(eq(designSessions.id, id));
+    const approved = async (title: string, html: string) => {
+      const brief = await design.saveDesignBrief({ title, milestone: "initial", markdown: `## ${title}` });
+      const { ids } = await design.saveDesignMockups({ sessionId: brief.sessionId, mockups: [{ title, html }] });
+      await design.approveDesignMockup(ids[0], "", design.mockupDigest(html));
+      return { sessionId: brief.sessionId, mockupId: ids[0] };
+    };
+
+    // reopened, then backed up and restored: still needs approving again
+    const re = await approved("Reset kept", "<p>rk</p>");
+    await design.setDesignSessionStatus(re.sessionId, "exploring");
+    const resetAt = (await sessionRow(re.sessionId)).approvalResetAt!;
+    const made = await backup.createBackup({ targetDir: path.join(tmp, "reset") });
+    const file = path.join(made.path, "data.json");
+    const data = JSON.parse(await fs.readFile(file, "utf8"));
+    await drop(re.sessionId);
+    await backup.restoreBackup(made.path);
+    expect((await sessionRow(re.sessionId)).approvalResetAt!.toISOString()).toBe(resetAt.toISOString());
+    expect((await design.getDesignSession(re.sessionId))!.currentApprovalId).toBeNull();
+    await design.setDesignSessionStatus(re.sessionId, "abandoned");
+    await expect(design.setDesignSessionStatus(re.sessionId, "approved")).rejects.toThrow(/needs approving again/);
+
+    // a backup made before resets were recorded (no field), or a malformed one: the restore resets the approval
+    const entry = data.designSessions.find((x: { id: string }) => x.id === re.sessionId);
+    for (const bad of [undefined, "not a date"]) {
+      entry.status = "abandoned";
+      if (bad === undefined) delete entry.approvalResetAt;
+      else entry.approvalResetAt = bad;
+      await fs.writeFile(file, JSON.stringify(data));
+      await drop(re.sessionId);
+      await backup.restoreBackup(made.path);
+      expect((await sessionRow(re.sessionId)).approvalResetAt, String(bad)).not.toBeNull();
+      await expect(design.setDesignSessionStatus(re.sessionId, "approved"), String(bad)).rejects.toThrow(
+        /needs approving again/,
+      );
+    }
+
+    // an approval whose version was already changed before the backup is still refused after the restore
+    const inv = await approved("Invalid before", "<p>ib</p>");
+    await (
+      await db.getDb()
+    )
+      .update(designMockups)
+      .set({ html: "<p>changed before the backup</p>" })
+      .where(eq(designMockups.id, inv.mockupId));
+    const made2 = await backup.createBackup({ targetDir: path.join(tmp, "invalid") });
+    await drop(inv.sessionId);
+    await backup.restoreBackup(made2.path);
+    expect((await design.getDesignSession(inv.sessionId))!.decisions.at(-1)!.binding!.status).toBe("changed");
+    await expect(design.setDesignSessionStatus(inv.sessionId, "building")).rejects.toThrow(/Ask for approval again/);
+  });
+
   it("merges by filling only empty fields, and makes separate copies once", async () => {
     const r = await resources.createResource({
       type: "reference",

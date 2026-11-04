@@ -419,11 +419,19 @@ export async function restoreBackup(
     }
   }
   for (const s of data.designSessions) {
+    // A valid reset time is kept as it was. A malformed one, or none for a session that is exploring or abandoned and
+    // has approvals (a backup made before resets were recorded), becomes the moment of the restore: those approvals
+    // need approving again, rather than counting on missing data.
+    const kept = s.approvalResetAt ? new Date(s.approvalResetAt) : null;
+    const valid = kept && !Number.isNaN(kept.getTime()) ? kept : null;
+    const hasApproval = data.designDecisions.some((d) => d.sessionId === s.id && d.kind === "approval");
+    const needsReset =
+      !valid && (s.approvalResetAt != null || (["exploring", "abandoned"].includes(s.status) && hasApproval));
     await db
       .insert(designSessions)
       .values({
         ...s,
-        approvalResetAt: s.approvalResetAt ? new Date(s.approvalResetAt) : null,
+        approvalResetAt: valid ?? (needsReset ? sql`now()` : null),
         createdAt: new Date(s.createdAt),
         updatedAt: new Date(s.updatedAt),
       })

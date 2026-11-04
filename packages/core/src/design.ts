@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "./db/client";
 import { designDecisions, designMockups, designSessions, designSnapshots } from "./db/schema";
 import type {
@@ -99,14 +99,25 @@ type ApprovalRow = { id: string; createdAt: Date; mockupId: string | null; mocku
 
 /**
  * The approval that counts now, from a session's approvals: the newest one recorded after the session last went back
- * to exploring (`resetAt`). Approvals recorded at the same moment count only if they name the same version and digest;
- * otherwise none does, rather than picking one. Older approvals never count instead of a newer one.
+ * to exploring. That moment is the latest of `resetAt` and the latest major-change brief, so a missing reset can't
+ * revive an approval the brief superseded; an approval at that very moment doesn't count. A session that is exploring
+ * has none (every way back to exploring after an approval resets it). Approvals recorded at the same moment count only
+ * if they name the same version and digest; otherwise none does, rather than picking one. Older approvals never count
+ * instead of a newer one. All times come from the database's clock.
  */
-export function pickCurrentApproval<T extends ApprovalRow>(approvals: T[], resetAt: Date | null) {
+export function pickCurrentApproval<T extends ApprovalRow>(
+  approvals: T[],
+  resetAt: Date | null,
+  { status, majorChangeAt = null }: { status?: DesignStatus; majorChangeAt?: Date | null } = {},
+) {
   const sorted = [...approvals].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : -1));
   const newest = sorted[0];
   if (!newest) return { approval: null, reason: "This session has no recorded approval yet." };
-  if (resetAt && newest.createdAt.getTime() <= resetAt.getTime())
+  if (status === "exploring")
+    return { approval: null, reason: "The session is exploring: the direction needs approving again." };
+  const resets = [resetAt, majorChangeAt].filter((d): d is Date => d instanceof Date && !Number.isNaN(d.getTime()));
+  const reset = resets.length ? new Date(Math.max(...resets.map((d) => d.getTime()))) : null;
+  if (reset && newest.createdAt.getTime() <= reset.getTime())
     return {
       approval: null,
       reason: "The session went back to exploring after its last approval: the direction needs approving again.",
@@ -120,10 +131,22 @@ export function pickCurrentApproval<T extends ApprovalRow>(approvals: T[], reset
   return { approval: newest, reason: null };
 }
 
+/** The latest major-change brief of a session, or null. */
+async function lastMajorChange(sessionId: string) {
+  const db = await getDb();
+  const [m] = await db
+    .select({ at: designSnapshots.createdAt })
+    .from(designSnapshots)
+    .where(and(eq(designSnapshots.sessionId, sessionId), eq(designSnapshots.milestone, "major_change")))
+    .orderBy(desc(designSnapshots.createdAt))
+    .limit(1);
+  return m?.at ?? null;
+}
+
 async function currentApproval(sessionId: string) {
   const db = await getDb();
   const [s] = await db
-    .select({ resetAt: designSessions.approvalResetAt })
+    .select({ resetAt: designSessions.approvalResetAt, status: designSessions.status })
     .from(designSessions)
     .where(eq(designSessions.id, sessionId))
     .limit(1);
@@ -137,14 +160,25 @@ async function currentApproval(sessionId: string) {
     })
     .from(designDecisions)
     .where(and(eq(designDecisions.sessionId, sessionId), eq(designDecisions.kind, "approval")));
-  return pickCurrentApproval(approvals, s.resetAt);
+  return pickCurrentApproval(approvals, s.resetAt, {
+    status: s.status as DesignStatus,
+    majorChangeAt: await lastMajorChange(sessionId),
+  });
 }
 
-async function touch(sessionId: string, set: Partial<typeof designSessions.$inferInsert> = {}) {
+/**
+ * Updates a session. `resetApprovals` marks the moment it went back to exploring with the database's clock, the same
+ * clock approvals are stamped with, so a skewed app clock can't place an older approval after the reset.
+ */
+async function touch(
+  sessionId: string,
+  set: Partial<typeof designSessions.$inferInsert> = {},
+  { resetApprovals = false }: { resetApprovals?: boolean } = {},
+) {
   const db = await getDb();
   await db
     .update(designSessions)
-    .set({ ...set, updatedAt: new Date() })
+    .set({ ...set, ...(resetApprovals ? { approvalResetAt: sql`now()` } : {}), updatedAt: new Date() })
     .where(eq(designSessions.id, sessionId));
 }
 
@@ -209,10 +243,9 @@ export async function saveDesignBrief(input: {
     })
     .returning({ id: designSnapshots.id });
   // a major change needs approving again: approvals recorded before it stop counting
-  await touch(
-    sessionId,
-    input.milestone === "major_change" ? { status: "exploring", approvalResetAt: new Date() } : {},
-  );
+  await touch(sessionId, input.milestone === "major_change" ? { status: "exploring" } : {}, {
+    resetApprovals: input.milestone === "major_change",
+  });
   return { sessionId, snapshotId: snap.id, created, duplicate: false };
 }
 
@@ -313,7 +346,7 @@ export async function setDesignSessionStatus(sessionId: string, status: DesignSt
         throw new DesignError("The approved version's content changed since it was approved. Ask for approval again.");
     }
   }
-  await touch(sessionId, status === "exploring" ? { status, approvalResetAt: new Date() } : { status });
+  await touch(sessionId, { status }, { resetApprovals: status === "exploring" });
 }
 
 export async function listDesignSessions({
@@ -363,6 +396,14 @@ export async function getDesignSession(id: string): Promise<DesignSessionDetailD
   const current = pickCurrentApproval(
     decisions.filter((d) => d.kind === "approval"),
     s.approvalResetAt,
+    {
+      status: s.status as DesignStatus,
+      majorChangeAt:
+        snapshots
+          .filter((x) => x.milestone === "major_change")
+          .map((x) => x.createdAt)
+          .at(-1) ?? null,
+    },
   );
   return {
     ...sessionDTO(s),

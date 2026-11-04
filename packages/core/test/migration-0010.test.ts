@@ -37,6 +37,13 @@ describe("migration 0010_windy_tana_nile.sql", () => {
         "approval",
         "approved before binding",
       ]);
+      // a session reopened before resets existed (exploring, with an approval), and one never approved
+      await db.query(
+        "insert into design_sessions (id, title, status) values ('s2', 'Reopened', 'exploring'), ('s3', 'Fresh', 'exploring')",
+      );
+      await db.query(
+        "insert into design_decisions (id, session_id, kind, summary) values ('d2', 's2', 'approval', 'before the reopen')",
+      );
       await run(db, "0010_windy_tana_nile.sql");
       const m = (
         await db.query<{ digest: string; interactive: boolean }>("select digest, interactive from design_mockups")
@@ -45,8 +52,14 @@ describe("migration 0010_windy_tana_nile.sql", () => {
       const d = (await db.query("select mockup_id, mockup_digest from design_decisions")).rows[0];
       expect(d).toEqual({ mockup_id: null, mockup_digest: null });
       // the session keeps its status, and no reset: its approval keeps the meaning it had
-      const s = (await db.query("select status, approval_reset_at from design_sessions")).rows[0];
+      const s = (await db.query("select status, approval_reset_at from design_sessions where id = 's1'")).rows[0];
       expect(s).toEqual({ status: "approved", approval_reset_at: null });
+      const reset = async (id: string) =>
+        (await db.query<{ r: Date | null }>("select approval_reset_at as r from design_sessions where id = $1", [id]))
+          .rows[0].r;
+      // the reopened session's old approval no longer counts; a session without approvals needs no reset
+      expect(await reset("s2")).toBeInstanceOf(Date);
+      expect(await reset("s3")).toBeNull();
       await expect(
         db.query(
           "insert into design_mockups (id, session_id, round, n, title, html, round_digest) values ('m2', 's1', 2, 1, 't', 'h', 'r')",

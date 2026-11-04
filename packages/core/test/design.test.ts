@@ -264,9 +264,16 @@ describe("approvals are bound to the exact mockup content", () => {
     expect((await design.getDesignSession(plain))!.status).toBe("building");
   });
 
+  const setSession = async (sessionId: string, values: { status?: string; approvalResetAt?: Date | null }) => {
+    const { db: d, designSessions, eq } = await raw();
+    await d.update(designSessions).set(values).where(eq(designSessions.id, sessionId));
+  };
+
   it("an unbound approval from before binding still counts (it can't be created any more where mockups exist)", async () => {
     const { sessionId } = await exploring("Legacy", [{ title: "One", html: "<p>l</p>" }]);
     await decision(sessionId, new Date());
+    // as migrated: approved, no reset recorded
+    await setSession(sessionId, { status: "approved", approvalResetAt: null });
     const s = (await design.getDesignSession(sessionId))!;
     expect(s.decisions.at(-1)!.binding).toBeNull();
     expect(s.currentApprovalId).toBe(s.decisions.at(-1)!.id);
@@ -317,6 +324,7 @@ describe("approvals are bound to the exact mockup content", () => {
     const at = new Date();
     await decision(sessionId, at, { mockupId: ids[0], mockupDigest: mockups[0].digest });
     await decision(sessionId, at, { mockupId: ids[1], mockupDigest: mockups[1].digest });
+    await setSession(sessionId, { status: "approved" }); // as recording an approval leaves it
     expect((await design.getDesignSession(sessionId))!.currentApprovalId).toBeNull();
     await expect(design.setDesignSessionStatus(sessionId, "approved")).rejects.toThrow(/same moment/);
     await expect(design.setDesignSessionStatus(sessionId, "building")).rejects.toThrow(/same moment/);
@@ -324,6 +332,7 @@ describe("approvals are bound to the exact mockup content", () => {
     const same = await exploring("Tie same", [{ title: "A", html: "<p>tS</p>" }]);
     await decision(same.sessionId, at, { mockupId: same.ids[0], mockupDigest: same.mockups[0].digest });
     await decision(same.sessionId, at, { mockupId: same.ids[0], mockupDigest: same.mockups[0].digest });
+    await setSession(same.sessionId, { status: "approved" });
     await design.setDesignSessionStatus(same.sessionId, "building");
     // and the pick doesn't depend on the order rows come back in
     const rows = [
@@ -359,6 +368,54 @@ describe("approvals are bound to the exact mockup content", () => {
     await expect(design.setDesignSessionStatus(mc.sessionId, "building")).rejects.toThrow(/needs approving again/);
   });
 
+  it("a legacy approval stops counting once the session is reset, and an approval at the reset moment never counts", async () => {
+    const { sessionId } = await exploring("Legacy reset", [{ title: "One", html: "<p>lr</p>" }]);
+    await decision(sessionId, new Date(Date.now() - 60_000));
+    await setSession(sessionId, { status: "approved", approvalResetAt: null });
+    await design.setDesignSessionStatus(sessionId, "exploring"); // Reopen
+    await design.setDesignSessionStatus(sessionId, "abandoned");
+    for (const status of ["approved", "building"] as const)
+      await expect(design.setDesignSessionStatus(sessionId, status)).rejects.toThrow(/needs approving again/);
+
+    const tie = await exploring("At the reset", [{ title: "One", html: "<p>at</p>" }]);
+    const at = new Date(Date.now() - 1000);
+    await decision(tie.sessionId, at, { mockupId: tie.ids[0], mockupDigest: tie.mockups[0].digest });
+    await setSession(tie.sessionId, { status: "approved", approvalResetAt: at });
+    expect((await design.getDesignSession(tie.sessionId))!.currentApprovalId).toBeNull();
+    await expect(design.setDesignSessionStatus(tie.sessionId, "building")).rejects.toThrow(/needs approving again/);
+  });
+
+  it("the reset is stamped with the database's clock, the same clock as approvals", async () => {
+    // PGlite runs in this process on the JS clock, so a skew between two clocks can't be simulated here; the source is
+    // checked instead: every reset is written with the database's now(), never the app's Date.
+    const src = await fs.readFile(path.resolve(__dirname, "../src/design.ts"), "utf8");
+    expect(src).toContain("approvalResetAt: sql`now()`");
+    expect(src).not.toMatch(/approvalResetAt:\s*new Date/);
+    const backupSrc = await fs.readFile(path.resolve(__dirname, "../src/backup.ts"), "utf8");
+    expect(backupSrc).toContain("sql`now()`");
+  });
+
+  it("missing reset metadata can't weaken authorization: exploring has no approval, and a major change still resets", async () => {
+    // a session reopened before resets were recorded: exploring, approvals, no reset
+    const old = await exploring("Old reopen", [{ title: "One", html: "<p>or</p>" }]);
+    await decision(old.sessionId, new Date(Date.now() - 60_000), {
+      mockupId: old.ids[0],
+      mockupDigest: old.mockups[0].digest,
+    });
+    await setSession(old.sessionId, { status: "exploring", approvalResetAt: null });
+    expect((await design.getDesignSession(old.sessionId))!.currentApprovalId).toBeNull();
+    for (const status of ["approved", "building"] as const)
+      await expect(design.setDesignSessionStatus(old.sessionId, status)).rejects.toThrow(/approving again/);
+
+    // a major change after the approval, with the reset lost (an old backup): the brief itself still resets it
+    const mc = await exploring("Lost reset", [{ title: "One", html: "<p>lost</p>" }]);
+    await design.approveDesignMockup(mc.ids[0], "", mc.mockups[0].digest);
+    await design.saveDesignBrief({ sessionId: mc.sessionId, title: "x", milestone: "major_change", markdown: "# v2" });
+    await setSession(mc.sessionId, { status: "abandoned", approvalResetAt: null });
+    expect((await design.getDesignSession(mc.sessionId))!.currentApprovalId).toBeNull();
+    await expect(design.setDesignSessionStatus(mc.sessionId, "approved")).rejects.toThrow(/needs approving again/);
+  });
+
   it("no path into building without a current approval, whatever the status it comes from", async () => {
     const { sessionId } = await exploring("Direct", [{ title: "A", html: "<p>d</p>" }]);
     await expect(design.setDesignSessionStatus(sessionId, "building")).rejects.toThrow(/no recorded approval/);
@@ -384,6 +441,7 @@ describe("approvals are bound to the exact mockup content", () => {
     const other = await exploring("Theirs", [{ title: "A", html: "<p>same</p>" }]);
     // as a crafted or mixed-up backup could hold it: an approval in one session naming the other's version
     await decision(one.sessionId, new Date(), { mockupId: other.ids[0], mockupDigest: other.mockups[0].digest });
+    await setSession(one.sessionId, { status: "approved" });
     expect((await design.getDesignSession(one.sessionId))!.decisions.at(-1)!.binding!.status).toBe("missing");
     await expect(design.setDesignSessionStatus(one.sessionId, "building")).rejects.toThrow(/No mockup version/);
   });

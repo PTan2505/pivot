@@ -47,6 +47,20 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
   - **Equal timestamps:** they had no defined order. Approvals at the same moment count only if they name the same version and digest.
   - **Cross-session digest check:** `get_design_session` re-hashed a bound version by id without checking its session. Now only the session's own versions count.
   - **Migration atomicity verified:** drizzle runs pending migrations in one transaction. A test makes 0010 fail after its columns and backfill, and nothing remains: no columns, no recorded step, unchanged data.
+- Legacy approval review (2026-11-04), defects found and fixed:
+  - **Two clocks:** the reset was stamped with the app's clock and approvals with the database's. With a remote database (Neon), a database clock running ahead could place an older approval after the reset. The reset now uses the database's `now()` everywhere, including restore. PGlite shares the JS clock in tests, so this is checked in the source rather than simulated.
+  - **Reopens before 0010 left no trace:** a session already exploring or abandoned with an older approval could go back to Approved or Building. Migration 0010 now sets the reset for those sessions, and at runtime an exploring session has no current approval. The reset point also includes the latest major-change brief, so a lost reset can't revive an approval that brief superseded.
+  - **Restore:** a backup without the reset (made before it existed), for a session exploring or abandoned with approvals, or with a malformed reset (which crashed the restore), now resets at the moment of the restore. A valid reset is kept as it was.
+  - Tests:
+    - a legacy approval stops counting once reset;
+    - an approval at the reset moment doesn't count;
+    - an exploring session with no reset;
+    - a lost reset after a major change;
+    - the reset kept through backup and restore;
+    - an old or malformed reset in a backup;
+    - an approval invalid before the backup stays invalid;
+    - the migration resets reopened sessions only.
+  - Behaviour change: an abandoned session that had an approval before 0010 restores to Exploring and needs approving again, since what happened before it was abandoned isn't known.
 - Backup and recovery before migration 0010 reaches real data. The migration runs automatically on the first start from a `dev` that includes it.
   1. Stop PIVOT.
   2. Make a PIVOT backup: Settings › **Back up the library**. It writes a folder with `data.json` and the files.
