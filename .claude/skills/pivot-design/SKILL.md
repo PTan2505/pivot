@@ -227,7 +227,7 @@ Mockups are **temporary design prototypes**, not the implementation.
 ## 10. QA
 
 - Check the result in the browser against the approved direction, at desktop and phone widths, in the states that matter (empty, error, long content, keyboard focus).
-- **Motion** (standard or advanced): check every approved item with the motion.md §9 list, reduced motion included. What you couldn't trigger or measure is unverified; a real device is unverified unless the user checked it.
+- **Motion** (standard or advanced): run motion QA as motion.md §9 says: a plan from the approved Motion block (its M-numbers), `scripts/motion-qa.mjs` against the build, then by hand what the script doesn't cover. Report each essential item as Pass, Fail or Not Verified with the report's path; the overall status is Pass only when every essential item passed. What you couldn't trigger or measure is Not Verified, never a pass; reduced motion checked by the script is browser emulation, and a real device is unverified unless the user checked it.
 - Fix what is a bug.
 - **Classify every other difference** by comparing it with the approved brief, the mockup and the approval's `direction` and `details`. A responsive adjustment can fall into any of the first three classes, so don't judge by how small it looks.
 

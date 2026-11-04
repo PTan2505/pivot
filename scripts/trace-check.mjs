@@ -132,6 +132,8 @@ export function analyze(events, { target, scratch, specialists = [], knownSkills
   const writes = { target: 0, scratch: 0, other: 0, shellHeuristic: 0 };
   const gate = { building: null, buildingRefused: 0, approvalsRecorded: 0, firstTargetWrite: null };
   const mcp = {};
+  // pivot-design's own motion QA script: run (not printed), and whether it exited 0 (overall Pass).
+  const motionQa = { runs: 0, selfTests: 0, nonZeroExits: 0 };
 
   calls.forEach((c, i) => {
     const name = c.name;
@@ -181,6 +183,12 @@ export function analyze(events, { target, scratch, specialists = [], knownSkills
     }
     if (name === "Bash") {
       const cmd = String(c.input.command ?? "");
+      // Only `node …/motion-qa.mjs` runs it; cat, sed or ls of the file is a read.
+      if (/\bnode\s+(?:\S*\/)?motion-qa\.mjs\b/.test(cmd)) {
+        if (/--self-test\b/.test(cmd)) motionQa.selfTests++;
+        else motionQa.runs++;
+        if (failed(c)) motionQa.nonZeroExits++;
+      }
       for (const s of skillsInPath(cmd)) {
         if (OWN_SKILLS.has(s)) continue;
         const e = entry(s);
@@ -240,6 +248,7 @@ export function analyze(events, { target, scratch, specialists = [], knownSkills
       .filter(([, e]) => e.mainThreadSkillCalls > 0)
       .map(([n]) => `${n}: invoked with the Skill tool in the main thread`),
     mcp,
+    motionQa,
   };
 }
 
@@ -266,6 +275,11 @@ function format(report) {
     `Writes: target ${w.target}, scratch ${w.scratch}, other ${w.other} (${w.shellHeuristic} from shell commands)`,
   );
   out.push(`Gate: ${report.gate.ok ? "ok" : "FAILED"}: ${report.gate.reason}`);
+  const q = report.motionQa;
+  if (q.runs || q.selfTests)
+    out.push(
+      `Motion QA: ${q.runs} run(s), ${q.selfTests} self-test(s), ${q.nonZeroExits} reported as failed by the shell tool (read the report for the result)`,
+    );
   for (const warning of report.warnings) out.push(`Warning: ${warning}`);
   return out.join("\n");
 }

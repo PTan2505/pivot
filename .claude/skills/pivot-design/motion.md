@@ -71,14 +71,16 @@ A screenshot can't show motion. For every reference that informs motion, say wha
 ## 4. Motion block in the brief
 
 Only when the level isn't **none**. Keep it proportional: about 6 lines for Standard, up to about 15 for Advanced. Tag
-each item **essential** (it defines the direction; the user must see it before approving) or **detail**.
+each item **essential** (it defines the direction; the user must see it before approving) or **detail**. Number the
+items **M1, M2…** in the Item cell; a number stays with its item for the whole session (a changed item keeps it, a new
+one takes the next), because QA (§9) traces every result to it.
 
 ```md
 **Motion:** <standard | advanced> (<auto | set by you>): <objective: what the motion is for>
 
-| Item   | Trigger → behaviour              | Timing / easing    | Reduced motion      | Tag       |
-| ------ | -------------------------------- | ------------------ | ------------------- | --------- |
-| <name> | <click on X → thumb slides to Y> | <200 ms, ease-out> | <cross-fade 150 ms> | essential |
+| Item        | Trigger → behaviour              | Timing / easing    | Reduced motion      | Tag       |
+| ----------- | -------------------------------- | ------------------ | ------------------- | --------- |
+| M1 · <name> | <click on X → thumb slides to Y> | <200 ms, ease-out> | <cross-fade 150 ms> | essential |
 
 - **References:** <title (evidence): take / leave>
 - **Responsive:** <what changes on phone>
@@ -122,7 +124,8 @@ The user must be able to see each **essential** item before gate 2 (§6).
     verified only when the user turns it on and says what they saw;
   - **a real device**: unverified unless the user checked it.
     The local viewer and PIVOT's session page show which setting the browser currently reports.
-- A recording, keyframes, a screenshot or a description is not an executable preview.
+- A recording, keyframes, a screenshot or a description is not an executable preview. A `motion-qa.mjs` run on the
+  preview with `--video` (§9) may go with it as evidence of reduced motion and phone width, never instead of it.
 - **Check it yourself before gate 2:** open the preview with the browser tool you have and trigger every essential
   item. An item you didn't see run doesn't count as previewed: fix the prototype, or offer the exception (§6).
 
@@ -173,18 +176,97 @@ the chosen technology.
 
 ## 9. QA
 
-Check each approved item, at desktop and phone width:
+Motion QA checks the build against the **approved** Motion block, and keeps four things apart: what the brief
+intended, what was observed running, what is inferred or unverified, and what deviates.
 
-- trigger correctness; initial and final states; timing and sequence; hover, focus, click and keyboard;
-- scroll behaviour (Advanced);
-- reduced motion: the briefed path, with the browser's emulation;
-- no layout shift, no long frames, listeners and timelines cleaned up after leaving the view;
-- the fallback (Advanced);
-- fidelity to the approved preview; accessibility (focus visible, nothing that flashes).
+1. **Read the approved brief** with `get_design_session` (the latest `approved` or `major_change` brief, and the
+   approval's `details`). Save its markdown in the scratchpad as `brief.md`, never in the project.
+2. **Write the plan** in the scratchpad: one entry per Motion item, with the brief's M-number, name and tag, and only
+   what the brief states:
 
-Report evidence as `pivot-design` §10 says: what you generated, what you actually looked at, what you hand over, and
-what is **unverified**. A behaviour you couldn't trigger or measure is unverified, never a pass; behaviour on a real
-device is unverified unless the user checked it and said so.
+   ```json
+   {
+     "project": "<name>",
+     "projectPath": "<target repo, for its git revision>",
+     "brief": { "session": "<session id>", "brief": "<brief id or milestone and date>", "approval": "<decision id>" },
+     "target": { "url": "http://127.0.0.1:<port>/<page>" },
+     "items": [
+       {
+         "id": "M1",
+         "name": "Hero entrance",
+         "tag": "essential",
+         "intent": "<the brief's Trigger → behaviour cell>",
+         "reference": "<reference and evidence label, if any>",
+         "trigger": "load",
+         "target": "#hero h1",
+         "expect": { "animates": true, "properties": ["opacity", "transform"], "end": { "opacity": "1" } },
+         "reduced": { "animates": false, "end": { "opacity": "1" } }
+       }
+     ]
+   }
+   ```
+
+   - `trigger`: `load`, `scroll` (`{ "type": "scroll", "to": "<selector>" }`), `hover`, `click` or `focus` (`"on"`
+     names the element to act on when it isn't the one that moves), or `other` when no automatic input can start it.
+   - `expect`: whether it moves, the properties that must change, the final computed values. `durationMs` and `easing`
+     only when the brief states them; they are compared exactly with what the running animation declares.
+   - `reduced`: what the brief's Reduced motion cell says: `animates: false`, or a briefed alternative
+     (`animates: true`, `properties: ["opacity"]`, `notProperties: ["transform"]`), and where it ends. Without it the
+     item can't pass: turning everything off isn't assumed to be right, and content must still reach its final state.
+   - `budgets` (`cls`, `longFrames`) only from the brief's Performance line. Never invent a value or a tolerance the
+     brief doesn't state.
+   - `target` may instead be `{ "file": "<path>" }` or a mockup folder shown through the viewer
+     (`{ "viewer": "<folder>", "version": <n>, "interactive": true }`), to check a preview before gate 2.
+
+3. **Run it:** `node <skill>/scripts/motion-qa.mjs <plan.json> --out <scratchpad>/motion-qa --brief <scratchpad>/brief.md`
+   - It performs each trigger with real input (page load, the scroll wheel, the mouse, Tab), at desktop and phone
+     width, with full motion and with the browser's reduced-motion emulation, and each twice: the second run is the
+     Replay, from a fresh page (in the viewer, its own Replay button). It waits for the page to stop moving before a
+     trigger, and a hover or click is only made when nothing covers the element.
+   - It writes `report.md`, `report.json` and screenshots (`--video` adds recordings) to `--out`, which must be a new,
+     empty folder, with a run id, their sha256, the browser, the preview's identity and the brief's.
+     `node <skill>/scripts/motion-qa.mjs --verify <out>/report.json` re-checks the files later: missing, changed or
+     stray ones are named. It proves the files match the report, not that the report is genuine.
+   - Previews must be local (a loopback URL, a file or a mockup folder), never PIVOT's own app. The browser can reach
+     only the preview's exact origin (its own WebSocket, such as a dev server's reload channel, included): not another
+     port or another name for this machine, and not other hosts, redirects, WebSockets and workers included. Every
+     connection goes through a gate the script runs. `--allow-origin <origin>` adds another local origin the preview
+     needs (an API on another port), and `--allow-remote` adds public hosts (never this machine or a private network).
+   - Requests that could change data (anything but GET, HEAD and OPTIONS) are blocked, so a click can't delete or
+     submit anything; the report lists them. `--allow-writes` lifts that, only against
+     data that may change.
+   - **Before using `--allow-origin`, `--allow-remote` or `--allow-writes`, stop and ask the user**, in chat: name
+     the flag, what it would open (the origin, the hosts, the writes) and why the check needs it. Use it only after
+     their explicit yes, for that run, and say in the QA summary that they agreed. Without a yes, run without it and
+     report what that leaves Not Verified. The same applies to pages that load remote resources (`specialists.md` §4).
+   - The flags only switch the script's behaviour. Typing one is not an authorization, and the script can't tell
+     whether the user agreed: the authorization is the user's reply. A field in the plan never sets them.
+   - Exit code: 0 Pass, 1 Fail, 2 Not Verified, 3 couldn't run.
+4. **Read the report** and look at the screenshots of every failed item. Each item is **Pass**, **Fail** or **Not
+   Verified**:
+   - **Pass** only when every check was executed and observed as briefed, at every viewport, with Replay and reduced
+     motion. Reading the source, a screenshot or a guess never makes a Pass.
+   - **Not Verified** when anything couldn't run or be observed: the element wasn't found or was covered, the trigger
+     can't be performed (`other`) or scrolling never reached it, the page never settled, the motion had already
+     finished when watching began or didn't settle in the window, the element disappeared, the replay didn't run, the
+     brief gives no reduced-motion behaviour, or the motion declares no timing to compare.
+   - A final state alone never proves the trigger: the element must be seen moving after it. Timing is what the
+     animation declares, not measured on screen.
+   - The **overall** status is Pass only when every essential item of the approved brief passed, with every brief item
+     traced to a check. A failed detail item is listed but doesn't decide it.
+   - If the script couldn't run (exit 3: no Playwright or Chromium), every item is Not Verified. Say so; never put
+     screenshots in its place.
+5. **Check by hand what the script doesn't cover**, in the browser, at desktop and phone width: the feel of the timing
+   and sequence, keyboard order, the fallback (Advanced), fidelity to the approved preview, cleanup after leaving the
+   view (listeners, observers, timelines), and accessibility (focus visible, nothing that flashes). Say which of these
+   you looked at.
+6. **Act on it** as `pivot-design` §10 says: fix a bug and run the plan again; a departure from the brief is a
+   `deviation`; a material change goes back to gate 2.
+
+Report the result in the QA summary: the overall status, each essential item with its result, and the report's path.
+Keep apart what you generated, what you looked at and what you hand over (`pivot-design` §10). A behaviour you
+couldn't trigger or measure is unverified, never a pass. Reduced motion checked by the script is **browser
+emulation**; the OS setting and a real device are unverified unless the user checked them and said so.
 
 ## 10. Budgets
 

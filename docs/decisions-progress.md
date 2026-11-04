@@ -12,11 +12,79 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
 | P0b   | Specialist spike, then routing         | Done (PR #62) |
 | P0c   | Motion foundation                      | Done (PR #63) |
 | P0d   | Preview controls and hardening         | Done (PR #64) |
-| P1a   | Motion reference evidence              | In review     |
+| P1a   | Motion reference evidence              | Done (PR #65) |
+| P1c   | Motion QA                              | In review     |
+
+### P1c — Motion QA (2026-11-04)
+
+- Status: In review (PR into `dev`).
+- Existing functionality reused:
+  - the approved brief and approval from `get_design_session`;
+  - the P0c viewer, for previews: its sandboxed frame, its policy and its own Replay button;
+  - PIVOT's Playwright and Chromium, found from the skill's real path (A6 verified: it resolves through the `~/.claude/skills` link);
+  - `trace-check.mjs` for the L3 run.
+- Files changed:
+  - new `.claude/skills/pivot-design/scripts/motion-qa.mjs`;
+  - `motion.md` (§4: M-numbers; §5: recordings accompany a preview, never replace it; §9: the QA workflow), `pivot-design` §10, `pivot-redesign` QA;
+  - `scripts/trace-check.mjs`: counts `node …/motion-qa.mjs` runs apart from specialists;
+  - tests: new `motion-qa.test.mjs`, `skills.test.ts`;
+  - SPEC, PIVOT_DECISIONS.
+- QA contract:
+  - each item of the brief's Motion block has an M-number, and the plan, the report and every result use it;
+  - each item is Pass, Fail or Not Verified, judged check by check;
+  - Pass needs executed observations of every check: the trigger, the motion, its properties, its final state, timing (only when the brief states it), the brief's budgets, the Replay, and reduced motion with its own final state;
+  - anything that couldn't run or be observed is Not Verified;
+  - the overall status is Pass only when every essential item of the brief passed and every brief item has a check;
+  - reduced motion is browser emulation, labelled as such; the OS setting and real devices stay unverified unless the user checked them;
+  - timing is compared as declared, with no tolerance invented.
+- Checks run and results: see the PR.
+- L3: a fresh general-purpose subagent with the `pivot-design` skill and the real MCP, a seeded scratch session (approved brief, status `building`) and a synthetic built page with three planted defects:
+  - M1 is hidden with reduced motion;
+  - M3 isn't implemented;
+  - M6 has the wrong timing.
+  - The agent found all three, plus two real issues the fixture didn't plan: M2 plays at load, not on scroll; M6 still animates with reduced motion.
+  - It reported overall Fail, edited nothing, recorded nothing, and marked what it couldn't verify.
+  - Two harness defects it exposed were fixed: `trace-check` counted reads of the script as runs; the script waited a fixed 300 ms before a trigger, so motion from the load raced the Replay.
+- Acceptance review (2026-11-04), defects found and fixed:
+  - **Network:** request routing missed redirects (of the page and of subresources) and WebSockets. A probe showed all three reaching another host. Other hosts are now cut off in the network stack: a dead proxy for everything but loopback, workers blocked, and WebRTC limited to the proxy. A browser test confirms nothing reaches another host.
+  - **Writes:** a click could send DELETE or POST. Anything but GET, HEAD and OPTIONS is now blocked and listed, unless `--allow-writes`.
+  - **PIVOT itself** could be a target, where a click is same-origin with its API (approval). It is now refused, and blocked as a destination.
+  - **False passes:** these are now Not Verified, never Pass:
+    - an animation seen only finished, which may have run before watching began;
+    - an animation that never ran (paused) no longer counts as motion;
+    - an element covered at the pointer's position isn't hovered or clicked;
+    - scrolling that never reaches its target;
+    - a window that ends before the element settles;
+    - a target that disappears;
+    - motion driven by a script before the trigger (settling now watches the element's values too).
+  - **Reduced motion:** it must leave the element as visible as full motion does, even when the brief names no final state.
+  - **Evidence:** each run gets a new, empty `--out` and a run id. `--verify` re-checks the files (missing, changed or stray) and caught screenshots dropped from early-stopped observations, which now stay.
+  - **Timing check** renamed "declared timing", and the report says it isn't measured on screen.
+  - **L3:** the agent's plan, re-run with the hardened runner, gives the same results, so the L3 conclusions stand.
+- Final security check (2026-11-04):
+  - **Loopback isolation (defect):** the dead proxy let every loopback address go direct, and routing let any loopback port through. A Chromium probe showed an unrelated service on this machine receiving a GET, an alias (`localhost`), a redirect and a WebSocket.
+  - Fix: every connection now goes through a gate the script runs (an HTTP proxy, with `<-loopback>` so Chromium sends loopback through it too). It allows only:
+    - the preview's exact origin;
+    - origins given with `--allow-origin`;
+    - with `--allow-remote`, public hosts, resolved once and refused if any address is local or private.
+
+    The plan can't grant any of these.
+
+  - A regression test shows the unrelated service gets nothing (other port, `localhost`, `[::1]`, `0.0.0.0`, a redirect, a WebSocket), while the preview's own reload socket works.
+- Remaining issues:
+  - Chromium only; reduced motion is emulation; the phone viewport is a narrow window, not touch.
+  - WebSockets to the preview's own origin are allowed, and their messages aren't inspected. GET requests to the preview's own server reach it as a user's browser would.
+  - Whether Chromium makes DNS lookups of its own (prefetching) wasn't verified; the gate resolves names only with `--allow-remote`.
+  - `--verify` proves the files match report.json, not that report.json is genuine (it isn't signed).
+  - On-screen timing and smoothness aren't measured; screenshots are near the named moments, not exact.
+  - Cleanup after leaving the view, keyboard order, fallbacks and fidelity to the approved preview are hand checks.
+  - Inside the viewer's script-free frame, layout shift and long frames aren't measured.
+  - The approved local preview isn't stored in PIVOT, so the script can't compare the build with it.
+- Next step: P1b, once authorised (it still needs immutable approval binding and the §3.4 security tests).
 
 ### P1a — Motion reference evidence (2026-11-04)
 
-- Status: In review (PR into `dev`).
+- Status: Done. Merged in PR #65 (`34feed6`).
 - Owner's choice, made before implementation because the request (structured evidence records stored per reference) and the plan ("no new table") differed: **follow the plan, no migration**. Stored, owner- or agent-written evidence per reference is left for a separate proposal.
 - Existing functionality reused:
   - the assets capture already stores: `motion-video` (meta `method`, `capturedAt`, `viewport`, `finalUrl`, `durationMs`), up to 8 `motion-keyframe` stills (meta `keyframe`, `scrollY`) and `state` stills (meta `state`);
