@@ -77,6 +77,26 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
     - a wrong token stayed refused;
     - the **real MCP server** (`apps/mcp/dist`) ran `search_external` with and without a token.
   - **Not checked:** the real extension in a browser (its requests were simulated from its code), and browsers too old to send Fetch Metadata (they would be treated as non-browser callers).
+- Final authentication check (2026-11-04, same PR):
+  - **Token validation is genuine.** It is a constant-time comparison with the saved token after stripping `Bearer `, not a check that an `Authorization` header exists. It runs in the proxy before any route.
+  - **Fixed: validation wrote.** Before, it read the token through `apiToken()`, which creates the token file when missing. So any request carrying a made-up token, before a token existed, created the file. Validation now only reads: with no token saved, every candidate is invalid.
+    - Tests: `api-token.test.ts` 3 of 3. The "creates nothing" check fails on the old code.
+  - **Fixed: loopback binding.** `apps/web`'s own `dev` and `start` scripts had no `-H`, so `pnpm --filter web dev` would listen on every interface. A LAN machine could then forge `Host: 127.0.0.1` and send no Fetch Metadata. Both scripts now bind `127.0.0.1`, as `scripts/start.mjs` already did.
+    - This was checked by reading the scripts. The script itself wasn't run, to keep away from the real data folder.
+  - **Trust boundary, by design and unchanged:** any process on this machine is trusted. It can read the token file and set any header, so a request with no Fetch Metadata, Origin or Referer is answered, the token route included, exactly as before P0d. Fetch Metadata, Origin and Referer only stop a browser from being used by another page, because pages can't forge them.
+  - **Residual, pre-existing:** on a machine shared by several OS accounts, another account can call `127.0.0.1` and read the token through the route.
+  - **Boundary probes** (`preview-checks.mjs boundary`, two fresh scratch instances with no token): **64 of 64** each run.
+    - Credentials:
+      - missing, made-up, empty, `Basic`, and the token in another header: all refused, before and after a token exists;
+      - near misses (one character short or long, same length but wrong, doubled, under another scheme): all refused;
+      - the real token, also with a lower-case `bearer`: the route runs.
+    - No token file was created by any refused request.
+    - Path tricks for both a side-effecting route and the token route never reached the route and never returned the token: trailing slash, encoded letters, `//`, `./`, `../`, `%2F`, case, `;`, `%00`, `/%61pi`.
+    - `x-middleware-subrequest` variants (CVE-2025-29927 style; Next 16.4.3) and `X-Forwarded-Host/Proto/For` were still refused.
+    - A forged `Host` got 403.
+    - Contradictory metadata got 403: same-origin with a foreign or `null` Origin, same-origin with a foreign Referer, no metadata with a foreign Origin or Referer, `same-site`, `none`.
+    - Two callers still reach the route: the app's own page, and a non-browser caller without a token (intended).
+  - PIVOT checks 46 of 46 and viewer 31 of 31, rerun after the fixes.
 - Remaining risks, not tested:
   - the interactive viewer's self-navigation (blocked in the checks by an undetermined mechanism, not relied on);
   - DNS prefetching (the `x-dns-prefetch-control` header and meta are best effort, unverified);

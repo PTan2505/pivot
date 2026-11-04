@@ -5,8 +5,12 @@
 //                                                     contained: no network, no file access, no navigating the page,
 //                                                     no popups or storage; static versions run no script; CSS motion
 //                                                     plays in both kinds
-//   node scripts/qa/preview-checks.mjs pivot <url>    CSS motion plays in a mockup shown on a design session page of a
-//                                                     running PIVOT (use a scratch instance; it writes one session)
+//   node scripts/qa/preview-checks.mjs pivot <url>    on a running scratch PIVOT (it writes one session): mockup
+//                                                     motion, Replay, reduced motion, and the API boundary against a
+//                                                     hostile page, a mockup, the app, the extension and the MCP server
+//   node scripts/qa/preview-checks.mjs boundary <url> <data folder>
+//                                                     on a fresh scratch PIVOT with no token yet: missing, invalid and
+//                                                     forged credentials, path tricks and bypass headers
 //
 // Prints one line per check and exits 1 if any fails. Dev-only; nothing here ships.
 import fs from "node:fs";
@@ -45,11 +49,14 @@ const rawGet = (base, path, headers = {}) =>
   new Promise((resolve, reject) => {
     const u = new URL(base + path);
     http
-      .get({ host: u.hostname, port: u.port, path: u.pathname + u.search, headers }, (res) => {
-        let body = "";
-        res.on("data", (c) => (body += c));
-        res.on("end", () => resolve({ status: res.statusCode, body }));
-      })
+      .get(
+        { host: u.hostname, port: u.port, path: path.startsWith("/") ? path : u.pathname + u.search, headers },
+        (res) => {
+          let body = "";
+          res.on("data", (c) => (body += c));
+          res.on("end", () => resolve({ status: res.statusCode, body }));
+        },
+      )
       .on("error", reject);
   });
 const rawBody = async (base, path) => (await rawGet(base, path)).body;
@@ -679,11 +686,143 @@ async function pivot(base) {
   }
 }
 
-const [mode, arg] = process.argv.slice(2);
+/**
+ * The API's authentication boundary, against a scratch PIVOT whose data folder has no token yet: missing, invalid and
+ * forged credentials, path tricks, middleware-bypass headers, forged Host and contradictory metadata. A request the
+ * proxy refuses must not run its route, and checking a made-up token must not create one.
+ */
+async function boundary(base, dataDir) {
+  const tokenFile = path.join(dataDir, "api-token");
+  check("scratch PIVOT starts with no API token", !fs.existsSync(tokenFile));
+  const META = "/api/metadata?url=" + encodeURIComponent("http://127.0.0.1:1/");
+  const CROSS = { "sec-fetch-site": "cross-site", "sec-fetch-mode": "no-cors", referer: "https://evil.example/" };
+  const PROXY = "Only PIVOT's own pages can do this";
+  // The route ran when it answered 200 JSON itself; a proxy refusal, a 404 page or a redirect means it didn't.
+  const ran = (r) => r.status === 200 && !r.body.includes(PROXY) && r.body.trim().startsWith("{");
+
+  const badCredentials = [
+    ["no Authorization", {}],
+    ["Bearer made-up", { authorization: "Bearer made-up" }],
+    ["empty Bearer", { authorization: "Bearer " }],
+    ["Basic scheme", { authorization: "Basic " + Buffer.from("pivot:secret").toString("base64") }],
+    ["token in another header", { "x-api-token": "made-up" }],
+  ];
+  for (const [label, auth] of badCredentials) {
+    const r = await rawGet(base, META, { ...CROSS, ...auth });
+    check(`before a token exists, cross-site + ${label}: refused, route didn't run`, r.status === 403 && !ran(r));
+  }
+  for (const [label, auth] of badCredentials) {
+    const r = await rawGet(base, "/api/settings/token", { ...CROSS, ...auth });
+    check(`before a token exists, token route + ${label}: refused`, r.status === 403 && !r.body.includes('"token"'));
+  }
+  check("refused requests and made-up tokens created no token file", !fs.existsSync(tokenFile));
+
+  // A non-browser caller (no Fetch Metadata, Origin or Referer) is inside the trust boundary: it gets the token.
+  const first = await rawGet(base, "/api/settings/token");
+  const token = JSON.parse(first.body).token;
+  check("a non-browser caller can read the token (intended: local trust boundary)", first.status === 200 && !!token);
+
+  const nearMisses = [
+    ["the token minus one character", `Bearer ${token.slice(0, -1)}`],
+    ["the token plus one character", `Bearer ${token}x`],
+    ["a same-length wrong token", `Bearer ${token.slice(0, -1)}${token.endsWith("A") ? "B" : "A"}`],
+    ["the token twice", `Bearer ${token}${token}`],
+    ["the token after another scheme", `Basic ${token}`],
+  ];
+  for (const [label, authorization] of nearMisses) {
+    const r = await rawGet(base, META, { ...CROSS, authorization });
+    check(`cross-site + ${label}: refused, route didn't run`, r.status === 403 && !ran(r));
+  }
+  check(
+    "cross-site + the real token: the route runs (extension, MCP)",
+    ran(await rawGet(base, META, { ...CROSS, authorization: `Bearer ${token}` })),
+  );
+  check(
+    "cross-site + 'bearer' in lower case and the real token: the route runs",
+    ran(await rawGet(base, META, { ...CROSS, authorization: `bearer ${token}` })),
+  );
+
+  // Path tricks: each must be refused, or not reach the route at all.
+  const variants = [
+    "/api/metadata/",
+    "/api/%6detadata",
+    "/api//metadata",
+    "//api/metadata",
+    "/api/./metadata",
+    "/api/x/../metadata",
+    "/api/metadata%2F",
+    "/API/metadata",
+    "/api/metadata;x",
+    "/api/Metadata",
+    "/api/metadata%00",
+    "/%61pi/metadata",
+  ];
+  for (const v of variants) {
+    const r = await rawGet(base, v + "?url=" + encodeURIComponent("http://127.0.0.1:1/"), CROSS);
+    check(`path ${v}: route didn't run for a cross-site caller`, !ran(r), `${r.status}`);
+    const t = await rawGet(
+      base,
+      v.replace(/metadata/i, (m) => (m === "metadata" ? "settings/token" : "Settings/token")),
+      CROSS,
+    );
+    check(`path ${v} (token route): no token returned`, !t.body.includes(token), `${t.status}`);
+  }
+
+  // Headers that once let requests skip Next.js middleware, and forwarded-host tricks.
+  for (const value of [
+    "middleware",
+    "src/middleware",
+    "proxy",
+    "src/proxy",
+    "middleware:middleware:middleware:middleware:middleware",
+    "src/proxy:src/proxy:src/proxy:src/proxy:src/proxy",
+    "proxy:proxy:proxy:proxy:proxy",
+  ]) {
+    const r = await rawGet(base, META, { ...CROSS, "x-middleware-subrequest": value });
+    check(`x-middleware-subrequest: ${value}: still refused`, r.status === 403 && !ran(r));
+  }
+  for (const [label, headers] of [
+    ["X-Forwarded-Host: evil", { "x-forwarded-host": "evil.example" }],
+    ["X-Forwarded-Host: the app", { "x-forwarded-host": new URL(base).host }],
+    ["X-Forwarded-Proto/For", { "x-forwarded-proto": "https", "x-forwarded-for": "127.0.0.1" }],
+  ]) {
+    const r = await rawGet(base, META, { ...CROSS, ...headers });
+    check(`${label}: still refused`, r.status === 403 && !ran(r));
+  }
+  check("Host: evil.example: refused", (await rawGet(base, META, { host: "evil.example" })).status === 403);
+
+  // Contradictory metadata: a browser can't send these, a forged request is refused anyway.
+  const APP = base;
+  for (const [label, headers] of [
+    ["same-origin + foreign Origin", { "sec-fetch-site": "same-origin", origin: "https://evil.example" }],
+    ["same-origin + Origin null", { "sec-fetch-site": "same-origin", origin: "null" }],
+    ["same-origin + foreign Referer", { "sec-fetch-site": "same-origin", referer: "https://evil.example/" }],
+    ["no metadata + foreign Origin", { origin: "https://evil.example" }],
+    ["no metadata + foreign Referer", { referer: "https://evil.example/" }],
+    ["same-site", { "sec-fetch-site": "same-site", referer: "http://127.0.0.1:9/" }],
+    ["none (typed address)", { "sec-fetch-site": "none", "sec-fetch-mode": "navigate" }],
+  ]) {
+    const r = await rawGet(base, META, headers);
+    check(`${label}: refused, route didn't run`, r.status === 403 && !ran(r));
+  }
+  check(
+    "the app's own page (same-origin, its Referer): the route runs",
+    ran(await rawGet(base, META, { "sec-fetch-site": "same-origin", referer: `${APP}/library` })),
+  );
+  check(
+    "a non-browser caller without a token: the route runs (intended)",
+    ran(await rawGet(base, META, { "sec-fetch-mode": "cors" })),
+  );
+}
+
+const [mode, arg, arg2] = process.argv.slice(2);
 if (mode === "viewer") await viewer();
 else if (mode === "pivot" && arg) await pivot(arg.replace(/\/+$/, ""));
+else if (mode === "boundary" && arg && arg2) await boundary(arg.replace(/\/+$/, ""), arg2);
 else {
-  console.error("Usage: node scripts/qa/preview-checks.mjs viewer | pivot <PIVOT url>");
+  console.error(
+    "Usage: node scripts/qa/preview-checks.mjs viewer | pivot <PIVOT url> | boundary <PIVOT url> <its data folder>",
+  );
   process.exit(2);
 }
 process.exit(results.every(Boolean) ? 0 : 1);
