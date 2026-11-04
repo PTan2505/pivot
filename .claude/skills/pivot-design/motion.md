@@ -148,8 +148,9 @@ There is no separate motion approval: the user approves the direction **and** it
   screenshot is never counted as the executable preview.
 - **What an approval is bound to:** an approval of a version saved in PIVOT stores that version's id and its content
   digest (its HTML and whether it runs scripts): an approval made in PIVOT does it from what the page showed, and a
-  chat approval does it when you pass `mockupId`. `get_design_session` says whether the version still matches
-  (`binding.status`), and `building` is refused if it doesn't. A local preview is named by its viewer digest in the
+  chat approval does it with `mockupId`, which PIVOT requires once the session has mockups. Only the newest approval
+  since the session last went back to exploring counts (`currentApprovalId`); `get_design_session` says whether its
+  version still matches (`binding.status`), and `building` is refused if it doesn't. A local preview is named by its viewer digest in the
   `Motion:` line; that prototype isn't stored in PIVOT, so keep its folder until the build is checked.
 - A note or reply that changes an essential item is a major change: back to gate 2.
 

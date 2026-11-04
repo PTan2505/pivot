@@ -727,6 +727,8 @@ export interface DesignSessionDTO {
   targetProject: string;
   surface: string;
   status: DesignStatus;
+  /** When the session last went back to exploring; approvals recorded before it no longer count. */
+  approvalResetAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -784,6 +786,8 @@ export interface DesignMockupDTO {
 }
 
 export interface DesignSessionDetailDTO extends DesignSessionDTO {
+  /** The approval that counts now (newest after the last return to exploring, unambiguous), or null: build only from it. */
+  currentApprovalId: string | null;
   snapshots: DesignSnapshotDTO[];
   decisions: DesignDecisionDTO[];
   /** Every saved version, oldest round first. */

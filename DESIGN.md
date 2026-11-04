@@ -433,7 +433,7 @@ A pen-tool icon button in the top bar (between Trash and Settings; inverse when 
 - **Note:** a 14px ink-muted live line saying what the state means. On Exploring and Approved it adds "Exploring and Approved follow the brief and your approval; you move the rest."
 - **Actions:**
   - The next manual step is an inverse pill with an arrow ("Start building", "Mark done"). It is never ember: the top bar's Add stays the screen's only primary.
-  - Then ghost pills: "Back to building" (Done), Abandon or Restore, and Reopen, which opens the destructive confirm dialog.
+  - Then ghost pills: "Back to building" (Done), Abandon or Restore, and Reopen, which opens the destructive confirm dialog. Restore returns to Approved only while an approval still counts (not after a Reopen or a major change); otherwise to Exploring.
   - While saving, the current dot becomes a spinner and the pills are disabled. A success toast "Status: Building" has **Undo**; a failure reverts and shows the reason in an error toast.
 
 **Mockups** (added 2026-11-03, `components/design-mockups.tsx`): between the stepper and the timeline, only when the session has mockups. The session page widens to `max-w-6xl` for it; the header and timeline keep their `max-w-4xl` reading width.

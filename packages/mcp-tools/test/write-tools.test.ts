@@ -147,9 +147,11 @@ describe("PIVOT MCP write tools", () => {
   it("get_design_session shows each version's id and digest, and whether an approval still matches it", async () => {
     const { source } = writerSource();
     const digest = "a".repeat(64);
-    const session = (status: "bound" | "changed" | "missing") =>
+    const session = (status: "bound" | "changed" | "missing", currentApprovalId: string | null = "d1") =>
       ({
         id: ID,
+        currentApprovalId,
+        approvalResetAt: null,
         title: "Billing",
         targetProject: "",
         surface: "",
@@ -188,11 +190,18 @@ describe("PIVOT MCP write tools", () => {
     const t = (r: Awaited<ReturnType<typeof runTool>>) => (r.content[0] as { text: string }).text;
     const ok = t(await runTool(tool("get_design_session"), source, { sessionId: ID }));
     expect(ok).toContain("Bound to mockup m1, digest aaaaaaaaaaaa: unchanged.");
+    expect(ok).toContain("approval (by the user, in PIVOT) [counts now]:");
+    expect(ok).not.toContain("No approval counts now");
     expect(ok).toContain("1. One (id m1, digest aaaaaaaaaaaa)");
     source.getDesignSession = async () => session("changed");
     expect(t(await runTool(tool("get_design_session"), source, { sessionId: ID }))).toContain(
       "CHANGED since approval, approve again",
     );
+    // after a reopen or a major change, the old approval is shown but doesn't count
+    source.getDesignSession = async () => session("bound", null);
+    const reopened = t(await runTool(tool("get_design_session"), source, { sessionId: ID }));
+    expect(reopened).toContain("No approval counts now");
+    expect(reopened).not.toContain("[counts now]");
   });
 
   it("suggest_metadata lists what was added and skipped", async () => {

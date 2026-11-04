@@ -421,7 +421,12 @@ export async function restoreBackup(
   for (const s of data.designSessions) {
     await db
       .insert(designSessions)
-      .values({ ...s, createdAt: new Date(s.createdAt), updatedAt: new Date(s.updatedAt) })
+      .values({
+        ...s,
+        approvalResetAt: s.approvalResetAt ? new Date(s.approvalResetAt) : null,
+        createdAt: new Date(s.createdAt),
+        updatedAt: new Date(s.updatedAt),
+      })
       .onConflictDoNothing();
   }
   for (const s of data.designSnapshots) {

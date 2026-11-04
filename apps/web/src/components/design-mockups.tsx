@@ -205,7 +205,8 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
   const versions = s.mockups.filter((m) => m.round === round);
   const current = versions.find((m) => m.n === n) ?? versions[0];
   const approvals = s.decisions.filter((d) => d.kind === "approval");
-  const lastApproval = approvals.at(-1);
+  // the approval that counts now: none after a reopen or a major change, even if older ones exist
+  const lastApproval = approvals.find((d) => d.id === s.currentApprovalId);
   // an approval names its version by id and digest; older ones only by their direction's words
   const isApproved = (m: DesignMockupDTO) =>
     lastApproval?.binding ? lastApproval.binding.mockupId === m.id : lastApproval?.direction === directionOf(m);

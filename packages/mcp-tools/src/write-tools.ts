@@ -252,7 +252,7 @@ function sessionText(s: DesignSessionDetailDTO) {
       s.decisions
         .map(
           (d) =>
-            `${d.kind}${d.source === "owner" ? " (by the user, in PIVOT)" : ""}: ${d.summary}` +
+            `${d.kind}${d.source === "owner" ? " (by the user, in PIVOT)" : ""}${d.id === s.currentApprovalId ? " [counts now]" : ""}: ${d.summary}` +
             (d.direction ? ` Direction: ${d.direction}.` : "") +
             (d.binding
               ? ` Bound to mockup ${d.binding.mockupId}, digest ${d.binding.digest.slice(0, 12)}: ${
@@ -268,6 +268,10 @@ function sessionText(s: DesignSessionDetailDTO) {
         .join(" | ") || "none"
     }`,
   ];
+  if (!s.currentApprovalId && s.decisions.some((d) => d.kind === "approval"))
+    lines.push(
+      "No approval counts now (the session went back to exploring after it, or approvals conflict): the direction needs approving again before building.",
+    );
   const rounds = [...new Set((s.mockups ?? []).map((m) => m.round))];
   if (rounds.length) {
     lines.push(

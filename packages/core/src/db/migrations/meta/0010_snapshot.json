@@ -1,5 +1,5 @@
 {
-  "id": "f14706ce-dabd-4051-8665-60e999695fcf",
+  "id": "5df2fda4-d0a9-4e2b-a110-689659da27c2",
   "prevId": "4b2f0a1d-10ad-4901-9a38-127b1ac00777",
   "version": "7",
   "dialect": "postgresql",
@@ -882,6 +882,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'exploring'"
+        },
+        "approval_reset_at": {
+          "name": "approval_reset_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",

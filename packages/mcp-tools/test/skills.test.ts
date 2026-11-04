@@ -421,7 +421,8 @@ describe("motion is part of the design", () => {
     expect(motion).toContain("digest <d>");
     expect(d).toContain("a static version, screenshot or recording never stands in for it");
     expect(motion).toContain("**What an approval is bound to:**");
-    expect(d).toContain("**Bind it to the version**");
+    expect(d).toContain("**Bind it to the version.**");
+    expect(d).toContain("PIVOT refuses an approval without it");
     expect(d).toContain("**Before building, check the binding:**");
     expect(src).toContain("mockupId: z");
   });

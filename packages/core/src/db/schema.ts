@@ -241,6 +241,8 @@ export const designSessions = pgTable(
     surface: text("surface").notNull().default(""),
     /** exploring | approved | building | done | abandoned */
     status: text("status").notNull().default("exploring"),
+    /** When the session last went back to exploring (reopened, or a major change): approvals before it no longer count. */
+    approvalResetAt: timestamp("approval_reset_at", { withTimezone: true, mode: "date" }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

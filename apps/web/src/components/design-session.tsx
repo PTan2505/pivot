@@ -145,7 +145,8 @@ function StatusStepper({
             size="sm"
             variant="ghost"
             disabled={saving}
-            onClick={() => onChange(approvals.length ? "approved" : "exploring")}
+            // back to approved only when an approval still counts; otherwise it needs approving again
+            onClick={() => onChange(s.currentApprovalId ? "approved" : "exploring")}
           >
             Restore
           </Button>

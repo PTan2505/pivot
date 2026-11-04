@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -226,12 +227,165 @@ describe("approvals are bound to the exact mockup content", () => {
     await expect(design.setDesignSessionStatus(gone.sessionId, "building")).rejects.toThrow(/Ask for approval again/);
   });
 
-  it("an approval recorded without a version (a chat approval, or one made before binding) keeps working", async () => {
+  // Inserts rows the way migrated data or a restored backup could hold them, bypassing the app's checks.
+  const raw = async () => {
+    const schema = await import("../src/db/schema");
+    const orm = await import("drizzle-orm");
+    return { db: await db.getDb(), ...schema, ...orm };
+  };
+  const decision = async (sessionId: string, at: Date, binding: { mockupId?: string; mockupDigest?: string } = {}) => {
+    const { db: d, designDecisions } = await raw();
+    await d.insert(designDecisions).values({
+      sessionId,
+      kind: "approval",
+      summary: "inserted",
+      createdAt: at,
+      mockupId: binding.mockupId ?? null,
+      mockupDigest: binding.mockupDigest ?? null,
+    });
+  };
+
+  it("an unbound approval can't be recorded once the session has mockups; without mockups it can, and builds", async () => {
+    const { sessionId } = await exploring("Unbound", [{ title: "One", html: "<p>u</p>" }]);
+    await expect(
+      design.recordDesignDecision({ sessionId, kind: "approval", summary: "Approved in chat", direction: "1" }),
+    ).rejects.toThrow(/pass the mockupId/);
+    expect((await design.getDesignSession(sessionId))!.status).toBe("exploring");
+    // a change or a deviation needs no version
+    await design.recordDesignDecision({ sessionId, kind: "deviation", summary: "QA found a gap" });
+
+    const { sessionId: plain } = await design.saveDesignBrief({
+      title: "Plain",
+      milestone: "initial",
+      markdown: "# P",
+    });
+    await design.recordDesignDecision({ sessionId: plain, kind: "approval", summary: "One-paragraph direction" });
+    await design.setDesignSessionStatus(plain, "building");
+    expect((await design.getDesignSession(plain))!.status).toBe("building");
+  });
+
+  it("an unbound approval from before binding still counts (it can't be created any more where mockups exist)", async () => {
     const { sessionId } = await exploring("Legacy", [{ title: "One", html: "<p>l</p>" }]);
-    await design.recordDesignDecision({ sessionId, kind: "approval", summary: "Approved in chat", direction: "1" });
-    expect((await design.getDesignSession(sessionId))!.decisions.at(-1)!.binding).toBeNull();
+    await decision(sessionId, new Date());
+    const s = (await design.getDesignSession(sessionId))!;
+    expect(s.decisions.at(-1)!.binding).toBeNull();
+    expect(s.currentApprovalId).toBe(s.decisions.at(-1)!.id);
+    await design.setDesignSessionStatus(sessionId, "approved");
     await design.setDesignSessionStatus(sessionId, "building");
     expect((await design.getDesignSession(sessionId))!.status).toBe("building");
+  });
+
+  it("approve A then B: when B changes or goes, building is refused and never falls back to A", async () => {
+    const { sessionId, ids, mockups } = await exploring("A then B", [
+      { title: "A", html: "<p>A</p>" },
+      { title: "B", html: "<p>B</p>" },
+    ]);
+    const approve = (n: number) =>
+      design.recordDesignDecision({ sessionId, kind: "approval", summary: `Approved ${n}`, mockupId: ids[n] });
+    await approve(0);
+    await new Promise((r) => setTimeout(r, 5));
+    await approve(1);
+    expect((await design.getDesignSession(sessionId))!.currentApprovalId).toBe(
+      (await design.getDesignSession(sessionId))!.decisions.at(-1)!.id,
+    );
+    await tamper(ids[1], "<p>B edited</p>");
+    await expect(design.setDesignSessionStatus(sessionId, "building")).rejects.toThrow(/Ask for approval again/);
+    // a newer approval that would be unbound, or names an unknown version, isn't recorded, so nothing older takes over
+    await expect(design.recordDesignDecision({ sessionId, kind: "approval", summary: "x" })).rejects.toThrow(
+      /mockupId/,
+    );
+    await expect(
+      design.recordDesignDecision({ sessionId, kind: "approval", summary: "x", mockupId: crypto.randomUUID() }),
+    ).rejects.toThrow(/No mockup version/);
+    await expect(design.setDesignSessionStatus(sessionId, "building")).rejects.toThrow(/Ask for approval again/);
+    const { db: d, designMockups, eq } = await raw();
+    await d.delete(designMockups).where(eq(designMockups.id, ids[1]));
+    await expect(design.setDesignSessionStatus(sessionId, "building")).rejects.toThrow(/Ask for approval again/);
+    // A is untouched and still valid, yet it doesn't count: B is the newer approval
+    const s = (await design.getDesignSession(sessionId))!;
+    expect(s.decisions.find((x) => x.binding?.mockupId === ids[0])!.binding!.status).toBe("bound");
+    expect(s.decisions.find((x) => x.binding?.mockupId === ids[1])!.binding!.status).toBe("missing");
+    expect(mockups[0].digest).toBe(design.mockupDigest("<p>A</p>"));
+    expect((await design.getDesignSession(sessionId))!.status).toBe("approved");
+  });
+
+  it("approvals recorded at the same moment count only if they name the same version", async () => {
+    const { sessionId, ids, mockups } = await exploring("Tie", [
+      { title: "A", html: "<p>tA</p>" },
+      { title: "B", html: "<p>tB</p>" },
+    ]);
+    const at = new Date();
+    await decision(sessionId, at, { mockupId: ids[0], mockupDigest: mockups[0].digest });
+    await decision(sessionId, at, { mockupId: ids[1], mockupDigest: mockups[1].digest });
+    expect((await design.getDesignSession(sessionId))!.currentApprovalId).toBeNull();
+    await expect(design.setDesignSessionStatus(sessionId, "approved")).rejects.toThrow(/same moment/);
+    await expect(design.setDesignSessionStatus(sessionId, "building")).rejects.toThrow(/same moment/);
+    // the same version twice at once is not ambiguous
+    const same = await exploring("Tie same", [{ title: "A", html: "<p>tS</p>" }]);
+    await decision(same.sessionId, at, { mockupId: same.ids[0], mockupDigest: same.mockups[0].digest });
+    await decision(same.sessionId, at, { mockupId: same.ids[0], mockupDigest: same.mockups[0].digest });
+    await design.setDesignSessionStatus(same.sessionId, "building");
+    // and the pick doesn't depend on the order rows come back in
+    const rows = [
+      { id: "b", createdAt: at, mockupId: "x", mockupDigest: "1" },
+      { id: "a", createdAt: at, mockupId: "y", mockupDigest: "2" },
+    ];
+    expect(design.pickCurrentApproval(rows, null).approval).toBeNull();
+    expect(design.pickCurrentApproval([...rows].reverse(), null).approval).toBeNull();
+  });
+
+  it("after Reopen or a major change, older approvals stop counting: no approved, no building, until approved again", async () => {
+    const { sessionId, ids, mockups } = await exploring("Reopen", [{ title: "A", html: "<p>r</p>" }]);
+    await design.approveDesignMockup(ids[0], "", mockups[0].digest);
+    await design.setDesignSessionStatus(sessionId, "exploring"); // Reopen
+    for (const status of ["approved", "building"] as const)
+      await expect(design.setDesignSessionStatus(sessionId, status)).rejects.toThrow(/needs approving again/);
+    // abandon, then restore: the page restores to exploring, and approved is still refused
+    await design.setDesignSessionStatus(sessionId, "abandoned");
+    expect((await design.getDesignSession(sessionId))!.currentApprovalId).toBeNull();
+    await expect(design.setDesignSessionStatus(sessionId, "approved")).rejects.toThrow(/needs approving again/);
+    await design.setDesignSessionStatus(sessionId, "exploring");
+    await design.approveDesignMockup(ids[0], "again", mockups[0].digest);
+    await design.setDesignSessionStatus(sessionId, "building");
+
+    const mc = await exploring("Major", [{ title: "A", html: "<p>m</p>" }]);
+    await design.approveDesignMockup(mc.ids[0], "", mc.mockups[0].digest);
+    await design.saveDesignBrief({
+      sessionId: mc.sessionId,
+      title: "Major",
+      milestone: "major_change",
+      markdown: "# v2",
+    });
+    await expect(design.setDesignSessionStatus(mc.sessionId, "building")).rejects.toThrow(/needs approving again/);
+  });
+
+  it("no path into building without a current approval, whatever the status it comes from", async () => {
+    const { sessionId } = await exploring("Direct", [{ title: "A", html: "<p>d</p>" }]);
+    await expect(design.setDesignSessionStatus(sessionId, "building")).rejects.toThrow(/no recorded approval/);
+    await design.setDesignSessionStatus(sessionId, "abandoned");
+    await expect(design.setDesignSessionStatus(sessionId, "building")).rejects.toThrow(/no recorded approval/);
+  });
+
+  it("flipping a version's interactive flag changes its identity; a building session still reports the change", async () => {
+    const { sessionId, ids, mockups } = await exploring("Flag", [{ title: "A", html: "<p>f</p>" }]);
+    await design.approveDesignMockup(ids[0], "", mockups[0].digest);
+    await design.setDesignSessionStatus(sessionId, "building");
+    const { db: d, designMockups, eq } = await raw();
+    await d.update(designMockups).set({ interactive: true }).where(eq(designMockups.id, ids[0]));
+    const s = (await design.getDesignSession(sessionId))!;
+    expect(s.status).toBe("building");
+    expect(s.decisions.at(-1)!.binding!.status).toBe("changed");
+    await design.setDesignSessionStatus(sessionId, "done");
+    await expect(design.setDesignSessionStatus(sessionId, "building")).rejects.toThrow(/Ask for approval again/);
+  });
+
+  it("another session's mockup can't confirm an approval, even when its digest matches", async () => {
+    const one = await exploring("Mine", [{ title: "A", html: "<p>same</p>" }]);
+    const other = await exploring("Theirs", [{ title: "A", html: "<p>same</p>" }]);
+    // as a crafted or mixed-up backup could hold it: an approval in one session naming the other's version
+    await decision(one.sessionId, new Date(), { mockupId: other.ids[0], mockupDigest: other.mockups[0].digest });
+    expect((await design.getDesignSession(one.sessionId))!.decisions.at(-1)!.binding!.status).toBe("missing");
+    await expect(design.setDesignSessionStatus(one.sessionId, "building")).rejects.toThrow(/No mockup version/);
   });
 });
 

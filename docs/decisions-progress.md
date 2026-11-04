@@ -40,8 +40,26 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
   - SPEC, DESIGN.md, PIVOT_DECISIONS;
   - tests.
 - Checks run and results: see the PR.
+- Acceptance review (2026-11-04), defects found and fixed:
+  - **Building without an approval:** `PATCH status: building` was accepted from any status, even with no approval; only MCP checked the status it came from. `approved` and `building` now need a current approval.
+  - **Falling back to an older approval:** after Reopen ("needs approving again"), Abandon then Restore went straight back to Approved, and building used the old approval. A major change had the same gap. Now `approval_reset_at` (added to migration 0010) is set whenever the session goes back to exploring, and only an approval recorded after it counts. The Restore button follows the same rule.
+  - **Unbound approvals:** they could still be recorded in sessions with mockups, by omitting `mockupId`. Now they are refused there.
+  - **Equal timestamps:** they had no defined order. Approvals at the same moment count only if they name the same version and digest.
+  - **Cross-session digest check:** `get_design_session` re-hashed a bound version by id without checking its session. Now only the session's own versions count.
+  - **Migration atomicity verified:** drizzle runs pending migrations in one transaction. A test makes 0010 fail after its columns and backfill, and nothing remains: no columns, no recorded step, unchanged data.
+- Backup and recovery before migration 0010 reaches real data. The migration runs automatically on the first start from a `dev` that includes it.
+  1. Stop PIVOT.
+  2. Make a PIVOT backup: Settings › **Back up the library**. It writes a folder with `data.json` and the files.
+  3. Copy the database itself:
+     - With Neon (`DATABASE_URL` set): create a Neon branch from now in the Neon console, or run `pg_dump "$DATABASE_URL" > pivot-before-0010.sql`.
+     - With the local database (no `DATABASE_URL`): copy the data folder while PIVOT is stopped, `cp -R ~/.pivot ~/.pivot-before-0010` (or the folder `PIVOT_DATA_DIR` names).
+  4. Start PIVOT from `dev`. If the migration fails, it rolls back completely and PIVOT doesn't start: nothing needs restoring, and you can report the error.
+  5. Going back after it succeeded needs the database copy, not only older code. Older code saves mockups without `digest`, which is now NOT NULL, so it would fail. To go back: restore the Neon branch, the dump or the data folder copy. Or, to keep the data and run older code, run `ALTER TABLE design_mockups ALTER COLUMN digest DROP NOT NULL`.
 - Remaining issues:
-  - A chat approval is bound only when the agent passes `mockupId`; an approval of a mix or of the local preview names its digest in text.
+  - Approvals from before the migration stay unbound and keep counting as they did. They can't be created any more where mockups exist.
+  - An approval of a mix or of a local prototype is bound to the version it starts from (or its static stand-in). The mix itself, or the prototype's viewer digest, is described in text.
+  - After a Reopen, the status toast's Undo can't put the session back to Approved (refused): the direction needs approving again, as the Reopen dialog says.
+  - Checking the binding and changing the status aren't one transaction. The app has no path that edits a saved version, so only a direct database edit could slip in between.
   - The digest proves the HTML is unchanged, not who wrote it; the database itself isn't signed.
 - Next step: P1b part 2 (scripted previews in PIVOT), after this is merged.
 
