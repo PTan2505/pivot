@@ -36,7 +36,7 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
 - Checks run and results:
   - Unit tests: core request-guard 8 of 8.
   - The full suite: see the PR.
-  - Browser checks (Chromium, scratch PIVOT on port 4400, two clean runs each): viewer **31 of 31**, PIVOT **27 of 27**.
+  - Browser checks (Chromium, scratch PIVOT on port 4400, two clean runs each): viewer **31 of 31**, PIVOT **27 of 27** (46 of 46 after the security follow-up below).
   - PIVOT API boundary:
     - forged headers via raw HTTP: `Origin: null`, an unreadable Origin and another origin on approve each got 403; the token refused a cross-site fetch and a same-site navigation (403) but answered the app's own page and a non-browser caller (200); cross-site navigation to an API page got 403 and to the mockup 200;
     - a hostile page on another port, served through a recording proxy so the server's real status is known even where the browser hides it (ORB): its iframe, img and fetch for the token got 403, 403, 403; its form and fetch approve got 403, 403; the session stayed exploring with no approval;
@@ -46,10 +46,37 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
     - the viewer's static version stops and plays, live and after Replay, and the interactive version's `matchMedia` follows both ways;
     - PIVOT's mockup stops and plays at once and after Replay;
     - both pages' indicators flip.
-- Found and reported, outside P0d (not changed; needs the owner's decision):
-  - A page on any site can still make **blind cross-site GETs** to the API. The responses are unreadable, but some GETs have effects: `/api/favicon?host=…` makes PIVOT fetch a site's icon, and `/api/search/external` can start a catalog sync.
-  - PIVOT's static mockups can do the same through `img`/`font` `'self'`, for example `<img src="/api/favicon?host=…">`.
-  - Blocking cross-site subresource requests to `/api` (except assets and mockups) would close both. It may affect the extension, which needs a check first.
+- Security follow-up (2026-11-04, same PR): **blind cross-site GETs with side effects**.
+  - **Root cause.** The proxy checked writes and navigations but let every read through. A page on another site, another app on this machine, or a sandboxed PIVOT mockup (via `img`/`font` `'self'`) could make the browser send GETs whose routes have effects. The response stayed unreadable, but the effect still happened.
+  - **Affected endpoints**, found by auditing every GET route and the core function it calls:
+    - `/api/favicon`: fetches the site and stores the icon;
+    - `/api/search/external`: may download a provider catalog and store it in R2;
+    - `/api/metadata` and `/api/visibility`: fetch the given URL. Private addresses are already refused by `net-guard`;
+    - `/api/resources/:id/compare` and `/compare/image`: decode and diff full-size images;
+    - `/api/settings/token`: already covered.
+  - **Not affected:**
+    - other GETs are database or file reads;
+    - `/api/assets/:id` can store a scroll preview the first time an old tall image is viewed. It stays open because the extension popup and mockups load assets as images, and asset ids are unguessable. This is noted as a residual.
+  - **Policy** (`request-guard.ts`): these reads are answered only for:
+    - a caller with the API token;
+    - the app's own pages: `Sec-Fetch-Site: same-origin`, with any Origin or Referer also same-origin;
+    - a non-browser caller: no Fetch Metadata, and no Origin or Referer from elsewhere.
+  - **Refused with 403 by the proxy, before the route runs:** `same-site` (it isn't `same-origin`), `cross-site`, `none`, `Origin: null`, and contradictory metadata. The refusal doesn't rely on CORS.
+  - **Compatibility, checked against the code:**
+    - the web app calls these routes only from its own pages, with relative URLs, and the server never calls its own API;
+    - the extension sends the Bearer token on every API call; its popup thumbnails are `<img>` loads of `/api/assets`, which stay open;
+    - the MCP server sends the token when it has one, and is a non-browser caller otherwise;
+    - no route contract changed.
+  - **Checked:**
+    - core request-guard tests: 14 of 14;
+    - PIVOT browser checks: **46 of 46**, twice;
+    - the four routes, requested by a hostile page's `img`/`fetch` and by a PIVOT mockup's `img`, were each refused by the proxy (its own 403 body, so the route never ran);
+    - the app's own page still reached each route;
+    - a simulated extension call (token, with Fetch Metadata `none`, `cross-site` or absent) reached `/api/visibility`;
+    - a popup-style thumbnail reached `/api/assets`;
+    - a wrong token stayed refused;
+    - the **real MCP server** (`apps/mcp/dist`) ran `search_external` with and without a token.
+  - **Not checked:** the real extension in a browser (its requests were simulated from its code), and browsers too old to send Fetch Metadata (they would be treated as non-browser callers).
 - Remaining risks, not tested:
   - the interactive viewer's self-navigation (blocked in the checks by an undetermined mechanism, not relied on);
   - DNS prefetching (the `x-dns-prefetch-control` header and meta are best effort, unverified);

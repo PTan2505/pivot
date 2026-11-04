@@ -40,6 +40,50 @@ const animState = (frame) =>
     const all = document.getAnimations();
     return { count: all.length, t: Number(all[0]?.currentTime ?? 0) };
   });
+/** A GET with exactly these headers (raw HTTP: fetch would rewrite Sec-Fetch-Mode). */
+const rawGet = (base, path, headers = {}) =>
+  new Promise((resolve, reject) => {
+    const u = new URL(base + path);
+    http
+      .get({ host: u.hostname, port: u.port, path: u.pathname + u.search, headers }, (res) => {
+        let body = "";
+        res.on("data", (c) => (body += c));
+        res.on("end", () => resolve({ status: res.statusCode, body }));
+      })
+      .on("error", reject);
+  });
+const rawBody = async (base, path) => (await rawGet(base, path)).body;
+
+/** Calls one tool on the built MCP server (apps/mcp/dist) pointed at `base`, with or without a token. */
+async function mcpCall(base, token, name, args) {
+  const req = createRequire(path.join(repo, "apps/mcp/package.json"));
+  const { Client } = await import(pathToFileURL(req.resolve("@modelcontextprotocol/sdk/client/index.js")).href);
+  const { StdioClientTransport } = await import(
+    pathToFileURL(req.resolve("@modelcontextprotocol/sdk/client/stdio.js")).href
+  );
+  const emptyDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "pivot-mcp-"));
+  const env = { ...process.env, PIVOT_URL: base, PIVOT_DATA_DIR: emptyDataDir };
+  delete env.PIVOT_TOKEN;
+  if (token) env.PIVOT_TOKEN = token;
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: [path.join(repo, "apps/mcp/dist/server.js")],
+    env,
+    stderr: "ignore",
+  });
+  const client = new Client({ name: "preview-checks", version: "1" });
+  try {
+    await client.connect(transport);
+    const r = await client.callTool({ name, arguments: args });
+    return { ok: !r.isError, text: (r.content ?? []).map((c) => c.text ?? "").join(" ") };
+  } catch (err) {
+    return { ok: false, text: String(err?.message ?? err) };
+  } finally {
+    await client.close().catch(() => {});
+    fs.rmSync(emptyDataDir, { recursive: true, force: true });
+  }
+}
+
 /** True when #box in this frame locator moves over 300 ms. */
 const moves = async (box) => {
   const a = await box.evaluate((el) => getComputedStyle(el).transform);
@@ -354,10 +398,22 @@ async function pivot(base) {
   const served = [];
   const target = new URL(base);
   const relay = http.createServer((req, res) => {
+    // Uncompressed answers, so the relay can read them; nothing the access rules look at changes.
+    const { "accept-encoding": _, ...headers } = req.headers;
     const out = http.request(
-      { host: target.hostname, port: target.port, path: req.url, method: req.method, headers: req.headers },
+      { host: target.hostname, port: target.port, path: req.url, method: req.method, headers },
       (answer) => {
-        served.push([new URL(req.url, base).pathname, answer.statusCode]);
+        // Keep the start of each body: a refusal written by the proxy (the route never ran) reads differently from
+        // whatever the route answers itself.
+        const chunks = [];
+        answer.on("data", (c) => chunks.length < 4 && chunks.push(c));
+        answer.on("end", () =>
+          served.push([
+            new URL(req.url, base).pathname,
+            answer.statusCode,
+            Buffer.concat(chunks).toString().slice(0, 200),
+          ]),
+        );
         res.writeHead(answer.statusCode, answer.headers);
         answer.pipe(res);
       },
@@ -369,10 +425,19 @@ async function pivot(base) {
   const seen = `http://127.0.0.1:${relay.address().port}`;
   const statusesOf = (path) =>
     served.filter(([p]) => p === path || (path instanceof RegExp && path.test(p))).map(([, s]) => s);
+  const PROXY_REFUSAL = "Only PIVOT's own pages can do this";
+  /** Each request to `path` the relay saw: "proxy" when the proxy refused it before the route ran, else the status. */
+  const handledBy = (path) =>
+    served
+      .filter(([p]) => p === path)
+      .map(([, st, body]) => (st === 403 && body.includes(PROXY_REFUSAL) ? "proxy" : st));
+  const SIDE = ["/api/favicon", "/api/metadata", "/api/search/external", "/api/visibility"];
 
   const mockupHtml = `<!doctype html><html><head><title>Moving box</title></head><body>${MOVING}
 <img src="${beacon}/mockup-img"><a id="token" href="${seen}/api/settings/token">token</a>
-<a id="popup" href="${beacon}/popup" target="_blank">popup</a><img src="/api/settings/token"></body></html>`;
+<a id="popup" href="${beacon}/popup" target="_blank">popup</a><img src="/api/settings/token">
+<img src="/api/favicon?host=example.com"><img src="/api/metadata?url=https%3A%2F%2Fexample.com%2F">
+<img src="/api/search/external?q=button"><img src="/api/visibility?url=https%3A%2F%2Fexample.com%2F"></body></html>`;
   const saved = await (
     await post(`/api/design/sessions/${sessionId}/mockups`, { mockups: [{ title: "Moving box", html: mockupHtml }] })
   ).json();
@@ -382,8 +447,12 @@ async function pivot(base) {
 <iframe id="tok" src="${seen}/api/settings/token"></iframe>
 <img src="${seen}/api/settings/token">
 <form id="f" method="post" action="${approve}"><input name="note" value="x"></form>
+<img src="${seen}/api/favicon?host=example.com">
+<img src="${seen}/api/metadata?url=https%3A%2F%2Fexample.com%2F">
 <script>
   fetch("${seen}/api/settings/token", { mode: "no-cors" }).catch(() => {});
+  fetch("${seen}/api/search/external?q=button", { mode: "no-cors" }).catch(() => {});
+  fetch("${seen}/api/visibility?url=https%3A%2F%2Fexample.com%2F").catch(() => {});
   fetch("${approve}", { method: "POST", mode: "no-cors", body: "{}" }).catch(() => {});
   document.getElementById("f").submit();
 </script></body>`;
@@ -448,7 +517,7 @@ async function pivot(base) {
     // 2. A hostile page on another port: it can't read or fetch the token, open it in a frame, or approve.
     const evil = await browser.newPage();
     await evil.goto(`${beacon}/attack`);
-    await pause(1500);
+    await pause(3500);
     const tokenAnswers = statusesOf("/api/settings/token");
     check(
       "hostile page: the server refused every request for the token (iframe, img, fetch)",
@@ -466,6 +535,14 @@ async function pivot(base) {
       "hostile page: the session is still exploring, with no approval",
       sessionState.status === "exploring" && sessionState.decisions.length === 0,
     );
+    for (const path of SIDE) {
+      const how = handledBy(path);
+      check(
+        `hostile page: ${path} refused by the proxy, the route never ran`,
+        how.length > 0 && how.every((h) => h === "proxy"),
+        how.join(", "),
+      );
+    }
     await evil.close();
 
     // 3. The session page: motion plays, Replay restarts it cleanly, reduced motion follows the browser both ways.
@@ -486,6 +563,27 @@ async function pivot(base) {
       imgAnswers.length ? `server answered ${imgAnswers.join(", ")}` : "never sent",
     );
     check("PIVOT: the mockup's remote image never left (policy)", !hits.includes("/mockup-img"));
+    for (const path of SIDE) {
+      const how = handledBy(path);
+      check(
+        `PIVOT mockup: ${path} refused by the proxy, the route never ran`,
+        how.length > 0 && how.every((h) => h === "proxy"),
+        how.join(", "),
+      );
+    }
+
+    // The app's own page still reaches them: the route itself answers (whatever it decides about the URL).
+    served.length = 0;
+    await tab.evaluate(async () => {
+      await fetch("/api/metadata?url=" + encodeURIComponent("http://127.0.0.1:1/")).catch(() => {});
+      await fetch("/api/visibility?url=" + encodeURIComponent("http://127.0.0.1:1/")).catch(() => {});
+      await fetch("/api/search/external?q=button").catch(() => {});
+      await fetch("/api/favicon?host=localhost").catch(() => {});
+    });
+    for (const path of SIDE) {
+      const how = handledBy(path);
+      check(`app page: ${path} reaches the route`, how.length > 0 && !how.includes("proxy"), how.join(", "));
+    }
 
     await pause(1500);
     const before = await animState(frame);
@@ -530,6 +628,50 @@ async function pivot(base) {
       tokenNav.length > 0 && tokenNav.every((s) => s === 403),
       tokenNav.join(", "),
     );
+
+    // 5. Legitimate non-page callers, with the real token of this scratch PIVOT (read as a non-browser caller).
+    const token = JSON.parse(await rawBody(base, "/api/settings/token")).token;
+    const routeRan = async (p, headers) => {
+      const r = await rawGet(base, p, headers);
+      return !(r.status === 403 && r.body.includes(PROXY_REFUSAL)) && r.status !== 403;
+    };
+    const auth = { authorization: `Bearer ${token}` };
+    for (const variant of [
+      { "sec-fetch-site": "none", "sec-fetch-mode": "cors", origin: "chrome-extension://abcdefghijklmnop" },
+      { "sec-fetch-site": "cross-site", "sec-fetch-mode": "cors", origin: "chrome-extension://abcdefghijklmnop" },
+      {},
+    ]) {
+      const label = variant["sec-fetch-site"] ?? "no Fetch Metadata";
+      check(
+        `extension (token, ${label}): /api/visibility reaches the route`,
+        await routeRan("/api/visibility?url=" + encodeURIComponent("http://127.0.0.1:1/"), { ...variant, ...auth }),
+      );
+    }
+    check(
+      "extension popup thumbnail (an <img>, no token): /api/assets still answered",
+      await routeRan("/api/assets/00000000-0000-4000-8000-000000000000?thumb=1", {
+        "sec-fetch-site": "cross-site",
+        "sec-fetch-mode": "no-cors",
+        referer: "chrome-extension://abcdefghijklmnop/",
+      }),
+    );
+    check(
+      "a wrong token from another site is still refused",
+      !(await routeRan("/api/favicon?host=example.com", {
+        authorization: "Bearer wrong",
+        "sec-fetch-site": "cross-site",
+      })),
+    );
+
+    // The real MCP server (apps/mcp/dist) against this PIVOT: with the token, and without one (a non-browser caller).
+    for (const withToken of [true, false]) {
+      const result = await mcpCall(base, withToken ? token : null, "search_external", { query: "button" });
+      check(
+        `MCP search_external ${withToken ? "with" : "without"} the token reaches the route`,
+        result.ok && !/unauthorized|refused|403/i.test(result.text),
+        result.text.slice(0, 120).replace(/\s+/g, " "),
+      );
+    }
   } finally {
     await browser.close();
     server.close();

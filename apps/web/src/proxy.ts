@@ -14,6 +14,7 @@ export function proxy(request: NextRequest) {
     pathname: request.nextUrl.pathname,
     host: h.get("host"),
     origin: h.get("origin"),
+    referer: h.get("referer"),
     fetchSite: h.get("sec-fetch-site"),
     fetchMode: h.get("sec-fetch-mode"),
     hasToken: () => isValidApiToken(h.get("authorization")?.replace(/^Bearer\s+/i, "")),

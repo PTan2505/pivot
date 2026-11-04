@@ -7,6 +7,7 @@ const req = (over: Partial<ApiRequest> = {}): ApiRequest => ({
   pathname: "/api/resources",
   host: HOST,
   origin: null,
+  referer: null,
   fetchSite: null,
   fetchMode: null,
   hasToken: () => false,
@@ -93,6 +94,90 @@ describe("guardApiRequest", () => {
     // rotating it is a write: same rules as other writes
     expect(allowed({ ...token, method: "POST", origin: `http://${HOST}` })).toBe(true);
     expect(allowed({ ...token, method: "POST", origin: "null" })).toBe(false);
+  });
+
+  describe("reads with side effects", () => {
+    const SIDE = [
+      "/api/favicon",
+      "/api/search/external",
+      "/api/metadata",
+      "/api/visibility",
+      "/api/resources/r1/compare",
+      "/api/resources/r1/compare/image",
+      "/api/settings/token",
+    ];
+    const APP = `http://${HOST}`;
+
+    it("answer the app's own pages, with or without a same-origin Origin and Referer", () => {
+      for (const pathname of SIDE) {
+        expect(allowed({ pathname, fetchSite: "same-origin", fetchMode: "no-cors", referer: `${APP}/settings` })).toBe(
+          true,
+        );
+        expect(allowed({ pathname, fetchSite: "same-origin", fetchMode: "cors", origin: APP })).toBe(true);
+      }
+    });
+
+    it("refuse what a page on another site, another port or a sandboxed mockup can make the browser send", () => {
+      for (const pathname of SIDE) {
+        // <img> or no-cors fetch from another site: no Origin, cross-site, Referer of that site (or none)
+        expect(
+          allowed({ pathname, fetchSite: "cross-site", fetchMode: "no-cors", referer: "https://evil.example/" }),
+        ).toBe(false);
+        expect(allowed({ pathname, fetchSite: "cross-site", fetchMode: "no-cors" })).toBe(false);
+        // another app on this machine: same-site is not same-origin
+        expect(
+          allowed({ pathname, fetchSite: "same-site", fetchMode: "no-cors", referer: "http://127.0.0.1:9999/" }),
+        ).toBe(false);
+        // a sandboxed mockup frame: opaque origin, cross-site, Origin null on cors requests
+        expect(allowed({ pathname, fetchSite: "cross-site", fetchMode: "cors", origin: "null" })).toBe(false);
+        // a typed or bookmarked address is not the app's page either
+        expect(allowed({ pathname, fetchSite: "none", fetchMode: "navigate" })).toBe(false);
+      }
+    });
+
+    it("refuse contradictory metadata", () => {
+      for (const pathname of SIDE) {
+        expect(allowed({ pathname, fetchSite: "same-origin", origin: "https://evil.example" })).toBe(false);
+        expect(allowed({ pathname, fetchSite: "same-origin", origin: "null" })).toBe(false);
+        expect(allowed({ pathname, fetchSite: "same-origin", referer: "https://evil.example/page" })).toBe(false);
+        expect(allowed({ pathname, origin: "https://evil.example" })).toBe(false); // no Fetch Metadata, foreign Origin
+        expect(allowed({ pathname, referer: "https://evil.example/" })).toBe(false); // no Fetch Metadata, foreign Referer
+        expect(allowed({ pathname, origin: "null" })).toBe(false);
+      }
+    });
+
+    it("answer a caller with the API token from anywhere (the extension, the MCP server)", () => {
+      for (const pathname of SIDE) {
+        const token = { pathname, hasToken: () => true };
+        expect(
+          allowed({ ...token, fetchSite: "cross-site", fetchMode: "cors", origin: "chrome-extension://abcdef" }),
+        ).toBe(true);
+        expect(allowed({ ...token, fetchMode: "cors" })).toBe(true); // Node's fetch: Sec-Fetch-Mode only
+      }
+    });
+
+    it("answer a non-browser caller (no Fetch Metadata, Origin or foreign Referer): the MCP server without a token, curl", () => {
+      for (const pathname of SIDE) expect(allowed({ pathname, fetchMode: "cors" })).toBe(true);
+    });
+
+    it("leave other reads alone, including assets and mockups a page or the extension shows", () => {
+      for (const pathname of [
+        "/api/resources",
+        "/api/assets/a1",
+        "/api/design/mockups/m1",
+        "/api/tags",
+        "/api/resources/r1/compare-not",
+      ]) {
+        expect(
+          allowed({
+            pathname,
+            fetchSite: "cross-site",
+            fetchMode: "no-cors",
+            referer: "chrome-extension://abc/popup.html",
+          }),
+        ).toBe(true);
+      }
+    });
   });
 
   it("leaves ordinary cross-site reads alone (responses stay unreadable without CORS)", () => {

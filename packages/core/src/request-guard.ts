@@ -2,7 +2,9 @@
 // - it only answers requests addressed to this machine (blocks DNS rebinding);
 // - writes must come from the app's own pages or carry the API token (blocks other sites and local scripts);
 // - another site, or a sandboxed mockup frame, can't open API pages in a frame or tab, except a mockup or an asset;
-// - the API token itself is readable only by the app's own pages and by non-browser callers.
+// - reads with side effects (fetching other sites, writing storage, syncing, heavy image work) and the API token answer
+//   only the app's own pages, a caller with the API token, or a non-browser caller: never a request a page on another
+//   site, a sandboxed mockup or a file can make the browser send (an <img>, a fetch, a frame).
 
 export const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
@@ -17,6 +19,8 @@ export interface ApiRequest {
   pathname: string;
   host: string | null;
   origin: string | null;
+  /** The Referer header, when the browser sent one. */
+  referer: string | null;
   /** The `Sec-Fetch-Site` header: `same-origin`, `same-site`, `cross-site` or `none`; null when the caller isn't a browser. */
   fetchSite: string | null;
   /** The `Sec-Fetch-Mode` header: `navigate` for a page or frame load. */
@@ -30,9 +34,17 @@ export type Verdict = { ok: true } | { ok: false; error: string };
 const READS = new Set(["GET", "HEAD", "OPTIONS"]);
 /** API pages another site or a mockup frame may still open: a mockup to look at, and stored assets. */
 const OPENABLE = [/^\/api\/design\/mockups\/[^/]+$/, /^\/api\/assets\/[^/]+$/];
-const TOKEN_PATH = "/api/settings/token";
+/** Reads with side effects, and the token. Each needs a caller allowed by `sideEffectsAllowed`. */
+const SIDE_EFFECT_READS = [
+  /^\/api\/settings\/token$/, // returns the secret, and creates it the first time
+  /^\/api\/favicon$/, // fetches a site's icon and stores it
+  /^\/api\/search\/external$/, // may download a provider catalog and store it (R2)
+  /^\/api\/metadata$/, // fetches the given URL
+  /^\/api\/visibility$/, // fetches the given URL
+  /^\/api\/resources\/[^/]+\/compare(\/image)?$/, // decodes and diffs full-size images
+];
 
-/** The Origin header's host, or null when it is missing, `null` (sandboxed frames, files) or not a URL. */
+/** The host of an Origin or Referer value, or null when it is missing, `null` (sandboxed frames, files) or not a URL. */
 function originHost(origin: string | null): string | null {
   if (!origin || origin === "null") return null;
   try {
@@ -40,6 +52,22 @@ function originHost(origin: string | null): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Who may trigger a read with side effects:
+ * - a caller with the API token (the extension, the MCP server);
+ * - the app's own pages: `Sec-Fetch-Site: same-origin`, with no Origin or Referer from anywhere else;
+ * - a caller that isn't a browser: no Fetch Metadata, no Origin and no Referer from anywhere else. Browsers send
+ *   `Sec-Fetch-Site` to localhost (Chrome, Firefox, Safari 16.4+), so this is a script or tool on this machine, which
+ *   could read the token file anyway, or a browser too old for Fetch Metadata (a documented residual).
+ * Same-site isn't same-origin: another port on this machine is another app.
+ */
+function sideEffectsAllowed(req: ApiRequest): boolean {
+  if (req.hasToken()) return true;
+  if (req.origin !== null && originHost(req.origin) !== req.host) return false;
+  if (req.referer !== null && originHost(req.referer) !== req.host) return false;
+  return req.fetchSite === null || req.fetchSite === "same-origin";
 }
 
 export function guardApiRequest(req: ApiRequest): Verdict {
@@ -52,10 +80,8 @@ export function guardApiRequest(req: ApiRequest): Verdict {
     return { ok: false, error: "Opening the API from another site is blocked" };
   }
 
-  // Browsers always send Sec-Fetch-Site; only the app's own pages may read the token. Non-browser callers (scripts,
-  // curl) have no Sec-Fetch-* headers and are allowed, as they can read the token file anyway.
-  if (req.pathname === TOKEN_PATH && read && req.fetchSite !== null && req.fetchSite !== "same-origin") {
-    return { ok: false, error: "The API token is only readable by PIVOT's own pages" };
+  if (read && SIDE_EFFECT_READS.some((p) => p.test(req.pathname)) && !sideEffectsAllowed(req)) {
+    return { ok: false, error: "Only PIVOT's own pages can do this" };
   }
 
   if (!read) {
