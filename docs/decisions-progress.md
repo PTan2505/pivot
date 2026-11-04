@@ -50,6 +50,12 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
     - Images used: 7 and 8 of about 12.
     - Neither run wrote anything to the target.
     - The brief save was refused in both runs: the MCP reads the real `~/.pivot/api-token`, which the scratch instance doesn't share. The brief text was checked from the transcripts instead.
+  - What this verifies, and what it doesn't:
+    - **Verified (two agent runs):** retrieving motion evidence (`get_reference`, `which: "keyframes"`) and reasoning about it in the brief's Motion block.
+    - **Not verified:** that `save_design_brief` persists the brief. Both saves were refused because of the scratch token mismatch.
+    - **Not verified:** an independent, fresh Claude Code session that loads the new MCP schema. Both runs were subagents of this session, whose client kept the old `get_reference_images` schema (`which` limited to `cover | fullpage | all`) although the server accepted `keyframes`.
+    - The design workflow was **not** run end to end: the runs stopped at the brief, with no mockups, gate 2, build or QA.
+  - Known limitation: `fromSlice` is capped at 20, so keyframes or states past the 24th can't be fetched. Capture keeps at most 8 keyframes today.
 - Remaining issues:
   - Recordings only cover scrolling; hover, click and focus motion have no captured evidence. Interaction-state stills are static.
   - The video itself can't be viewed through MCP.
