@@ -501,17 +501,22 @@ describe("motion QA traces to the approved brief and never passes on missing evi
     expect(flat).toContain("never PIVOT's own app");
     expect(flat).toContain("redirects, WebSockets and workers included");
     expect(flat).toContain("The browser can reach only the preview's exact origin");
-    expect(flat).toContain("only the command line grants them: a field in the plan never does.");
-    expect(flat).toContain("`--allow-writes` lifts that, only with the user's permission");
+    expect(flat).toContain(
+      "**Before using `--allow-origin`, `--allow-remote` or `--allow-writes`, stop and ask the user**",
+    );
+    expect(flat).toContain("Use it only after their explicit yes");
+    expect(flat).toContain("Typing one is not an authorization");
+    expect(flat).toContain("the authorization is the user's reply. A field in the plan never sets them.");
+    expect(flat).not.toContain("only the command line grants them");
+    expect(spec).toContain("gõ cờ không phải là sự cho phép");
+    expect(spec).not.toContain("chỉ dòng lệnh mới cấp được");
     expect(flat).toContain("which must be a new, empty folder");
     expect(flat).toContain("It proves the files match the report, not that the report is genuine.");
     expect(flat).toContain("A final state alone never proves the trigger");
   });
   it("emulation, the OS setting and devices stay apart; remote requests need permission", () => {
     expect(flat).toContain("Reduced motion checked by the script is **browser emulation**");
-    expect(flat).toContain(
-      "`--allow-remote` adds public hosts (never this machine or a private network); each needs the user's permission",
-    );
+    expect(flat).toContain("`--allow-remote` adds public hosts (never this machine or a private network).");
   });
   it("pivot-design §10 and pivot-redesign use it; SPEC and PIVOT_DECISIONS describe it", () => {
     expect(d).toContain("`scripts/motion-qa.mjs` against the build");

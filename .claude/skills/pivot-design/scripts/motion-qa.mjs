@@ -21,8 +21,10 @@
 // and policy); never PIVOT's own app. Every connection goes through a local gate that lets the browser reach only the
 // preview's exact origin (redirects, WebSockets and workers included; not other ports or names of this machine), plus
 // local origins given with --allow-origin and public hosts with --allow-remote. Requests that could change data
-// (anything but GET, HEAD, OPTIONS) are blocked unless --allow-writes. Each flag needs the user's permission and comes
-// only from the command line: the plan holds selectors and expectations, no permission, shell command or page script.
+// (anything but GET, HEAD, OPTIONS) are blocked unless --allow-writes. The agent asks the user before using any of these
+// flags (motion.md §9): a flag only switches this script's behaviour, it isn't an authorization, and the script can't
+// tell whether the user agreed. The plan can't set them: it holds selectors and expectations, no shell command or page
+// script.
 // Exit code: 0 Pass, 1 Fail, 2 Not Verified, 3 couldn't run (bad plan, no Playwright or Chromium, a used --out).
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";

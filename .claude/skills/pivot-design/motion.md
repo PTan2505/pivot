@@ -231,12 +231,16 @@ intended, what was observed running, what is inferred or unverified, and what de
      only the preview's exact origin (its own WebSocket, such as a dev server's reload channel, included): not another
      port or another name for this machine, and not other hosts, redirects, WebSockets and workers included. Every
      connection goes through a gate the script runs. `--allow-origin <origin>` adds another local origin the preview
-     needs (an API on another port), and `--allow-remote` adds public hosts (never this machine or a private network);
-     each needs the user's permission, as `specialists.md` §4 says for pages that load remote resources, and only
-     the command line grants them: a field in the plan never does.
+     needs (an API on another port), and `--allow-remote` adds public hosts (never this machine or a private network).
    - Requests that could change data (anything but GET, HEAD and OPTIONS) are blocked, so a click can't delete or
-     submit anything; the report lists them. `--allow-writes` lifts that, only with the user's permission and against
+     submit anything; the report lists them. `--allow-writes` lifts that, only against
      data that may change.
+   - **Before using `--allow-origin`, `--allow-remote` or `--allow-writes`, stop and ask the user**, in chat: name
+     the flag, what it would open (the origin, the hosts, the writes) and why the check needs it. Use it only after
+     their explicit yes, for that run, and say in the QA summary that they agreed. Without a yes, run without it and
+     report what that leaves Not Verified. The same applies to pages that load remote resources (`specialists.md` §4).
+   - The flags only switch the script's behaviour. Typing one is not an authorization, and the script can't tell
+     whether the user agreed: the authorization is the user's reply. A field in the plan never sets them.
    - Exit code: 0 Pass, 1 Fail, 2 Not Verified, 3 couldn't run.
 4. **Read the report** and look at the screenshots of every failed item. Each item is **Pass**, **Fail** or **Not
    Verified**:
