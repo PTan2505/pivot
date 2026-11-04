@@ -55,6 +55,8 @@ Pick a **path** and a **risk level**, and say both in one line before doing anyt
 
 If it's unclear which component or page to match ("make it look like the rest of the app"), ask, then take path A.
 
+**Motion.** Add the motion level to the classification line, from `pivot-design`'s [motion.md](../pivot-design/motion.md) §2 (`Motion: none | standard | advanced — <reason>`). Changing how anything moves (adding, removing or retiming motion) is an **interaction** change, so it is **Major**, with motion.md's brief block, preview and approval rules. A Minor redesign keeps the existing motion exactly as it is, and its checks confirm that.
+
 ## 1. Before you start
 
 1. **Design system:** read `DESIGN.md`, `CLAUDE.md`, the token or theme files and the components the target uses.
@@ -199,7 +201,8 @@ If the write tools fail or the connection is read-only, say so in one line and s
   - keyboard order follows the visual order;
   - roles, labels and headings no worse than before;
   - touch targets as below;
-  - motion respects reduced motion.
+  - motion respects reduced motion;
+  - when motion changed: every approved motion item checked with motion.md §9, before and after compared.
 
 **Touch targets** (Minor and Major, when the change touches controls):
 

@@ -86,7 +86,7 @@ describe("mockups in PIVOT and the decision watcher", () => {
     expect(d).toContain("stop the watcher");
   });
   it("the local viewer is only a fallback, and its script exists", () => {
-    expect(d).toContain("Fallback viewer");
+    expect(d).toContain("**Fallback:** use it instead of PIVOT");
     expect(d).toContain("viewer/make-viewer.mjs");
     expect(fs.existsSync(P(".claude/skills/pivot-design/viewer/make-viewer.mjs"))).toBe(true);
   });
@@ -231,7 +231,7 @@ describe("shortlist, mockups and slop check", () => {
     expect(r).toContain("2–3 directions for a Major change");
   });
   it("an approval is the user's message or their own click in PIVOT", () => {
-    expect(d).toContain("the approval is then the user's message");
+    expect(d).toContain("an approval made there is the user's message");
     expect(d).toContain("An approval the user made in PIVOT** is an explicit approval");
   });
   it("the slop check always runs and the critique stays text-only", () => {
@@ -366,5 +366,82 @@ describe("specialists run for real, labelled by what happened", () => {
     for (const x of ["pivot-specialist", "`ran (skill)`", "`consulted`", "claude -p"])
       expect(spec.includes(x), x).toBe(true);
     expect(read("docs/PIVOT_DECISIONS.md")).toContain("**Orchestrator v2, P0b**");
+  });
+});
+
+describe("motion is part of the design", () => {
+  const motion = read(".claude/skills/pivot-design/motion.md");
+
+  it("motion.md defines the three levels and the classification line, none by default", () => {
+    for (const l of ["**None**", "**Standard**", "**Advanced**"]) expect(motion).toContain(l);
+    expect(motion).toContain("`Motion: none | standard | advanced — <reason> (auto | set by you)`");
+    expect(motion).toContain("**The user's words decide**");
+    expect(motion).toContain("**none** by default");
+    expect(motion).toContain("don't force animation");
+  });
+  it("both skills classify motion and point to motion.md", () => {
+    expect(d).toContain("**the motion level:**");
+    expect(d).toContain("**Re-check the motion level**");
+    expect(r).toContain("../pivot-design/motion.md");
+    expect(r).toContain("so it is **Major**");
+    expect(r).toContain("A Minor redesign keeps the existing motion exactly as it is");
+  });
+  it("the brief's Motion block tags items essential or detail, and references carry motion evidence", () => {
+    expect(motion).toContain("**essential**");
+    expect(motion).toContain("**detail**");
+    for (const e of ["`observed live`", "`keyframes`", "`video exists, not viewed`", "`screenshot`", "`metadata only`"])
+      expect(motion).toContain(e);
+    expect(motion).toContain("**observed** or **inferred**");
+    expect(d).toContain("add the **Motion** block from motion.md §4");
+  });
+  it("previews: CSS in PIVOT, executable local preview for Advanced, real reduced-motion setting only", () => {
+    expect(motion).toContain("**CSS motion in PIVOT (Standard).**");
+    expect(motion).toContain("--interactive <n,…>");
+    expect(motion).toContain("never a rewrite of the mockup's CSS or a fake `matchMedia`");
+    expect(motion).toContain("A recording, keyframes, a screenshot or a description is not an executable preview.");
+  });
+  it("reduced-motion evidence stays in three kinds; the OS setting and devices are verified only by the user", () => {
+    expect(motion).toContain("**browser emulation**");
+    expect(motion).toContain("verified only when the user turns it on and says what they saw");
+    expect(motion).toContain("**a real device**: unverified unless the user checked it");
+  });
+  it("gate 2 needs each essential item seen running, never a static stand-in, and names the preview's digest", () => {
+    expect(motion).toContain("**Check it yourself before gate 2:**");
+    expect(motion.replace(/\s+/g, " ")).toContain(
+      "A static version or its screenshot is never counted as the executable preview.",
+    );
+    expect(motion).toContain("digest <d>");
+    expect(d).toContain("a static version, screenshot or recording never stands in for it");
+    expect(motion).toContain("**What an approval is bound to, today:**");
+  });
+  it("the viewer's tested protections and residual risks are written down", () => {
+    expect(motion).toContain("**What is tested and what isn't**");
+    expect(motion).toContain("Not covered by the checks: DNS prefetching");
+    expect(motion).toContain("The inliner's markup rewriting is a");
+  });
+  it("approval stays inside gate 2, with the Advanced rule and the exception", () => {
+    expect(motion).toContain("There is no separate motion approval");
+    expect(d).toContain("**Motion is approved here too, not in a separate step**");
+    expect(motion).toContain("**Every essential item in the executable local preview**");
+    expect(motion).toContain("`Exception (owner):");
+    expect(motion).toContain("don't call `set_design_status` with `building`");
+  });
+  it("technology order and QA honesty", () => {
+    expect(
+      ordered(motion, ["already uses for motion", "CSS transitions", "The Web Animations API", "Add a library"]),
+    ).toBe(true);
+    expect(motion).toContain("Never add a dependency without that reason in the approved brief.");
+    expect(motion).toContain("measure is unverified, never a pass");
+  });
+  it("the local viewer is hardened and motion specialists follow the level", () => {
+    const viewer = read(".claude/skills/pivot-design/viewer/make-viewer.mjs");
+    expect(viewer).toContain("connect-src 'none'");
+    expect(viewer).not.toContain('allow-same-origin"');
+    expect(specialists).toContain("when the motion level is standard or advanced");
+  });
+  it("SPEC and PIVOT_DECISIONS describe the motion foundation", () => {
+    for (const x of ["mức motion", "Xem trước và duyệt motion", "--interactive"])
+      expect(spec.includes(x), x).toBe(true);
+    expect(read("docs/PIVOT_DECISIONS.md")).toContain("**Orchestrator v2, P0c: motion foundation**");
   });
 });
