@@ -202,7 +202,7 @@ If the write tools fail or the connection is read-only, say so in one line and s
   - roles, labels and headings no worse than before;
   - touch targets as below;
   - motion respects reduced motion;
-  - when motion changed: every approved motion item checked with motion.md §9, before and after compared.
+  - when motion changed: every approved motion item checked with motion.md §9, before and after compared (a `motion-qa.mjs` run on the current build, before any edit, gives the before).
 
 **Touch targets** (Minor and Major, when the change touches controls):
 

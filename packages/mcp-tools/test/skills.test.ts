@@ -462,3 +462,50 @@ describe("motion is part of the design", () => {
     expect(read("docs/PIVOT_DECISIONS.md")).toContain("**Orchestrator v2, P0c: motion foundation**");
   });
 });
+
+describe("motion QA traces to the approved brief and never passes on missing evidence", () => {
+  const flat = motionMd.replace(/\s+/g, " ");
+  it("Motion items carry M-numbers that stay with them, and the brief template shows one", () => {
+    expect(flat).toContain("Number the items **M1, M2…** in the Item cell");
+    expect(motionMd).toContain("| M1 · <name> |");
+  });
+  it("motion.md §9: read the approved brief, plan from it, run the script, then check by hand", () => {
+    expect(
+      ordered(flat, [
+        "**Read the approved brief**",
+        "**Write the plan**",
+        "**Run it:**",
+        "**Read the report**",
+        "**Check by hand",
+      ]),
+    ).toBe(true);
+    expect(fs.existsSync(P(".claude/skills/pivot-design/scripts/motion-qa.mjs"))).toBe(true);
+    expect(flat).toContain(
+      "node <skill>/scripts/motion-qa.mjs <plan.json> --out <scratchpad>/motion-qa --brief <scratchpad>/brief.md",
+    );
+    expect(flat).toContain("never in the project");
+  });
+  it("Pass, Fail and Not Verified are defined, and only executed observations pass", () => {
+    for (const x of ["**Pass**", "**Fail**", "**Not Verified**"]) expect(motionMd).toContain(x);
+    expect(flat).toContain("Reading the source, a screenshot or a guess never makes a Pass.");
+    expect(flat).toContain(
+      "The **overall** status is Pass only when every essential item of the approved brief passed",
+    );
+    expect(flat).toContain("every item is Not Verified. Say so; never put screenshots in its place.");
+    expect(flat).toContain(
+      "turning everything off isn't assumed to be right, and content must still reach its final state",
+    );
+    expect(flat).toContain("Never invent a value or a tolerance the brief doesn't state.");
+  });
+  it("emulation, the OS setting and devices stay apart; remote requests need permission", () => {
+    expect(flat).toContain("Reduced motion checked by the script is **browser emulation**");
+    expect(flat).toContain("`--allow-remote`, which needs the user's permission");
+  });
+  it("pivot-design §10 and pivot-redesign use it; SPEC and PIVOT_DECISIONS describe it", () => {
+    expect(d).toContain("`scripts/motion-qa.mjs` against the build");
+    expect(d).toContain("the overall status is Pass only when every essential item passed");
+    expect(r).toContain("a `motion-qa.mjs` run on the current build, before any edit, gives the before");
+    for (const x of ["Motion QA", "motion-qa.mjs", "Not Verified"]) expect(spec.includes(x), x).toBe(true);
+    expect(read("docs/PIVOT_DECISIONS.md")).toContain("**Orchestrator v2, P1c: motion QA**");
+  });
+});
