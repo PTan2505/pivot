@@ -1,6 +1,8 @@
 // pivot-design's motion QA script (.claude/skills/pivot-design/scripts/motion-qa.mjs): the QA contract (Pass, Fail,
 // Not Verified), tracing to the approved brief, the overall status, and one real browser run on its fixture page.
 import { execFileSync } from "node:child_process";
+import crypto from "node:crypto";
+import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -11,7 +13,8 @@ import { analyze, parseTranscript } from "../../../scripts/trace-check.mjs";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const scriptPath = path.resolve(here, "../../../.claude/skills/pivot-design/scripts/motion-qa.mjs");
 const qa = await import(pathToFileURL(scriptPath).href);
-const { validatePlan, parseBriefMotion, traceItems, judgeItem, aggregate, renderMarkdown, signature } = qa;
+const { validatePlan, parseBriefMotion, traceItems, judgeItem, aggregate, renderMarkdown, signature, verifyEvidence } =
+  qa;
 
 const DESKTOP = [{ name: "desktop", width: 1440, height: 900 }];
 const obs = (o = {}) => ({
@@ -57,6 +60,13 @@ describe("the plan and the approved brief", () => {
       [{ ...base, items: [] }, "items is empty"],
     ])
       expect(validatePlan(bad).errors.join(" "), message).toContain(message);
+    // PIVOT's own app is never a target: a click there is same-origin with its API
+    expect(validatePlan({ ...base, target: { url: "http://127.0.0.1:4321/design/s1" } }).errors.join(" ")).toContain(
+      "PIVOT itself",
+    );
+    expect(validatePlan({ ...base, target: { url: "http://localhost:4321/" } }).errors.join(" ")).toContain(
+      "PIVOT itself",
+    );
     // an item that can't be triggered automatically needs no element or expectation
     expect(
       validatePlan({ ...base, items: [{ id: "M2", name: "Trail", tag: "detail", trigger: "other" }] }).errors,
@@ -102,6 +112,7 @@ describe("judging one item", () => {
       "full replay",
       "reduced moves",
       "reduced final state",
+      "reduced visibility",
       "reduced replay",
     ]);
   });
@@ -142,12 +153,12 @@ describe("judging one item", () => {
   it("compares declared timing exactly as the brief writes it, and can't verify motion that declares none", () => {
     const timed = item({ expect: { ...item().expect, durationMs: 250, easing: "ease-out" } });
     const ok = obs({ declared: [{ name: "rise", durationMs: 250, easing: "ease-out" }] });
-    expect(statusOf(judgeItem(timed, runs([ok, ok], [still(), still()]), DESKTOP), "timing")).toBe("pass");
+    expect(statusOf(judgeItem(timed, runs([ok, ok], [still(), still()]), DESKTOP), "declared timing")).toBe("pass");
     const slow = obs({ declared: [{ name: "rise", durationMs: 251, easing: "ease-out" }] });
-    expect(statusOf(judgeItem(timed, runs([slow, slow], [still(), still()]), DESKTOP), "timing")).toBe("fail");
+    expect(statusOf(judgeItem(timed, runs([slow, slow], [still(), still()]), DESKTOP), "declared timing")).toBe("fail");
     const scripted = obs({ declared: [] });
     const j = judgeItem(timed, runs([scripted, scripted], [still(), still()]), DESKTOP);
-    expect(statusOf(j, "timing")).toBe("not verified");
+    expect(statusOf(j, "declared timing")).toBe("not verified");
     expect(j.result).toBe("Not Verified");
   });
 
@@ -156,6 +167,31 @@ describe("judging one item", () => {
     const j = judgeItem(item(), runs([busy, obs()], [still(), still()]), DESKTOP);
     expect(statusOf(j, "settled")).toBe("not verified");
     expect(j.result).toBe("Not Verified");
+  });
+
+  it("an observation that didn't see the whole motion can't pass", () => {
+    // an animation found finished, never seen running, may have run before anyone watched
+    const late = still({ finishedBeforeWatch: true });
+    const j = judgeItem(item(), runs([late, late], [still(), still()]), DESKTOP);
+    expect(statusOf(j, "moves")).toBe("not verified");
+    expect(j.result).toBe("Not Verified");
+    // the window ended before the element settled, or the element went away
+    const capped = judgeItem(item(), runs([obs({ capped: true }), obs()], [still(), still()]), DESKTOP);
+    expect(capped.checks.find((c) => c.check === "settled")).toMatchObject({ status: "not verified" });
+    expect(capped.result).toBe("Not Verified");
+    const gone = obs({ lostTarget: true, end: {} });
+    const lost = judgeItem(item(), runs([gone, gone], [still(), still()]), DESKTOP);
+    expect(lost.checks.filter((c) => c.check === "final state").map((c) => c.status)).toEqual(["not verified", "pass"]);
+    expect(lost.result).toBe("Not Verified");
+  });
+
+  it("a final state alone never proves the trigger", () => {
+    // the element ends exactly as briefed, but nothing moved after the trigger: it was already there
+    const already = still({ end: { opacity: "1", transform: "none" } });
+    const j = judgeItem(item({ trigger: { type: "scroll" } }), runs([already, already], [still(), still()]), DESKTOP);
+    expect(statusOf(j, "final state")).toBe("pass");
+    expect(statusOf(j, "moves")).toBe("fail");
+    expect(j.result).toBe("Fail");
   });
 
   it("checks Replay: a second run that differs fails, a replay that didn't run isn't verified", () => {
@@ -184,6 +220,32 @@ describe("judging one item", () => {
     expect(
       statusOf(judgeItem(fadeOnly, runs([obs(), obs()], [stillMoves, stillMoves]), DESKTOP), "no movement", "reduced"),
     ).toBe("fail");
+    // with no final state briefed, reduced motion must still leave it as visible as full motion does
+    const noEnd = item({ expect: { animates: true, properties: ["opacity"] } });
+    const ghost = still({ end: { opacity: "0", transform: "none", visibility: "visible", display: "block" } });
+    const shown = obs({ end: { opacity: "1", transform: "none", visibility: "visible", display: "block" } });
+    const v = judgeItem(noEnd, runs([shown, shown], [ghost, ghost]), DESKTOP);
+    expect(v.checks.find((c) => c.check === "visibility")).toMatchObject({ status: "fail", mode: "reduced" });
+    expect(
+      judgeItem(
+        noEnd,
+        runs(
+          [shown, shown],
+          [
+            { ...shown, motion: false },
+            { ...shown, motion: false },
+          ],
+        ),
+        DESKTOP,
+      ).result,
+    ).toBe("Pass");
+    expect(
+      judgeItem(
+        noEnd,
+        { desktop: { full: [{ executed: false, error: "x" }], reduced: [shown, shown] } },
+        DESKTOP,
+      ).checks.find((c) => c.check === "visibility").status,
+    ).toBe("not verified");
     // turning everything off isn't assumed to be right: without the brief's reduced behaviour, it isn't verified
     const unbriefed = judgeItem(item({ reduced: undefined }), runs([obs(), obs()]), DESKTOP);
     expect(unbriefed.result).toBe("Not Verified");
@@ -301,6 +363,54 @@ describe("the report", () => {
   });
 });
 
+describe("evidence", () => {
+  const folder = () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "motion-qa-ev-"));
+    const files = { "M1-a.png": "first", "M1-b.png": "second" };
+    for (const [f, body] of Object.entries(files)) fs.writeFileSync(path.join(dir, f), body);
+    const sha = (b) => crypto.createHash("sha256").update(b).digest("hex");
+    const report = {
+      runId: "run-1",
+      items: [
+        {
+          id: "M1",
+          observations: [{ evidence: Object.entries(files).map(([file, body]) => ({ file, sha256: sha(body) })) }],
+        },
+      ],
+    };
+    fs.writeFileSync(path.join(dir, "report.json"), JSON.stringify(report));
+    return dir;
+  };
+
+  it("--verify accepts untouched evidence and names missing, changed and stray files", () => {
+    const dir = folder();
+    try {
+      expect(verifyEvidence(path.join(dir, "report.json"))).toEqual({ runId: "run-1", files: 2, problems: [] });
+      fs.writeFileSync(path.join(dir, "M1-a.png"), "edited");
+      fs.rmSync(path.join(dir, "M1-b.png"));
+      fs.writeFileSync(path.join(dir, "M2-other-run.png"), "x");
+      expect(verifyEvidence(path.join(dir, "report.json")).problems).toEqual([
+        "M1-a.png: changed since the run",
+        "M1-b.png: missing",
+        "M2-other-run.png: in the folder but not in this report (another run?)",
+      ]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("a run never writes into a folder that already holds something", async () => {
+    const dir = folder();
+    try {
+      await expect(
+        qa.runPlan({ target: { file: path.join(dir, "x.html") }, items: [item()] }, { out: dir }),
+      ).rejects.toThrow("isn't empty");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("in a transcript", () => {
   const line = (i, name, input, error = false) => [
     JSON.stringify({
@@ -359,6 +469,106 @@ describe("in a browser", () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  // Another address of this machine stands in for "another host": nothing may reach it.
+  const lan = Object.values(os.networkInterfaces())
+    .flat()
+    .find((i) => i?.family === "IPv4" && !i.internal)?.address;
+  it.skipIf(!lan)(
+    "reaches no other host (requests, redirects, WebSockets, workers) and sends no writes, even when a click asks",
+    async () => {
+      const remoteHits = [];
+      const remote = http.createServer((req, res) => {
+        remoteHits.push(`${req.method} ${req.url}`);
+        res.end("x");
+      });
+      remote.on("upgrade", (req, socket) => {
+        remoteHits.push(`WS ${req.url}`);
+        socket.destroy();
+      });
+      await new Promise((r) => remote.listen(0, "0.0.0.0", r));
+      const far = `${lan}:${remote.address().port}`;
+      const localHits = [];
+      const local = http.createServer((req, res) => {
+        localHits.push(`${req.method} ${req.url}`);
+        if (req.url === "/hop") {
+          res.writeHead(302, { location: `http://${far}/redirected` });
+          return res.end();
+        }
+        if (req.url === "/away") {
+          res.writeHead(302, { location: `http://${far}/page` });
+          return res.end();
+        }
+        if (req.url === "/sw.js") {
+          res.setHeader("content-type", "text/javascript");
+          return res.end(`fetch("http://${far}/from-worker")`);
+        }
+        res.setHeader("content-type", "text/html");
+        res.end(`<!doctype html><style>#box{width:80px;height:80px;transition:transform .2s ease-out}
+#box.on{transform:translateX(40px)}</style><div id="box"></div><button id="go">Delete</button><img src="/hop">
+<script>
+fetch("http://${far}/fetch").catch(() => {});
+try { new WebSocket("ws://${far}/socket"); } catch {}
+navigator.serviceWorker?.register("/sw.js").catch(() => {});
+document.getElementById("go").addEventListener("click", () => {
+  document.getElementById("box").classList.add("on");
+  fetch("/api/items/1", { method: "DELETE" }).catch(() => {});
+  navigator.sendBeacon("http://${far}/beacon", "x");
+});
+</script>`);
+      });
+      await new Promise((r) => local.listen(0, "127.0.0.1", r));
+      const base = `http://127.0.0.1:${local.address().port}`;
+      const out = fs.mkdtempSync(path.join(os.tmpdir(), "motion-qa-net-"));
+      try {
+        const report = await qa.runPlan(
+          {
+            target: { url: `${base}/` },
+            viewports: ["desktop"],
+            items: [
+              {
+                id: "M1",
+                name: "Box slides on click",
+                tag: "essential",
+                trigger: { type: "click", on: "#go" },
+                target: "#box",
+                expect: { animates: true, properties: ["transform"] },
+              },
+            ],
+          },
+          { out: path.join(out, "qa") },
+        );
+        await new Promise((r) => setTimeout(r, 500));
+        expect(remoteHits).toEqual([]);
+        expect(localHits.filter((h) => !h.startsWith("GET"))).toEqual([]);
+        expect(report.network.blockedWrites).toContain(`DELETE ${base}/api/items/1`);
+        expect(report.blocked.length).toBeGreaterThan(0);
+        // the click still ran and its motion was seen; only the write was stopped
+        const m1 = report.items[0];
+        expect(m1.checks.find((c) => c.check === "moves" && c.viewport === "desktop")).toMatchObject({
+          status: "pass",
+        });
+        // a preview that redirects to another host isn't observed at all
+        const away = await qa.runPlan(
+          {
+            target: { url: `${base}/away` },
+            viewports: ["desktop"],
+            items: [
+              { id: "M1", name: "x", tag: "essential", trigger: "load", target: "#box", expect: { animates: true } },
+            ],
+          },
+          { out: path.join(out, "away") },
+        );
+        expect(away.items[0].result).toBe("Not Verified");
+        expect(remoteHits).toEqual([]);
+      } finally {
+        remote.close();
+        local.close();
+        fs.rmSync(out, { recursive: true, force: true });
+      }
+    },
+    120_000,
+  );
 
   it("on the fixture page: catches the defects, repeats on Replay, keeps evidence with its provenance", async () => {
     const out = fs.mkdtempSync(path.join(os.tmpdir(), "motion-qa-test-"));

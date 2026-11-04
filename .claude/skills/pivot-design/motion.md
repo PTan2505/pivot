@@ -221,20 +221,29 @@ intended, what was observed running, what is inferred or unverified, and what de
 3. **Run it:** `node <skill>/scripts/motion-qa.mjs <plan.json> --out <scratchpad>/motion-qa --brief <scratchpad>/brief.md`
    - It performs each trigger with real input (page load, the scroll wheel, the mouse, Tab), at desktop and phone
      width, with full motion and with the browser's reduced-motion emulation, and each twice: the second run is the
-     Replay, from a fresh page (in the viewer, its own Replay button).
-   - It writes `report.md`, `report.json` and screenshots (`--video` adds recordings) to `--out`, with their sha256,
-     the browser, the preview's identity and the brief's.
-   - Previews must be local (a loopback URL, a file or a mockup folder). Requests to other hosts are blocked and listed
-     unless `--allow-remote`, which needs the user's permission, as `specialists.md` §4 says for pages that load remote
-     resources.
+     Replay, from a fresh page (in the viewer, its own Replay button). It waits for the page to stop moving before a
+     trigger, and a hover or click is only made when nothing covers the element.
+   - It writes `report.md`, `report.json` and screenshots (`--video` adds recordings) to `--out`, which must be a new,
+     empty folder, with a run id, their sha256, the browser, the preview's identity and the brief's.
+     `node <skill>/scripts/motion-qa.mjs --verify <out>/report.json` re-checks the files later: missing, changed or
+     stray ones are named. It proves the files match the report, not that the report is genuine.
+   - Previews must be local (a loopback URL, a file or a mockup folder), never PIVOT's own app. Other hosts are cut
+     off in the browser's network stack (redirects, WebSockets and workers included) unless `--allow-remote`, which
+     needs the user's permission, as `specialists.md` §4 says for pages that load remote resources.
+   - Requests that could change data (anything but GET, HEAD and OPTIONS) are blocked, so a click can't delete or
+     submit anything; the report lists them. `--allow-writes` lifts that, only with the user's permission and against
+     data that may change.
    - Exit code: 0 Pass, 1 Fail, 2 Not Verified, 3 couldn't run.
 4. **Read the report** and look at the screenshots of every failed item. Each item is **Pass**, **Fail** or **Not
    Verified**:
    - **Pass** only when every check was executed and observed as briefed, at every viewport, with Replay and reduced
      motion. Reading the source, a screenshot or a guess never makes a Pass.
-   - **Not Verified** when anything couldn't run or be observed: the element wasn't found, the trigger can't be
-     performed (`other`), the replay didn't run, the brief gives no reduced-motion behaviour, or the motion declares no
-     timing to compare.
+   - **Not Verified** when anything couldn't run or be observed: the element wasn't found or was covered, the trigger
+     can't be performed (`other`) or scrolling never reached it, the page never settled, the motion had already
+     finished when watching began or didn't settle in the window, the element disappeared, the replay didn't run, the
+     brief gives no reduced-motion behaviour, or the motion declares no timing to compare.
+   - A final state alone never proves the trigger: the element must be seen moving after it. Timing is what the
+     animation declares, not measured on screen.
    - The **overall** status is Pass only when every essential item of the approved brief passed, with every brief item
      traced to a check. A failed detail item is listed but doesn't decide it.
    - If the script couldn't run (exit 3: no Playwright or Chromium), every item is Not Verified. Say so; never put

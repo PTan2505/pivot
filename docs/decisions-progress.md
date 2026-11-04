@@ -45,8 +45,26 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
   - The agent found all three, plus two real issues the fixture didn't plan: M2 plays at load, not on scroll; M6 still animates with reduced motion.
   - It reported overall Fail, edited nothing, recorded nothing, and marked what it couldn't verify.
   - Two harness defects it exposed were fixed: `trace-check` counted reads of the script as runs; the script waited a fixed 300 ms before a trigger, so motion from the load raced the Replay.
+- Acceptance review (2026-11-04), defects found and fixed:
+  - **Network:** request routing missed redirects (of the page and of subresources) and WebSockets. A probe showed all three reaching another host. Other hosts are now cut off in the network stack: a dead proxy for everything but loopback, workers blocked, and WebRTC limited to the proxy. A browser test confirms nothing reaches another host.
+  - **Writes:** a click could send DELETE or POST. Anything but GET, HEAD and OPTIONS is now blocked and listed, unless `--allow-writes`.
+  - **PIVOT itself** could be a target, where a click is same-origin with its API (approval). It is now refused, and blocked as a destination.
+  - **False passes:** these are now Not Verified, never Pass:
+    - an animation seen only finished, which may have run before watching began;
+    - an animation that never ran (paused) no longer counts as motion;
+    - an element covered at the pointer's position isn't hovered or clicked;
+    - scrolling that never reaches its target;
+    - a window that ends before the element settles;
+    - a target that disappears;
+    - motion driven by a script before the trigger (settling now watches the element's values too).
+  - **Reduced motion:** it must leave the element as visible as full motion does, even when the brief names no final state.
+  - **Evidence:** each run gets a new, empty `--out` and a run id. `--verify` re-checks the files (missing, changed or stray) and caught screenshots dropped from early-stopped observations, which now stay.
+  - **Timing check** renamed "declared timing", and the report says it isn't measured on screen.
+  - **L3:** the agent's plan, re-run with the hardened runner, gives the same results, so the L3 conclusions stand.
 - Remaining issues:
   - Chromium only; reduced motion is emulation; the phone viewport is a narrow window, not touch.
+  - WebSockets to loopback (a dev server's reload) are allowed, and their messages aren't inspected. The browser's own DNS prefetching isn't covered by the block.
+  - `--verify` proves the files match report.json, not that report.json is genuine (it isn't signed).
   - On-screen timing and smoothness aren't measured; screenshots are near the named moments, not exact.
   - Cleanup after leaving the view, keyboard order, fallbacks and fidelity to the approved preview are hand checks.
   - Inside the viewer's script-free frame, layout shift and long frames aren't measured.

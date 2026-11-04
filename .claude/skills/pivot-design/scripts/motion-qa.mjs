@@ -15,10 +15,14 @@
 // approved brief passed. Timing is the duration and easing the running animation declares, compared as written in the
 // brief; nothing is measured on screen and no tolerance is applied.
 //
-// Writes report.json, report.md and screenshots (and videos with --video) to --out, which belongs in the scratchpad,
-// never in the target project. Previews must be local: a loopback URL, a file, or a mockup folder shown through the
-// pivot-design viewer (its sandbox and policy). Requests to other hosts are blocked and listed unless --allow-remote.
-// Exit code: 0 Pass, 1 Fail, 2 Not Verified, 3 couldn't run (bad plan, no Playwright or Chromium).
+// Writes report.json, report.md and screenshots (and videos with --video) to --out: a new, empty folder in the
+// scratchpad, never in the target project. `--verify report.json` re-checks the evidence files against their sha256.
+// Previews must be local: a loopback URL, a file, or a mockup folder shown through the pivot-design viewer (its sandbox
+// and policy); never PIVOT's own app. Other hosts are cut off in the browser's network stack (redirects, WebSockets
+// and workers included) unless --allow-remote, and requests that could change data (anything but GET, HEAD, OPTIONS)
+// are blocked unless --allow-writes. Both need the user's permission. The plan holds selectors and expectations only:
+// no shell command or page script comes from it.
+// Exit code: 0 Pass, 1 Fail, 2 Not Verified, 3 couldn't run (bad plan, no Playwright or Chromium, a used --out).
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -31,12 +35,40 @@ export const VERSION = "1.0.0";
 export const VIEWPORTS = { desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } };
 const TRIGGERS = ["load", "scroll", "hover", "click", "focus", "other"];
 /** Properties always watched, besides the ones the plan names. */
-const WATCHED = ["opacity", "transform", "translate", "scale", "rotate", "filter", "clip-path", "visibility"];
+const WATCHED = [
+  "opacity",
+  "transform",
+  "translate",
+  "scale",
+  "rotate",
+  "filter",
+  "clip-path",
+  "visibility",
+  "display",
+];
+/** What makes an element seen or not: compared between reduced and full motion when the brief doesn't set them. */
+const VISIBILITY = ["opacity", "visibility", "display"];
 /** How long one observation may run before it stops waiting for the element to settle (a harness limit, not a tolerance). */
 const WINDOW_MS = 4000;
 const SETTLE_MS = 300;
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
 const isLoopback = (host) => LOOPBACK.has(host) || host.endsWith(".localhost");
+const portOf = (u) => u.port || (u.protocol === "https:" ? "443" : "80");
+/**
+ * PIVOT's own app is never driven: its pages are same-origin with its API, so a click there could approve a mockup or
+ * change the library. Its address is PIVOT_URL, or the default http://127.0.0.1:4321.
+ */
+export function isPivotApp(url) {
+  try {
+    const u = new URL(url);
+    const pivot = new URL(process.env.PIVOT_URL || "http://127.0.0.1:4321");
+    return /^(https?|wss?):$/.test(u.protocol) && isLoopback(u.hostname) && portOf(u) === portOf(pivot);
+  } catch {
+    return false;
+  }
+}
+/** Methods that can't change anything on a server; anything else is blocked unless writes are allowed. */
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 const sha256 = (data) => crypto.createHash("sha256").update(data).digest("hex");
 const kebab = (p) => p.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
@@ -64,6 +96,8 @@ export function validatePlan(input) {
       const u = new URL(t.url);
       if (!/^https?:$/.test(u.protocol) || !isLoopback(u.hostname))
         errors.push(`target.url must be a local preview (127.0.0.1, localhost or [::1]): ${t.url}`);
+      else if (isPivotApp(t.url))
+        errors.push(`target.url is PIVOT itself (${u.host}): motion QA never drives PIVOT's own pages`);
     } catch {
       errors.push(`target.url isn't a URL: ${t.url}`);
     }
@@ -164,6 +198,19 @@ const endDiff = (want, got) =>
 export function judgeItem(item, runs, viewports) {
   const checks = [];
   const add = (viewport, mode, check, status, detail = "") => checks.push({ viewport, mode, check, status, detail });
+  /** What can't be judged from an observation that didn't see the whole thing. */
+  const incomplete = (vp, mode, o) => {
+    if (o.unsettled) add(vp, mode, "settled", "not verified", "the page never stopped animating before the trigger");
+    if (o.capped) add(vp, mode, "settled", "not verified", "the observation window ended before the element settled");
+    if (o.lostTarget) add(vp, mode, "final state", "not verified", "the element disappeared while it was watched");
+  };
+  const moves = (vp, mode, o, expected) => {
+    const what = `${expected ? "expected motion" : "expected no motion"}; ${o.motion ? "motion observed" : "no motion observed"}`;
+    // A finished animation found on the element, never seen running: it may have run before anyone watched.
+    if (!o.motion && o.finishedBeforeWatch)
+      add(vp, mode, "moves", "not verified", `an animation on it had already finished when watching began; ${what}`);
+    else add(vp, mode, "moves", o.motion === expected ? "pass" : "fail", what);
+  };
   if (item.trigger.type === "other") {
     add(
       null,
@@ -178,17 +225,12 @@ export function judgeItem(item, runs, viewports) {
       if (!first?.executed) add(vp, "full", "trigger", "not verified", first?.error ?? "not run");
       else {
         add(vp, "full", "trigger", "pass", `${item.trigger.type} performed`);
-        if (first.unsettled)
-          add(vp, "full", "settled", "not verified", "the page never stopped animating before the trigger");
-        add(
-          vp,
-          "full",
-          "moves",
-          first.motion === item.expect.animates ? "pass" : "fail",
-          `${item.expect.animates ? "expected motion" : "expected no motion"}; ${first.motion ? "motion observed" : "no motion observed"}`,
-        );
+        incomplete(vp, "full", first);
+        moves(vp, "full", first, item.expect.animates);
         const props = (item.expect.properties ?? []).map(kebab);
-        if (props.length) {
+        if (props.length && !first.motion && first.finishedBeforeWatch)
+          add(vp, "full", "properties", "not verified", "the motion wasn't seen, so its properties can't be read");
+        else if (props.length) {
           const missing = props.filter((p) => !first.properties.includes(p));
           add(
             vp,
@@ -198,7 +240,7 @@ export function judgeItem(item, runs, viewports) {
             missing.length ? `${missing.join(", ")} didn't change` : props.join(", "),
           );
         }
-        if (item.expect.end) {
+        if (item.expect.end && !first.lostTarget) {
           const diff = endDiff(item.expect.end, first.end);
           add(vp, "full", "final state", diff.length ? "fail" : "pass", diff.join("; ") || "as briefed");
         }
@@ -208,7 +250,7 @@ export function judgeItem(item, runs, viewports) {
             add(
               vp,
               "full",
-              "timing",
+              "declared timing",
               "not verified",
               `no declared timing to read (script-driven motion?); brief: ${want}`,
             );
@@ -219,7 +261,13 @@ export function judgeItem(item, runs, viewports) {
                 (!item.expect.easing || d.easing === item.expect.easing),
             );
             const got = first.declared.map((d) => `${d.name} ${d.durationMs} ms ${d.easing}`).join(", ");
-            add(vp, "full", "timing", ok ? "pass" : "fail", `declared ${got}; brief: ${want}`);
+            add(
+              vp,
+              "full",
+              "declared timing",
+              ok ? "pass" : "fail",
+              `declared ${got}; brief: ${want} (declared values, not measured on screen)`,
+            );
           }
         }
         for (const [key, label] of [
@@ -258,16 +306,8 @@ export function judgeItem(item, runs, viewports) {
         add(vp, "reduced", "trigger", "not verified", r1?.error ?? "not run");
         continue;
       }
-      if (r1.unsettled)
-        add(vp, "reduced", "settled", "not verified", "the page never stopped animating before the trigger");
-      if (typeof item.reduced.animates === "boolean")
-        add(
-          vp,
-          "reduced",
-          "moves",
-          r1.motion === item.reduced.animates ? "pass" : "fail",
-          `${item.reduced.animates ? "expected motion" : "expected no motion"}; ${r1.motion ? "motion observed" : "no motion observed"}`,
-        );
+      incomplete(vp, "reduced", r1);
+      if (typeof item.reduced.animates === "boolean") moves(vp, "reduced", r1, item.reduced.animates);
       const banned = (item.reduced.notProperties ?? []).map(kebab).filter((p) => r1.animated.includes(p));
       if (item.reduced.notProperties?.length)
         add(
@@ -287,9 +327,25 @@ export function judgeItem(item, runs, viewports) {
           rprops.length ? `${rprops.join(", ")} didn't change` : "",
         );
       const wantEnd = item.reduced.end ?? item.expect.end;
-      if (wantEnd) {
+      if (wantEnd && !r1.lostTarget) {
         const diff = endDiff(wantEnd, r1.end);
         add(vp, "reduced", "final state", diff.length ? "fail" : "pass", diff.join("; ") || "same final state");
+      }
+      // Whatever the brief says about the end, reduced motion must leave the element as visible as full motion does.
+      const fullEnd = first?.executed && !first.lostTarget ? first.end : null;
+      const unbriefed = VISIBILITY.filter((p) => !(p in (wantEnd ?? {})));
+      if (!r1.lostTarget && unbriefed.length) {
+        if (!fullEnd) add(vp, "reduced", "visibility", "not verified", "no full-motion run to compare with");
+        else {
+          const diff = endDiff(Object.fromEntries(unbriefed.map((p) => [p, fullEnd[p]])), r1.end);
+          add(
+            vp,
+            "reduced",
+            "visibility",
+            diff.length ? "fail" : "pass",
+            diff.length ? `${diff.join("; ")} (as ended with full motion)` : "as visible as with full motion",
+          );
+        }
       }
       if (!r2?.executed) add(vp, "reduced", "replay", "not verified", r2?.error ?? "replay not run");
       else
@@ -365,7 +421,9 @@ const HINTS = {
   "reduced final state":
     "With reduced motion the element must still reach its final state: a rule that only removes the animation can leave it at its hidden start.",
   "final state": "The element doesn't end where the brief and the approved mockup put it.",
-  timing: "Use the duration and easing the brief states.",
+  "declared timing": "Use the duration and easing the brief states.",
+  "reduced visibility":
+    "With reduced motion the element ends less visible than with full motion: give the reduced branch the final state.",
   replay: "The second run differs from the first: state left over from the last run, or a one-time animation.",
   "no movement": "The reduced-motion branch still moves things: drop the movement, keep at most the briefed fade.",
   "layout shift": "The motion shifts layout: animate transform/opacity and reserve the element's space.",
@@ -385,7 +443,14 @@ export function renderMarkdown(r) {
   );
   out.push(`- Reduced motion: ${r.environment.reducedMotion}`);
   out.push(`- Viewports: ${r.viewports.map((v) => `${v.name} ${v.width}×${v.height}`).join(", ")}`);
-  out.push(`- Run: ${r.startedAt}, motion-qa ${r.tool.version}, plan sha256 ${r.plan.sha256.slice(0, 12)}`, "");
+  out.push(
+    `- Run: ${r.runId ?? "(no id)"}, ${r.startedAt}, motion-qa ${r.tool.version}, plan sha256 ${r.plan.sha256.slice(0, 12)}`,
+  );
+  if (r.network) out.push(`- Network: other hosts ${r.network.remote}; writes ${r.network.writes}`);
+  out.push(
+    "- Evidence: the files listed below, each with its sha256 in report.json; `motion-qa.mjs --verify report.json` re-checks them",
+    "",
+  );
   out.push(`**Overall: ${r.overall.status}.** ${r.overall.reasons.join("; ") || "every essential item passed"}.`, "");
   out.push("| ID | Item | Tag | Trigger | Result | Reduced motion |", "| --- | --- | --- | --- | --- | --- |");
   for (const i of r.items) {
@@ -535,24 +600,34 @@ const pause = (ms) => new Promise((r) => setTimeout(r, ms));
  * Waits until nothing finite runs on the page and that has held for SETTLE_MS, so motion started by the load (an
  * entrance, an element already in view) can't be mistaken for the trigger's. Returns false if it never settled.
  */
-async function settle(scopeOf) {
+async function settle(scopeOf, sel, props) {
   const t0 = Date.now();
   let quietSince = null;
+  let last = null;
   while (Date.now() - t0 < WINDOW_MS) {
-    const busy = await (
+    const state = await (
       await scopeOf()
     )
-      .evaluate(() =>
-        document
-          .getAnimations()
-          .some(
-            (a) =>
-              a.playState === "running" &&
-              a.effect?.getTiming?.().iterations !== Infinity &&
-              (!a.timeline || a.timeline === document.timeline),
-          ),
+      .evaluate(
+        ({ sel, props }) => {
+          const running = document
+            .getAnimations()
+            .some(
+              (a) =>
+                a.playState === "running" &&
+                a.effect?.getTiming?.().iterations !== Infinity &&
+                (!a.timeline || a.timeline === document.timeline),
+            );
+          const el = document.querySelector(sel);
+          const cs = el ? getComputedStyle(el) : null;
+          return { running, values: cs ? props.map((p) => cs.getPropertyValue(p)).join("|") : null };
+        },
+        { sel, props },
       )
-      .catch(() => true);
+      .catch(() => ({ running: true, values: null }));
+    // Script-driven motion has no Animation object: the element's own values must also hold still.
+    const busy = state.running || state.values !== last;
+    last = state.values;
     if (busy) quietSince = null;
     else if ((quietSince ??= Date.now()) && Date.now() - quietSince >= SETTLE_MS) return true;
     await pause(16);
@@ -560,18 +635,22 @@ async function settle(scopeOf) {
   return false;
 }
 
+/** The computed properties watched on an item's element. */
+const watchedProps = (item) => [
+  ...new Set([
+    ...WATCHED,
+    ...(item.expect.properties ?? []).map(kebab),
+    ...Object.keys(item.expect.end ?? {}).map(kebab),
+    ...Object.keys(item.reduced?.end ?? {}).map(kebab),
+    ...(item.reduced?.notProperties ?? []).map(kebab),
+  ]),
+];
+
 async function observeOnce(page, scopeOf, item, ctx, label) {
   const sel = item.target;
-  const props = [
-    ...new Set([
-      ...WATCHED,
-      ...(item.expect.properties ?? []).map(kebab),
-      ...Object.keys(item.expect.end ?? {}).map(kebab),
-      ...Object.keys(item.reduced?.end ?? {}).map(kebab),
-      ...(item.reduced?.notProperties ?? []).map(kebab),
-    ]),
-  ];
-  const evidence = [];
+  const props = watchedProps(item);
+  // Owned by the caller, so screenshots taken before a failure stay in the report.
+  const evidence = ctx.evidence ?? [];
   const shot = async (what) => {
     const file = `${item.id}-${label}-${what.replace(/\W+/g, "-")}.png`;
     const data = await page.screenshot({ path: path.join(ctx.out, file) });
@@ -596,7 +675,7 @@ async function observeOnce(page, scopeOf, item, ctx, label) {
   const type = item.trigger.type;
   let before = await waitFound(3000);
   if (!before.found)
-    return { executed: false, error: `element ${sel} not found${before.error ? ` (${before.error})` : ""}` };
+    return { executed: false, error: `element ${sel} not found${before.error ? ` (${before.error})` : ""}`, evidence };
   // Everything that was already there before the trigger doesn't count as its motion (except at load).
   const known = new Set(type === "load" ? [] : before.anims.map((a) => a.key));
   const eventsBefore = type === "load" ? 0 : (before.events?.length ?? 0);
@@ -618,7 +697,25 @@ async function observeOnce(page, scopeOf, item, ctx, label) {
       before = await poll();
       samples[0] = before;
       const b = await box(on);
-      if (!b) return { executed: false, error: `trigger element ${on} not found or not visible` };
+      if (!b) return { executed: false, error: `trigger element ${on} not found or not visible`, evidence };
+      // The pointer goes where the user's would: if something else covers that point, it's what gets the input.
+      const covered = await scope
+        .locator(on)
+        .first()
+        .evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return !hit || hit === el || el.contains(hit)
+            ? null
+            : `${hit.tagName.toLowerCase()}${hit.id ? `#${hit.id}` : ""}`;
+        })
+        .catch(() => "an unreadable element");
+      if (covered)
+        return {
+          executed: false,
+          error: `${on} is covered by ${covered} at its centre, so it can't get the ${type}`,
+          evidence,
+        };
       if (type === "hover") await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 4 });
       else await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
     } else if (type === "focus") {
@@ -631,26 +728,36 @@ async function observeOnce(page, scopeOf, item, ctx, label) {
           .evaluate((el) => el === document.activeElement || el.contains(document.activeElement))
           .catch(() => false);
       }
-      if (!reached) return { executed: false, error: `Tab never reached ${on}` };
+      if (!reached) return { executed: false, error: `Tab never reached ${on}`, evidence };
     } else if (type === "scroll") {
       const vp = page.viewportSize();
       await page.mouse.move(vp.width / 2, vp.height / 2);
       const stop = item.trigger.to ?? sel;
       let last = null;
+      let reached = false;
       for (let i = 0; i < 60; i++) {
         const b = await box(stop);
-        if (b && b.y <= vp.height * 0.5) break;
+        // In the upper half of the view, or wholly in view when the page can't scroll it that far.
+        if (b && (b.y <= vp.height * 0.5 || (last !== null && b.y >= 0 && b.y + b.height <= vp.height))) {
+          reached = true;
+          break;
+        }
         await page.mouse.wheel(0, 240);
         await pause(60);
         const s = await poll();
         samples.push(s);
         const y = JSON.stringify(s.rect);
-        if (y === last) break; // the page can't scroll further
+        if (y === last) {
+          const b2 = await box(stop);
+          reached = !!b2 && b2.y >= 0 && b2.y < vp.height;
+          break; // the page can't scroll further
+        }
         last = y;
       }
+      if (!reached) return { executed: false, error: `scrolling never brought ${stop} into view`, evidence };
     }
   } catch (err) {
-    return { executed: false, error: `trigger failed: ${String(err.message ?? err).split("\n")[0]}` };
+    return { executed: false, error: `trigger failed: ${String(err.message ?? err).split("\n")[0]}`, evidence };
   }
 
   // Watch until nothing runs and the values hold, or the window ends.
@@ -659,9 +766,13 @@ async function observeOnce(page, scopeOf, item, ctx, label) {
   let prev = JSON.stringify(samples.at(-1).values);
   let during = false;
   let capped = false;
+  let lostTarget = false;
   for (;;) {
     const s = await poll();
-    if (!s.found) break;
+    if (!s.found) {
+      lostTarget = true;
+      break;
+    }
     samples.push(s);
     const now = JSON.stringify(s.values);
     if (now !== prev) {
@@ -671,7 +782,7 @@ async function observeOnce(page, scopeOf, item, ctx, label) {
     const running = s.anims.filter((a) => a.playState === "running" && !a.scroll);
     if (!during && running.some((a) => !known.has(a.key))) {
       during = true;
-      await shot(`during ~${Date.now() - t0}ms`);
+      await shot(`during, about ${Date.now() - t0} ms into watching`);
     }
     if (!running.some((a) => !a.infinite) && Date.now() - lastChange >= SETTLE_MS && Date.now() - t0 >= 100) break;
     if (Date.now() - t0 > (item.windowMs ?? WINDOW_MS)) {
@@ -686,6 +797,11 @@ async function observeOnce(page, scopeOf, item, ctx, label) {
   const fresh = samples
     .flatMap((s) => s.anims ?? [])
     .filter((a) => !known.has(a.key) && (a.scroll || (a.durationMs ?? 0) > 0));
+  // An animation counts as motion only if it was seen running; one only ever seen finished ran before anyone watched,
+  // and one only ever seen paused never ran.
+  const seenRunning = new Set(fresh.filter((a) => a.playState === "running").map((a) => a.key));
+  const ran = fresh.filter((a) => a.scroll || seenRunning.has(a.key));
+  const finishedBeforeWatch = fresh.some((a) => !a.scroll && !seenRunning.has(a.key) && a.playState === "finished");
   const scrolled = samples
     .flatMap((s) => s.anims ?? [])
     .filter((a) => a.scroll)
@@ -700,7 +816,7 @@ async function observeOnce(page, scopeOf, item, ctx, label) {
   );
   const animated = [
     ...new Set([
-      ...fresh.flatMap((a) => a.props.map(kebab)),
+      ...ran.flatMap((a) => a.props.map(kebab)),
       ...newEvents.filter((n) => n.includes("-") || props.includes(n)),
     ]),
   ];
@@ -713,8 +829,10 @@ async function observeOnce(page, scopeOf, item, ctx, label) {
   }));
   return {
     executed: true,
-    motion: fresh.length > 0 || scrollMoved || between.length > 0,
-    properties: [...new Set([...animated, ...between, ...changed.filter((p) => fresh.length || scrollMoved)])],
+    motion: ran.some((a) => !a.scroll) || scrollMoved || between.length > 0,
+    finishedBeforeWatch,
+    lostTarget,
+    properties: [...new Set([...animated, ...between, ...changed.filter((p) => ran.length || scrollMoved)])],
     animated: [...new Set([...animated, ...between])],
     declared,
     end: after.values,
@@ -730,14 +848,21 @@ async function observeOnce(page, scopeOf, item, ctx, label) {
 /** Runs every item at every viewport, with full and reduced motion, each twice (the second time is the Replay). */
 export async function runPlan(
   rawPlan,
-  { out, briefText = null, briefFile = null, video = false, allowRemote = false } = {},
+  { out, briefText = null, briefFile = null, video = false, allowRemote = false, allowWrites = false } = {},
 ) {
   const { plan, errors } = validatePlan(rawPlan);
   if (errors.length) throw new Error(`Plan errors:\n- ${errors.join("\n- ")}`);
+  // A fresh folder per run, so no file from another run can sit next to this report.
+  if (fs.existsSync(out) && fs.readdirSync(out).length)
+    throw new Error(
+      `${out} isn't empty: give each run a new --out folder, so its evidence can't mix with another run's`,
+    );
   fs.mkdirSync(out, { recursive: true });
+  const runId = crypto.randomUUID();
   const { chromium, version } = loadPlaywright();
   const startedAt = new Date().toISOString();
   const blocked = new Set();
+  const blockedWrites = new Set();
 
   // Where the preview comes from, and what identifies it.
   let url;
@@ -780,7 +905,14 @@ export async function runPlan(
     }
   }
 
-  const browser = await chromium.launch();
+  // Other hosts are cut off in the network stack, not only by request routing, which misses redirects, WebSockets and
+  // workers: everything but loopback goes to a proxy that doesn't exist. WebRTC may only use that proxy (so no UDP).
+  const browser = await chromium.launch({
+    ...(allowRemote
+      ? {}
+      : { proxy: { server: "http://127.0.0.1:9", bypass: "127.0.0.1,localhost,[::1],*.localhost" } }),
+    args: allowRemote ? [] : ["--force-webrtc-ip-handling-policy=disable_non_proxied_udp"],
+  });
   const browserVersion = browser.version();
   const viewer = !!plan.target.viewer;
   const results = [];
@@ -796,19 +928,38 @@ export async function runPlan(
             const context = await browser.newContext({
               viewport: { width: vp.width, height: vp.height },
               reducedMotion: mode === "reduced" ? "reduce" : "no-preference",
+              serviceWorkers: "block",
               ...(video
                 ? { recordVideo: { dir: path.join(out, "videos"), size: { width: vp.width, height: vp.height } } }
                 : {}),
             });
             await context.addInitScript(recorder);
             await context.route("**/*", (route) => {
-              const u = new URL(route.request().url());
-              if (allowRemote || !/^(https?|wss?):$/.test(u.protocol) || isLoopback(u.hostname))
-                return route.continue();
+              const req = route.request();
+              const u = new URL(req.url());
+              const web = /^(https?|wss?):$/.test(u.protocol);
+              if (web && isPivotApp(u.href)) {
+                blocked.add(`${u.protocol}//${u.host} (PIVOT)`);
+                return route.abort("blockedbyclient");
+              }
+              if (web && !allowWrites && !SAFE_METHODS.has(req.method())) {
+                blockedWrites.add(`${req.method()} ${u.protocol}//${u.host}${u.pathname}`);
+                return route.abort("blockedbyclient");
+              }
+              if (!web || allowRemote || isLoopback(u.hostname)) return route.continue();
               blocked.add(`${u.protocol}//${u.host}`);
               return route.abort("blockedbyclient");
             });
             const page = await context.newPage();
+            // What routing doesn't see (a redirect, a WebSocket) the proxy stops; list it too.
+            page.on("requestfailed", (r) => {
+              const u = new URL(r.url());
+              if (/^https?:$/.test(u.protocol) && !isLoopback(u.hostname)) blocked.add(`${u.protocol}//${u.host}`);
+            });
+            page.on("websocket", (ws) => {
+              const u = new URL(ws.url());
+              if (!isLoopback(u.hostname) || isPivotApp(u.href)) blocked.add(`${u.protocol}//${u.host}`);
+            });
             const scopeOf = viewer
               ? async () => (await page.waitForSelector("#frame", { timeout: 3000 })).contentFrame()
               : async () => page.mainFrame();
@@ -816,6 +967,7 @@ export async function runPlan(
             for (const run of ["first", "replay"]) {
               const label = `${vp.name}-${mode}-${run}`;
               let o;
+              const evidence = [];
               try {
                 const waitUntil = item.trigger.type === "load" ? "commit" : "load";
                 if (run === "first") await page.goto(url, { waitUntil });
@@ -829,12 +981,15 @@ export async function runPlan(
                 let settled = true;
                 if (item.trigger.type !== "load") {
                   await page.waitForLoadState("load");
-                  settled = await settle(scopeOf);
+                  settled = await settle(scopeOf, item.target, watchedProps(item));
                 }
-                o = await observeOnce(page, scopeOf, item, { out }, label);
+                const at = new URL(page.url());
+                if (!["file:", "about:"].includes(at.protocol) && (!isLoopback(at.hostname) || isPivotApp(at.href)))
+                  throw new Error(`the preview went to ${at.protocol}//${at.host}, which isn't the local preview`);
+                o = await observeOnce(page, scopeOf, item, { out, evidence }, label);
                 if (!settled && o.executed) o.unsettled = true;
               } catch (err) {
-                o = { executed: false, error: String(err.message ?? err).split("\n")[0] };
+                o = { executed: false, error: String(err.message ?? err).split("\n")[0], evidence };
               }
               o.evidence ??= [];
               list.push(o);
@@ -901,11 +1056,19 @@ export async function runPlan(
     limitations.push(
       "The preview ran in the viewer's sandboxed frame; layout shift and long frames aren't measured inside a frame that runs no script.",
     );
+  if (blockedWrites.size)
+    limitations.push(
+      `Requests that could change data were blocked, so what they would have done wasn't observed: ${[...blockedWrites].join(", ")}.`,
+    );
+  limitations.push(
+    "WebSockets to loopback (a dev server's reload channel) are allowed and their messages aren't inspected. DNS lookups the browser makes on its own (prefetching) aren't covered by the network block.",
+  );
   if (blocked.size)
     limitations.push(
       `Requests to other hosts were blocked, so the page may have rendered without them: ${[...blocked].join(", ")}.`,
     );
   const report = {
+    runId,
     tool: { name: "motion-qa.mjs", version: VERSION },
     project: plan.project ?? null,
     implementation,
@@ -934,11 +1097,40 @@ export async function runPlan(
     specialists: plan.specialists ?? [],
     limitations,
     blocked: [...blocked],
+    network: {
+      remote: allowRemote ? "allowed (--allow-remote)" : "blocked: only loopback; other hosts go to a dead proxy",
+      writes: allowWrites ? "allowed (--allow-writes)" : "blocked: only GET, HEAD and OPTIONS requests leave the page",
+      blockedWrites: [...blockedWrites],
+    },
   };
   report.overall = aggregate(results, trace);
   fs.writeFileSync(path.join(out, "report.json"), JSON.stringify(report, null, 2));
   fs.writeFileSync(path.join(out, "report.md"), renderMarkdown(report));
   return report;
+}
+
+/**
+ * Re-checks a report's evidence: every file it lists exists in the report's folder with the same sha256, and nothing
+ * else in the folder claims to be evidence. It proves the files are the ones this report was written with, not that
+ * the report itself is genuine: report.json has no signature.
+ */
+export function verifyEvidence(reportFile) {
+  const dir = path.dirname(path.resolve(reportFile));
+  const report = JSON.parse(fs.readFileSync(reportFile, "utf8"));
+  const problems = [];
+  const listed = new Set();
+  for (const item of report.items ?? [])
+    for (const o of item.observations ?? [])
+      for (const e of o.evidence ?? []) {
+        listed.add(e.file);
+        const file = path.join(dir, e.file);
+        if (path.relative(dir, file).startsWith("..")) problems.push(`${e.file}: outside the report's folder`);
+        else if (!fs.existsSync(file)) problems.push(`${e.file}: missing`);
+        else if (sha256(fs.readFileSync(file)) !== e.sha256) problems.push(`${e.file}: changed since the run`);
+      }
+  const strays = fs.readdirSync(dir).filter((f) => /\.(png|webm)$/i.test(f) && !listed.has(f));
+  for (const f of strays) problems.push(`${f}: in the folder but not in this report (another run?)`);
+  return { runId: report.runId ?? null, files: listed.size, problems };
 }
 
 // ---- self-test -------------------------------------------------------------------------------------------------
@@ -953,16 +1145,28 @@ body{margin:0;font:16px system-ui;background:#fff;color:#111}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 #reveal{margin:24px;opacity:0;transform:translateY(24px);transition:opacity .3s ease-out,transform .3s ease-out}
 #reveal.in{opacity:1;transform:none}
+#veil-wrap{position:relative;margin:24px;width:200px}
+#covered{width:200px;height:40px;transition:transform .2s ease-out}
+#covered:hover{transform:translateY(-2px)}
+#veil{position:absolute;inset:0}
+#paused{margin:24px;animation:rise .4s ease-out both;animation-play-state:paused}
+#early{margin:24px;animation:rise .5s ease-out both}
+#ghost{margin:24px;animation:fade .3s ease-out both}
 @media (prefers-reduced-motion: reduce){
   #hero{animation:none}
   .card{transition:none}
   #broken{animation:none;opacity:0}
   #reveal{transition:none}
+  #ghost{animation:none;opacity:0}
 }
 </style></head><body>
 <h1 id="hero">Hero</h1>
 <div class="card" id="card">Card</div>
 <p id="broken">Visible only with full motion (the defect)</p>
+<p id="early">Already in view: its entrance plays at load, not on scroll</p>
+<p id="ghost">Hidden with reduced motion, and the plan names no final state</p>
+<div id="veil-wrap"><button id="covered">Covered</button><div id="veil"></div></div>
+<p id="paused">Declared but paused: never runs</p>
 <button id="open">Open</button><div id="panel" hidden>Panel</div>
 <div style="height:1400px"></div>
 <section id="reveal">Revealed on scroll</section>
@@ -985,6 +1189,10 @@ const FIXTURE_BRIEF = `**Motion:** standard (set by you): fixture.
 | M6 · Cursor trail | pointer → trail | – | none | detail |
 | M7 · Section reveal | scroll → fades up | 300 ms ease-out | shown at once | essential |
 | M8 · Logo spin | load → spins once | 600 ms | static | essential |
+| M9 · Covered button | hover → lifts 2px | 200 ms | none | detail |
+| M10 · Paused entrance | load → fades up | 400 ms | shown at once | detail |
+| M11 · Early reveal | scroll → fades up | 500 ms | shown at once | detail |
+| M12 · Ghost note | load → fades in | 300 ms | shown at once | detail |
 `;
 
 const fixturePlan = (file) => ({
@@ -1052,6 +1260,44 @@ const fixturePlan = (file) => ({
       expect: { animates: true, properties: ["opacity", "transform"], end: { opacity: "1", transform: "none" } },
       reduced: { animates: false },
     },
+    // Each of these must not pass: covered from the pointer, declared but never running, playing at load instead of on
+    // scroll, and hidden with reduced motion when the plan names no final state.
+    {
+      id: "M9",
+      name: "Covered button",
+      tag: "detail",
+      trigger: "hover",
+      target: "#covered",
+      expect: { animates: true, properties: ["transform"] },
+      reduced: { animates: false },
+    },
+    {
+      id: "M10",
+      name: "Paused entrance",
+      tag: "detail",
+      trigger: "load",
+      target: "#paused",
+      expect: { animates: true, properties: ["opacity"] },
+      reduced: { animates: false },
+    },
+    {
+      id: "M11",
+      name: "Early reveal",
+      tag: "detail",
+      trigger: { type: "scroll", to: "#early" },
+      target: "#early",
+      expect: { animates: true, properties: ["opacity", "transform"] },
+      reduced: { animates: false },
+    },
+    {
+      id: "M12",
+      name: "Ghost note",
+      tag: "detail",
+      trigger: "load",
+      target: "#ghost",
+      expect: { animates: true, properties: ["opacity"] },
+      reduced: { animates: false },
+    },
   ],
 });
 
@@ -1062,7 +1308,19 @@ export async function selfTest({ out = fs.mkdtempSync(path.join(os.tmpdir(), "mo
   fs.writeFileSync(file, FIXTURE);
   const plan = { ...fixturePlan(file), ...(viewports ? { viewports } : {}) };
   const report = await runPlan(plan, { out: path.join(out, "run"), briefText: FIXTURE_BRIEF, briefFile: "fixture" });
-  const want = { M1: "Pass", M2: "Pass", M3: "Fail", M4: "Fail", M5: "Not Verified", M6: "Not Verified", M7: "Pass" };
+  const want = {
+    M1: "Pass",
+    M2: "Pass",
+    M3: "Fail",
+    M4: "Fail",
+    M5: "Not Verified",
+    M6: "Not Verified",
+    M7: "Pass",
+    M9: "Not Verified",
+    M10: "Fail",
+    M11: "Fail",
+    M12: "Fail",
+  };
   const lines = [];
   const problems = [];
   for (const [id, expected] of Object.entries(want)) {
@@ -1074,6 +1332,22 @@ export async function selfTest({ out = fs.mkdtempSync(path.join(os.tmpdir(), "mo
   const caught = m3.checks.some((c) => c.mode === "reduced" && c.check === "final state" && c.status === "fail");
   lines.push(`${caught ? "PASS" : "FAIL"} M3 is caught by its reduced-motion final state (content hidden)`);
   if (!caught) problems.push("M3 reduced");
+  const why = (id, check, status, mode = "full") =>
+    report.items
+      .find((i) => i.id === id)
+      .checks.some((c) => c.check === check && c.status === status && c.mode === mode);
+  for (const [ok, text] of [
+    [why("M9", "trigger", "not verified"), "M9 isn't hovered through the element covering it"],
+    [why("M10", "moves", "fail"), "M10, declared but paused, doesn't count as motion"],
+    [why("M11", "moves", "fail"), "M11's entrance at load doesn't pass for its scroll trigger"],
+    [
+      why("M12", "visibility", "fail", "reduced"),
+      "M12 hidden with reduced motion is caught with no final state briefed",
+    ],
+  ]) {
+    lines.push(`${ok ? "PASS" : "FAIL"} ${text}`);
+    if (!ok) problems.push(text);
+  }
   const traced = report.trace.missing.map((m) => m.id).join(",") === "M8";
   lines.push(`${traced ? "PASS" : "FAIL"} brief item M8 with no check is reported`);
   if (!traced) problems.push("trace");
@@ -1081,9 +1355,9 @@ export async function selfTest({ out = fs.mkdtempSync(path.join(os.tmpdir(), "mo
   lines.push(`${overall ? "PASS" : "FAIL"} overall ${report.overall.status} (expected Fail)`);
   if (!overall) problems.push("overall");
   const files = report.items.flatMap((i) => i.observations.flatMap((o) => o.evidence));
-  const intact =
-    files.length > 0 && files.every((e) => sha256(fs.readFileSync(path.join(out, "run", e.file))) === e.sha256);
-  lines.push(`${intact ? "PASS" : "FAIL"} ${files.length} evidence files exist and match their sha256`);
+  const verified = verifyEvidence(path.join(out, "run", "report.json"));
+  const intact = files.length > 0 && !verified.problems.length;
+  lines.push(`${intact ? "PASS" : "FAIL"} ${files.length} evidence files exist and match their sha256 (--verify)`);
   if (!intact) problems.push("evidence");
   return { ok: !problems.length, problems, lines, report, out };
 }
@@ -1094,16 +1368,24 @@ if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(path.re
   const args = process.argv.slice(2);
   const opt = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
   try {
+    if (args.includes("--verify")) {
+      const r = verifyEvidence(opt("--verify"));
+      for (const p of r.problems) console.log(`FAIL ${p}`);
+      console.log(
+        `${r.problems.length ? "Evidence doesn't match" : "Evidence matches"} report ${r.runId ?? "(no run id)"}: ${r.files} file(s), ${r.problems.length} problem(s)`,
+      );
+      process.exit(r.problems.length ? 1 : 0);
+    }
     if (args.includes("--self-test")) {
       const r = await selfTest(opt("--out") ? { out: path.resolve(opt("--out")) } : {});
       for (const l of r.lines) console.log(l);
       console.log(`Self-test ${r.ok ? "passed" : "FAILED"}; evidence in ${r.out}`);
       process.exit(r.ok ? 0 : 1);
     }
-    const planFile = args.find((a, i) => !a.startsWith("--") && !/^--(out|brief)$/.test(args[i - 1] ?? ""));
+    const planFile = args.find((a, i) => !a.startsWith("--") && !/^--(out|brief|verify)$/.test(args[i - 1] ?? ""));
     if (!planFile || !opt("--out")) {
       console.error(
-        "Usage: node motion-qa.mjs <plan.json> --out <scratch folder> [--brief <brief.md>] [--video] [--allow-remote]\n       node motion-qa.mjs --self-test [--out <folder>]",
+        "Usage: node motion-qa.mjs <plan.json> --out <new scratch folder> [--brief <brief.md>] [--video] [--allow-remote] [--allow-writes]\n       node motion-qa.mjs --verify <report.json>\n       node motion-qa.mjs --self-test [--out <folder>]",
       );
       process.exit(3);
     }
@@ -1114,6 +1396,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(path.re
       briefFile,
       video: args.includes("--video"),
       allowRemote: args.includes("--allow-remote"),
+      allowWrites: args.includes("--allow-writes"),
     });
     for (const i of report.items) console.log(`${i.id} ${i.result.padEnd(12)} ${i.tag.padEnd(9)} ${i.name}`);
     for (const m of report.trace.missing)
