@@ -1,39 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isValidApiToken } from "@pivot/core/api-token";
-
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
-
-function hostname(hostHeader: string | null) {
-  if (!hostHeader) return "";
-  return hostHeader.startsWith("[") ? hostHeader.slice(0, hostHeader.indexOf("]") + 1) : hostHeader.split(":")[0];
-}
+import { guardApiRequest } from "@pivot/core/request-guard";
 
 /**
- * The API has no login, so it only answers requests addressed to this machine (blocks DNS rebinding),
- * and writes must come from the app's own pages or carry the API token (blocks other sites and local scripts).
+ * The API has no login, so it only answers requests addressed to this machine (blocks DNS rebinding), writes must
+ * come from the app's own pages or carry the API token, and other sites can't open API pages or read the token.
+ * The rules live in `@pivot/core/request-guard`.
  */
 export function proxy(request: NextRequest) {
-  const host = request.headers.get("host");
-  if (!LOCAL_HOSTS.has(hostname(host))) {
-    return NextResponse.json({ error: "Forbidden host" }, { status: 403 });
-  }
-  if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
-    const origin = request.headers.get("origin");
-    const site = request.headers.get("sec-fetch-site");
-    // Browsers always send one of these on a write; a request with neither (curl, a script) needs the token.
-    const sameOrigin = origin ? new URL(origin).host === host : site === "same-origin";
-    const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-    if (!sameOrigin && !isValidApiToken(bearer)) {
-      return NextResponse.json(
-        {
-          error: origin?.startsWith("chrome-extension://")
-            ? "Invalid API token — copy it again from PIVOT › Settings."
-            : "Cross-origin request blocked",
-        },
-        { status: 403 },
-      );
-    }
-  }
+  const h = request.headers;
+  const verdict = guardApiRequest({
+    method: request.method,
+    pathname: request.nextUrl.pathname,
+    host: h.get("host"),
+    origin: h.get("origin"),
+    referer: h.get("referer"),
+    fetchSite: h.get("sec-fetch-site"),
+    fetchMode: h.get("sec-fetch-mode"),
+    hasToken: () => isValidApiToken(h.get("authorization")?.replace(/^Bearer\s+/i, "")),
+  });
+  if (!verdict.ok) return NextResponse.json({ error: verdict.error }, { status: 403 });
   return NextResponse.next();
 }
 

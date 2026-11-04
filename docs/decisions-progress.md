@@ -10,11 +10,109 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
 | ----- | -------------------------------------- | ------------- |
 | P0a   | Skill contract tests and trace checker | Done (PR #61) |
 | P0b   | Specialist spike, then routing         | Done (PR #62) |
-| P0c   | Motion foundation                      | In review     |
+| P0c   | Motion foundation                      | Done (PR #63) |
+| P0d   | Preview controls and hardening         | In review     |
+
+### P0d — Preview controls and hardening (2026-11-04)
+
+- Status: In review (PR into `dev`).
+- Existing functionality reused:
+  - the proxy's local-host and write-origin rules, now moved unchanged into a pure helper;
+  - the session page's mockup frame and the viewer's Replay;
+  - PIVOT's Playwright and Chromium;
+  - the scratch start command.
+- Files changed:
+  - new `packages/core/src/request-guard.ts`: the API's access rules, now testable, with tests;
+  - `apps/web/src/proxy.ts`, which calls it;
+  - the mockup route (`X-DNS-Prefetch-Control: off`);
+  - `components/design-mockups.tsx` (Replay; the live reduced-motion line);
+  - the viewer (DNS-prefetch switch);
+  - `scripts/qa/preview-checks.mjs` (Replay, reduced motion and API-boundary probes);
+  - tests, SPEC, DESIGN, `motion.md`, PIVOT_DECISIONS.
+- Proxy changes, as the plan's §3.3 lists them:
+  - `Origin: null`, or an Origin that can't be read, on a write is now 403. Before, it made the proxy throw.
+  - A cross-site or same-site navigation (frame or tab) to `/api/*` is 403, except `GET /api/design/mockups/:id` and `GET /api/assets/:id`.
+  - `GET /api/settings/token` answers only the app's own pages (`Sec-Fetch-Site: same-origin`) and non-browser callers (no `Sec-Fetch-*`). The Settings page is its only browser client (A7 checked).
+- Checks run and results:
+  - Unit tests: core request-guard 8 of 8.
+  - The full suite: see the PR.
+  - Browser checks (Chromium, scratch PIVOT on port 4400, two clean runs each): viewer **31 of 31**, PIVOT **27 of 27** (46 of 46 after the security follow-up below).
+  - PIVOT API boundary:
+    - forged headers via raw HTTP: `Origin: null`, an unreadable Origin and another origin on approve each got 403; the token refused a cross-site fetch and a same-site navigation (403) but answered the app's own page and a non-browser caller (200); cross-site navigation to an API page got 403 and to the mockup 200;
+    - a hostile page on another port, served through a recording proxy so the server's real status is known even where the browser hides it (ORB): its iframe, img and fetch for the token got 403, 403, 403; its form and fetch approve got 403, 403; the session stayed exploring with no approval;
+    - inside a PIVOT mockup: an `<img>` pointing at the token route **was sent** (the static policy allows `'self'`) and got 403; a link to the token got 403; a `target=_blank` link opened nothing; a remote image never left.
+  - Replay, both the viewer and PIVOT: after three quick replays there was one frame and one animation, restarted, with its time going from about 1500–1870 ms back to about 150 ms.
+  - Reduced motion through browser emulation, `reduce` and `no-preference`:
+    - the viewer's static version stops and plays, live and after Replay, and the interactive version's `matchMedia` follows both ways;
+    - PIVOT's mockup stops and plays at once and after Replay;
+    - both pages' indicators flip.
+- Security follow-up (2026-11-04, same PR): **blind cross-site GETs with side effects**.
+  - **Root cause.** The proxy checked writes and navigations but let every read through. A page on another site, another app on this machine, or a sandboxed PIVOT mockup (via `img`/`font` `'self'`) could make the browser send GETs whose routes have effects. The response stayed unreadable, but the effect still happened.
+  - **Affected endpoints**, found by auditing every GET route and the core function it calls:
+    - `/api/favicon`: fetches the site and stores the icon;
+    - `/api/search/external`: may download a provider catalog and store it in R2;
+    - `/api/metadata` and `/api/visibility`: fetch the given URL. Private addresses are already refused by `net-guard`;
+    - `/api/resources/:id/compare` and `/compare/image`: decode and diff full-size images;
+    - `/api/settings/token`: already covered.
+  - **Not affected:**
+    - other GETs are database or file reads;
+    - `/api/assets/:id` can store a scroll preview the first time an old tall image is viewed. It stays open because the extension popup and mockups load assets as images, and asset ids are unguessable. This is noted as a residual.
+  - **Policy** (`request-guard.ts`): these reads are answered only for:
+    - a caller with the API token;
+    - the app's own pages: `Sec-Fetch-Site: same-origin`, with any Origin or Referer also same-origin;
+    - a non-browser caller: no Fetch Metadata, and no Origin or Referer from elsewhere.
+  - **Refused with 403 by the proxy, before the route runs:** `same-site` (it isn't `same-origin`), `cross-site`, `none`, `Origin: null`, and contradictory metadata. The refusal doesn't rely on CORS.
+  - **Compatibility, checked against the code:**
+    - the web app calls these routes only from its own pages, with relative URLs, and the server never calls its own API;
+    - the extension sends the Bearer token on every API call; its popup thumbnails are `<img>` loads of `/api/assets`, which stay open;
+    - the MCP server sends the token when it has one, and is a non-browser caller otherwise;
+    - no route contract changed.
+  - **Checked:**
+    - core request-guard tests: 14 of 14;
+    - PIVOT browser checks: **46 of 46**, twice;
+    - the four routes, requested by a hostile page's `img`/`fetch` and by a PIVOT mockup's `img`, were each refused by the proxy (its own 403 body, so the route never ran);
+    - the app's own page still reached each route;
+    - a simulated extension call (token, with Fetch Metadata `none`, `cross-site` or absent) reached `/api/visibility`;
+    - a popup-style thumbnail reached `/api/assets`;
+    - a wrong token stayed refused;
+    - the **real MCP server** (`apps/mcp/dist`) ran `search_external` with and without a token.
+  - **Not checked:** the real extension in a browser (its requests were simulated from its code), and browsers too old to send Fetch Metadata (they would be treated as non-browser callers).
+- Final authentication check (2026-11-04, same PR):
+  - **Token validation is genuine.** It is a constant-time comparison with the saved token after stripping `Bearer `, not a check that an `Authorization` header exists. It runs in the proxy before any route.
+  - **Fixed: validation wrote.** Before, it read the token through `apiToken()`, which creates the token file when missing. So any request carrying a made-up token, before a token existed, created the file. Validation now only reads: with no token saved, every candidate is invalid.
+    - Tests: `api-token.test.ts` 3 of 3. The "creates nothing" check fails on the old code.
+  - **Fixed: loopback binding.** `apps/web`'s own `dev` and `start` scripts had no `-H`, so `pnpm --filter web dev` would listen on every interface. A LAN machine could then forge `Host: 127.0.0.1` and send no Fetch Metadata. Both scripts now bind `127.0.0.1`, as `scripts/start.mjs` already did.
+    - This was checked by reading the scripts. The script itself wasn't run, to keep away from the real data folder.
+  - **Trust boundary, by design and unchanged:** any process on this machine is trusted. It can read the token file and set any header, so a request with no Fetch Metadata, Origin or Referer is answered, the token route included, exactly as before P0d. Fetch Metadata, Origin and Referer only stop a browser from being used by another page, because pages can't forge them.
+  - **Residual, pre-existing:** on a machine shared by several OS accounts, another account can call `127.0.0.1` and read the token through the route.
+  - **Boundary probes** (`preview-checks.mjs boundary`, two fresh scratch instances with no token): **64 of 64** each run.
+    - Credentials:
+      - missing, made-up, empty, `Basic`, and the token in another header: all refused, before and after a token exists;
+      - near misses (one character short or long, same length but wrong, doubled, under another scheme): all refused;
+      - the real token, also with a lower-case `bearer`: the route runs.
+    - No token file was created by any refused request.
+    - Path tricks for both a side-effecting route and the token route never reached the route and never returned the token: trailing slash, encoded letters, `//`, `./`, `../`, `%2F`, case, `;`, `%00`, `/%61pi`.
+    - `x-middleware-subrequest` variants (CVE-2025-29927 style; Next 16.4.3) and `X-Forwarded-Host/Proto/For` were still refused.
+    - A forged `Host` got 403.
+    - Contradictory metadata got 403: same-origin with a foreign or `null` Origin, same-origin with a foreign Referer, no metadata with a foreign Origin or Referer, `same-site`, `none`.
+    - Two callers still reach the route: the app's own page, and a non-browser caller without a token (intended).
+  - PIVOT checks 46 of 46 and viewer 31 of 31, rerun after the fixes.
+- Remaining risks, not tested:
+  - the interactive viewer's self-navigation (blocked in the checks by an undetermined mechanism, not relied on);
+  - DNS prefetching (the `x-dns-prefetch-control` header and meta are best effort, unverified);
+  - WebRTC from interactive viewer scripts;
+  - browsers other than Chromium;
+  - the OS reduced-motion setting and real devices (the user's to confirm);
+  - immutable approval binding inside PIVOT, still a prerequisite of P1b.
+- Deviations from the plan:
+  - the branch is `feat/orchestrator-preview-hardening`, as the owner asked (the plan said `feat/mockup-preview-controls`);
+  - the proxy rules moved into `packages/core`, which the plan allowed for testing;
+  - the DNS-prefetch switch is an extra best-effort mitigation for a residual P0c listed.
+- Next step: P1a, once authorised.
 
 ### P0c — Motion foundation (2026-11-03)
 
-- Status: In review (PR into `dev`).
+- Status: Done. Merged in PR #63 (`281005e`).
 - Existing functionality reused:
   - the brief template;
   - the gate-2 approval record (`details` after the user's words);

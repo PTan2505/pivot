@@ -21,9 +21,24 @@ export function regenerateApiToken(): string {
   return token;
 }
 
+/** The saved token, or null when there is none yet. Reading never creates one. */
+function savedApiToken(): string | null {
+  try {
+    return fs.readFileSync(tokenFile(), "utf8").trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether `candidate` is the saved token (constant-time compare). Checking writes nothing: before any token exists,
+ * every candidate is invalid, so a request carrying a made-up token can't create one.
+ */
 export function isValidApiToken(candidate: string | null | undefined): boolean {
   if (!candidate) return false;
-  const expected = Buffer.from(apiToken());
+  const saved = savedApiToken();
+  if (!saved) return false;
+  const expected = Buffer.from(saved);
   const given = Buffer.from(candidate);
   return given.length === expected.length && crypto.timingSafeEqual(given, expected);
 }

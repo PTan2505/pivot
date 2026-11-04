@@ -167,7 +167,8 @@ export function inlineMockup(file, root, { interactive = false } = {}) {
 
   // The policy goes first, so it governs everything that follows: right after the doctype (keeping standards mode), or
   // at the very start. Not after a <head> tag, which a comment or stray markup earlier in the file could precede.
-  const policy = `<meta http-equiv="Content-Security-Policy" content="${versionPolicy(interactive)}">`;
+  // The DNS-prefetch switch is best effort: no policy covers host-name lookups.
+  const policy = `<meta http-equiv="Content-Security-Policy" content="${versionPolicy(interactive)}"><meta http-equiv="x-dns-prefetch-control" content="off">`;
   const doctype = /^\uFEFF?\s*<!doctype[^>]*>/i.exec(html);
   html = doctype ? doctype[0] + policy + html.slice(doctype[0].length) : policy + html;
   return { html, removed: [...new Set(removed)] };
@@ -207,7 +208,7 @@ export function buildViewer(dir, { title = null, interactive = [] } = {}) {
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="${pagePolicy}">
-<meta name="referrer" content="no-referrer">
+<meta name="referrer" content="no-referrer"><meta http-equiv="x-dns-prefetch-control" content="off">
 <title>${esc(title ?? "Mockups")} — ${versions.length} versions</title>
 <style>
   :root { color-scheme: dark; --bg:#0c0806; --surface:#18110d; --raised:#221812; --ink:#fbf3ea; --muted:#b8a596; --subtle:#94806f; --accent:#ff6a13; --on-accent:#0c0806; --focus:#ff8c42; }

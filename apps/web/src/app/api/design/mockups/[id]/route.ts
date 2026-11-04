@@ -7,6 +7,8 @@ const SAFE_HEADERS = {
     "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; sandbox",
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "no-referrer",
+  // Best effort: asks the browser not to resolve host names it finds in the mockup (no policy covers DNS lookups).
+  "X-DNS-Prefetch-Control": "off",
   "Cache-Control": "private, max-age=31536000, immutable",
 };
 
