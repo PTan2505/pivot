@@ -397,8 +397,27 @@ describe("motion is part of the design", () => {
   it("previews: CSS in PIVOT, executable local preview for Advanced, real reduced-motion setting only", () => {
     expect(motion).toContain("**CSS motion in PIVOT (Standard).**");
     expect(motion).toContain("--interactive <n,…>");
-    expect(motion).toContain("Never rewrite the mockup's media");
-    expect(motion).toContain("A recording, keyframes or a description is not an executable preview.");
+    expect(motion).toContain("never a rewrite of the mockup's CSS or a fake `matchMedia`");
+    expect(motion).toContain("A recording, keyframes, a screenshot or a description is not an executable preview.");
+  });
+  it("reduced-motion evidence stays in three kinds; the OS setting and devices are verified only by the user", () => {
+    expect(motion).toContain("**browser emulation**");
+    expect(motion).toContain("verified only when the user turns it on and says what they saw");
+    expect(motion).toContain("**a real device**: unverified unless the user checked it");
+  });
+  it("gate 2 needs each essential item seen running, never a static stand-in, and names the preview's digest", () => {
+    expect(motion).toContain("**Check it yourself before gate 2:**");
+    expect(motion.replace(/\s+/g, " ")).toContain(
+      "A static version or its screenshot is never counted as the executable preview.",
+    );
+    expect(motion).toContain("digest <d>");
+    expect(d).toContain("a static version, screenshot or recording never stands in for it");
+    expect(motion).toContain("**What an approval is bound to, today:**");
+  });
+  it("the viewer's tested protections and residual risks are written down", () => {
+    expect(motion).toContain("**What is tested and what isn't**");
+    expect(motion).toContain("Not covered by the checks: DNS prefetching");
+    expect(motion).toContain("The inliner's markup rewriting is a");
   });
   it("approval stays inside gate 2, with the Advanced rule and the exception", () => {
     expect(motion).toContain("There is no separate motion approval");

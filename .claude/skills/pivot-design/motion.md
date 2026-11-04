@@ -82,30 +82,50 @@ The user must be able to see each **essential** item before gate 2 (§6).
   `node <skill>/viewer/make-viewer.mjs <folder> --title "<surface>" --interactive <n,…>`.
   - Scripts must be inline or local files inside the folder (a library copied from the target's own
     `node_modules`, when its licence allows). Nothing is fetched: the viewer runs each version in a sandbox with no
-    network, no access to other files, no navigation of the page and no popups, and lists anything it removed. A version that tries to open another page is stopped (a script's own navigation can't be blocked in advance, so keep prototypes free of links and redirects).
+    network, no access to other files, no navigation of the page and no popups, and lists anything it removed. Each
+    version shows a content **digest**; a choice copied from the viewer names it.
+  - **What is tested and what isn't** (`scripts/qa/preview-checks.mjs viewer`, Chromium): fetch, images, styles,
+    WebSocket, `sendBeacon`, forms, nested frames, `object`/`embed`, popups, top navigation, reading the viewer page,
+    storage and other local files were all blocked before any request left. A script navigating its own frame
+    can't be blocked by any policy: in the checks that request didn't leave either, and the viewer then stopped the
+    version, but don't rely on it, so keep prototypes free of redirects. Not covered by the checks: DNS prefetching
+    and WebRTC from an interactive script, and browsers other than Chromium. The inliner's markup rewriting is a
+    convenience, not the protection: the sandbox and the policy are.
   - Static versions stay script-free in the viewer too.
   - Save the static versions (and a static stand-in for each prototype) to PIVOT as usual, so the session holds them.
-- **Reduced motion is previewed with the viewer's real setting** (macOS/Windows/iOS "Reduce motion", or Chrome
-  DevTools › Rendering › _Emulate CSS media feature prefers-reduced-motion_). Never rewrite the mockup's media
-  queries or fake `matchMedia`. The local viewer shows which setting the browser currently reports.
-- A recording, keyframes or a description is not an executable preview.
+- **Reduced motion uses the browser's own media query**, never a rewrite of the mockup's CSS or a fake `matchMedia`.
+  Three kinds of evidence, never merged into one:
+  - **browser emulation** (Chrome DevTools › Rendering › _Emulate CSS media feature prefers-reduced-motion_, or
+    Playwright): checked to reach the sandboxed versions in the local viewer and in PIVOT's mockup frame;
+  - **the OS setting** (macOS/Windows/iOS "Reduce motion"): the native path, but not checked automatically: it is
+    verified only when the user turns it on and says what they saw;
+  - **a real device**: unverified unless the user checked it.
+    The local viewer shows which setting the browser currently reports.
+- A recording, keyframes, a screenshot or a description is not an executable preview.
+- **Check it yourself before gate 2:** open the preview with the browser tool you have and trigger every essential
+  item. An item you didn't see run doesn't count as previewed: fix the prototype, or offer the exception (§6).
 
 ## 6. Approval (inside gate 2)
 
 There is no separate motion approval: the user approves the direction **and** its motion at gate 2.
 
-| Level    | Before gate 2 can approve                                                                                                                                    | Add to the approval's `details`, after the user's exact words                                                             |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| None     | Static mockups.                                                                                                                                              | –                                                                                                                         |
-| Standard | Each **essential** item visible in CSS motion in PIVOT or in the local viewer; details may be described.                                                     | `Motion: standard — previewed (pivot-css \| local) — essentials: <list>`                                                  |
-| Advanced | **Every essential item in the executable local preview** (until PIVOT can run interactive mockups). Screenshots, keyframes, recordings and text don't count. | `Motion: advanced — previewed (local) — essentials: <list> — reduced motion: previewed (native setting) \| not previewed` |
+| Level    | Before gate 2 can approve                                                                                                                                                         | Add to the approval's `details`, after the user's exact words                                                                                    |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| None     | Static mockups.                                                                                                                                                                   | –                                                                                                                                                |
+| Standard | Each **essential** item visible in CSS motion in PIVOT or in the local viewer, and seen running by you; details may be described.                                                 | `Motion: standard — previewed (pivot-css \| local, digest <d>) — essentials: <list>`                                                             |
+| Advanced | **Every essential item in the executable local preview**, seen running by you (until PIVOT can run interactive mockups). Screenshots, keyframes, recordings and text don't count. | `Motion: advanced — previewed (local, digest <d>) — essentials: <list> — reduced motion: <emulated \| OS setting, by the user \| not previewed>` |
 
 - **Exception.** If an essential item can't be previewed, say which one, why, and what the user would approve
   instead, in the gate-2 message itself (not as an extra step), and ask once. Only an explicit yes counts; record
   `Exception (owner): "<exact words>" — essentials not previewed: <list>`. Without a preview or that yes, don't
   build: don't call `set_design_status` with `building`.
 - An approval made in PIVOT counts for motion only when the user could see the preview (the version itself, or the
-  local preview of the version they approved) and the note doesn't reject the motion.
+  local preview of the version they approved) and the note doesn't reject the motion. A static version or its
+  screenshot is never counted as the executable preview.
+- **What an approval is bound to, today:** a PIVOT approval names its version by title and round, and PIVOT keeps
+  that mockup's HTML unchanged; a local preview is named by its digest in the `Motion:` line. The local prototype
+  itself isn't stored in PIVOT, so keep its folder until the build is checked. Binding an approval to an immutable
+  mockup identity in PIVOT itself comes before interactive mockups move into PIVOT (P1b).
 - A note or reply that changes an essential item is a major change: back to gate 2.
 
 ## 7. Technology

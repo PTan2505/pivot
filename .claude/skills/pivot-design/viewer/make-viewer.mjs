@@ -10,6 +10,7 @@
 // network, no access to other files, no navigating the page, no popups or forms. Local stylesheets, images, fonts and
 // media inside the folder are inlined; anything remote or outside the folder is removed and listed. Scripts are removed
 // too, except in the versions named with --interactive (motion prototypes), where inline and local scripts run.
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -164,8 +165,11 @@ export function inlineMockup(file, root, { interactive = false } = {}) {
   });
   if (links) removed.push(`${links} link${links === 1 ? "" : "s"} (href removed)`);
 
+  // The policy goes first, so it governs everything that follows: right after the doctype (keeping standards mode), or
+  // at the very start. Not after a <head> tag, which a comment or stray markup earlier in the file could precede.
   const policy = `<meta http-equiv="Content-Security-Policy" content="${versionPolicy(interactive)}">`;
-  html = /<head\b[^>]*>/i.test(html) ? html.replace(/<head\b[^>]*>/i, (h) => h + policy) : policy + html;
+  const doctype = /^\uFEFF?\s*<!doctype[^>]*>/i.exec(html);
+  html = doctype ? doctype[0] + policy + html.slice(doctype[0].length) : policy + html;
   return { html, removed: [...new Set(removed)] };
 }
 
@@ -182,11 +186,14 @@ export function buildViewer(dir, { title = null, interactive = [] } = {}) {
     const isInteractive = interactive.includes(n);
     const { html, removed } = inlineMockup(path.join(dir, file), dir, { interactive: isInteractive });
     const name = (html.match(/<title>([^<]*)<\/title>/i)?.[1] ?? file.replace(/\.html$/i, "")).trim();
-    return { n, file, title: name, interactive: isInteractive, html, removed };
+    // What the user sees, identified by content: a choice names this, so it can't silently refer to another build.
+    const digest = crypto.createHash("sha256").update(html).digest("hex").slice(0, 12);
+    return { n, file, title: name, interactive: isInteractive, html, removed, digest };
   });
-  const data = versions.map(({ n, title: t, interactive: i, html }) => ({
+  const data = versions.map(({ n, title: t, interactive: i, html, digest }) => ({
     n,
     title: t,
+    digest,
     sandbox: versionSandbox(i),
     interactive: i,
     html,
@@ -238,7 +245,7 @@ export function buildViewer(dir, { title = null, interactive = [] } = {}) {
   </div>
 </header>
 <div class="bar">
-  <span>Version <b id="num"></b> · <b id="name"></b></span><span class="chip" id="kind"></span>
+  <span>Version <b id="num"></b> · <b id="name"></b></span><span class="chip" id="kind"></span><span class="chip" id="digest"></span>
   <button id="replay">Replay</button>
   <button class="choose" id="choose">Choose this version</button>
   <span class="hint"><span id="motion"></span> · Keys 1–${Math.min(versions.length, 9)} and ← → switch versions</span>
@@ -277,6 +284,7 @@ export function buildViewer(dir, { title = null, interactive = [] } = {}) {
     document.getElementById("num").textContent = n;
     document.getElementById("name").textContent = v.title;
     document.getElementById("kind").textContent = v.interactive ? "Interactive" : "Static";
+    document.getElementById("digest").textContent = "digest " + v.digest;
     document.querySelectorAll("[role=tab]").forEach((t) => {
       const on = +t.dataset.n === n;
       t.setAttribute("aria-selected", on);
@@ -309,7 +317,8 @@ export function buildViewer(dir, { title = null, interactive = [] } = {}) {
   );
   document.getElementById("replay").addEventListener("click", load);
   document.getElementById("choose").addEventListener("click", async () => {
-    const text = "I choose version " + current + ": " + versions[current - 1].title;
+    const v = versions[current - 1];
+    const text = "I choose version " + current + ": " + v.title + " (digest " + v.digest + ")";
     try {
       await navigator.clipboard.writeText(text);
     } catch {
@@ -334,12 +343,13 @@ export function buildViewer(dir, { title = null, interactive = [] } = {}) {
 `;
   return {
     page,
-    versions: versions.map(({ n, file, title: t, interactive: i, removed }) => ({
+    versions: versions.map(({ n, file, title: t, interactive: i, removed, digest }) => ({
       n,
       file,
       title: t,
       interactive: i,
       removed,
+      digest,
     })),
   };
 }
@@ -360,7 +370,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     console.log(`${out} (${versions.length} versions)`);
     for (const v of versions) {
       const kind = v.interactive ? "interactive" : "static";
-      console.log(`  ${v.n}. ${v.title} — ${kind}${v.removed.length ? `; removed: ${v.removed.join(", ")}` : ""}`);
+      console.log(
+        `  ${v.n}. ${v.title} — ${kind}, digest ${v.digest}${v.removed.length ? `; removed: ${v.removed.join(", ")}` : ""}`,
+      );
     }
   } catch (err) {
     console.error(err.message);

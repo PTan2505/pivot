@@ -30,7 +30,7 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
   - new tests `viewer.test.mjs` and the motion contract checks in `skills.test.ts`;
   - SPEC, README, PIVOT_DECISIONS.
 - Checks run and results: see the PR. Browser checks, twice from a clean load:
-  - **local viewer, 17 of 17 passed**:
+  - **local viewer, 17 of 17 passed (21 of 21 after the review below)**:
     - static versions run no script or handler;
     - CSS animation plays and local CSS applies;
     - the interactive version's own script runs;
@@ -42,8 +42,15 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
 - Remaining issues:
   - Interactive motion can't be shown in PIVOT itself until P1b. Advanced previews are local and approved in the chat, or in PIVOT on the static stand-in.
   - Self-navigation by a script can't be blocked by policy. The viewer stops the version afterwards; in the checks the request didn't reach the server, but that isn't guaranteed.
-  - DevTools' reduced-motion emulation may not reach a sandboxed frame; the OS setting does (to confirm in P0d).
+  - Reduced motion: browser emulation is checked to reach the sandboxed frames in the viewer and in PIVOT. The OS setting and real devices aren't checked automatically; they count only when the user confirms them.
   - Motion QA is still a manual checklist until `motion-qa.mjs` (P1c).
+- Review (2026-11-04), on the same PR:
+  - The version policy now goes right after the doctype, or at the very start. Before, it went after the first `<head>`, which earlier markup or a comment could precede.
+  - Each version gets a content digest, shown in the viewer and named in the copied choice and in the approval's `Motion:` line.
+  - Gate 2: the agent must see every essential item run in the preview itself. A static version, screenshot or recording never stands in. The current approval binding is written down: PIVOT approvals name a version by title and round, and local previews by digest; an immutable binding in PIVOT comes before P1b.
+  - Reduced motion: three kinds of evidence (browser emulation, the OS setting confirmed by the user, a real device), and the viewer's residual risks are written in `motion.md` §5.
+  - New browser checks: nested frames and `object`/`embed` reach nothing; emulated reduced motion reaches the static and interactive viewer versions and PIVOT's mockup frame; the viewer's indicator follows it.
+  - Untested residuals: a script navigating its own frame (blocked in the checks, by an undetermined mechanism, so not relied on), DNS prefetching and WebRTC from interactive scripts, and browsers other than Chromium.
 - Next step: P0d, once authorised.
 
 ### P0b — Specialist capability spike, then routing (2026-11-03)

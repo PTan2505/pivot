@@ -49,7 +49,7 @@ describe("inlineMockup", () => {
     });
     const { html, removed } = inlineMockup(path.join(dir, "m.html"), dir);
     expect(removed).toEqual([]);
-    expect(html).toMatch(/^<html><head><meta http-equiv="Content-Security-Policy"/);
+    expect(html).toMatch(/^<meta http-equiv="Content-Security-Policy"/);
     expect(html).toContain(".b{color:red}");
     expect(html).not.toMatch(/(href|src)="(css|img)\//);
     expect(html.match(/data:image\/png;base64,UE5H/g)).toHaveLength(3);
@@ -97,6 +97,20 @@ describe("inlineMockup", () => {
   });
 });
 
+describe("policy placement", () => {
+  it("goes right after the doctype, before anything a comment or stray markup could hide", () => {
+    const dir = folder({
+      "a.html": `<!DOCTYPE html><!-- <head> --><img src="x.png"><head></head>`,
+      "b.html": `<!-- <head> --><p>no doctype</p>`,
+      "x.png": "PNG",
+    });
+    expect(inlineMockup(path.join(dir, "a.html"), dir).html).toMatch(
+      /^<!DOCTYPE html><meta http-equiv="Content-Security-Policy"[^>]*><!-- <head> -->/,
+    );
+    expect(inlineMockup(path.join(dir, "b.html"), dir).html).toMatch(/^<meta http-equiv="Content-Security-Policy"/);
+  });
+});
+
 describe("buildViewer", () => {
   it("embeds each version with its sandbox, and escapes markup inside the page script", () => {
     const dir = folder({
@@ -115,6 +129,20 @@ describe("buildViewer", () => {
     expect(page).toContain('"sandbox":""');
     expect(page).toContain("Content-Security-Policy");
     expect(page).not.toMatch(/https?:\/\//);
+  });
+
+  it("names each version by a digest of what it shows", () => {
+    const dir = folder({ "mockup-1-a.html": "<p>a</p>", "mockup-2-b.html": "<p>b</p>" });
+    const first = buildViewer(dir).versions;
+    expect(first.map((v) => v.digest)).toEqual([
+      expect.stringMatching(/^[0-9a-f]{12}$/),
+      expect.stringMatching(/^[0-9a-f]{12}$/),
+    ]);
+    expect(first[0].digest).not.toBe(first[1].digest);
+    expect(buildViewer(dir).versions[0].digest).toBe(first[0].digest);
+    fs.writeFileSync(path.join(dir, "mockup-1-a.html"), "<p>a changed</p>");
+    expect(buildViewer(dir).versions[0].digest).not.toBe(first[0].digest);
+    expect(buildViewer(dir).page).toContain('" (digest " + v.digest');
   });
 
   it("refuses a folder without mockups", () => {

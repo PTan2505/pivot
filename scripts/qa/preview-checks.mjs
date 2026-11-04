@@ -31,7 +31,14 @@ const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** CSS that moves a box forever, so a running animation can be detected. */
 const MOVING = `<style>@keyframes slide{from{transform:translateX(0)}to{transform:translateX(200px)}}
-#box{width:40px;height:40px;background:#f60;animation:slide 1s linear infinite}</style><div id="box"></div>`;
+#box{width:40px;height:40px;background:#f60;animation:slide 1s linear infinite}
+@media (prefers-reduced-motion: reduce){#box{animation:none}}</style><div id="box"></div>`;
+/** True when #box in this frame locator moves over 300 ms. */
+const moves = async (box) => {
+  const a = await box.evaluate((el) => getComputedStyle(el).transform);
+  await pause(300);
+  return a !== (await box.evaluate((el) => getComputedStyle(el).transform));
+};
 
 async function viewer() {
   // A local server that only counts what reaches it: any hit is a leak.
@@ -209,6 +216,22 @@ async function viewer() {
       }
     });
     await pause(500);
+    // A frame nested inside the version, and plugin elements, inherit the same limits.
+    await probe(({ beacon }) => {
+      const nested = document.createElement("iframe");
+      nested.srcdoc = `<script>fetch("${beacon}/nested-fetch").catch(()=>{});new Image().src="${beacon}/nested-img"</script><img src="${beacon}/nested-tag">`;
+      document.body.append(nested);
+      const ext = document.createElement("iframe");
+      ext.src = beacon + "/nested-src";
+      document.body.append(ext);
+      const obj = document.createElement("object");
+      obj.data = beacon + "/object";
+      document.body.append(obj);
+      const emb = document.createElement("embed");
+      emb.src = beacon + "/embed";
+      document.body.append(emb);
+    });
+    await pause(800);
     const leaked = hits.filter((h) => !h.startsWith("/self-nav"));
     check("no request from any version reached the network", leaked.length === 0, leaked.join(", ") || `form: ${form}`);
 
@@ -227,6 +250,31 @@ async function viewer() {
     await tab.getByRole("button", { name: "Replay" }).click();
     await pause(500);
     check("Replay restores the version", (await tab.locator("#frame").count()) === 1);
+
+    // Reduced motion, through the browser's own emulation (what DevTools and Playwright use), not the OS setting.
+    await tab.locator("#tab-1").click();
+    await pause(500);
+    check("full motion: the static version's animation plays", await moves(tab.frameLocator("#frame").locator("#box")));
+    await tab.emulateMedia({ reducedMotion: "reduce" });
+    await tab.getByRole("button", { name: "Replay" }).click();
+    await pause(500);
+    check(
+      "emulated reduced motion reaches the sandboxed version (its reduce rule applies)",
+      !(await moves(tab.frameLocator("#frame").locator("#box"))),
+    );
+    check(
+      "the viewer's indicator reports reduced motion",
+      (await tab.locator("#motion").textContent()).startsWith("Your browser reports reduced motion"),
+    );
+    await tab.locator("#tab-2").click();
+    await pause(500);
+    check(
+      "emulated reduced motion reaches the interactive version",
+      await tab
+        .frameLocator("#frame")
+        .locator("body")
+        .evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches),
+    );
   } finally {
     await browser.close();
     server.close();
@@ -263,10 +311,11 @@ async function pivot(base) {
     await tab.goto(`${base}/design/${sessionId}`);
     const box = tab.frameLocator('iframe[sandbox=""]').locator("#box");
     await box.waitFor({ timeout: 15000 });
-    const a = await box.evaluate((el) => getComputedStyle(el).transform);
-    await pause(300);
-    const b = await box.evaluate((el) => getComputedStyle(el).transform);
-    check("PIVOT session page: CSS animation plays in the sandboxed mockup", a !== b, `${a} → ${b}`);
+    check("PIVOT session page: CSS animation plays in the sandboxed mockup", await moves(box));
+    await tab.emulateMedia({ reducedMotion: "reduce" });
+    await tab.reload();
+    await box.waitFor({ timeout: 15000 });
+    check("PIVOT session page: emulated reduced motion reaches the sandboxed mockup", !(await moves(box)));
   } finally {
     await browser.close();
   }
