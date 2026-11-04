@@ -80,6 +80,20 @@ const decisionInput = {
   summary: z.string().min(1).max(2000).describe("One or two sentences: what was decided or found."),
   direction: z.string().max(2000).optional().describe("The chosen direction or mix, for an approval."),
   details: z.string().max(50_000).optional().describe("Anything else worth keeping, in Markdown."),
+  mockupId: z
+    .string()
+    .regex(UUID)
+    .optional()
+    .describe(
+      "For an approval of a mockup version saved in PIVOT: its id (from get_design_session). The approval is then bound to that version's content digest, and building checks it.",
+    ),
+  mockupDigest: z
+    .string()
+    .regex(/^[0-9a-f]{12,64}$/i)
+    .optional()
+    .describe(
+      "The digest the user saw (at least its first 12 characters, as PIVOT shows it). PIVOT refuses the record if it isn't that version's digest.",
+    ),
 };
 
 const recordDesignDecision: PivotTool<typeof decisionInput> = {
@@ -90,8 +104,12 @@ const recordDesignDecision: PivotTool<typeof decisionInput> = {
   async run(source, { sessionId, ...input }) {
     const res = await writer(source).recordDesignDecision(sessionId, input);
     return {
-      content: [text(`Recorded the ${input.kind} (id ${res.id}).`)],
-      structuredContent: { id: res.id, sessionId, kind: input.kind },
+      content: [
+        text(
+          `Recorded the ${input.kind} (id ${res.id})${input.mockupId ? `, bound to mockup version ${input.mockupId}` : ""}.`,
+        ),
+      ],
+      structuredContent: { id: res.id, sessionId, kind: input.kind, mockupId: input.mockupId ?? null },
     };
   },
 };
@@ -236,6 +254,15 @@ function sessionText(s: DesignSessionDetailDTO) {
           (d) =>
             `${d.kind}${d.source === "owner" ? " (by the user, in PIVOT)" : ""}: ${d.summary}` +
             (d.direction ? ` Direction: ${d.direction}.` : "") +
+            (d.binding
+              ? ` Bound to mockup ${d.binding.mockupId}, digest ${d.binding.digest.slice(0, 12)}: ${
+                  d.binding.status === "bound"
+                    ? "unchanged"
+                    : d.binding.status === "changed"
+                      ? "CHANGED since approval, approve again"
+                      : "the version is gone, approve again"
+                }.`
+              : "") +
             (d.source === "owner" && d.details ? ` The user's note: "${d.details}"` : ""),
         )
         .join(" | ") || "none"
@@ -249,7 +276,7 @@ function sessionText(s: DesignSessionDetailDTO) {
           (r) =>
             `round ${r}: ${s.mockups
               .filter((m) => m.round === r)
-              .map((m) => `${m.n}. ${m.title}`)
+              .map((m) => `${m.n}. ${m.title} (id ${m.id}, digest ${m.digest.slice(0, 12)})`)
               .join(", ")}`,
         )
         .join(" | ")}`,

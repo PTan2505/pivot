@@ -102,6 +102,42 @@ describe("backup and restore", () => {
     expect((await resources.listResources({ q: "Pricing" })).length).toBe(2);
   });
 
+  it("restores mockups with digests recomputed from their HTML, so a bound approval still says what changed", async () => {
+    const brief = await design.saveDesignBrief({ title: "Bound", milestone: "initial", markdown: "## Bound" });
+    const { ids } = await design.saveDesignMockups({
+      sessionId: brief.sessionId,
+      mockups: [{ title: "One", html: "<p>bound</p>" }],
+    });
+    await design.approveDesignMockup(ids[0], "", design.mockupDigest("<p>bound</p>"));
+    const made = await backup.createBackup({ targetDir: path.join(tmp, "bound") });
+    const file = path.join(made.path, "data.json");
+    const data = JSON.parse(await fs.readFile(file, "utf8"));
+    const { designSessions } = await import("../src/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const drop = async () => (await db.getDb()).delete(designSessions).where(eq(designSessions.id, brief.sessionId));
+
+    // a backup made before binding has no digest or interactive flag: both are filled in on restore
+    const mockup = data.designMockups.find((m: { id: string }) => m.id === ids[0]);
+    delete mockup.digest;
+    delete mockup.interactive;
+    await fs.writeFile(file, JSON.stringify(data));
+    await drop();
+    await backup.restoreBackup(made.path);
+    let s = (await design.getDesignSession(brief.sessionId))!;
+    expect(s.mockups[0]).toMatchObject({ digest: design.mockupDigest("<p>bound</p>"), interactive: false });
+    expect(s.decisions.at(-1)!.binding!.status).toBe("bound");
+
+    // a backup whose HTML was edited: the stored digest isn't trusted, and the approval shows the change
+    mockup.html = "<p>edited in the backup</p>";
+    mockup.digest = design.mockupDigest("<p>bound</p>");
+    await fs.writeFile(file, JSON.stringify(data));
+    await drop();
+    await backup.restoreBackup(made.path);
+    s = (await design.getDesignSession(brief.sessionId))!;
+    expect(s.mockups[0].digest).toBe(design.mockupDigest("<p>edited in the backup</p>"));
+    expect(s.decisions.at(-1)!.binding!.status).toBe("changed");
+  });
+
   it("merges by filling only empty fields, and makes separate copies once", async () => {
     const r = await resources.createResource({
       type: "reference",

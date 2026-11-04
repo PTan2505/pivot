@@ -5,6 +5,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getAsset, readAssetBytes, saveAsset } from "./assets";
 import { expandHome, paths } from "./config";
 import { getDb } from "./db/client";
+import { mockupDigest } from "./design";
 import {
   appSettings,
   assetAnnotations,
@@ -47,8 +48,11 @@ export interface BackupData {
   designSessions: Rows<typeof designSessions>;
   designSnapshots: Rows<typeof designSnapshots>;
   designDecisions: Rows<typeof designDecisions>;
-  /** Missing in backups made before mockups were stored in PIVOT. */
-  designMockups?: Rows<typeof designMockups>;
+  /** Missing in backups made before mockups were stored in PIVOT; `digest` and `interactive` before approval binding. */
+  designMockups?: (Omit<Rows<typeof designMockups>[number], "digest" | "interactive"> & {
+    digest?: string;
+    interactive?: boolean;
+  })[];
   suggestions: Rows<typeof resourceSuggestions>;
   settings: Rows<typeof appSettings>;
 }
@@ -433,9 +437,12 @@ export async function restoreBackup(
       .onConflictDoNothing();
   }
   for (const m of data.designMockups ?? []) {
+    // The digest is recomputed from the HTML, never taken from the file: backups made before it existed have none, and
+    // an approval in the backup still names the digest it was given, so a changed version shows as changed.
+    const interactive = m.interactive === true;
     await db
       .insert(designMockups)
-      .values({ ...m, createdAt: new Date(m.createdAt) })
+      .values({ ...m, interactive, digest: mockupDigest(m.html, interactive), createdAt: new Date(m.createdAt) })
       .onConflictDoNothing();
   }
   return summary;

@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "./db/client";
 import { designDecisions, designMockups, designSessions, designSnapshots } from "./db/schema";
 import type {
@@ -15,6 +15,17 @@ import type {
 } from "./types";
 
 export class DesignError extends Error {}
+
+/**
+ * A mockup version's content identity: its HTML and whether it runs scripts. An approval stores it, so it names
+ * exactly what the owner saw. The migration that added it computes the same value in SQL for older versions.
+ */
+export function mockupDigest(html: string, interactive = false) {
+  return crypto
+    .createHash("sha256")
+    .update(`pivot-mockup:v1:${interactive ? "interactive" : "static"}:${html}`)
+    .digest("hex");
+}
 
 type SessionRow = typeof designSessions.$inferSelect;
 
@@ -42,7 +53,11 @@ function snapshotDTO(r: typeof designSnapshots.$inferSelect): DesignSnapshotDTO 
   };
 }
 
-function decisionDTO(r: typeof designDecisions.$inferSelect): DesignDecisionDTO {
+function decisionDTO(
+  r: typeof designDecisions.$inferSelect,
+  digests: Map<string, string> = new Map(),
+): DesignDecisionDTO {
+  const current = r.mockupId ? digests.get(r.mockupId) : undefined;
   return {
     id: r.id,
     sessionId: r.sessionId,
@@ -51,6 +66,14 @@ function decisionDTO(r: typeof designDecisions.$inferSelect): DesignDecisionDTO 
     direction: r.direction,
     details: r.details,
     source: r.source as DesignDecisionSource,
+    binding:
+      r.mockupId && r.mockupDigest
+        ? {
+            mockupId: r.mockupId,
+            digest: r.mockupDigest,
+            status: current === undefined ? "missing" : current === r.mockupDigest ? "bound" : "changed",
+          }
+        : null,
     createdAt: r.createdAt.toISOString(),
   };
 }
@@ -62,6 +85,8 @@ const MOCKUP_COLUMNS = {
   round: designMockups.round,
   n: designMockups.n,
   title: designMockups.title,
+  interactive: designMockups.interactive,
+  digest: designMockups.digest,
   createdAt: designMockups.createdAt,
 };
 
@@ -141,7 +166,37 @@ export async function saveDesignBrief(input: {
   return { sessionId, snapshotId: snap.id, created, duplicate: false };
 }
 
-/** Records a decision. An approval marks the session approved; a change or a deviation is kept as history. */
+/**
+ * Checks a version of this session against its stored digest (recomputed from its HTML) and, when given, the digest
+ * the caller saw (the full digest, or at least its first 12 characters). Returns the version's digest.
+ */
+async function verifiedDigest(sessionId: string, mockupId: string, seen?: string) {
+  const db = await getDb();
+  const [m] = await db
+    .select({
+      sessionId: designMockups.sessionId,
+      html: designMockups.html,
+      interactive: designMockups.interactive,
+      digest: designMockups.digest,
+    })
+    .from(designMockups)
+    .where(eq(designMockups.id, mockupId))
+    .limit(1);
+  if (!m || m.sessionId !== sessionId) throw new DesignError(`No mockup version ${mockupId} in this session.`);
+  if (mockupDigest(m.html, m.interactive) !== m.digest)
+    throw new DesignError(`Mockup version ${mockupId} no longer matches the content it was saved with.`);
+  const want = seen?.trim().toLowerCase();
+  if (want !== undefined && (want.length < 12 || !m.digest.startsWith(want)))
+    throw new DesignError(
+      `The version shown (digest ${want.slice(0, 12) || "none"}) isn't the stored one (digest ${m.digest.slice(0, 12)}): reload it before approving.`,
+    );
+  return m.digest;
+}
+
+/**
+ * Records a decision. An approval marks the session approved; a change or a deviation is kept as history. With a
+ * `mockupId`, the decision is bound to that version's content digest (checked against `mockupDigest` when given).
+ */
 export async function recordDesignDecision(input: {
   sessionId: string;
   kind: DesignDecisionKind;
@@ -150,10 +205,14 @@ export async function recordDesignDecision(input: {
   details?: string;
   /** "owner" when the user approved in PIVOT; the agent's records are "agent". */
   source?: DesignDecisionSource;
+  mockupId?: string;
+  mockupDigest?: string;
 }) {
   const db = await getDb();
   const [s] = await db.select().from(designSessions).where(eq(designSessions.id, input.sessionId)).limit(1);
   if (!s) throw new DesignError(`No design session ${input.sessionId}.`);
+  if (input.mockupDigest && !input.mockupId) throw new DesignError("mockupDigest needs the mockupId it belongs to.");
+  const bound = input.mockupId ? await verifiedDigest(input.sessionId, input.mockupId, input.mockupDigest) : null;
   const [row] = await db
     .insert(designDecisions)
     .values({
@@ -163,6 +222,8 @@ export async function recordDesignDecision(input: {
       direction: input.direction ?? "",
       details: input.details ?? "",
       source: input.source ?? "agent",
+      mockupId: input.mockupId ?? null,
+      mockupDigest: bound,
     })
     .returning({ id: designDecisions.id });
   await touch(input.sessionId, input.kind === "approval" ? { status: "approved" } : {});
@@ -174,6 +235,23 @@ export async function recordDesignDecision(input: {
  * is the user's decision, recorded with record_design_decision, never a status flipped in the UI.
  */
 export async function setDesignSessionStatus(sessionId: string, status: DesignStatus) {
+  if (status === "building") {
+    // Building starts from the latest approval: if it names a version, that version must still be what was approved.
+    const db = await getDb();
+    const [latest] = await db
+      .select({ mockupId: designDecisions.mockupId, mockupDigest: designDecisions.mockupDigest })
+      .from(designDecisions)
+      .where(and(eq(designDecisions.sessionId, sessionId), eq(designDecisions.kind, "approval")))
+      .orderBy(desc(designDecisions.createdAt))
+      .limit(1);
+    if (latest?.mockupId && latest.mockupDigest) {
+      const now = await verifiedDigest(sessionId, latest.mockupId).catch((err: Error) => {
+        throw new DesignError(`The approved version can't be checked: ${err.message} Ask for approval again.`);
+      });
+      if (now !== latest.mockupDigest)
+        throw new DesignError("The approved version's content changed since it was approved. Ask for approval again.");
+    }
+  }
   if (status === "approved") {
     const db = await getDb();
     const [approval] = await db
@@ -220,10 +298,20 @@ export async function getDesignSession(id: string): Promise<DesignSessionDetailD
     .from(designMockups)
     .where(eq(designMockups.sessionId, id))
     .orderBy(asc(designMockups.round), asc(designMockups.n));
+  // A bound version counts as unchanged only if its HTML still hashes to its digest: recompute it for those versions.
+  const boundIds = [...new Set(decisions.flatMap((d) => (d.mockupId ? [d.mockupId] : [])))];
+  const checked = boundIds.length
+    ? await db
+        .select({ id: designMockups.id, html: designMockups.html, interactive: designMockups.interactive })
+        .from(designMockups)
+        .where(inArray(designMockups.id, boundIds))
+    : [];
+  const digests = new Map(mockups.map((m) => [m.id, m.digest]));
+  for (const c of checked) digests.set(c.id, mockupDigest(c.html, c.interactive));
   return {
     ...sessionDTO(s),
     snapshots: snapshots.map(snapshotDTO),
-    decisions: decisions.map(decisionDTO),
+    decisions: decisions.map((d) => decisionDTO(d, digests)),
     mockups: mockups.map(mockupDTO),
   };
 }
@@ -293,6 +381,8 @@ export async function saveDesignMockups(input: {
         n: i + 1,
         title: m.title.trim(),
         html: m.html,
+        interactive: false,
+        digest: mockupDigest(m.html, false),
         roundDigest: digest,
       })),
     )
@@ -314,9 +404,10 @@ export async function getDesignMockupHtml(id: string) {
 
 /**
  * The owner approves one mockup version in PIVOT: an `approval` decision with source "owner", the version as the
- * direction and the owner's note, verbatim, as the details. Only while the session is exploring.
+ * direction and the owner's note, verbatim, as the details, bound to the version's digest. `seenDigest` is the digest
+ * of the copy the page showed: a stale page can't approve content it didn't show. Only while the session is exploring.
  */
-export async function approveDesignMockup(mockupId: string, note = "") {
+export async function approveDesignMockup(mockupId: string, note = "", seenDigest?: string) {
   const db = await getDb();
   const [m] = await db.select(MOCKUP_COLUMNS).from(designMockups).where(eq(designMockups.id, mockupId)).limit(1);
   if (!m) return null;
@@ -330,6 +421,8 @@ export async function approveDesignMockup(mockupId: string, note = "") {
     direction: `Version ${m.n}: ${m.title} (round ${m.round})`,
     details: note.trim(),
     source: "owner",
+    mockupId,
+    mockupDigest: seenDigest,
   });
   return { id, sessionId: m.sessionId };
 }

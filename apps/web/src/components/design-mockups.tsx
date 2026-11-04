@@ -114,7 +114,8 @@ function ApproveDialog({
     try {
       const s = await api<DesignSessionDetailDTO>(`/api/design/mockups/${mockup.id}/approve`, {
         method: "POST",
-        json: { note },
+        // the digest of the copy this page shows: the approval is bound to exactly that content
+        json: { note, digest: mockup.digest },
       });
       qc.setQueryData(["design-session", sessionId], s);
       await qc.invalidateQueries({ queryKey: ["design-sessions"] });
@@ -147,8 +148,9 @@ function ApproveDialog({
             Approve version {mockup.n}, “{mockup.title}”?
           </DialogTitle>
           <DialogDescription>
-            Claude builds this version. Add what it should change or keep from the others; the note is kept word for
-            word.
+            Claude builds this version, exactly as shown (digest{" "}
+            <span className="font-mono">{mockup.digest.slice(0, 12)}</span>). Add what it should change or keep from the
+            others; the note is kept word for word.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5">
@@ -203,7 +205,11 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
   const versions = s.mockups.filter((m) => m.round === round);
   const current = versions.find((m) => m.n === n) ?? versions[0];
   const approvals = s.decisions.filter((d) => d.kind === "approval");
-  const approvedDirection = approvals.at(-1)?.direction;
+  const lastApproval = approvals.at(-1);
+  // an approval names its version by id and digest; older ones only by their direction's words
+  const isApproved = (m: DesignMockupDTO) =>
+    lastApproval?.binding ? lastApproval.binding.mockupId === m.id : lastApproval?.direction === directionOf(m);
+  const brokenBinding = lastApproval?.binding && lastApproval.binding.status !== "bound" ? lastApproval.binding : null;
   const canApprove = s.status === "exploring";
 
   useEffect(() => {
@@ -258,7 +264,7 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
 
       <div role="tablist" aria-label="Versions" className="flex gap-1.5 overflow-x-auto pb-1">
         {versions.map((m) => {
-          const approved = approvedDirection === directionOf(m);
+          const approved = isApproved(m);
           return (
             <Pill
               key={m.id}
@@ -311,9 +317,21 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
         </div>
       </div>
 
+      {brokenBinding && (
+        <p role="alert" className="text-[13px] text-danger">
+          The approved version{" "}
+          {brokenBinding.status === "missing" ? "is no longer stored" : "changed since it was approved"}: it can’t be
+          built until a version is approved again.
+        </p>
+      )}
+
       <div id="mockup-panel" role="tabpanel" aria-label={`Version ${current.n}: ${current.title}`}>
         <Frame mockup={current} width={width} run={run} />
       </div>
+      <p className="text-[13px] text-ink-muted">
+        Version {current.n} · digest <span className="font-mono">{current.digest.slice(0, 12)}</span>: an approval names
+        this exact content.
+      </p>
       {reduce !== null && (
         <p className="text-[13px] text-ink-muted" aria-live="polite">
           Motion follows your browser, which has reduced motion{" "}

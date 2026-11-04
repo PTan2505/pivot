@@ -141,6 +141,100 @@ describe("design sessions", () => {
   });
 });
 
+describe("approvals are bound to the exact mockup content", () => {
+  const exploring = async (title: string, versions: { title: string; html: string }[]) => {
+    const { sessionId } = await design.saveDesignBrief({ title, milestone: "initial", markdown: `## ${title}` });
+    const { ids } = await design.saveDesignMockups({ sessionId, mockups: versions });
+    const s = (await design.getDesignSession(sessionId))!;
+    return { sessionId, ids, mockups: s.mockups };
+  };
+  const tamper = async (id: string, html: string) => {
+    const { designMockups } = await import("../src/db/schema");
+    const { eq } = await import("drizzle-orm");
+    await (await db.getDb()).update(designMockups).set({ html }).where(eq(designMockups.id, id));
+  };
+
+  it("each version has a content digest of its HTML and kind; the migration's SQL computes the same value", async () => {
+    const { mockups } = await exploring("Digest", [{ title: "A", html: "<p>Café ✓</p>" }]);
+    expect(mockups[0]).toMatchObject({ interactive: false, digest: design.mockupDigest("<p>Café ✓</p>", false) });
+    expect(design.mockupDigest("<p>x</p>", true)).not.toBe(design.mockupDigest("<p>x</p>", false));
+    const { sql } = await import("drizzle-orm");
+    const html = "<p>Café ✓ \u{1F600}</p>";
+    const rows = (await (
+      await db.getDb()
+    ).execute(
+      sql`select encode(sha256(convert_to(${"pivot-mockup:v1:static:" + html}, 'UTF8')), 'hex') as d`,
+    )) as unknown as { rows: { d: string }[] };
+    expect(rows.rows[0].d).toBe(design.mockupDigest(html, false));
+  });
+
+  it("the owner's approval stores the version and the digest the page showed; a stale or wrong digest is refused", async () => {
+    const { sessionId, ids, mockups } = await exploring("Owner", [
+      { title: "One", html: "<p>1</p>" },
+      { title: "Two", html: "<p>2</p>" },
+    ]);
+    await expect(design.approveDesignMockup(ids[0], "", "0".repeat(64))).rejects.toThrow(/reload it before approving/);
+    await expect(design.approveDesignMockup(ids[0], "", "abc")).rejects.toThrow(/reload it before approving/);
+    expect((await design.getDesignSession(sessionId))!.status).toBe("exploring");
+    // the page shows the first 12 characters; that prefix is enough
+    await design.approveDesignMockup(ids[1], "Go", mockups[1].digest.slice(0, 12));
+    const s = (await design.getDesignSession(sessionId))!;
+    expect(s.decisions.at(-1)).toMatchObject({
+      source: "owner",
+      binding: { mockupId: ids[1], digest: mockups[1].digest, status: "bound" },
+    });
+  });
+
+  it("an agent's approval names a version of this session only, and a digest needs its version", async () => {
+    const a = await exploring("Agent A", [{ title: "A", html: "<p>a</p>" }]);
+    const b = await exploring("Agent B", [{ title: "B", html: "<p>b</p>" }]);
+    const base = { sessionId: a.sessionId, kind: "approval" as const, summary: "User approved A" };
+    await expect(design.recordDesignDecision({ ...base, mockupId: b.ids[0] })).rejects.toThrow(/No mockup version/);
+    await expect(design.recordDesignDecision({ ...base, mockupDigest: a.mockups[0].digest })).rejects.toThrow(
+      /needs the mockupId/,
+    );
+    await expect(
+      design.recordDesignDecision({ ...base, mockupId: a.ids[0], mockupDigest: b.mockups[0].digest }),
+    ).rejects.toThrow(/isn't the stored one/);
+    await design.recordDesignDecision({ ...base, mockupId: a.ids[0] });
+    expect((await design.getDesignSession(a.sessionId))!.decisions.at(-1)!.binding).toEqual({
+      mockupId: a.ids[0],
+      digest: a.mockups[0].digest,
+      status: "bound",
+    });
+  });
+
+  it("building checks the approved version is still what was approved; a changed or missing version stops it", async () => {
+    const { sessionId, ids, mockups } = await exploring("Build", [{ title: "One", html: "<p>1</p>" }]);
+    await design.approveDesignMockup(ids[0], "", mockups[0].digest);
+    await tamper(ids[0], "<p>1, edited after approval</p>");
+    // the session reports it too: the HTML no longer hashes to the approved digest
+    expect((await design.getDesignSession(sessionId))!.decisions.at(-1)!.binding!.status).toBe("changed");
+    // the stored digest no longer matches its HTML: refused at building, and the approval shows it can't be checked
+    await expect(design.setDesignSessionStatus(sessionId, "building")).rejects.toThrow(/Ask for approval again/);
+    expect((await design.getDesignSession(sessionId))!.status).toBe("approved");
+    await tamper(ids[0], "<p>1</p>");
+    await design.setDesignSessionStatus(sessionId, "building");
+    expect((await design.getDesignSession(sessionId))!.status).toBe("building");
+
+    const gone = await exploring("Gone", [{ title: "One", html: "<p>g</p>" }]);
+    await design.approveDesignMockup(gone.ids[0], "", gone.mockups[0].digest);
+    const { designMockups } = await import("../src/db/schema");
+    const { eq } = await import("drizzle-orm");
+    await (await db.getDb()).delete(designMockups).where(eq(designMockups.id, gone.ids[0]));
+    expect((await design.getDesignSession(gone.sessionId))!.decisions.at(-1)!.binding!.status).toBe("missing");
+    await expect(design.setDesignSessionStatus(gone.sessionId, "building")).rejects.toThrow(/Ask for approval again/);
+  });
+
+  it("an approval recorded without a version (a chat approval, or one made before binding) keeps working", async () => {
+    const { sessionId } = await exploring("Legacy", [{ title: "One", html: "<p>l</p>" }]);
+    await design.recordDesignDecision({ sessionId, kind: "approval", summary: "Approved in chat", direction: "1" });
+    expect((await design.getDesignSession(sessionId))!.decisions.at(-1)!.binding).toBeNull();
+    await design.setDesignSessionStatus(sessionId, "building");
+    expect((await design.getDesignSession(sessionId))!.status).toBe("building");
+  });
+});
+
 describe("agent suggestions", () => {
   it("keeps suggestions pending, reuses existing facet names, finds them in search, and applies only what you accept", async () => {
     const r = await resources.createResource({

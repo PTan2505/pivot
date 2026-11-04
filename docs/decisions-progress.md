@@ -13,11 +13,41 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
 | P0c   | Motion foundation                      | Done (PR #63) |
 | P0d   | Preview controls and hardening         | Done (PR #64) |
 | P1a   | Motion reference evidence              | Done (PR #65) |
-| P1c   | Motion QA                              | In review     |
+| P1c   | Motion QA                              | Done (PR #66) |
+| P1b-1 | Approval bound to mockup content       | In review     |
+
+### P1b part 1 — Approval bound to mockup content (2026-11-04)
+
+- Status: In review (PR into `dev`).
+- Owner's choices before implementation:
+  - split P1b into two PRs, binding first;
+  - an additive migration;
+  - isolation C+A for part 2 (a cross-site loopback alias).
+- Existing functionality reused:
+  - the approve route and dialog;
+  - `recordDesignDecision`;
+  - the backup and restore code;
+  - `get_design_session`.
+- Files changed:
+  - schema and migration `0010` (`design_mockups.interactive`, `design_mockups.digest`, `design_decisions.mockup_id`, `design_decisions.mockup_digest`);
+  - `design.ts` (`mockupDigest`, binding and checks, the building guard);
+  - `backup.ts` (digest recomputed on restore);
+  - `types.ts`;
+  - the approve and decision routes;
+  - `design-mockups.tsx` (the digest line, approval by digest, the broken-binding alert);
+  - MCP `record_design_decision` (`mockupId`, `mockupDigest`) and `get_design_session` text;
+  - `pivot-design` §8, `motion.md` §6;
+  - SPEC, DESIGN.md, PIVOT_DECISIONS;
+  - tests.
+- Checks run and results: see the PR.
+- Remaining issues:
+  - A chat approval is bound only when the agent passes `mockupId`; an approval of a mix or of the local preview names its digest in text.
+  - The digest proves the HTML is unchanged, not who wrote it; the database itself isn't signed.
+- Next step: P1b part 2 (scripted previews in PIVOT), after this is merged.
 
 ### P1c — Motion QA (2026-11-04)
 
-- Status: In review (PR into `dev`).
+- Status: Done. Merged in PR #66 (`9b80fe8`).
 - Existing functionality reused:
   - the approved brief and approval from `get_design_session`;
   - the P0c viewer, for previews: its sandboxed frame, its policy and its own Replay button;

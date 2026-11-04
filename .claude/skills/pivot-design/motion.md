@@ -146,10 +146,11 @@ There is no separate motion approval: the user approves the direction **and** it
 - An approval made in PIVOT counts for motion only when the user could see the preview (the version itself, or the
   local preview of the version they approved) and the note doesn't reject the motion. A static version or its
   screenshot is never counted as the executable preview.
-- **What an approval is bound to, today:** a PIVOT approval names its version by title and round, and PIVOT keeps
-  that mockup's HTML unchanged; a local preview is named by its digest in the `Motion:` line. The local prototype
-  itself isn't stored in PIVOT, so keep its folder until the build is checked. Binding an approval to an immutable
-  mockup identity in PIVOT itself comes before interactive mockups move into PIVOT (P1b).
+- **What an approval is bound to:** an approval of a version saved in PIVOT stores that version's id and its content
+  digest (its HTML and whether it runs scripts): an approval made in PIVOT does it from what the page showed, and a
+  chat approval does it when you pass `mockupId`. `get_design_session` says whether the version still matches
+  (`binding.status`), and `building` is refused if it doesn't. A local preview is named by its viewer digest in the
+  `Motion:` line; that prototype isn't stored in PIVOT, so keep its folder until the build is checked.
 - A note or reply that changes an essential item is a major change: back to gate 2.
 
 ## 7. Technology
