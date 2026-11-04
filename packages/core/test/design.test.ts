@@ -335,12 +335,93 @@ describe("approvals are bound to the exact mockup content", () => {
     await setSession(same.sessionId, { status: "approved" });
     await design.setDesignSessionStatus(same.sessionId, "building");
     // and the pick doesn't depend on the order rows come back in
+    const us = BigInt(at.getTime()) * 1000n;
     const rows = [
-      { id: "b", createdAt: at, mockupId: "x", mockupDigest: "1" },
-      { id: "a", createdAt: at, mockupId: "y", mockupDigest: "2" },
+      { id: "b", at: us, mockupId: "x", mockupDigest: "1" },
+      { id: "a", at: us, mockupId: "y", mockupDigest: "2" },
     ];
     expect(design.pickCurrentApproval(rows, null).approval).toBeNull();
     expect(design.pickCurrentApproval([...rows].reverse(), null).approval).toBeNull();
+  });
+
+  it("a reset and an approval keep the order they happened in, even before the clock moves on", async () => {
+    // PGlite's now() moves in whole milliseconds, so a reset and an approval can share one. Placing the other event
+    // a second ahead of now() stands for a clock that hasn't moved past it yet.
+    const { sql } = await import("drizzle-orm");
+    const { db: d } = await raw();
+
+    // an approval recorded right after a reset counts
+    const a = await exploring("After reset", [{ title: "A", html: "<p>ar</p>" }]);
+    await d.execute(
+      sql`update design_sessions set approval_reset_at = now() + interval '1 second' where id = ${a.sessionId}`,
+    );
+    await design.recordDesignDecision({
+      sessionId: a.sessionId,
+      kind: "approval",
+      summary: "after",
+      mockupId: a.ids[0],
+    });
+    expect((await design.getDesignSession(a.sessionId))!.currentApprovalId).not.toBeNull();
+    await design.setDesignSessionStatus(a.sessionId, "building");
+
+    // a reset made right after an approval ends it
+    const b = await exploring("Before reset", [{ title: "A", html: "<p>br</p>" }]);
+    await design.recordDesignDecision({
+      sessionId: b.sessionId,
+      kind: "approval",
+      summary: "before",
+      mockupId: b.ids[0],
+    });
+    await d.execute(
+      sql`update design_decisions set created_at = now() + interval '1 second' where session_id = ${b.sessionId}`,
+    );
+    await design.setDesignSessionStatus(b.sessionId, "exploring"); // Reopen
+    await design.setDesignSessionStatus(b.sessionId, "abandoned");
+    await expect(design.setDesignSessionStatus(b.sessionId, "approved")).rejects.toThrow(/needs approving again/);
+
+    // and approvals made one after another never tie: the newer one counts
+    const c = await exploring("In a row", [
+      { title: "A", html: "<p>r1</p>" },
+      { title: "B", html: "<p>r2</p>" },
+    ]);
+    await design.recordDesignDecision({ sessionId: c.sessionId, kind: "approval", summary: "A", mockupId: c.ids[0] });
+    await d.execute(
+      sql`update design_decisions set created_at = now() + interval '1 second' where session_id = ${c.sessionId}`,
+    );
+    await design.recordDesignDecision({ sessionId: c.sessionId, kind: "approval", summary: "B", mockupId: c.ids[1] });
+    const sc = (await design.getDesignSession(c.sessionId))!;
+    expect(sc.decisions.find((x) => x.id === sc.currentApprovalId)!.binding!.mockupId).toBe(c.ids[1]);
+  });
+
+  it("times are compared in microseconds: moments in the same millisecond keep their order", async () => {
+    // an approval 300 µs after the reset counts; one at the reset moment doesn't (a JS Date rounds both to one ms)
+    const reset = 1_762_000_000_123_000n;
+    const one = (id: string, at: bigint, v = "x") => ({ id, at, mockupId: v, mockupDigest: v });
+    expect(design.pickCurrentApproval([one("a", reset + 300n)], reset).approval?.id).toBe("a");
+    expect(design.pickCurrentApproval([one("a", reset)], reset).approval).toBeNull();
+    // two approvals of different versions 1 µs apart: the newer one counts, in any order
+    const rows = [one("old", reset + 500n, "x"), one("new", reset + 501n, "y")];
+    expect(design.pickCurrentApproval(rows, reset).approval?.id).toBe("new");
+    expect(design.pickCurrentApproval([...rows].reverse(), reset).approval?.id).toBe("new");
+    // and in the database: a reset and an approval inside the same millisecond, in that order
+    const { sessionId, ids, mockups } = await exploring("Same ms", [{ title: "A", html: "<p>ms</p>" }]);
+    const { db: d, designSessions, designDecisions, eq } = await raw();
+    const base = new Date();
+    await d.update(designSessions).set({ status: "approved" }).where(eq(designSessions.id, sessionId));
+    const { sql } = await import("drizzle-orm");
+    await d.execute(
+      sql`update design_sessions set approval_reset_at = ${base.toISOString()}::timestamptz + interval '100 microseconds' where id = ${sessionId}`,
+    );
+    await d.insert(designDecisions).values({
+      sessionId,
+      kind: "approval",
+      summary: "approved 300 µs after the reset, in the same millisecond",
+      mockupId: ids[0],
+      mockupDigest: mockups[0].digest,
+      createdAt: sql`${base.toISOString()}::timestamptz + interval '400 microseconds'` as unknown as Date,
+    });
+    expect((await design.getDesignSession(sessionId))!.currentApprovalId).not.toBeNull();
+    await design.setDesignSessionStatus(sessionId, "building");
   });
 
   it("after Reopen or a major change, older approvals stop counting: no approved, no building, until approved again", async () => {
@@ -389,7 +470,8 @@ describe("approvals are bound to the exact mockup content", () => {
     // PGlite runs in this process on the JS clock, so a skew between two clocks can't be simulated here; the source is
     // checked instead: every reset is written with the database's now(), never the app's Date.
     const src = await fs.readFile(path.resolve(__dirname, "../src/design.ts"), "utf8");
-    expect(src).toContain("approvalResetAt: sql`now()`");
+    expect(src).toContain("approvalResetAt: resetMoment(sessionId)");
+    expect(src).toMatch(/const resetMoment = [\s\S]*?greatest\(now\(\)/);
     expect(src).not.toMatch(/approvalResetAt:\s*new Date/);
     const backupSrc = await fs.readFile(path.resolve(__dirname, "../src/backup.ts"), "utf8");
     expect(backupSrc).toContain("sql`now()`");

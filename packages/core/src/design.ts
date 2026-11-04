@@ -95,7 +95,8 @@ function mockupDTO(r: Omit<DesignMockupDTO, "createdAt"> & { createdAt: Date }):
   return { ...r, createdAt: r.createdAt.toISOString() };
 }
 
-type ApprovalRow = { id: string; createdAt: Date; mockupId: string | null; mockupDigest: string | null };
+/** An approval as the rules compare it: `at` is its database time in microseconds, never rounded to a JS Date. */
+type ApprovalRow = { id: string; at: bigint; mockupId: string | null; mockupDigest: string | null };
 
 /**
  * The approval that counts now, from a session's approvals: the newest one recorded after the session last went back
@@ -103,26 +104,27 @@ type ApprovalRow = { id: string; createdAt: Date; mockupId: string | null; mocku
  * revive an approval the brief superseded; an approval at that very moment doesn't count. A session that is exploring
  * has none (every way back to exploring after an approval resets it). Approvals recorded at the same moment count only
  * if they name the same version and digest; otherwise none does, rather than picking one. Older approvals never count
- * instead of a newer one. All times come from the database's clock.
+ * instead of a newer one. All times come from the database's clock, compared in microseconds as it stores them (a JS
+ * Date would round two different moments to the same millisecond).
  */
 export function pickCurrentApproval<T extends ApprovalRow>(
   approvals: T[],
-  resetAt: Date | null,
-  { status, majorChangeAt = null }: { status?: DesignStatus; majorChangeAt?: Date | null } = {},
+  resetAt: bigint | null,
+  { status, majorChangeAt = null }: { status?: DesignStatus; majorChangeAt?: bigint | null } = {},
 ) {
-  const sorted = [...approvals].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : -1));
+  const sorted = [...approvals].sort((a, b) => (a.at === b.at ? (a.id < b.id ? 1 : -1) : a.at > b.at ? -1 : 1));
   const newest = sorted[0];
   if (!newest) return { approval: null, reason: "This session has no recorded approval yet." };
   if (status === "exploring")
     return { approval: null, reason: "The session is exploring: the direction needs approving again." };
-  const resets = [resetAt, majorChangeAt].filter((d): d is Date => d instanceof Date && !Number.isNaN(d.getTime()));
-  const reset = resets.length ? new Date(Math.max(...resets.map((d) => d.getTime()))) : null;
-  if (reset && newest.createdAt.getTime() <= reset.getTime())
+  const resets = [resetAt, majorChangeAt].filter((t): t is bigint => typeof t === "bigint");
+  const reset = resets.length ? resets.reduce((a, b) => (a > b ? a : b)) : null;
+  if (reset !== null && newest.at <= reset)
     return {
       approval: null,
       reason: "The session went back to exploring after its last approval: the direction needs approving again.",
     };
-  const tied = sorted.filter((a) => a.createdAt.getTime() === newest.createdAt.getTime());
+  const tied = sorted.filter((a) => a.at === newest.at);
   if (tied.some((a) => a.mockupId !== newest.mockupId || a.mockupDigest !== newest.mockupDigest))
     return {
       approval: null,
@@ -131,40 +133,53 @@ export function pickCurrentApproval<T extends ApprovalRow>(
   return { approval: newest, reason: null };
 }
 
-/** The latest major-change brief of a session, or null. */
-async function lastMajorChange(sessionId: string) {
-  const db = await getDb();
-  const [m] = await db
-    .select({ at: designSnapshots.createdAt })
-    .from(designSnapshots)
-    .where(and(eq(designSnapshots.sessionId, sessionId), eq(designSnapshots.milestone, "major_change")))
-    .orderBy(desc(designSnapshots.createdAt))
-    .limit(1);
-  return m?.at ?? null;
-}
+/** A timestamp column in microseconds since the epoch, as text (exact in every driver), or null. */
+const micros = (col: unknown) => sql<string | null>`(floor(extract(epoch from ${col}) * 1000000))::bigint::text`;
+const big = (v: string | null | undefined) => (v == null ? null : BigInt(v));
 
-async function currentApproval(sessionId: string) {
+/** What the approval rules read about a session, at the database's full precision. */
+async function approvalState(sessionId: string) {
   const db = await getDb();
   const [s] = await db
-    .select({ resetAt: designSessions.approvalResetAt, status: designSessions.status })
+    .select({ status: designSessions.status, resetAt: micros(designSessions.approvalResetAt) })
     .from(designSessions)
     .where(eq(designSessions.id, sessionId))
     .limit(1);
   if (!s) throw new DesignError(`No design session ${sessionId}.`);
-  const approvals = await db
-    .select({
-      id: designDecisions.id,
-      createdAt: designDecisions.createdAt,
-      mockupId: designDecisions.mockupId,
-      mockupDigest: designDecisions.mockupDigest,
-    })
-    .from(designDecisions)
-    .where(and(eq(designDecisions.sessionId, sessionId), eq(designDecisions.kind, "approval")));
-  return pickCurrentApproval(approvals, s.resetAt, {
+  const [m] = await db
+    .select({ at: micros(sql`max(${designSnapshots.createdAt})`) })
+    .from(designSnapshots)
+    .where(and(eq(designSnapshots.sessionId, sessionId), eq(designSnapshots.milestone, "major_change")));
+  const approvals = (
+    await db
+      .select({
+        id: designDecisions.id,
+        at: micros(designDecisions.createdAt),
+        mockupId: designDecisions.mockupId,
+        mockupDigest: designDecisions.mockupDigest,
+      })
+      .from(designDecisions)
+      .where(and(eq(designDecisions.sessionId, sessionId), eq(designDecisions.kind, "approval")))
+  ).map((a) => ({ ...a, at: big(a.at)! }));
+  return pickCurrentApproval(approvals, big(s.resetAt), {
     status: s.status as DesignStatus,
-    majorChangeAt: await lastMajorChange(sessionId),
+    majorChangeAt: big(m?.at),
   });
 }
+
+const currentApproval = approvalState;
+
+const latestApproval = (sessionId: string) =>
+  sql`(select max(${designDecisions.createdAt}) from ${designDecisions} where ${designDecisions.sessionId} = ${sessionId} and ${designDecisions.kind} = 'approval')`;
+/**
+ * The database's time for a reset, and for an approval: strictly after the session's latest approval (a reset) or after
+ * its reset and latest approval (an approval). A clock that ticks in whole milliseconds (PGlite's) would otherwise give
+ * a reset and an approval made in the same millisecond the same time, and the order they happened in would be lost.
+ */
+const resetMoment = (sessionId: string) =>
+  sql`greatest(now(), coalesce(${latestApproval(sessionId)}, '-infinity'::timestamptz) + interval '1 microsecond')`;
+const approvalMoment = (sessionId: string) =>
+  sql`greatest(now(), coalesce(${latestApproval(sessionId)}, '-infinity'::timestamptz) + interval '1 microsecond', coalesce((select ${designSessions.approvalResetAt} from ${designSessions} where ${designSessions.id} = ${sessionId}), '-infinity'::timestamptz) + interval '1 microsecond')`;
 
 /**
  * Updates a session. `resetApprovals` marks the moment it went back to exploring with the database's clock, the same
@@ -178,7 +193,7 @@ async function touch(
   const db = await getDb();
   await db
     .update(designSessions)
-    .set({ ...set, ...(resetApprovals ? { approvalResetAt: sql`now()` } : {}), updatedAt: new Date() })
+    .set({ ...set, ...(resetApprovals ? { approvalResetAt: resetMoment(sessionId) } : {}), updatedAt: new Date() })
     .where(eq(designSessions.id, sessionId));
 }
 
@@ -320,6 +335,7 @@ export async function recordDesignDecision(input: {
       source: input.source ?? "agent",
       mockupId: input.mockupId ?? null,
       mockupDigest: bound,
+      ...(input.kind === "approval" ? { createdAt: approvalMoment(input.sessionId) } : {}),
     })
     .returning({ id: designDecisions.id });
   await touch(input.sessionId, input.kind === "approval" ? { status: "approved" } : {});
@@ -393,18 +409,7 @@ export async function getDesignSession(id: string): Promise<DesignSessionDetailD
     : [];
   const digests = new Map(mockups.map((m) => [m.id, m.digest]));
   for (const c of checked) digests.set(c.id, mockupDigest(c.html, c.interactive));
-  const current = pickCurrentApproval(
-    decisions.filter((d) => d.kind === "approval"),
-    s.approvalResetAt,
-    {
-      status: s.status as DesignStatus,
-      majorChangeAt:
-        snapshots
-          .filter((x) => x.milestone === "major_change")
-          .map((x) => x.createdAt)
-          .at(-1) ?? null,
-    },
-  );
+  const current = await approvalState(id);
   return {
     ...sessionDTO(s),
     currentApprovalId: current.approval?.id ?? null,

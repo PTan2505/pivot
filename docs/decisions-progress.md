@@ -60,6 +60,16 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
     - an old or malformed reset in a backup;
     - an approval invalid before the backup stays invalid;
     - the migration resets reopened sessions only.
+- Isolated verification (2026-11-04), from a dedicated worktree at `5f5ad0c`:
+  - **The intermittent core failure was identified.** `design.test.ts` › "after Reopen or a major change…" failed once in the first validation run; the output is kept. An approval recorded right after a reset was judged older than it.
+  - Two causes:
+    - times were compared as JS Dates (milliseconds), while the database keeps microseconds;
+    - PGlite's clock (the local database) ticks in whole milliseconds, so a reset and an approval in the same millisecond got the same time.
+  - The outcome was safe (it refused) but depended on timing. Fixed:
+    - times are read in microseconds from SQL;
+    - the database stamps a reset strictly after the session's latest approval, and an approval strictly after the reset and the previous approval (`greatest(now(), … + 1 µs)`), so the order things happened in is kept with any clock.
+  - A deterministic test (placing the other event ahead of `now()`) fails on the code before this fix and passes after. The earlier "many fast rounds" idea couldn't force the collision and was dropped.
+  - Behavioural clock-skew test against real PostgreSQL, as above.
   - Behaviour change: an abandoned session that had an approval before 0010 restores to Exploring and needs approving again, since what happened before it was abandoned isn't known.
 - Backup and recovery before migration 0010 reaches real data. The migration runs automatically on the first start from a `dev` that includes it.
   1. Stop PIVOT.
