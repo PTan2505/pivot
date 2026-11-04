@@ -14,7 +14,8 @@ const read = (...p: string[]) => fs.readFileSync(P(...p), "utf8");
 const d = read(".claude/skills/pivot-design/SKILL.md");
 const r = read(".claude/skills/pivot-redesign/SKILL.md");
 const specialists = read(".claude/skills/pivot-design/specialists.md");
-const files = { "pivot-design": d, "pivot-redesign": r, specialists } as const;
+const motionMd = read(".claude/skills/pivot-design/motion.md");
+const files = { "pivot-design": d, "pivot-redesign": r, specialists, motion: motionMd } as const;
 const spec = read("docs/SPEC.md");
 const src = ["tools.ts", "write-tools.ts", "external-tools.ts"].map((f) => read("packages/mcp-tools/src", f)).join("");
 const types = read("packages/core/src/types.ts");
@@ -38,6 +39,13 @@ describe("skills name real MCP tools and values", () => {
     expect(tools.size).toBe(13);
   });
 
+  // get_reference_images' `which` values, from the tool's own schema
+  const whichValues = new Set(
+    [...(/which: z\s*\.enum\(\[([^\]]*)\]/.exec(src)?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1]),
+  );
+  it("get_reference_images offers keyframes and states", () => {
+    expect([...whichValues]).toEqual(["cover", "fullpage", "all", "keyframes", "states"]);
+  });
   const milestones = enumValues("DESIGN_MILESTONES");
   const kinds = enumValues("DESIGN_DECISION_KINDS");
   const tagKinds = enumValues("TAG_KINDS");
@@ -55,7 +63,7 @@ describe("skills name real MCP tools and values", () => {
         ...all(/`(pageType|domain|visualStyle|uiPattern|technology)[:`]/g, t),
       ]);
       expect(subset(facetKinds, tagKinds)).toEqual([]);
-      expect(subset(all(/which: "([a-z]+)"/g, t), new Set(["cover", "fullpage", "all"]))).toEqual([]);
+      expect(subset(all(/which: "([a-z]+)"/g, t), whichValues)).toEqual([]);
     });
   }
 
@@ -438,6 +446,15 @@ describe("motion is part of the design", () => {
     expect(viewer).toContain("connect-src 'none'");
     expect(viewer).not.toContain('allow-same-origin"');
     expect(specialists).toContain("when the motion level is standard or advanced");
+  });
+  it("motion evidence: read from PIVOT, observed only for a recording, inferred is the agent's label, gaps named", () => {
+    const flat = motion.replace(/\s+/g, " ");
+    expect(flat).toContain('`classification: "observed"` only when PIVOT recorded the page while scrolling it');
+    expect(flat).toContain('`classification: "unknown"` when there is no recording');
+    expect(flat).toContain("PIVOT never labels anything inferred itself");
+    expect(flat).toContain('`which: "keyframes"`');
+    expect(flat).toContain("**Name the gaps:**");
+    expect(d.replace(/\s+/g, " ")).toContain("A screenshot never proves an animation");
   });
   it("SPEC and PIVOT_DECISIONS describe the motion foundation", () => {
     for (const x of ["mức motion", "Xem trước và duyệt motion", "--interactive"])

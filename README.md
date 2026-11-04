@@ -77,21 +77,21 @@ Two pieces let Claude Code design and redesign screens in any project from **you
 
 ### Tools (the `pivot` MCP server)
 
-| Tool                     | Kind  | What Claude uses it for                                                                             |
-| ------------------------ | ----- | --------------------------------------------------------------------------------------------------- |
-| `list_facets`            | read  | Learn the library's vocabulary once per task: page types, domains, styles, patterns, collections    |
-| `search_references`      | read  | Find references by words and facets, inside a collection or from a source                           |
-| `get_reference`          | read  | One reference's link, description, your notes, facets and available screenshots                     |
-| `get_reference_images`   | read  | Look at it: the cover, and the full page in ~2,000-token slices                                     |
-| `search_external`        | read  | Free public component catalogs (Magic UI, React Bits, shadcn/ui), only when the library falls short |
-| `save_design_brief`      | write | Store the brief at a milestone: `initial` (opens a design session), `approved`, `major_change`      |
-| `record_design_decision` | write | Record your `approval`, a `change` after approval, or a QA `deviation`                              |
-| `save_design_mockups`    | write | Put a round of mockups on the session's page in PIVOT, where you compare them and approve one       |
-| `set_design_status`      | write | Mark an approved session `building` when Claude starts coding, and `done` after the build and QA    |
-| `get_design_session`     | read  | Read a session to continue earlier work, or the approval you made in PIVOT                          |
-| `suggest_metadata`       | write | Suggest facets or a title for a reference; it waits in your Inbox                                   |
-| `annotate_reference`     | write | Add a dated agent note to a reference; your notes stay as they are                                  |
-| `save_reference`         | write | Save a page to the library, only when you ask                                                       |
+| Tool                     | Kind  | What Claude uses it for                                                                                     |
+| ------------------------ | ----- | ----------------------------------------------------------------------------------------------------------- |
+| `list_facets`            | read  | Learn the library's vocabulary once per task: page types, domains, styles, patterns, collections            |
+| `search_references`      | read  | Find references by words and facets, inside a collection or from a source                                   |
+| `get_reference`          | read  | One reference's link, description, your notes, facets, screenshots and motion evidence (observed / unknown) |
+| `get_reference_images`   | read  | Look at it: the cover, the full page in ~2,000-token slices, motion keyframes or interaction states         |
+| `search_external`        | read  | Free public component catalogs (Magic UI, React Bits, shadcn/ui), only when the library falls short         |
+| `save_design_brief`      | write | Store the brief at a milestone: `initial` (opens a design session), `approved`, `major_change`              |
+| `record_design_decision` | write | Record your `approval`, a `change` after approval, or a QA `deviation`                                      |
+| `save_design_mockups`    | write | Put a round of mockups on the session's page in PIVOT, where you compare them and approve one               |
+| `set_design_status`      | write | Mark an approved session `building` when Claude starts coding, and `done` after the build and QA            |
+| `get_design_session`     | read  | Read a session to continue earlier work, or the approval you made in PIVOT                                  |
+| `suggest_metadata`       | write | Suggest facets or a title for a reference; it waits in your Inbox                                           |
+| `annotate_reference`     | write | Add a dated agent note to a reference; your notes stay as they are                                          |
+| `save_reference`         | write | Save a page to the library, only when you ask                                                               |
 
 **Where things live:**
 

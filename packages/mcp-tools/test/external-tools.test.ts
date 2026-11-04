@@ -134,4 +134,18 @@ describe("search_external", () => {
     const none = await runTool(tool, source(), { query: "list" });
     expect(none.structuredContent).toMatchObject({ error: { code: "not_supported" } });
   });
+
+  it("passes a source category through, and refuses an unknown one", async () => {
+    const seen: unknown[] = [];
+    const src = source({ externalSearch: async (req) => (seen.push(req), page) });
+    await runTool(tool, src, { query: "scroll", category: "motion" });
+    await runTool(tool, src, { query: "list" });
+    expect(seen).toEqual([
+      { query: "scroll", providers: undefined, limit: 5, category: "motion" },
+      { query: "list", providers: undefined, limit: 5 },
+    ]);
+    expect((await runTool(tool, src, { query: "x", category: "animations" })).structuredContent).toMatchObject({
+      error: { code: "invalid_input" },
+    });
+  });
 });

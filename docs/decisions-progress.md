@@ -11,11 +11,62 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
 | P0a   | Skill contract tests and trace checker | Done (PR #61) |
 | P0b   | Specialist spike, then routing         | Done (PR #62) |
 | P0c   | Motion foundation                      | Done (PR #63) |
-| P0d   | Preview controls and hardening         | In review     |
+| P0d   | Preview controls and hardening         | Done (PR #64) |
+| P1a   | Motion reference evidence              | In review     |
+
+### P1a — Motion reference evidence (2026-11-04)
+
+- Status: In review (PR into `dev`).
+- Owner's choice, made before implementation because the request (structured evidence records stored per reference) and the plan ("no new table") differed: **follow the plan, no migration**. Stored, owner- or agent-written evidence per reference is left for a separate proposal.
+- Existing functionality reused:
+  - the assets capture already stores: `motion-video` (meta `method`, `capturedAt`, `viewport`, `finalUrl`, `durationMs`), up to 8 `motion-keyframe` stills (meta `keyframe`, `scrollY`) and `state` stills (meta `state`);
+  - `AssetDTO.meta`, which the MCP layer already received;
+  - `getImage`, `fitImage` and the image budget;
+  - core's external-search `category`.
+- Files changed:
+  - `packages/mcp-tools/src/tools.ts`: `motionEvidenceOf`; `get_reference` returns `motionEvidence`; `get_reference_images` gains `which: "keyframes" | "states"`;
+  - `external-tools.ts`, `source.ts`, `apps/mcp/src/http-source.ts`: `category` for `search_external`;
+  - tests: `motion-evidence.test.ts`, `motion-evidence.db.test.ts`, `external-tools.test.ts`, `skills.test.ts`;
+  - `motion.md` §3 and `pivot-design` §3;
+  - SPEC, README, `apps/mcp/README.md`, PIVOT_DECISIONS.
+- Evidence rules:
+  - `observed` only when PIVOT recorded the page while scrolling, with scope `scroll`, the recording's provenance and its limits (no hover, click or focus; no timing or easing; between keyframes is inferred; the video can't be viewed over MCP);
+  - `unknown` otherwise;
+  - the system never labels anything `inferred`: that is the agent's label in the brief;
+  - malformed metadata is dropped, never guessed;
+  - lists are capped at 12, with totals.
+- Checks run and results: see the PR.
+- Acceptance review (2026-11-04):
+  - Setup: a scratch PIVOT on 127.0.0.1:4321 (no Neon, no R2). Linear (`https://linear.app/`) was captured through the normal capture API with `motion: true`, giving 1 `motion-video` (12.6 s) and 8 `motion-keyframe` stills (scroll 0–9060). Vercel was captured without motion. A throwaway target repo held a synthetic `DESIGN.md`.
+  - Edge cases found and fixed:
+    - with a video but no keyframes, `which: "keyframes"` said "unknown, no recording", contradicting `observed`;
+    - invalid dates, a negative duration, viewport or `scrollY`, and a non-object `meta` (which crashed) are now dropped;
+    - the Motion line now says when its scroll range covers only the first 12 keyframes;
+    - **Claude Code shows only `structuredContent` when a reply has it**, so the keyframe labels and limits in the text never reached the agent. `structuredContent` now carries `images` (with labels), `next` and `limitations`.
+  - L3: two runs of a fresh general-purpose subagent, given a neutral user prompt with the `pivot-design` skill and the real MCP, stopping after the brief, judged from their transcripts by `trace-check`.
+    - Run 1 used the pre-fix build; run 2 used the fixed build and received the labels.
+    - Both runs called `get_reference`, read `motionEvidence` (observed, 12.6 s, 8 keyframes), and called `get_reference_images` with `which: "keyframes"` (keyframes 1–4).
+    - Both labelled each claim observed or inferred, cited the reference and the keyframes, and left hover, click and focus "not exercised" and timing and easing "inferred".
+    - Images used: 7 and 8 of about 12.
+    - Neither run wrote anything to the target.
+    - The brief save was refused in both runs: the MCP reads the real `~/.pivot/api-token`, which the scratch instance doesn't share. The brief text was checked from the transcripts instead.
+  - What this verifies, and what it doesn't:
+    - **Verified (two agent runs):** retrieving motion evidence (`get_reference`, `which: "keyframes"`) and reasoning about it in the brief's Motion block.
+    - **Not verified:** that `save_design_brief` persists the brief. Both saves were refused because of the scratch token mismatch.
+    - **Not verified:** an independent, fresh Claude Code session that loads the new MCP schema. Both runs were subagents of this session, whose client kept the old `get_reference_images` schema (`which` limited to `cover | fullpage | all`) although the server accepted `keyframes`.
+    - The design workflow was **not** run end to end: the runs stopped at the brief, with no mockups, gate 2, build or QA.
+  - Known limitation: `fromSlice` is capped at 20, so keyframes or states past the 24th can't be fetched. Capture keeps at most 8 keyframes today.
+- Remaining issues:
+  - Recordings only cover scrolling; hover, click and focus motion have no captured evidence. Interaction-state stills are static.
+  - The video itself can't be viewed through MCP.
+  - No owner- or agent-written motion evidence is stored per reference; it lives in the brief.
+  - `category: "motion"` returns search links only, because the direct catalogs are component catalogs.
+  - The live MCP server runs the build from `pnpm mcp:build`; Claude Code needs a restart to see the new behaviour.
+- Next step: P1c, once authorised.
 
 ### P0d — Preview controls and hardening (2026-11-04)
 
-- Status: In review (PR into `dev`).
+- Status: Done. Merged in PR #64 (`cee7a19`).
 - Existing functionality reused:
   - the proxy's local-host and write-origin rules, now moved unchanged into a pure helper;
   - the session page's mockup frame and the viewer's Replay;
