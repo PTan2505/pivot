@@ -102,6 +102,7 @@ Pin down, from the request and the codebase (ask only for what you can't infer):
 - `get_reference` on the 4–8 most promising hits. The user's **notes** often say what they liked; weigh them.
 - `get_reference_images` (cover) on the best 3–6. Use full-page slices (`which: "fullpage"`) only for the 1–2 references whose structure below the fold matters, one or two slices at a time.
 - Budget: about 12 images per task. Each costs ~2,000 tokens.
+- **Motion** (level standard or advanced): read each candidate's `motionEvidence` in `get_reference`, and look at keyframes (`which: "keyframes"`) only for the 1–2 references whose motion matters; they count toward the image budget. A screenshot never proves an animation: label motion evidence as [motion.md](motion.md) §3 says.
 - Screenshots have limits: an element cut between two captured screens can look half revealed, and pages behind a login only have the user's own view. Don't read meaning into those artefacts.
 - External references have no screenshot in PIVOT. Open the page only if you have a tool to (and the user is fine with it); otherwise judge from the catalog's title and description and mark it **metadata only**. Never describe how something looks unless you saw it.
 

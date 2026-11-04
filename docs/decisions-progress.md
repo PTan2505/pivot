@@ -11,11 +11,42 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
 | P0a   | Skill contract tests and trace checker | Done (PR #61) |
 | P0b   | Specialist spike, then routing         | Done (PR #62) |
 | P0c   | Motion foundation                      | Done (PR #63) |
-| P0d   | Preview controls and hardening         | In review     |
+| P0d   | Preview controls and hardening         | Done (PR #64) |
+| P1a   | Motion reference evidence              | In review     |
+
+### P1a — Motion reference evidence (2026-11-04)
+
+- Status: In review (PR into `dev`).
+- Owner's choice, made before implementation because the request (structured evidence records stored per reference) and the plan ("no new table") differed: **follow the plan, no migration**. Stored, owner- or agent-written evidence per reference is left for a separate proposal.
+- Existing functionality reused:
+  - the assets capture already stores: `motion-video` (meta `method`, `capturedAt`, `viewport`, `finalUrl`, `durationMs`), up to 8 `motion-keyframe` stills (meta `keyframe`, `scrollY`) and `state` stills (meta `state`);
+  - `AssetDTO.meta`, which the MCP layer already received;
+  - `getImage`, `fitImage` and the image budget;
+  - core's external-search `category`.
+- Files changed:
+  - `packages/mcp-tools/src/tools.ts`: `motionEvidenceOf`; `get_reference` returns `motionEvidence`; `get_reference_images` gains `which: "keyframes" | "states"`;
+  - `external-tools.ts`, `source.ts`, `apps/mcp/src/http-source.ts`: `category` for `search_external`;
+  - tests: `motion-evidence.test.ts`, `motion-evidence.db.test.ts`, `external-tools.test.ts`, `skills.test.ts`;
+  - `motion.md` §3 and `pivot-design` §3;
+  - SPEC, README, `apps/mcp/README.md`, PIVOT_DECISIONS.
+- Evidence rules:
+  - `observed` only when PIVOT recorded the page while scrolling, with scope `scroll`, the recording's provenance and its limits (no hover, click or focus; no timing or easing; between keyframes is inferred; the video can't be viewed over MCP);
+  - `unknown` otherwise;
+  - the system never labels anything `inferred`: that is the agent's label in the brief;
+  - malformed metadata is dropped, never guessed;
+  - lists are capped at 12, with totals.
+- Checks run and results: see the PR.
+- Remaining issues:
+  - Recordings only cover scrolling; hover, click and focus motion have no captured evidence. Interaction-state stills are static.
+  - The video itself can't be viewed through MCP.
+  - No owner- or agent-written motion evidence is stored per reference; it lives in the brief.
+  - `category: "motion"` returns search links only, because the direct catalogs are component catalogs.
+  - The live MCP server runs the build from `pnpm mcp:build`; Claude Code needs a restart to see the new behaviour.
+- Next step: P1c, once authorised.
 
 ### P0d — Preview controls and hardening (2026-11-04)
 
-- Status: In review (PR into `dev`).
+- Status: Done. Merged in PR #64 (`cee7a19`).
 - Existing functionality reused:
   - the proxy's local-host and write-origin rules, now moved unchanged into a pure helper;
   - the session page's mockup frame and the viewer's Replay;

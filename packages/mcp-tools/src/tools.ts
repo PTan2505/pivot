@@ -187,6 +187,137 @@ function screenshotsOf(r: ResourceDetailDTO) {
     }));
 }
 
+// ---- motion evidence --------------------------------------------------------------------------------------------
+
+/** At most this many keyframes and interaction states are listed, to keep a reply small. */
+const MOTION_LIST_MAX = 12;
+const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 200) : null);
+
+export interface MotionEvidence {
+  /** observed: PIVOT recorded the page moving; unknown: it holds no recording. PIVOT never labels motion inferred. */
+  classification: "observed" | "unknown";
+  /** What the recording exercised: scrolling only. */
+  scope: "scroll" | null;
+  source: {
+    kind: "pivot-scroll-recording";
+    method: string | null;
+    capturedAt: string | null;
+    viewport: { width: number; height: number } | null;
+    finalUrl: string | null;
+  } | null;
+  /** The video exists but can't be viewed through these tools. */
+  recording: { assetId: string; durationMs: number | null } | null;
+  keyframes: {
+    assetId: string;
+    index: number | null;
+    scrollY: number | null;
+    width: number | null;
+    height: number | null;
+  }[];
+  keyframesTotal: number;
+  /** Stills of interaction states (hover, open, …): how a state looks, not how it moves. */
+  states: { assetId: string; state: string | null }[];
+  statesTotal: number;
+  /** What this evidence can't tell, in plain words. */
+  limitations: string[];
+}
+
+const viewportOf = (v: unknown) => {
+  const o = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+  const width = num(o.width);
+  const height = num(o.height);
+  return width && height ? { width, height } : null;
+};
+
+/**
+ * The motion evidence PIVOT holds for a reference, read from what its capture stored (a scroll recording, its
+ * keyframes, interaction-state stills). Nothing is guessed: timing, easing and triggers other than scrolling are
+ * never filled in, and a reference without a recording is "unknown". Lists stop at `limit` items; the totals don't.
+ */
+export function motionEvidenceOf(r: ResourceDetailDTO, limit = MOTION_LIST_MAX): MotionEvidence {
+  const live = r.assets.filter((a) => !a.missing);
+  const video = live.find((a) => a.role === "motion-video");
+  const allKeyframes = live
+    .filter((a) => a.role === "motion-keyframe" && (a.kind === "image" || a.kind === "svg"))
+    .map((a) => ({
+      assetId: a.id,
+      index: num(a.meta.keyframe),
+      scrollY: num(a.meta.scrollY),
+      width: a.width,
+      height: a.height,
+    }))
+    .sort((a, b) => (a.scrollY ?? Infinity) - (b.scrollY ?? Infinity) || (a.index ?? 0) - (b.index ?? 0));
+  const allStates = live
+    .filter((a) => a.role === "state" && (a.kind === "image" || a.kind === "svg"))
+    .map((a) => ({ assetId: a.id, state: str(a.meta.state) }));
+  const states = allStates.slice(0, limit);
+  const stateNote = allStates.length ? ["Interaction-state stills show how a state looks, not how it animates."] : [];
+
+  if (!video && !allKeyframes.length) {
+    return {
+      classification: "unknown",
+      scope: null,
+      source: null,
+      recording: null,
+      keyframes: [],
+      keyframesTotal: 0,
+      states,
+      statesTotal: allStates.length,
+      limitations: [
+        "PIVOT holds no motion recording for this reference: any motion described for it is inferred unless observed live.",
+        ...stateNote,
+      ],
+    };
+  }
+  const meta = (video ?? live.find((a) => a.role === "motion-keyframe"))!.meta;
+  return {
+    classification: "observed",
+    scope: "scroll",
+    source: {
+      kind: "pivot-scroll-recording",
+      method: str(meta.method),
+      capturedAt: str(meta.capturedAt) ?? video?.createdAt ?? null,
+      viewport: viewportOf(meta.viewport),
+      finalUrl: str(meta.finalUrl),
+    },
+    recording: video ? { assetId: video.id, durationMs: num(video.meta.durationMs) } : null,
+    keyframes: allKeyframes.slice(0, limit),
+    keyframesTotal: allKeyframes.length,
+    states,
+    statesTotal: allStates.length,
+    limitations: [
+      "Recorded while PIVOT scrolled the page top to bottom with no pointer: hover, click, focus and other triggers weren't exercised.",
+      "Timing and easing weren't measured: keyframes are stills at the listed scroll positions, and what happens between them is inferred.",
+      video
+        ? "The video itself can't be viewed through these tools; look at the keyframes."
+        : "The recording's video is missing; only its keyframes remain.",
+      ...(allKeyframes.length ? [] : ["No keyframes were kept, so nothing from the recording can be looked at here."]),
+      ...stateNote,
+    ],
+  };
+}
+
+function motionLine(m: MotionEvidence) {
+  if (m.classification === "unknown") {
+    return `Motion: unknown (PIVOT holds no recording).${m.statesTotal ? ` ${m.statesTotal} interaction-state still${m.statesTotal === 1 ? "" : "s"}: get_reference_images which=states.` : ""}`;
+  }
+  const vp = m.source?.viewport ? `, ${m.source.viewport.width}×${m.source.viewport.height}` : "";
+  const length = m.recording?.durationMs ? `, ${(m.recording.durationMs / 1000).toFixed(1)} s` : "";
+  const ys = m.keyframes.map((k) => k.scrollY).filter((y): y is number => y !== null);
+  const range = ys.length ? ` at scroll ${Math.min(...ys)}–${Math.max(...ys)}px` : "";
+  return [
+    `Motion: observed while scrolling (PIVOT scroll recording${length}${vp}${m.source?.capturedAt ? `, ${m.source.capturedAt.slice(0, 10)}` : ""}).`,
+    m.keyframesTotal
+      ? `${m.keyframesTotal} keyframe${m.keyframesTotal === 1 ? "" : "s"}${range}: get_reference_images which=keyframes.`
+      : "No keyframes kept.",
+    m.statesTotal ? `${m.statesTotal} interaction-state still${m.statesTotal === 1 ? "" : "s"}: which=states.` : "",
+    `Limits: ${m.limitations.join(" ")}`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 async function liveResource(source: PivotSource, id: string) {
   const r = await source.getResource(id);
   if (!r || r.deletedAt)
@@ -201,7 +332,7 @@ const idInput = {
 const getReference: PivotTool<typeof idInput> = {
   name: "get_reference",
   title: "Get a reference's details",
-  description: `Full details of one PIVOT reference or source: link, description, the user's notes, facets, collections and which screenshots exist (with sizes). Call it before relying on a reference. ${UNTRUSTED}`,
+  description: `Full details of one PIVOT reference or source: link, description, the user's notes, facets, collections, which screenshots exist (with sizes), and its motion evidence: "observed" only when PIVOT recorded the page while scrolling (with the recording's source and limits, and keyframes you can view), otherwise "unknown". Call it before relying on a reference. ${UNTRUSTED}`,
   inputSchema: idInput,
   async run(source, { id }) {
     const r = await liveResource(source, id);
@@ -221,6 +352,7 @@ const getReference: PivotTool<typeof idInput> = {
       facets: r.tags.map(({ kind, name }) => ({ kind, name })),
       collections: r.collections.map((c) => c.name),
       screenshots: screenshotsOf(r),
+      motionEvidence: motionEvidenceOf(r),
       // the user's (or an agent's) notes on places in the screenshots, as fractions of the image
       annotations: (r.annotations ?? []).map((a) => ({
         assetId: a.assetId,
@@ -247,6 +379,7 @@ const getReference: PivotTool<typeof idInput> = {
       detail.screenshots.length
         ? `Screenshots: ${detail.screenshots.map((s) => `${s.role} ${s.width}×${s.height}`).join(", ")}. get_reference_images shows them.`
         : "No screenshots.",
+      motionLine(detail.motionEvidence),
       detail.annotations.length &&
         `Annotations: ${detail.annotations
           .map(
@@ -313,10 +446,10 @@ const listFacets: PivotTool<Record<string, never>> = {
 const imagesInput = {
   id: idInput.id,
   which: z
-    .enum(["cover", "fullpage", "all"])
+    .enum(["cover", "fullpage", "all", "keyframes", "states"])
     .optional()
     .describe(
-      "cover: the first screen as saved (default). fullpage: the whole page, top to bottom, in slices. all: both.",
+      "cover: the first screen as saved (default). fullpage: the whole page, top to bottom, in slices. all: both. keyframes: stills from PIVOT's scroll recording, in scroll order (motion evidence). states: stills of interaction states.",
     ),
   fromSlice: z
     .number()
@@ -324,7 +457,7 @@ const imagesInput = {
     .min(0)
     .max(20)
     .optional()
-    .describe("Full page only: the first slice to return (default 0)."),
+    .describe("Full page: the first slice to return. Keyframes and states: the first one to return. Default 0."),
   maxImages: z.number().int().min(1).max(4).optional().describe("At most this many images (1–4, default 3)."),
 };
 
@@ -332,7 +465,7 @@ const getReferenceImages: PivotTool<typeof imagesInput> = {
   name: "get_reference_images",
   title: "Look at a reference",
   description:
-    "The screenshots of one PIVOT reference as images, so you can judge its layout, hierarchy, type and colour. The cover is the first screen as saved (or what the user saw when saving it with the browser extension). The full page is the whole page captured top to bottom, sent in 960px-wide slices; page through it with fromSlice. Each image costs about 2,000 tokens, so look at a few chosen references rather than every result. Captured pages can show a half-revealed element where two screens meet, and pages behind a login only have the user's own view.",
+    "The screenshots of one PIVOT reference as images, so you can judge its layout, hierarchy, type and colour. The cover is the first screen as saved (or what the user saw when saving it with the browser extension). The full page is the whole page captured top to bottom, sent in 960px-wide slices; page through it with fromSlice. Keyframes are stills PIVOT took while recording the page scrolling: they show what appeared at each scroll position (observed), not timing or easing, and nothing about hover or click; states are stills of interaction states. Each image costs about 2,000 tokens, so look at a few chosen references rather than every result. Captured pages can show a half-revealed element where two screens meet, and pages behind a login only have the user's own view.",
   inputSchema: imagesInput,
   async run(source, { id, which = "cover", fromSlice = 0, maxImages = 3 }) {
     const r = await liveResource(source, id);
@@ -363,6 +496,50 @@ const getReferenceImages: PivotTool<typeof imagesInput> = {
             }`
           : `Full page ${page.pageWidth}×${page.pageHeight} has ${page.total} slice${page.total === 1 ? "" : "s"}; fromSlice ${fromSlice} is past the end.`,
       );
+    }
+    if (which === "keyframes" || which === "states") {
+      const motion = motionEvidenceOf(r);
+      const total = which === "keyframes" ? motion.keyframesTotal : motion.statesTotal;
+      if (!total) {
+        throw new ToolError(
+          "no_images",
+          which === "keyframes"
+            ? `${r.title} has no motion keyframes: its motion evidence is unknown (PIVOT holds no scroll recording).`
+            : `${r.title} has no interaction-state stills.`,
+        );
+      }
+      // the full lists (not just the listed first 12), in the same order
+      const all =
+        which === "keyframes"
+          ? motionEvidenceOf(r, Infinity).keyframes.map((k, i) => ({
+              assetId: k.assetId,
+              label: `Keyframe ${i + 1} of ${total}${k.scrollY !== null ? ` at scroll ${k.scrollY}px` : ""} (observed, PIVOT scroll recording)`,
+            }))
+          : motionEvidenceOf(r, Infinity).states.map((st, i) => ({
+              assetId: st.assetId,
+              label: `State ${i + 1} of ${total}${st.state ? `: ${st.state}` : ""} (a still: how the state looks, not how it moves)`,
+            }));
+      const picked = all.slice(fromSlice, fromSlice + maxImages);
+      for (const item of picked) {
+        const img = await fitImage((await source.getImage(item.assetId, "original")).data);
+        parts.push(image(img));
+        notes.push(
+          `${item.label}, sent at ${img.width}×${img.height} (~${imageTokens(img.width, img.height)} tokens).`,
+        );
+      }
+      if (!picked.length) notes.push(`${which} has ${total}; fromSlice ${fromSlice} is past the end.`);
+      else if (fromSlice + picked.length < total)
+        notes.push(`Call again with fromSlice ${fromSlice + picked.length} for the rest.`);
+      if (which === "keyframes") notes.push(`Limits: ${motion.limitations.join(" ")}`);
+      return {
+        content: [text(`${r.title}${r.sourceUrl ? ` (${hostOf(r.sourceUrl)})` : ""}\n${notes.join("\n")}`), ...parts],
+        structuredContent: {
+          which,
+          classification: which === "keyframes" ? motion.classification : null,
+          total,
+          returned: picked.map((x) => x.assetId),
+        },
+      };
     }
     if (!parts.length) {
       const has = [cover && "cover", full && "fullpage"].filter(Boolean);

@@ -4,18 +4,18 @@ Lets Claude Code search and look at your PIVOT library while you design and buil
 
 ## Read tools
 
-| Tool                   | What it does                                                                                                                                                                                   |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `search_references`    | Search references (or sources, skills…) by words and facets, inside a collection (by name or id) or from a source (by host or id). Up to 25 results per page, with a cursor for the next page. |
-| `get_reference`        | One item's link, description, your notes, facets, collections and which screenshots exist.                                                                                                     |
-| `list_facets`          | What the library can be filtered by: types with counts, facet values in use, source categories, collections.                                                                                   |
-| `get_reference_images` | The screenshots as images: the cover (first screen) and the full page in 960px-wide slices (about 2,000 tokens each), paged with `fromSlice`, at most 4 images per call.                       |
+| Tool                   | What it does                                                                                                                                                                                                                                                                       |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_references`    | Search references (or sources, skills…) by words and facets, inside a collection (by name or id) or from a source (by host or id). Up to 25 results per page, with a cursor for the next page.                                                                                     |
+| `get_reference`        | One item's link, description, your notes, facets, collections, which screenshots exist, and its `motionEvidence`: `observed` only when PIVOT recorded the page scrolling (with source, keyframes and limits), otherwise `unknown`.                                                 |
+| `list_facets`          | What the library can be filtered by: types with counts, facet values in use, source categories, collections.                                                                                                                                                                       |
+| `get_reference_images` | The screenshots as images: the cover (first screen), the full page in 960px-wide slices (about 2,000 tokens each), the motion keyframes in scroll order (`which: "keyframes"`) or interaction-state stills (`which: "states"`), paged with `fromSlice`, at most 4 images per call. |
 
 ## Outside the library
 
-| Tool              | What it does                                                                                                                                                                                                                      |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `search_external` | Searches the free public component catalogs PIVOT indexes on this computer (Magic UI, React Bits, shadcn/ui) and lists search links for other sites. Read-only. Nothing is saved; the links are places to browse, not references. |
+| Tool              | What it does                                                                                                                                                                                                                                                                                            |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_external` | Searches the free public component catalogs PIVOT indexes on this computer (Magic UI, React Bits, shadcn/ui) and lists search links for other sites, optionally of one `category` (`motion` gives motion sites to browse). Read-only. Nothing is saved; the links are places to browse, not references. |
 
 ## Write tools (need the API token)
 

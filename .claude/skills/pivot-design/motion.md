@@ -39,16 +39,34 @@ A screenshot can't show motion. For every reference that informs motion, say wha
 | -------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `observed live`            | You opened the page in a browser tool (with the user's permission) and triggered the behaviour yourself. |
 | `keyframes`                | You looked at the reference's motion keyframes in PIVOT.                                                 |
-| `video exists, not viewed` | PIVOT lists a motion recording (`get_reference` shows "motion keyframe" screenshots) you couldn't view.  |
+| `video exists, not viewed` | PIVOT holds a motion recording (`motionEvidence` says observed) but you didn't look at its keyframes.    |
 | `screenshot`               | Only still images.                                                                                       |
 | `metadata only`            | Title, description, catalog text.                                                                        |
 
+- **What PIVOT holds.** `get_reference` returns `motionEvidence`, read from what PIVOT's capture stored and never
+  guessed:
+  - `classification: "observed"` only when PIVOT recorded the page while scrolling it. `source` says how and when
+    (method, capture date, viewport, final URL), `recording` has the duration, `keyframes` lists stills in scroll
+    order with their `scrollY`, and `limitations` says what the recording can't tell;
+  - `classification: "unknown"` when there is no recording: every reference saved without motion capture. Anything you
+    write about its motion is **inferred** (or observed live, if you open it);
+  - PIVOT never labels anything inferred itself: that label is yours, in the brief.
+- **Look at it:** `get_reference_images` with `which: "keyframes"` sends the keyframes (page with `fromSlice`), and
+  `which: "states"` the interaction-state stills. They count toward the image budget. The video can't be viewed
+  through MCP.
+- **What keyframes prove:** what was on screen at each scroll position, while PIVOT scrolled top to bottom with no
+  pointer. Not timing, easing, or what happens between two frames (inferred); nothing about hover, click or focus
+  (not exercised). A state still shows how a state looks, not how it moves.
+- **Name the gaps:** when an essential motion item has no observed evidence, say so in the brief's Motion block
+  ("no recording", "scroll only", "between keyframes: inferred"), and treat it as a reason for the executable preview,
+  not as settled.
 - Describe, where the evidence allows: trigger; behaviour; sequence; timing and easing; interaction states; relation
   to scroll; responsive behaviour; reduced-motion behaviour; the source link.
 - Mark each of those as **observed** or **inferred**. Never describe an animation as seen when you only had a still or
   text; "probably fades in" is inferred.
 - For animation components outside the library, `search_external` with generic words ("animated tabs", "scroll
-  reveal"); their results are metadata only unless you open them.
+  reveal"); their results are metadata only unless you open them. `category: "motion"` lists motion sites to browse
+  (search links only, not references).
 
 ## 4. Motion block in the brief
 

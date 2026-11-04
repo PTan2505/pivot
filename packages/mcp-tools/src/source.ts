@@ -14,6 +14,7 @@ import type {
   ResourceType,
   SearchPage,
   SearchRequest,
+  SourceCategory,
   TagDTO,
 } from "@pivot/core/types";
 
@@ -42,6 +43,8 @@ export interface PivotSource {
     query: string;
     providers?: DirectProviderId[];
     limit?: number;
+    /** Only catalogs and search links of this kind. */
+    category?: SourceCategory;
   }): Promise<ExternalSearchPage | null>;
 }
 

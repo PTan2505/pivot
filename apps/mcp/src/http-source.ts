@@ -14,6 +14,7 @@ import type {
   ExternalSearchPage,
   SearchPage,
   SearchRequest,
+  SourceCategory,
   TagDTO,
 } from "@pivot/core/types";
 
@@ -97,8 +98,9 @@ export class HttpSource implements PivotSource, PivotWriter {
   }
 
   /** Null when the app predates hybrid search (no such route). */
-  externalSearch(req: { query: string; providers?: DirectProviderId[]; limit?: number }) {
+  externalSearch(req: { query: string; providers?: DirectProviderId[]; limit?: number; category?: SourceCategory }) {
     const sp = new URLSearchParams({ q: req.query });
+    if (req.category) sp.set("category", req.category);
     if (req.providers?.length) sp.set("providers", req.providers.join(","));
     if (req.limit) sp.set("limit", String(req.limit));
     return this.json<ExternalSearchPage>(`/api/search/external?${sp}`);
