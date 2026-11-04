@@ -1,8 +1,8 @@
 "use client";
 
-import { Check, ExternalLink, Loader2 } from "lucide-react";
+import { Check, ExternalLink, Loader2, RotateCcw } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { DesignMockupDTO, DesignSessionDetailDTO } from "@pivot/core/types";
@@ -41,11 +41,25 @@ function Pill({ active, className, ...props }: React.ComponentProps<"button"> & 
   );
 }
 
+const REDUCE = "(prefers-reduced-motion: reduce)";
+/** The browser's own reduced-motion setting, live (null before hydration). Never overridden: mockups follow it. */
+function useReducedMotion() {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mq = matchMedia(REDUCE);
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () => matchMedia(REDUCE).matches,
+    () => null,
+  );
+}
+
 /**
  * A mockup at a device width, scaled down to fit the column (never up), about 80% of the window tall and scrolling
  * inside. It is served sandboxed: no scripts, no other hosts, no access to the app.
  */
-function Frame({ mockup, width }: { mockup: DesignMockupDTO; width: Width }) {
+function Frame({ mockup, width, run }: { mockup: DesignMockupDTO; width: Width; run: number }) {
   const box = useRef<HTMLDivElement>(null);
   const [avail, setAvail] = useState(0);
   useLayoutEffect(() => {
@@ -61,7 +75,8 @@ function Frame({ mockup, width }: { mockup: DesignMockupDTO; width: Width }) {
     <div ref={box} className="h-[80vh] overflow-hidden rounded-[14px] bg-surface">
       {avail > 0 && (
         <iframe
-          key={mockup.id}
+          // a new key loads a fresh document: Replay restarts its motion with nothing left from the last run
+          key={`${mockup.id}:${run}`}
           src={`/api/design/mockups/${mockup.id}`}
           title={`Version ${mockup.n}: ${mockup.title}`}
           sandbox=""
@@ -172,6 +187,8 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
   const [n, setN] = useState(1);
   const [width, setWidth] = useState<Width>("desktop");
   const [approving, setApproving] = useState(false);
+  const [run, setRun] = useState(0);
+  const reduce = useReducedMotion();
 
   // a new round arriving (the page refreshes while exploring) opens on its first version
   const seen = useRef(latest);
@@ -272,6 +289,9 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
+          <Button size="sm" variant="ghost" onClick={() => setRun((r) => r + 1)}>
+            <RotateCcw /> Replay
+          </Button>
           <Button size="sm" variant="ghost" asChild>
             <a href={`/api/design/mockups/${current.id}`} target="_blank" rel="noopener noreferrer">
               Open alone <ExternalLink />
@@ -292,8 +312,15 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
       </div>
 
       <div id="mockup-panel" role="tabpanel" aria-label={`Version ${current.n}: ${current.title}`}>
-        <Frame mockup={current} width={width} />
+        <Frame mockup={current} width={width} run={run} />
       </div>
+      {reduce !== null && (
+        <p className="text-[13px] text-ink-muted" aria-live="polite">
+          Motion follows your browser, which has reduced motion{" "}
+          <b className="font-medium text-ink">{reduce ? "on" : "off"}</b>. To preview the other setting, switch Reduce
+          motion in your system settings, or emulate it in DevTools › Rendering, then press Replay.
+        </p>
+      )}
 
       <ApproveDialog mockup={current} sessionId={s.id} open={approving} onOpenChange={setApproving} />
     </section>

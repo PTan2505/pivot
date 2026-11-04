@@ -33,6 +33,13 @@ const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const MOVING = `<style>@keyframes slide{from{transform:translateX(0)}to{transform:translateX(200px)}}
 #box{width:40px;height:40px;background:#f60;animation:slide 1s linear infinite}
 @media (prefers-reduced-motion: reduce){#box{animation:none}}</style><div id="box"></div>`;
+const REDUCE = "(prefers-reduced-motion: reduce)";
+/** How many animations run in a frame, and how far the first one is (ms). */
+const animState = (frame) =>
+  frame.locator("body").evaluate(() => {
+    const all = document.getAnimations();
+    return { count: all.length, t: Number(all[0]?.currentTime ?? 0) };
+  });
 /** True when #box in this frame locator moves over 300 ms. */
 const moves = async (box) => {
   const a = await box.evaluate((el) => getComputedStyle(el).transform);
@@ -251,30 +258,62 @@ async function viewer() {
     await pause(500);
     check("Replay restores the version", (await tab.locator("#frame").count()) === 1);
 
-    // Reduced motion, through the browser's own emulation (what DevTools and Playwright use), not the OS setting.
+    // Replay: one fresh frame, one animation, restarted; nothing left over from the previous run.
     await tab.locator("#tab-1").click();
-    await pause(500);
-    check("full motion: the static version's animation plays", await moves(tab.frameLocator("#frame").locator("#box")));
+    await pause(1500);
+    const before = await animState(tab.frameLocator("#frame"));
+    for (let i = 0; i < 3; i++) await tab.getByRole("button", { name: "Replay" }).click();
+    await pause(150);
+    const after = await animState(tab.frameLocator("#frame"));
+    check(
+      "viewer Replay: one frame, one animation, restarted from the start",
+      (await tab.locator("iframe").count()) === 1 && after.count === 1 && after.t < before.t,
+      `frames ${await tab.locator("iframe").count()}, animations ${after.count}, time ${Math.round(before.t)} → ${Math.round(after.t)} ms`,
+    );
+
+    // Reduced motion, through the browser's own emulation (what DevTools and Playwright use), not the OS setting.
+    // Both states, static and interactive, live (without Replay) and after Replay.
+    const frame = () => tab.frameLocator("#frame");
+    const reports = async () =>
+      (await tab.locator("#motion").textContent()).startsWith("Your browser reports reduced motion");
+    for (const state of ["no-preference", "reduce", "no-preference"]) {
+      await tab.emulateMedia({ reducedMotion: state });
+      await pause(200);
+      const reduce = state === "reduce";
+      await tab.locator("#tab-1").click();
+      await pause(400);
+      check(
+        `viewer, ${state}: static version ${reduce ? "stops" : "plays"} its animation`,
+        (await moves(frame().locator("#box"))) === !reduce,
+      );
+      check(`viewer, ${state}: the indicator reports it`, (await reports()) === reduce);
+      await tab.getByRole("button", { name: "Replay" }).click();
+      await pause(400);
+      check(
+        `viewer, ${state}: still ${reduce ? "stopped" : "playing"} after Replay`,
+        (await moves(frame().locator("#box"))) === !reduce,
+      );
+      await tab.locator("#tab-2").click();
+      await pause(400);
+      check(
+        `viewer, ${state}: the interactive version's matchMedia reports it`,
+        (await frame()
+          .locator("body")
+          .evaluate((_, q) => matchMedia(q).matches, REDUCE)) === reduce,
+      );
+    }
+    // A change while a version is showing reaches it at once.
     await tab.emulateMedia({ reducedMotion: "reduce" });
-    await tab.getByRole("button", { name: "Replay" }).click();
-    await pause(500);
-    check(
-      "emulated reduced motion reaches the sandboxed version (its reduce rule applies)",
-      !(await moves(tab.frameLocator("#frame").locator("#box"))),
-    );
-    check(
-      "the viewer's indicator reports reduced motion",
-      (await tab.locator("#motion").textContent()).startsWith("Your browser reports reduced motion"),
-    );
-    await tab.locator("#tab-2").click();
-    await pause(500);
-    check(
-      "emulated reduced motion reaches the interactive version",
-      await tab
-        .frameLocator("#frame")
-        .locator("body")
-        .evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches),
-    );
+    await pause(200);
+    const live = await frame()
+      .locator("body")
+      .evaluate((_, q) => matchMedia(q).matches, REDUCE);
+    await tab.emulateMedia({ reducedMotion: "no-preference" });
+    await pause(200);
+    const back = await frame()
+      .locator("body")
+      .evaluate((_, q) => matchMedia(q).matches, REDUCE);
+    check("viewer: a live change reaches the showing version both ways", live === true && back === false);
   } finally {
     await browser.close();
     server.close();
@@ -284,40 +323,217 @@ async function viewer() {
 }
 
 async function pivot(base) {
-  const post = (p, body) =>
+  const post = (p, body, headers = { origin: base }) =>
     fetch(base + p, {
       method: "POST",
-      headers: { "content-type": "application/json", origin: base },
+      headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify(body),
-    }).then((r) => r.json());
-  const { sessionId } = await post("/api/design/briefs", {
-    title: "CSS motion check",
-    targetProject: "preview-checks",
-    surface: "Box",
-    milestone: "initial",
-    markdown: "## Brief: Box\n\n**Goal:** check CSS motion in the mockup frame.",
+    });
+  const { sessionId } = await (
+    await post("/api/design/briefs", {
+      title: "Preview checks",
+      targetProject: "preview-checks",
+      surface: "Box",
+      milestone: "initial",
+      markdown: "## Brief: Box\n\n**Goal:** check previews and the API boundary.",
+    })
+  ).json();
+
+  // A counting server, also playing a hostile site on another port (same host, so "same-site" to PIVOT).
+  const hits = [];
+  const server = http.createServer((req, res) => {
+    hits.push(req.url);
+    res.setHeader("content-type", "text/html");
+    res.end(req.url === "/attack" ? attackPage : "ok");
   });
-  await post(`/api/design/sessions/${sessionId}/mockups`, {
-    mockups: [
-      {
-        title: "Moving box",
-        html: `<!doctype html><html><head><title>Moving box</title></head><body>${MOVING}</body></html>`,
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const beacon = `http://127.0.0.1:${server.address().port}`;
+
+  // Browser pages reach PIVOT through a recording proxy, so each request's real status is known even when the browser
+  // hides it (ORB, no-cors). Headers pass through unchanged; the Host is the proxy's, still a local host.
+  const served = [];
+  const target = new URL(base);
+  const relay = http.createServer((req, res) => {
+    const out = http.request(
+      { host: target.hostname, port: target.port, path: req.url, method: req.method, headers: req.headers },
+      (answer) => {
+        served.push([new URL(req.url, base).pathname, answer.statusCode]);
+        res.writeHead(answer.statusCode, answer.headers);
+        answer.pipe(res);
       },
-    ],
+    );
+    out.on("error", () => res.destroy());
+    req.pipe(out);
   });
+  await new Promise((r) => relay.listen(0, "127.0.0.1", r));
+  const seen = `http://127.0.0.1:${relay.address().port}`;
+  const statusesOf = (path) =>
+    served.filter(([p]) => p === path || (path instanceof RegExp && path.test(p))).map(([, s]) => s);
+
+  const mockupHtml = `<!doctype html><html><head><title>Moving box</title></head><body>${MOVING}
+<img src="${beacon}/mockup-img"><a id="token" href="${seen}/api/settings/token">token</a>
+<a id="popup" href="${beacon}/popup" target="_blank">popup</a><img src="/api/settings/token"></body></html>`;
+  const saved = await (
+    await post(`/api/design/sessions/${sessionId}/mockups`, { mockups: [{ title: "Moving box", html: mockupHtml }] })
+  ).json();
+  const mockupId = saved.ids?.[0];
+  const approve = `${seen}/api/design/mockups/${mockupId}/approve`;
+  const attackPage = `<!doctype html><body>
+<iframe id="tok" src="${seen}/api/settings/token"></iframe>
+<img src="${seen}/api/settings/token">
+<form id="f" method="post" action="${approve}"><input name="note" value="x"></form>
+<script>
+  fetch("${seen}/api/settings/token", { mode: "no-cors" }).catch(() => {});
+  fetch("${approve}", { method: "POST", mode: "no-cors", body: "{}" }).catch(() => {});
+  document.getElementById("f").submit();
+</script></body>`;
+
+  // 1. The API boundary, from a non-browser caller with forged headers.
+  // Raw HTTP, so the headers go exactly as written (fetch rewrites Sec-Fetch-Mode, for example).
+  const status = (p, init = {}) =>
+    new Promise((resolve, reject) => {
+      const u = new URL(base + p);
+      http
+        .get({ host: u.hostname, port: u.port, path: u.pathname, headers: init.headers ?? {} }, (res) => {
+          res.resume();
+          resolve(res.statusCode);
+        })
+        .on("error", reject);
+    });
+  check(
+    "Origin: null on approve → 403 (not a server error)",
+    (await post(`/api/design/mockups/${mockupId}/approve`, {}, { origin: "null" })).status === 403,
+  );
+  check(
+    "an unreadable Origin on approve → 403",
+    (await post(`/api/design/mockups/${mockupId}/approve`, {}, { origin: "%%%" })).status === 403,
+  );
+  check(
+    "another origin on approve → 403",
+    (await post(`/api/design/mockups/${mockupId}/approve`, {}, { origin: beacon })).status === 403,
+  );
+  check(
+    "token: cross-site fetch → 403",
+    (await status("/api/settings/token", {
+      headers: { "sec-fetch-site": "cross-site", "sec-fetch-mode": "no-cors" },
+    })) === 403,
+  );
+  check(
+    "token: same-site navigation → 403",
+    (await status("/api/settings/token", {
+      headers: { "sec-fetch-site": "same-site", "sec-fetch-mode": "navigate" },
+    })) === 403,
+  );
+  check(
+    "token: the app's own page → 200",
+    (await status("/api/settings/token", {
+      headers: { "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors" },
+    })) === 200,
+  );
+  check("token: a non-browser caller (no Sec-Fetch headers) → 200", (await status("/api/settings/token")) === 200);
+  check(
+    "cross-site navigation to an API page → 403",
+    (await status("/api/resources", { headers: { "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate" } })) ===
+      403,
+  );
+  check(
+    "cross-site navigation to the mockup itself still works",
+    (await status(`/api/design/mockups/${mockupId}`, {
+      headers: { "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate" },
+    })) === 200,
+  );
+
   const browser = await chromium.launch();
   try {
+    // 2. A hostile page on another port: it can't read or fetch the token, open it in a frame, or approve.
+    const evil = await browser.newPage();
+    await evil.goto(`${beacon}/attack`);
+    await pause(1500);
+    const tokenAnswers = statusesOf("/api/settings/token");
+    check(
+      "hostile page: the server refused every request for the token (iframe, img, fetch)",
+      tokenAnswers.length >= 3 && tokenAnswers.every((s) => s === 403),
+      tokenAnswers.join(", "),
+    );
+    const approveAnswers = statusesOf(/\/approve$/);
+    check(
+      "hostile page: the server refused every approve attempt (form, fetch)",
+      approveAnswers.length >= 2 && approveAnswers.every((s) => s === 403),
+      approveAnswers.join(", "),
+    );
+    const sessionState = await (await fetch(`${base}/api/design/sessions/${sessionId}`)).json();
+    check(
+      "hostile page: the session is still exploring, with no approval",
+      sessionState.status === "exploring" && sessionState.decisions.length === 0,
+    );
+    await evil.close();
+
+    // 3. The session page: motion plays, Replay restarts it cleanly, reduced motion follows the browser both ways.
     const tab = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-    await tab.goto(`${base}/design/${sessionId}`);
-    const box = tab.frameLocator('iframe[sandbox=""]').locator("#box");
+    served.length = 0;
+    const popups = [];
+    tab.context().on("page", (p) => popups.push(p));
+    await tab.goto(`${seen}/design/${sessionId}`);
+    const frame = tab.frameLocator('iframe[sandbox=""]');
+    const box = frame.locator("#box");
     await box.waitFor({ timeout: 15000 });
-    check("PIVOT session page: CSS animation plays in the sandboxed mockup", await moves(box));
-    await tab.emulateMedia({ reducedMotion: "reduce" });
-    await tab.reload();
-    await box.waitFor({ timeout: 15000 });
-    check("PIVOT session page: emulated reduced motion reaches the sandboxed mockup", !(await moves(box)));
+    check("PIVOT: the mockup's CSS animation plays", await moves(box));
+    // The mockup's <img src="/api/settings/token">: refused by the browser (policy) or by the server (403), never 200.
+    const imgAnswers = statusesOf("/api/settings/token");
+    check(
+      "PIVOT: the mockup's image pointing at the token route was refused",
+      imgAnswers.every((x) => x === 403),
+      imgAnswers.length ? `server answered ${imgAnswers.join(", ")}` : "never sent",
+    );
+    check("PIVOT: the mockup's remote image never left (policy)", !hits.includes("/mockup-img"));
+
+    await pause(1500);
+    const before = await animState(frame);
+    const replay = tab.getByRole("button", { name: "Replay" });
+    for (let i = 0; i < 3; i++) await replay.click();
+    await box.waitFor();
+    await pause(150);
+    const after = await animState(frame);
+    check(
+      "PIVOT Replay: one frame, one animation, restarted from the start",
+      (await tab.locator('iframe[sandbox=""]').count()) === 1 && after.count === 1 && after.t < before.t,
+      `frames ${await tab.locator('iframe[sandbox=""]').count()}, animations ${after.count}, time ${Math.round(before.t)} → ${Math.round(after.t)} ms`,
+    );
+
+    const indicator = tab.getByText("Motion follows your browser");
+    for (const state of ["reduce", "no-preference", "reduce"]) {
+      await tab.emulateMedia({ reducedMotion: state });
+      await pause(300);
+      const reduce = state === "reduce";
+      check(`PIVOT, ${state}: the mockup ${reduce ? "stops" : "plays"} at once (live)`, (await moves(box)) === !reduce);
+      check(
+        `PIVOT, ${state}: the indicator says ${reduce ? "on" : "off"}`,
+        (await indicator.textContent()).includes(`reduced motion ${reduce ? "on" : "off"}`),
+      );
+      await replay.click();
+      await box.waitFor();
+      await pause(300);
+      check(`PIVOT, ${state}: same after Replay`, (await moves(box)) === !reduce);
+    }
+    await tab.emulateMedia({ reducedMotion: "no-preference" });
+
+    // 4. Inside the mockup: a link to the token is refused, a popup link opens nothing.
+    served.length = 0;
+    await frame.locator("#popup").click();
+    await pause(500);
+    check("PIVOT: a target=_blank link in the mockup opens no popup", popups.length === 0 && !hits.includes("/popup"));
+    await frame.locator("#token").click();
+    await pause(1000);
+    const tokenNav = statusesOf("/api/settings/token");
+    check(
+      "PIVOT: following a link to the token from the mockup gets 403",
+      tokenNav.length > 0 && tokenNav.every((s) => s === 403),
+      tokenNav.join(", "),
+    );
   } finally {
     await browser.close();
+    server.close();
+    relay.close();
   }
 }
 

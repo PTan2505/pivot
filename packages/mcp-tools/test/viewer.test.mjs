@@ -90,7 +90,7 @@ describe("inlineMockup", () => {
     const { html, removed } = inlineMockup(path.join(dir, "m.html"), dir);
     expect(html).not.toContain("https://x");
     expect(html).toContain('<a href="#tab-2">');
-    expect(html.match(/http-equiv/g)).toHaveLength(1); // only the viewer's own policy
+    expect(html.match(/http-equiv/g)).toHaveLength(2); // only the viewer's own policy and DNS-prefetch switch
     expect(removed).toEqual(
       expect.arrayContaining(["a <base> tag", "1 link (href removed)", "https://x/a.png (not local)"]),
     );
@@ -105,7 +105,7 @@ describe("policy placement", () => {
       "x.png": "PNG",
     });
     expect(inlineMockup(path.join(dir, "a.html"), dir).html).toMatch(
-      /^<!DOCTYPE html><meta http-equiv="Content-Security-Policy"[^>]*><!-- <head> -->/,
+      /^<!DOCTYPE html><meta http-equiv="Content-Security-Policy"[^>]*><meta http-equiv="x-dns-prefetch-control" content="off"><!-- <head> -->/,
     );
     expect(inlineMockup(path.join(dir, "b.html"), dir).html).toMatch(/^<meta http-equiv="Content-Security-Policy"/);
   });

@@ -76,7 +76,8 @@ The user must be able to see each **essential** item before gate 2 (§6).
 - **CSS motion in PIVOT (Standard).** Mockups saved with `save_design_mockups` keep inline CSS but lose every
   script. Transitions, `@keyframes`, `:hover`, `:focus-visible`, `:checked`/`:target` state tricks and CSS
   scroll-driven animations (`animation-timeline`) can show most Standard motion. Also draw the end states statically,
-  so the version reads without motion.
+  so the version reads without motion. The session page has **Replay** (a fresh frame, so motion restarts with
+  nothing left from the last run) and a line saying whether the browser has reduced motion on.
 - **Executable local preview (Advanced, or any essential CSS can't show).** Build only the top 1–2 directions as
   interactive prototypes, in the same scratch folder, and run the local viewer with them marked interactive:
   `node <skill>/viewer/make-viewer.mjs <folder> --title "<surface>" --interactive <n,…>`.
@@ -89,18 +90,20 @@ The user must be able to see each **essential** item before gate 2 (§6).
     storage and other local files were all blocked before any request left. A script navigating its own frame
     can't be blocked by any policy: in the checks that request didn't leave either, and the viewer then stopped the
     version, but don't rely on it, so keep prototypes free of redirects. Not covered by the checks: DNS prefetching
-    and WebRTC from an interactive script, and browsers other than Chromium. The inliner's markup rewriting is a
+    (the viewer asks the browser not to prefetch, unverified) and WebRTC from an interactive script, and browsers
+    other than Chromium. The inliner's markup rewriting is a
     convenience, not the protection: the sandbox and the policy are.
   - Static versions stay script-free in the viewer too.
   - Save the static versions (and a static stand-in for each prototype) to PIVOT as usual, so the session holds them.
 - **Reduced motion uses the browser's own media query**, never a rewrite of the mockup's CSS or a fake `matchMedia`.
   Three kinds of evidence, never merged into one:
   - **browser emulation** (Chrome DevTools › Rendering › _Emulate CSS media feature prefers-reduced-motion_, or
-    Playwright): checked to reach the sandboxed versions in the local viewer and in PIVOT's mockup frame;
+    Playwright): checked in Chromium, both `reduce` and `no-preference`, live and after Replay, to reach the static
+    and interactive versions in the local viewer and PIVOT's mockup frame, and to flip both pages' indicator;
   - **the OS setting** (macOS/Windows/iOS "Reduce motion"): the native path, but not checked automatically: it is
     verified only when the user turns it on and says what they saw;
   - **a real device**: unverified unless the user checked it.
-    The local viewer shows which setting the browser currently reports.
+    The local viewer and PIVOT's session page show which setting the browser currently reports.
 - A recording, keyframes, a screenshot or a description is not an executable preview.
 - **Check it yourself before gate 2:** open the preview with the browser tool you have and trigger every essential
   item. An item you didn't see run doesn't count as previewed: fix the prototype, or offer the exception (§6).

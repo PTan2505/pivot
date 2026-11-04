@@ -10,11 +10,62 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
 | ----- | -------------------------------------- | ------------- |
 | P0a   | Skill contract tests and trace checker | Done (PR #61) |
 | P0b   | Specialist spike, then routing         | Done (PR #62) |
-| P0c   | Motion foundation                      | In review     |
+| P0c   | Motion foundation                      | Done (PR #63) |
+| P0d   | Preview controls and hardening         | In review     |
+
+### P0d — Preview controls and hardening (2026-11-04)
+
+- Status: In review (PR into `dev`).
+- Existing functionality reused:
+  - the proxy's local-host and write-origin rules, now moved unchanged into a pure helper;
+  - the session page's mockup frame and the viewer's Replay;
+  - PIVOT's Playwright and Chromium;
+  - the scratch start command.
+- Files changed:
+  - new `packages/core/src/request-guard.ts`: the API's access rules, now testable, with tests;
+  - `apps/web/src/proxy.ts`, which calls it;
+  - the mockup route (`X-DNS-Prefetch-Control: off`);
+  - `components/design-mockups.tsx` (Replay; the live reduced-motion line);
+  - the viewer (DNS-prefetch switch);
+  - `scripts/qa/preview-checks.mjs` (Replay, reduced motion and API-boundary probes);
+  - tests, SPEC, DESIGN, `motion.md`, PIVOT_DECISIONS.
+- Proxy changes, as the plan's §3.3 lists them:
+  - `Origin: null`, or an Origin that can't be read, on a write is now 403. Before, it made the proxy throw.
+  - A cross-site or same-site navigation (frame or tab) to `/api/*` is 403, except `GET /api/design/mockups/:id` and `GET /api/assets/:id`.
+  - `GET /api/settings/token` answers only the app's own pages (`Sec-Fetch-Site: same-origin`) and non-browser callers (no `Sec-Fetch-*`). The Settings page is its only browser client (A7 checked).
+- Checks run and results:
+  - Unit tests: core request-guard 8 of 8.
+  - The full suite: see the PR.
+  - Browser checks (Chromium, scratch PIVOT on port 4400, two clean runs each): viewer **31 of 31**, PIVOT **27 of 27**.
+  - PIVOT API boundary:
+    - forged headers via raw HTTP: `Origin: null`, an unreadable Origin and another origin on approve each got 403; the token refused a cross-site fetch and a same-site navigation (403) but answered the app's own page and a non-browser caller (200); cross-site navigation to an API page got 403 and to the mockup 200;
+    - a hostile page on another port, served through a recording proxy so the server's real status is known even where the browser hides it (ORB): its iframe, img and fetch for the token got 403, 403, 403; its form and fetch approve got 403, 403; the session stayed exploring with no approval;
+    - inside a PIVOT mockup: an `<img>` pointing at the token route **was sent** (the static policy allows `'self'`) and got 403; a link to the token got 403; a `target=_blank` link opened nothing; a remote image never left.
+  - Replay, both the viewer and PIVOT: after three quick replays there was one frame and one animation, restarted, with its time going from about 1500–1870 ms back to about 150 ms.
+  - Reduced motion through browser emulation, `reduce` and `no-preference`:
+    - the viewer's static version stops and plays, live and after Replay, and the interactive version's `matchMedia` follows both ways;
+    - PIVOT's mockup stops and plays at once and after Replay;
+    - both pages' indicators flip.
+- Found and reported, outside P0d (not changed; needs the owner's decision):
+  - A page on any site can still make **blind cross-site GETs** to the API. The responses are unreadable, but some GETs have effects: `/api/favicon?host=…` makes PIVOT fetch a site's icon, and `/api/search/external` can start a catalog sync.
+  - PIVOT's static mockups can do the same through `img`/`font` `'self'`, for example `<img src="/api/favicon?host=…">`.
+  - Blocking cross-site subresource requests to `/api` (except assets and mockups) would close both. It may affect the extension, which needs a check first.
+- Remaining risks, not tested:
+  - the interactive viewer's self-navigation (blocked in the checks by an undetermined mechanism, not relied on);
+  - DNS prefetching (the `x-dns-prefetch-control` header and meta are best effort, unverified);
+  - WebRTC from interactive viewer scripts;
+  - browsers other than Chromium;
+  - the OS reduced-motion setting and real devices (the user's to confirm);
+  - immutable approval binding inside PIVOT, still a prerequisite of P1b.
+- Deviations from the plan:
+  - the branch is `feat/orchestrator-preview-hardening`, as the owner asked (the plan said `feat/mockup-preview-controls`);
+  - the proxy rules moved into `packages/core`, which the plan allowed for testing;
+  - the DNS-prefetch switch is an extra best-effort mitigation for a residual P0c listed.
+- Next step: P1a, once authorised.
 
 ### P0c — Motion foundation (2026-11-03)
 
-- Status: In review (PR into `dev`).
+- Status: Done. Merged in PR #63 (`281005e`).
 - Existing functionality reused:
   - the brief template;
   - the gate-2 approval record (`details` after the user's words);
