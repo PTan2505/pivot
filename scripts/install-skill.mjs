@@ -1,6 +1,6 @@
-// Links the repo's PIVOT skills (pivot-design, pivot-redesign) into ~/.claude/skills and its subagents
-// (pivot-specialist, test-runner, qa-reviewer) into ~/.claude/agents, so every project's Claude Code sees them and
-// edits in the repo apply at once. Refuses to replace anything that isn't already this link.
+// Links the repo's PIVOT skills (pivot-design, pivot-redesign) into ~/.claude/skills and the subagent they use
+// (pivot-specialist) into ~/.claude/agents, so every project's Claude Code sees them and edits in the repo apply at
+// once. Refuses to replace anything that isn't already this link.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -19,12 +19,7 @@ const LINKS = [
     path.join(skillsDir, name),
     "dir",
   ]),
-  ...["pivot-specialist", "test-runner", "qa-reviewer"].map((name) => [
-    path.join(repo, ".claude/agents", `${name}.md`),
-    "",
-    path.join(agentsDir, `${name}.md`),
-    "file",
-  ]),
+  [path.join(repo, ".claude/agents/pivot-specialist.md"), "", path.join(agentsDir, "pivot-specialist.md"), "file"],
 ];
 
 let failed = false;

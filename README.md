@@ -73,7 +73,7 @@ Two pieces let Claude Code design and redesign screens in any project from **you
    ```bash
    pnpm skill:install
    ```
-   This **symlinks** `~/.claude/skills/pivot-design` and `pivot-redesign` to `.claude/skills/` in this repo, and `~/.claude/agents/pivot-specialist.md` (the read-only agent that runs specialist skills for them), `test-runner.md` (Haiku: runs tests, lint and type-check and reports only what failed) and `qa-reviewer.md` (Sonnet: reads the diff for logic bugs and returns MUST / SHOULD / NIT findings with a verdict) to `.claude/agents/`. It never replaces a file that's already there. There is one copy, kept in git: edit the skills here and every project picks up the change. Claude Code reads whatever branch this checkout is on, so keep it on `dev` for day-to-day use. Agents are loaded when a Claude Code session starts, so open a new session after the first install.
+   This **symlinks** `~/.claude/skills/pivot-design` and `pivot-redesign` to `.claude/skills/` in this repo, and `~/.claude/agents/pivot-specialist.md` (the read-only agent that runs specialist skills for them) to `.claude/agents/`. It never replaces a file that's already there. There is one copy, kept in git: edit the skills here and every project picks up the change. Claude Code reads whatever branch this checkout is on, so keep it on `dev` for day-to-day use. Agents are loaded when a Claude Code session starts, so open a new session after the first install.
 
 ### Tools (the `pivot` MCP server)
 
@@ -193,7 +193,7 @@ pnpm typecheck
 pnpm lint
 pnpm db:generate   # after editing packages/core/src/db/schema.ts
 pnpm mcp:build     # build the MCP server into apps/mcp/dist
-pnpm skill:install # link the design skills and the pivot-specialist, test-runner, qa-reviewer agents into ~/.claude
+pnpm skill:install # link the design skills and the pivot-specialist agent into ~/.claude
 ```
 
 ## Security
