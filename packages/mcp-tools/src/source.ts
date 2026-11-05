@@ -65,7 +65,14 @@ export interface PivotWriter {
   }): Promise<{ sessionId: string; snapshotId: string; created: boolean; duplicate: boolean }>;
   recordDesignDecision(
     sessionId: string,
-    input: { kind: DesignDecisionKind; summary: string; direction?: string; details?: string },
+    input: {
+      kind: DesignDecisionKind;
+      summary: string;
+      direction?: string;
+      details?: string;
+      mockupId?: string;
+      mockupDigest?: string;
+    },
   ): Promise<{ id: string }>;
   /** Stores a round of self-contained mockup versions; the app refuses it unless the session is exploring. */
   saveDesignMockups(

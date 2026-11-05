@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   doublePrecision,
   index,
   integer,
@@ -240,6 +241,8 @@ export const designSessions = pgTable(
     surface: text("surface").notNull().default(""),
     /** exploring | approved | building | done | abandoned */
     status: text("status").notNull().default("exploring"),
+    /** When the session last went back to exploring (reopened, or a major change): approvals before it no longer count. */
+    approvalResetAt: timestamp("approval_reset_at", { withTimezone: true, mode: "date" }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -281,6 +284,9 @@ export const designDecisions = pgTable(
     details: text("details").notNull().default(""),
     /** agent (recorded through MCP) | owner (the user pressed Approve on a mockup in PIVOT) */
     source: text("source").notNull().default("agent"),
+    /** The mockup version an approval is bound to, and its digest when approved; null for approvals made before. */
+    mockupId: text("mockup_id"),
+    mockupDigest: text("mockup_digest"),
     createdAt: createdAt(),
   },
   (t) => [index("design_decisions_session_idx").on(t.sessionId, t.createdAt)],
@@ -305,6 +311,10 @@ export const designMockups = pgTable(
     n: integer("n").notNull(),
     title: text("title").notNull(),
     html: text("html").notNull(),
+    /** Whether the version runs its own scripts (an interactive prototype); static versions never do. */
+    interactive: boolean("interactive").notNull().default(false),
+    /** The version's content identity, `mockupDigest(html, interactive)`: what an approval is bound to. */
+    digest: text("digest").notNull(),
     /** sha256 of the round's titles and HTML, so saving the same set again returns the same round. */
     roundDigest: text("round_digest").notNull(),
     createdAt: createdAt(),

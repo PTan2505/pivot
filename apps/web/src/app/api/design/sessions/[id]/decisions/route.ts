@@ -8,6 +8,11 @@ const input = z.object({
   summary: z.string().min(1).max(2000),
   direction: z.string().max(2000).optional(),
   details: z.string().max(50_000).optional(),
+  mockupId: z.string().max(100).optional(),
+  mockupDigest: z
+    .string()
+    .regex(/^[0-9a-f]{12,64}$/i)
+    .optional(),
 });
 
 /** Records an approval, a change after approval, or a deviation found in QA. */

@@ -111,6 +111,99 @@ describe("PIVOT MCP write tools", () => {
     expect((await runTool(tool("annotate_reference"), source, { id: "nope", note: "x" })).isError).toBe(true);
   });
 
+  it("record_design_decision binds an approval to a mockup version and its digest, and checks their form", async () => {
+    const { source, calls } = writerSource();
+    const M = "22222222-3333-4444-8555-666666666666";
+    const res = await runTool(tool("record_design_decision"), source, {
+      sessionId: ID,
+      kind: "approval",
+      summary: "The user approved version 2",
+      mockupId: M,
+      mockupDigest: "0123456789ab",
+    });
+    expect(calls[0]).toMatchObject({
+      method: "recordDesignDecision",
+      args: [ID, { kind: "approval", mockupId: M, mockupDigest: "0123456789ab" }],
+    });
+    expect(res.structuredContent).toMatchObject({ mockupId: M });
+    for (const bad of [
+      { mockupId: "m1" },
+      { mockupId: M, mockupDigest: "short" },
+      { mockupId: M, mockupDigest: "zz".repeat(8) },
+    ])
+      expect(
+        (
+          await runTool(tool("record_design_decision"), source, {
+            sessionId: ID,
+            kind: "approval",
+            summary: "x",
+            ...bad,
+          })
+        ).isError,
+        JSON.stringify(bad),
+      ).toBe(true);
+  });
+
+  it("get_design_session shows each version's id and digest, and whether an approval still matches it", async () => {
+    const { source } = writerSource();
+    const digest = "a".repeat(64);
+    const session = (status: "bound" | "changed" | "missing", currentApprovalId: string | null = "d1") =>
+      ({
+        id: ID,
+        currentApprovalId,
+        approvalResetAt: null,
+        title: "Billing",
+        targetProject: "",
+        surface: "",
+        status: "approved",
+        createdAt: "",
+        updatedAt: "",
+        snapshots: [],
+        decisions: [
+          {
+            id: "d1",
+            sessionId: ID,
+            kind: "approval",
+            summary: "Owner approved version 1",
+            direction: "Version 1: One (round 1)",
+            details: "",
+            source: "owner",
+            binding: { mockupId: "m1", digest, status },
+            createdAt: "",
+          },
+        ],
+        mockups: [
+          {
+            id: "m1",
+            sessionId: ID,
+            snapshotId: null,
+            round: 1,
+            n: 1,
+            title: "One",
+            interactive: false,
+            digest,
+            createdAt: "",
+          },
+        ],
+      }) as never;
+    source.getDesignSession = async () => session("bound");
+    const t = (r: Awaited<ReturnType<typeof runTool>>) => (r.content[0] as { text: string }).text;
+    const ok = t(await runTool(tool("get_design_session"), source, { sessionId: ID }));
+    expect(ok).toContain("Bound to mockup m1, digest aaaaaaaaaaaa: unchanged.");
+    expect(ok).toContain("approval (by the user, in PIVOT) [counts now]:");
+    expect(ok).not.toContain("No approval counts now");
+    expect(ok).toContain("1. One (id m1, digest aaaaaaaaaaaa)");
+    source.getDesignSession = async () => session("changed");
+    expect(t(await runTool(tool("get_design_session"), source, { sessionId: ID }))).toContain(
+      "CHANGED since approval, approve again",
+    );
+    // after a reopen or a major change, the old approval is shown but doesn't count
+    source.getDesignSession = async () => session("bound", null);
+    const reopened = t(await runTool(tool("get_design_session"), source, { sessionId: ID }));
+    expect(reopened).toContain("No approval counts now");
+    expect(reopened).not.toContain("[counts now]");
+  });
+
   it("suggest_metadata lists what was added and skipped", async () => {
     const { source } = writerSource();
     const res = await runTool(tool("suggest_metadata"), source, {

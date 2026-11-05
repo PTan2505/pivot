@@ -5,6 +5,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getAsset, readAssetBytes, saveAsset } from "./assets";
 import { expandHome, paths } from "./config";
 import { getDb } from "./db/client";
+import { mockupDigest } from "./design";
 import {
   appSettings,
   assetAnnotations,
@@ -47,8 +48,11 @@ export interface BackupData {
   designSessions: Rows<typeof designSessions>;
   designSnapshots: Rows<typeof designSnapshots>;
   designDecisions: Rows<typeof designDecisions>;
-  /** Missing in backups made before mockups were stored in PIVOT. */
-  designMockups?: Rows<typeof designMockups>;
+  /** Missing in backups made before mockups were stored in PIVOT; `digest` and `interactive` before approval binding. */
+  designMockups?: (Omit<Rows<typeof designMockups>[number], "digest" | "interactive"> & {
+    digest?: string;
+    interactive?: boolean;
+  })[];
   suggestions: Rows<typeof resourceSuggestions>;
   settings: Rows<typeof appSettings>;
 }
@@ -415,9 +419,22 @@ export async function restoreBackup(
     }
   }
   for (const s of data.designSessions) {
+    // A valid reset time is kept as it was. A malformed one, or none for a session that is exploring or abandoned and
+    // has approvals (a backup made before resets were recorded), becomes the moment of the restore: those approvals
+    // need approving again, rather than counting on missing data.
+    const kept = s.approvalResetAt ? new Date(s.approvalResetAt) : null;
+    const valid = kept && !Number.isNaN(kept.getTime()) ? kept : null;
+    const hasApproval = data.designDecisions.some((d) => d.sessionId === s.id && d.kind === "approval");
+    const needsReset =
+      !valid && (s.approvalResetAt != null || (["exploring", "abandoned"].includes(s.status) && hasApproval));
     await db
       .insert(designSessions)
-      .values({ ...s, createdAt: new Date(s.createdAt), updatedAt: new Date(s.updatedAt) })
+      .values({
+        ...s,
+        approvalResetAt: valid ?? (needsReset ? sql`now()` : null),
+        createdAt: new Date(s.createdAt),
+        updatedAt: new Date(s.updatedAt),
+      })
       .onConflictDoNothing();
   }
   for (const s of data.designSnapshots) {
@@ -433,9 +450,12 @@ export async function restoreBackup(
       .onConflictDoNothing();
   }
   for (const m of data.designMockups ?? []) {
+    // The digest is recomputed from the HTML, never taken from the file: backups made before it existed have none, and
+    // an approval in the backup still names the digest it was given, so a changed version shows as changed.
+    const interactive = m.interactive === true;
     await db
       .insert(designMockups)
-      .values({ ...m, createdAt: new Date(m.createdAt) })
+      .values({ ...m, interactive, digest: mockupDigest(m.html, interactive), createdAt: new Date(m.createdAt) })
       .onConflictDoNothing();
   }
   return summary;

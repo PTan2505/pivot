@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "./db/client";
 import { designDecisions, designMockups, designSessions, designSnapshots } from "./db/schema";
 import type {
@@ -16,6 +16,17 @@ import type {
 
 export class DesignError extends Error {}
 
+/**
+ * A mockup version's content identity: its HTML and whether it runs scripts. An approval stores it, so it names
+ * exactly what the owner saw. The migration that added it computes the same value in SQL for older versions.
+ */
+export function mockupDigest(html: string, interactive = false) {
+  return crypto
+    .createHash("sha256")
+    .update(`pivot-mockup:v1:${interactive ? "interactive" : "static"}:${html}`)
+    .digest("hex");
+}
+
 type SessionRow = typeof designSessions.$inferSelect;
 
 function sessionDTO(r: SessionRow): DesignSessionDTO {
@@ -25,6 +36,7 @@ function sessionDTO(r: SessionRow): DesignSessionDTO {
     targetProject: r.targetProject,
     surface: r.surface,
     status: r.status as DesignStatus,
+    approvalResetAt: r.approvalResetAt?.toISOString() ?? null,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
   };
@@ -42,7 +54,11 @@ function snapshotDTO(r: typeof designSnapshots.$inferSelect): DesignSnapshotDTO 
   };
 }
 
-function decisionDTO(r: typeof designDecisions.$inferSelect): DesignDecisionDTO {
+function decisionDTO(
+  r: typeof designDecisions.$inferSelect,
+  digests: Map<string, string> = new Map(),
+): DesignDecisionDTO {
+  const current = r.mockupId ? digests.get(r.mockupId) : undefined;
   return {
     id: r.id,
     sessionId: r.sessionId,
@@ -51,6 +67,14 @@ function decisionDTO(r: typeof designDecisions.$inferSelect): DesignDecisionDTO 
     direction: r.direction,
     details: r.details,
     source: r.source as DesignDecisionSource,
+    binding:
+      r.mockupId && r.mockupDigest
+        ? {
+            mockupId: r.mockupId,
+            digest: r.mockupDigest,
+            status: current === undefined ? "missing" : current === r.mockupDigest ? "bound" : "changed",
+          }
+        : null,
     createdAt: r.createdAt.toISOString(),
   };
 }
@@ -62,6 +86,8 @@ const MOCKUP_COLUMNS = {
   round: designMockups.round,
   n: designMockups.n,
   title: designMockups.title,
+  interactive: designMockups.interactive,
+  digest: designMockups.digest,
   createdAt: designMockups.createdAt,
 };
 
@@ -69,11 +95,105 @@ function mockupDTO(r: Omit<DesignMockupDTO, "createdAt"> & { createdAt: Date }):
   return { ...r, createdAt: r.createdAt.toISOString() };
 }
 
-async function touch(sessionId: string, set: Partial<typeof designSessions.$inferInsert> = {}) {
+/** An approval as the rules compare it: `at` is its database time in microseconds, never rounded to a JS Date. */
+type ApprovalRow = { id: string; at: bigint; mockupId: string | null; mockupDigest: string | null };
+
+/**
+ * The approval that counts now, from a session's approvals: the newest one recorded after the session last went back
+ * to exploring. That moment is the latest of `resetAt` and the latest major-change brief, so a missing reset can't
+ * revive an approval the brief superseded; an approval at that very moment doesn't count. A session that is exploring
+ * has none (every way back to exploring after an approval resets it). Approvals recorded at the same moment count only
+ * if they name the same version and digest; otherwise none does, rather than picking one. Older approvals never count
+ * instead of a newer one. All times come from the database's clock, compared in microseconds as it stores them (a JS
+ * Date would round two different moments to the same millisecond).
+ */
+export function pickCurrentApproval<T extends ApprovalRow>(
+  approvals: T[],
+  resetAt: bigint | null,
+  { status, majorChangeAt = null }: { status?: DesignStatus; majorChangeAt?: bigint | null } = {},
+) {
+  const sorted = [...approvals].sort((a, b) => (a.at === b.at ? (a.id < b.id ? 1 : -1) : a.at > b.at ? -1 : 1));
+  const newest = sorted[0];
+  if (!newest) return { approval: null, reason: "This session has no recorded approval yet." };
+  if (status === "exploring")
+    return { approval: null, reason: "The session is exploring: the direction needs approving again." };
+  const resets = [resetAt, majorChangeAt].filter((t): t is bigint => typeof t === "bigint");
+  const reset = resets.length ? resets.reduce((a, b) => (a > b ? a : b)) : null;
+  if (reset !== null && newest.at <= reset)
+    return {
+      approval: null,
+      reason: "The session went back to exploring after its last approval: the direction needs approving again.",
+    };
+  const tied = sorted.filter((a) => a.at === newest.at);
+  if (tied.some((a) => a.mockupId !== newest.mockupId || a.mockupDigest !== newest.mockupDigest))
+    return {
+      approval: null,
+      reason: "Approvals of different versions were recorded at the same moment, so none counts: approve again.",
+    };
+  return { approval: newest, reason: null };
+}
+
+/** A timestamp column in microseconds since the epoch, as text (exact in every driver), or null. */
+const micros = (col: unknown) => sql<string | null>`(floor(extract(epoch from ${col}) * 1000000))::bigint::text`;
+const big = (v: string | null | undefined) => (v == null ? null : BigInt(v));
+
+/** What the approval rules read about a session, at the database's full precision. */
+async function approvalState(sessionId: string) {
+  const db = await getDb();
+  const [s] = await db
+    .select({ status: designSessions.status, resetAt: micros(designSessions.approvalResetAt) })
+    .from(designSessions)
+    .where(eq(designSessions.id, sessionId))
+    .limit(1);
+  if (!s) throw new DesignError(`No design session ${sessionId}.`);
+  const [m] = await db
+    .select({ at: micros(sql`max(${designSnapshots.createdAt})`) })
+    .from(designSnapshots)
+    .where(and(eq(designSnapshots.sessionId, sessionId), eq(designSnapshots.milestone, "major_change")));
+  const approvals = (
+    await db
+      .select({
+        id: designDecisions.id,
+        at: micros(designDecisions.createdAt),
+        mockupId: designDecisions.mockupId,
+        mockupDigest: designDecisions.mockupDigest,
+      })
+      .from(designDecisions)
+      .where(and(eq(designDecisions.sessionId, sessionId), eq(designDecisions.kind, "approval")))
+  ).map((a) => ({ ...a, at: big(a.at)! }));
+  return pickCurrentApproval(approvals, big(s.resetAt), {
+    status: s.status as DesignStatus,
+    majorChangeAt: big(m?.at),
+  });
+}
+
+const currentApproval = approvalState;
+
+const latestApproval = (sessionId: string) =>
+  sql`(select max(${designDecisions.createdAt}) from ${designDecisions} where ${designDecisions.sessionId} = ${sessionId} and ${designDecisions.kind} = 'approval')`;
+/**
+ * The database's time for a reset, and for an approval: strictly after the session's latest approval (a reset) or after
+ * its reset and latest approval (an approval). A clock that ticks in whole milliseconds (PGlite's) would otherwise give
+ * a reset and an approval made in the same millisecond the same time, and the order they happened in would be lost.
+ */
+const resetMoment = (sessionId: string) =>
+  sql`greatest(now(), coalesce(${latestApproval(sessionId)}, '-infinity'::timestamptz) + interval '1 microsecond')`;
+const approvalMoment = (sessionId: string) =>
+  sql`greatest(now(), coalesce(${latestApproval(sessionId)}, '-infinity'::timestamptz) + interval '1 microsecond', coalesce((select ${designSessions.approvalResetAt} from ${designSessions} where ${designSessions.id} = ${sessionId}), '-infinity'::timestamptz) + interval '1 microsecond')`;
+
+/**
+ * Updates a session. `resetApprovals` marks the moment it went back to exploring with the database's clock, the same
+ * clock approvals are stamped with, so a skewed app clock can't place an older approval after the reset.
+ */
+async function touch(
+  sessionId: string,
+  set: Partial<typeof designSessions.$inferInsert> = {},
+  { resetApprovals = false }: { resetApprovals?: boolean } = {},
+) {
   const db = await getDb();
   await db
     .update(designSessions)
-    .set({ ...set, updatedAt: new Date() })
+    .set({ ...set, ...(resetApprovals ? { approvalResetAt: resetMoment(sessionId) } : {}), updatedAt: new Date() })
     .where(eq(designSessions.id, sessionId));
 }
 
@@ -137,11 +257,44 @@ export async function saveDesignBrief(input: {
       digest,
     })
     .returning({ id: designSnapshots.id });
-  await touch(sessionId, input.milestone === "major_change" ? { status: "exploring" } : {});
+  // a major change needs approving again: approvals recorded before it stop counting
+  await touch(sessionId, input.milestone === "major_change" ? { status: "exploring" } : {}, {
+    resetApprovals: input.milestone === "major_change",
+  });
   return { sessionId, snapshotId: snap.id, created, duplicate: false };
 }
 
-/** Records a decision. An approval marks the session approved; a change or a deviation is kept as history. */
+/**
+ * Checks a version of this session against its stored digest (recomputed from its HTML) and, when given, the digest
+ * the caller saw (the full digest, or at least its first 12 characters). Returns the version's digest.
+ */
+async function verifiedDigest(sessionId: string, mockupId: string, seen?: string) {
+  const db = await getDb();
+  const [m] = await db
+    .select({
+      sessionId: designMockups.sessionId,
+      html: designMockups.html,
+      interactive: designMockups.interactive,
+      digest: designMockups.digest,
+    })
+    .from(designMockups)
+    .where(eq(designMockups.id, mockupId))
+    .limit(1);
+  if (!m || m.sessionId !== sessionId) throw new DesignError(`No mockup version ${mockupId} in this session.`);
+  if (mockupDigest(m.html, m.interactive) !== m.digest)
+    throw new DesignError(`Mockup version ${mockupId} no longer matches the content it was saved with.`);
+  const want = seen?.trim().toLowerCase();
+  if (want !== undefined && (want.length < 12 || !m.digest.startsWith(want)))
+    throw new DesignError(
+      `The version shown (digest ${want.slice(0, 12) || "none"}) isn't the stored one (digest ${m.digest.slice(0, 12)}): reload it before approving.`,
+    );
+  return m.digest;
+}
+
+/**
+ * Records a decision. An approval marks the session approved; a change or a deviation is kept as history. With a
+ * `mockupId`, the decision is bound to that version's content digest (checked against `mockupDigest` when given).
+ */
 export async function recordDesignDecision(input: {
   sessionId: string;
   kind: DesignDecisionKind;
@@ -150,10 +303,27 @@ export async function recordDesignDecision(input: {
   details?: string;
   /** "owner" when the user approved in PIVOT; the agent's records are "agent". */
   source?: DesignDecisionSource;
+  mockupId?: string;
+  mockupDigest?: string;
 }) {
   const db = await getDb();
   const [s] = await db.select().from(designSessions).where(eq(designSessions.id, input.sessionId)).limit(1);
   if (!s) throw new DesignError(`No design session ${input.sessionId}.`);
+  if (input.mockupDigest && !input.mockupId) throw new DesignError("mockupDigest needs the mockupId it belongs to.");
+  if (input.kind === "approval" && !input.mockupId) {
+    // Once a session has mockups in PIVOT, an approval names the version approved (a mix names the version it starts
+    // from, the rest goes in details). Only a session without any mockup can be approved without one.
+    const [any] = await db
+      .select({ id: designMockups.id })
+      .from(designMockups)
+      .where(eq(designMockups.sessionId, input.sessionId))
+      .limit(1);
+    if (any)
+      throw new DesignError(
+        "This session has mockups in PIVOT: pass the mockupId of the version the user approved (for a mix, the version it starts from).",
+      );
+  }
+  const bound = input.mockupId ? await verifiedDigest(input.sessionId, input.mockupId, input.mockupDigest) : null;
   const [row] = await db
     .insert(designDecisions)
     .values({
@@ -163,6 +333,9 @@ export async function recordDesignDecision(input: {
       direction: input.direction ?? "",
       details: input.details ?? "",
       source: input.source ?? "agent",
+      mockupId: input.mockupId ?? null,
+      mockupDigest: bound,
+      ...(input.kind === "approval" ? { createdAt: approvalMoment(input.sessionId) } : {}),
     })
     .returning({ id: designDecisions.id });
   await touch(input.sessionId, input.kind === "approval" ? { status: "approved" } : {});
@@ -170,21 +343,26 @@ export async function recordDesignDecision(input: {
 }
 
 /**
- * Changes a session's status by hand. "approved" is only allowed once the session has an approval record: an approval
- * is the user's decision, recorded with record_design_decision, never a status flipped in the UI.
+ * Changes a session's status by hand. "approved" and "building" need an approval that counts now (pickCurrentApproval):
+ * an approval is the user's decision, recorded with record_design_decision or made in PIVOT, never a status flipped in
+ * the UI. Building also checks that the approved version is still the content approved. Going back to exploring (Reopen)
+ * means the direction needs approving again: approvals recorded before it stop counting.
  */
 export async function setDesignSessionStatus(sessionId: string, status: DesignStatus) {
-  if (status === "approved") {
-    const db = await getDb();
-    const [approval] = await db
-      .select({ id: designDecisions.id })
-      .from(designDecisions)
-      .where(and(eq(designDecisions.sessionId, sessionId), eq(designDecisions.kind, "approval")))
-      .limit(1);
-    if (!approval)
-      throw new DesignError("This session has no recorded approval yet. Approve a direction to mark it approved.");
+  if (status === "approved" || status === "building") {
+    const { approval, reason } = await currentApproval(sessionId);
+    if (!approval) throw new DesignError(`${reason} Approve a direction first.`);
+    if (status === "building" && (approval.mockupId || approval.mockupDigest)) {
+      if (!approval.mockupId || !approval.mockupDigest)
+        throw new DesignError("The approval's binding is incomplete. Ask for approval again.");
+      const now = await verifiedDigest(sessionId, approval.mockupId).catch((err: Error) => {
+        throw new DesignError(`The approved version can't be checked: ${err.message} Ask for approval again.`);
+      });
+      if (now !== approval.mockupDigest)
+        throw new DesignError("The approved version's content changed since it was approved. Ask for approval again.");
+    }
   }
-  await touch(sessionId, { status });
+  await touch(sessionId, { status }, { resetApprovals: status === "exploring" });
 }
 
 export async function listDesignSessions({
@@ -214,16 +392,29 @@ export async function getDesignSession(id: string): Promise<DesignSessionDetailD
     .select()
     .from(designDecisions)
     .where(eq(designDecisions.sessionId, id))
-    .orderBy(asc(designDecisions.createdAt));
+    .orderBy(asc(designDecisions.createdAt), asc(designDecisions.id));
   const mockups = await db
     .select(MOCKUP_COLUMNS)
     .from(designMockups)
     .where(eq(designMockups.sessionId, id))
     .orderBy(asc(designMockups.round), asc(designMockups.n));
+  // A bound version counts as unchanged only if its HTML still hashes to its digest: recompute it for those versions.
+  const boundIds = [...new Set(decisions.flatMap((d) => (d.mockupId ? [d.mockupId] : [])))];
+  const checked = boundIds.length
+    ? await db
+        .select({ id: designMockups.id, html: designMockups.html, interactive: designMockups.interactive })
+        .from(designMockups)
+        // only this session's versions: an approval can't be confirmed by another session's mockup
+        .where(and(eq(designMockups.sessionId, id), inArray(designMockups.id, boundIds)))
+    : [];
+  const digests = new Map(mockups.map((m) => [m.id, m.digest]));
+  for (const c of checked) digests.set(c.id, mockupDigest(c.html, c.interactive));
+  const current = await approvalState(id);
   return {
     ...sessionDTO(s),
+    currentApprovalId: current.approval?.id ?? null,
     snapshots: snapshots.map(snapshotDTO),
-    decisions: decisions.map(decisionDTO),
+    decisions: decisions.map((d) => decisionDTO(d, digests)),
     mockups: mockups.map(mockupDTO),
   };
 }
@@ -293,6 +484,8 @@ export async function saveDesignMockups(input: {
         n: i + 1,
         title: m.title.trim(),
         html: m.html,
+        interactive: false,
+        digest: mockupDigest(m.html, false),
         roundDigest: digest,
       })),
     )
@@ -314,9 +507,10 @@ export async function getDesignMockupHtml(id: string) {
 
 /**
  * The owner approves one mockup version in PIVOT: an `approval` decision with source "owner", the version as the
- * direction and the owner's note, verbatim, as the details. Only while the session is exploring.
+ * direction and the owner's note, verbatim, as the details, bound to the version's digest. `seenDigest` is the digest
+ * of the copy the page showed: a stale page can't approve content it didn't show. Only while the session is exploring.
  */
-export async function approveDesignMockup(mockupId: string, note = "") {
+export async function approveDesignMockup(mockupId: string, note = "", seenDigest?: string) {
   const db = await getDb();
   const [m] = await db.select(MOCKUP_COLUMNS).from(designMockups).where(eq(designMockups.id, mockupId)).limit(1);
   if (!m) return null;
@@ -330,6 +524,8 @@ export async function approveDesignMockup(mockupId: string, note = "") {
     direction: `Version ${m.n}: ${m.title} (round ${m.round})`,
     details: note.trim(),
     source: "owner",
+    mockupId,
+    mockupDigest: seenDigest,
   });
   return { id, sessionId: m.sessionId };
 }

@@ -433,7 +433,7 @@ A pen-tool icon button in the top bar (between Trash and Settings; inverse when 
 - **Note:** a 14px ink-muted live line saying what the state means. On Exploring and Approved it adds "Exploring and Approved follow the brief and your approval; you move the rest."
 - **Actions:**
   - The next manual step is an inverse pill with an arrow ("Start building", "Mark done"). It is never ember: the top bar's Add stays the screen's only primary.
-  - Then ghost pills: "Back to building" (Done), Abandon or Restore, and Reopen, which opens the destructive confirm dialog.
+  - Then ghost pills: "Back to building" (Done), Abandon or Restore, and Reopen, which opens the destructive confirm dialog. Restore returns to Approved only while an approval still counts (not after a Reopen or a major change); otherwise to Exploring.
   - While saving, the current dot becomes a spinner and the pills are disabled. A success toast "Status: Building" has **Undo**; a failure reverts and shows the reason in an error toast.
 
 **Mockups** (added 2026-11-03, `components/design-mockups.tsx`): between the stepper and the timeline, only when the session has mockups. The session page widens to `max-w-6xl` for it; the header and timeline keep their `max-w-4xl` reading width.
@@ -446,6 +446,8 @@ A pen-tool icon button in the top bar (between Trash and Settings; inverse when 
 - **Actions** on the right of the width row: a ghost **Replay** pill with a rotate icon (it reloads the version in a fresh frame, so its motion restarts with nothing left from the last run; added 2026-11-04), a ghost "Open alone" pill with an external-link icon, and, only while the session is Exploring, **Approve this version** as an inverse pill with a check. It is never ember: the top bar's Add stays the screen's only primary.
 - **Reduced-motion line** (added 2026-11-04): under the frame, an ink-muted 13px line, "Motion follows your browser, which has reduced motion **on** / **off**" (the state in ink, weight 500), with how to preview the other setting (the OS switch, or DevTools › Rendering, then Replay). It reads the browser's `prefers-reduced-motion` live and never overrides it. Announced politely when it changes.
 - **Frame:** a surface panel (14px radius), 80vh tall, holding the mockup in a sandboxed iframe at the chosen device width, scaled down to fit the column (never up) and scrolling inside.
+- **Digest line** (added 2026-11-04): under the frame, an ink-muted 13px line, "Version 2 · digest `3f9a1c2b7e44`: an approval names this exact content", the digest in the mono font. The approve dialog's line names the same digest.
+- **Broken binding** (added 2026-11-04): when the latest approval's version changed or is gone, a 13px `text-danger` line above the frame (role alert) says it can't be built until a version is approved again.
 - **Approve dialog:** title "Approve version 3, “Raised card”?", one line on what happens, a labelled optional textarea "Note for the build", then ghost Cancel and the default **Approve** button. A success toast says a waiting Claude Code session starts building.
 - The timeline labels an approval made here "Approved in PIVOT". The stepper's Exploring note reads "Waiting for you to approve a version below, or a direction in the chat." when there are mockups.
 
