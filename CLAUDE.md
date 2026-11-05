@@ -54,7 +54,7 @@ pnpm mcp:build         # build the stdio MCP server into apps/mcp/dist (setup: a
 pnpm skill:install     # link the pivot-design / pivot-redesign skills and the pivot-specialist agent into ~/.claude
 ```
 
-Run `pnpm check` (format check, lint, typecheck, tests) before saying a change is done. To try the app without touching the real Neon database or R2 bucket, start it with a scratch environment: `DATABASE_URL= PIVOT_DATA_DIR=<tmp dir> PORT=4400 node scripts/start.mjs` (unset the `R2_*` variables the same way).
+Run `pnpm check` (format check, lint, typecheck, tests) before saying a change is done. Two project subagents in `.claude/agents/` help with that: `test-runner` (Haiku) runs the checks and reports only what failed, and `qa-reviewer` (Opus, read-only) reads the branch's diff against `dev` for logic bugs and guard bypasses and returns MUST / SHOULD / NIT findings with a verdict; give it the `test-runner` report. Single runs vary, so start two `qa-reviewer` runs in parallel with the same brief and merge their findings. It complements a human or acceptance review; it doesn't replace one. To try the app without touching the real Neon database or R2 bucket, start it with a scratch environment: `DATABASE_URL= PIVOT_DATA_DIR=<tmp dir> PORT=4400 node scripts/start.mjs` (unset the `R2_*` variables the same way).
 
 ## Hooks
 
