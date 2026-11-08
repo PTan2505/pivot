@@ -2,6 +2,7 @@
 // Not Verified), tracing to the approved brief, the overall status, and one real browser run on its fixture page.
 import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
+import dgram from "node:dgram";
 import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
@@ -711,6 +712,84 @@ document.getElementById("go").addEventListener("click", () => {
         remote.close();
         local.close();
         fs.rmSync(out, { recursive: true, force: true });
+      }
+    },
+    120_000,
+  );
+
+  it.skipIf(!lan)(
+    "sends no WebRTC packet to another host, from the page or a frame, with either guard alone and in a full run",
+    async () => {
+      // A UDP recorder on another address of this machine stands in for a STUN server on another host.
+      const udp = dgram.createSocket("udp4");
+      let packets = 0;
+      udp.on("message", () => packets++);
+      await new Promise((r) => udp.bind(0, "0.0.0.0", r));
+      const stun = `stun:${lan}:${udp.address().port}`;
+      const connect = (ctor) =>
+        `try { const pc = new ${ctor}({ iceServers: [{ urls: "${stun}" }] }); pc.createDataChannel("x"); pc.createOffer().then((o) => pc.setLocalDescription(o)); } catch {}`;
+      // The page itself, a sandboxed frame, and the constructor taken from a fresh same-origin frame.
+      const fixture = `<!doctype html><title>rtc</title><div id="box">x</div><script>${connect("RTCPeerConnection")}</script>
+<iframe sandbox="allow-scripts" srcdoc="<script>${connect("RTCPeerConnection").replaceAll('"', "&quot;")}</script>"></iframe>
+<script>const f = document.createElement("iframe"); document.body.append(f);
+${connect("f.contentWindow.RTCPeerConnection")}</script>`;
+      const site = http.createServer((req, res) => {
+        res.setHeader("content-type", "text/html");
+        res.end(fixture);
+      });
+      await new Promise((r) => site.listen(0, "127.0.0.1", r));
+      const url = `http://127.0.0.1:${site.address().port}/`;
+      const { chromium } = qa.loadPlaywright();
+      const gate = await qa.startGate({
+        decide: qa.destinationPolicy({ allowed: [qa.originKey(url)] }),
+        blocked: new Set(),
+        blockedWrites: new Set(),
+      });
+      const gated = { proxy: { server: gate.server, bypass: "<-loopback>" } };
+      const sent = async (launch, init) => {
+        const browser = await chromium.launch(launch);
+        try {
+          const context = await browser.newContext();
+          if (init) await context.addInitScript(init);
+          const before = packets;
+          await (await context.newPage()).goto(url);
+          await new Promise((r) => setTimeout(r, 1500));
+          return packets - before;
+        } finally {
+          await browser.close();
+        }
+      };
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "motion-qa-rtc-"));
+      try {
+        // Control: the recorder hears an unguarded browser, so a zero below is a guard at work.
+        expect(await sent({}), "no packet even without a guard: this machine can't show a leak").toBeGreaterThan(0);
+        // Each guard holds alone, so neither one hides a regression in the other (such as a switch Chromium ignores).
+        expect(await sent({ ...gated, args: qa.BROWSER_ARGS }), "the switches alone").toBe(0);
+        expect(await sent(gated, qa.noWebRtc), "the init script alone").toBe(0);
+        // A real run, on the page and as an interactive mockup in the viewer's sandboxed frame.
+        fs.writeFileSync(path.join(dir, "mockup-1.html"), fixture);
+        const before = packets;
+        for (const [name, target] of [
+          ["url", { url }],
+          ["viewer", { viewer: dir, version: 1, interactive: true }],
+        ])
+          await qa.runPlan(
+            {
+              target,
+              viewports: ["desktop"],
+              items: [
+                { id: "M1", name: "x", tag: "essential", trigger: "load", target: "#box", expect: { animates: false } },
+              ],
+            },
+            { out: path.join(dir, `qa-${name}`) },
+          );
+        await new Promise((r) => setTimeout(r, 500));
+        expect(packets - before, "a full run").toBe(0);
+      } finally {
+        await gate.close();
+        site.close();
+        udp.close();
+        fs.rmSync(dir, { recursive: true, force: true });
       }
     },
     120_000,

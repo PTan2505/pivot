@@ -20,7 +20,9 @@
 // Previews must be local: a loopback URL, a file, or a mockup folder shown through the pivot-design viewer (its sandbox
 // and policy); never PIVOT's own app. Every connection goes through a local gate that lets the browser reach only the
 // preview's exact origin (redirects, WebSockets and workers included; not other ports or names of this machine), plus
-// local origins given with --allow-origin and public hosts with --allow-remote. Requests that could change data
+// local origins given with --allow-origin and public hosts with --allow-remote. WebRTC is off (UDP may only go through
+// the gate, which carries none, and the page's WebRTC constructors are removed), and the browser resolves no host name
+// itself: the gate does, for what it allows. Requests that could change data
 // (anything but GET, HEAD, OPTIONS) are blocked unless --allow-writes. The agent asks the user before using any of these
 // flags (motion.md §9): a flag only switches this script's behaviour, it isn't an authorization, and the script can't
 // tell whether the user agreed. The plan can't set them: it holds selectors and expectations, no shell command or page
@@ -228,6 +230,23 @@ export async function startGate({ decide, allowWrites = false, blocked, blockedW
         for (const sock of sockets) sock.destroy();
       }),
   };
+}
+
+/**
+ * Chromium switches for the QA browser, for what the gate (a proxy) can't see:
+ * - WebRTC may send UDP only through the proxy, and an HTTP proxy carries no UDP, so it sends none. The switch Chromium
+ *   reads is `--force-webrtc-ip-handling-policy`; `--webrtc-ip-handling-policy` is ignored (on Chromium 156 a STUN
+ *   server on another address got its packets with it, as with no switch). The regression test checks both ways.
+ * - Every host name the browser would resolve itself fails; the gate resolves only what it lets through.
+ */
+export const BROWSER_ARGS = [
+  "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+  "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1",
+];
+
+/** Backstop for the WebRTC switch, run in every frame before the page's scripts: no constructor, no connection. */
+export function noWebRtc() {
+  for (const name of ["RTCPeerConnection", "webkitRTCPeerConnection", "RTCDataChannel"]) delete globalThis[name];
 }
 
 const sha256 = (data) => crypto.createHash("sha256").update(data).digest("hex");
@@ -1090,9 +1109,9 @@ export async function runPlan(
   });
   const browser = await chromium
     .launch({
-      // "<-loopback>" stops Chromium sending this machine's addresses around the proxy. WebRTC may only use the proxy.
+      // "<-loopback>" stops Chromium sending this machine's addresses around the proxy.
       proxy: { server: gate.server, bypass: "<-loopback>" },
-      args: ["--force-webrtc-ip-handling-policy=disable_non_proxied_udp"],
+      args: BROWSER_ARGS,
     })
     .catch(async (err) => {
       await gate.close();
@@ -1118,6 +1137,7 @@ export async function runPlan(
                 ? { recordVideo: { dir: path.join(out, "videos"), size: { width: vp.width, height: vp.height } } }
                 : {}),
             });
+            await context.addInitScript(noWebRtc);
             await context.addInitScript(recorder);
             await context.route("**/*", (route) => {
               const req = route.request();
@@ -1237,7 +1257,7 @@ export async function runPlan(
       `Requests that could change data were blocked, so what they would have done wasn't observed: ${[...blockedWrites].join(", ")}.`,
     );
   limitations.push(
-    "WebSockets to an allowed origin (a dev server's reload channel) are allowed and their messages aren't inspected. Requests to an allowed origin, GET included, reach that server as a user's browser would. Whether Chromium makes DNS lookups of its own (prefetching) wasn't verified; the gate itself resolves names only with --allow-remote.",
+    "WebSockets to an allowed origin (a dev server's reload channel) are allowed and their messages aren't inspected. Requests to an allowed origin, GET included, reach that server as a user's browser would. WebRTC was off (no UDP outside the gate, no WebRTC constructors in the page), so a preview that needs it wasn't observed as it would run. The browser was set to resolve no host name itself (the gate itself resolves names only with --allow-remote); that it made no DNS lookup at all, prefetching included, wasn't measured.",
   );
   if (blocked.size)
     limitations.push(
