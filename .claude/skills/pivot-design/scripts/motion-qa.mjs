@@ -20,7 +20,11 @@
 // Previews must be local: a loopback URL, a file, or a mockup folder shown through the pivot-design viewer (its sandbox
 // and policy); never PIVOT's own app. Every connection goes through a local gate that lets the browser reach only the
 // preview's exact origin (redirects, WebSockets and workers included; not other ports or names of this machine), plus
-// local origins given with --allow-origin and public hosts with --allow-remote. Requests that could change data
+// local origins given with --allow-origin and public hosts with --allow-remote. WebRTC is turned off with Chromium
+// switches (UDP only through the gate, which carries none) plus an init script that removes the WebRTC constructors;
+// which switch takes effect, and which frames the init script reaches, depend on the Chromium binary (BROWSER_ARGS,
+// noWebRtc). The browser is set to resolve no host name itself: the gate does, for what it allows. The report names the
+// binary. Requests that could change data
 // (anything but GET, HEAD, OPTIONS) are blocked unless --allow-writes. The agent asks the user before using any of these
 // flags (motion.md §9): a flag only switches this script's behaviour, it isn't an authorization, and the script can't
 // tell whether the user agreed. The plan can't set them: it holds selectors and expectations, no shell command or page
@@ -228,6 +232,61 @@ export async function startGate({ decide, allowWrites = false, blocked, blockedW
         for (const sock of sockets) sock.destroy();
       }),
   };
+}
+
+/**
+ * Chromium switches for the QA browser, for what the gate (a proxy) can't see:
+ * - WebRTC may send UDP only through the proxy, and an HTTP proxy carries no UDP, so it sends none. Which switch name
+ *   takes effect depends on the binary. Measured on 156.0.8078.4 (Playwright 1.64.1, macOS), with a STUN recorder on
+ *   another address of the machine: the headless shell (what `chromium.launch()` starts by default) obeys
+ *   `--force-webrtc-ip-handling-policy` and ignores `--webrtc-ip-handling-policy`; full Chromium (`channel:
+ *   "chromium"`) does the opposite. Each binary ignores the name it doesn't read, so both are passed, and with both
+ *   neither binary sent a packet. Other builds or versions may differ; the regression test runs on each binary that is
+ *   installed and fails when a packet arrives.
+ * - Every host name the browser would resolve itself fails; the gate resolves only what it lets through.
+ */
+export const BROWSER_ARGS = [
+  "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+  "--webrtc-ip-handling-policy=disable_non_proxied_udp",
+  "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1",
+];
+
+/** The QA browser's launch options: everything through the gate, with the switches above. runPlan launches with this. */
+export function launchOptions(gateServer) {
+  // "<-loopback>" stops Chromium sending this machine's addresses around the proxy.
+  return { proxy: { server: gateServer, bypass: "<-loopback>" }, args: BROWSER_ARGS };
+}
+
+/**
+ * Backstop for the WebRTC switches, added as an init script: removes the WebRTC constructors before the page's own
+ * scripts. Observed on 156.0.8078.4: in the headless shell it held in the page, same-origin and sandboxed frames (src,
+ * srcdoc, data: URL, nested) and a constructor taken from a loaded same-origin frame; in full Chromium it did not reach
+ * sandboxed srcdoc frames (the viewer's mockup frame is one), so there the switches are the only guard for those.
+ */
+export function noWebRtc() {
+  for (const name of ["RTCPeerConnection", "webkitRTCPeerConnection", "RTCDataChannel"]) delete globalThis[name];
+}
+
+/** Adds the WebRTC backstop to a QA browser context. runPlan calls this for every context it opens. */
+export async function guardContext(context) {
+  await context.addInitScript(noWebRtc);
+}
+
+/**
+ * Which Chromium binary is running, from the browser itself (CDP `Browser.getVersion`): the headless shell reports
+ * `HeadlessChrome/<version>`, full Chromium `Chrome/<version>`. The WebRTC guards above depend on it.
+ */
+export async function browserBuild(browser) {
+  try {
+    const session = await browser.newBrowserCDPSession();
+    const { product } = await session.send("Browser.getVersion");
+    await session.detach().catch(() => {});
+    if (/^HeadlessChrome\//.test(product)) return "headless shell";
+    if (/^Chrome\//.test(product)) return "full Chromium";
+    return `unknown (${product})`;
+  } catch {
+    return "unknown";
+  }
 }
 
 const sha256 = (data) => crypto.createHash("sha256").update(data).digest("hex");
@@ -1016,6 +1075,8 @@ export async function runPlan(
     allowRemote = false,
     allowWrites = false,
     allowOrigins = [],
+    // Tests only: a wrapped Playwright, to see what runPlan really launches. The CLI never sets it.
+    playwright = null,
   } = {},
 ) {
   const { plan, errors } = validatePlan(rawPlan);
@@ -1027,7 +1088,7 @@ export async function runPlan(
     );
   fs.mkdirSync(out, { recursive: true });
   const runId = crypto.randomUUID();
-  const { chromium, version } = loadPlaywright();
+  const { chromium, version } = playwright ?? loadPlaywright();
   const startedAt = new Date().toISOString();
   const blocked = new Set();
   const blockedWrites = new Set();
@@ -1088,17 +1149,12 @@ export async function runPlan(
     blocked,
     blockedWrites,
   });
-  const browser = await chromium
-    .launch({
-      // "<-loopback>" stops Chromium sending this machine's addresses around the proxy. WebRTC may only use the proxy.
-      proxy: { server: gate.server, bypass: "<-loopback>" },
-      args: ["--force-webrtc-ip-handling-policy=disable_non_proxied_udp"],
-    })
-    .catch(async (err) => {
-      await gate.close();
-      throw err;
-    });
+  const browser = await chromium.launch(launchOptions(gate.server)).catch(async (err) => {
+    await gate.close();
+    throw err;
+  });
   const browserVersion = browser.version();
+  const build = await browserBuild(browser);
   const viewer = !!plan.target.viewer;
   const results = [];
   try {
@@ -1118,6 +1174,7 @@ export async function runPlan(
                 ? { recordVideo: { dir: path.join(out, "videos"), size: { width: vp.width, height: vp.height } } }
                 : {}),
             });
+            await guardContext(context);
             await context.addInitScript(recorder);
             await context.route("**/*", (route) => {
               const req = route.request();
@@ -1237,7 +1294,7 @@ export async function runPlan(
       `Requests that could change data were blocked, so what they would have done wasn't observed: ${[...blockedWrites].join(", ")}.`,
     );
   limitations.push(
-    "WebSockets to an allowed origin (a dev server's reload channel) are allowed and their messages aren't inspected. Requests to an allowed origin, GET included, reach that server as a user's browser would. Whether Chromium makes DNS lookups of its own (prefetching) wasn't verified; the gate itself resolves names only with --allow-remote.",
+    `WebSockets to an allowed origin (a dev server's reload channel) are allowed and their messages aren't inspected. Requests to an allowed origin, GET included, reach that server as a user's browser would. WebRTC was turned off (Chromium switches for no UDP outside the gate, and an init script removing the WebRTC constructors), so a preview that needs it wasn't observed as it would run; how well that holds depends on the Chromium binary (${build}), and it was measured on a few builds only, not proven for this one. The browser was set to resolve no host name itself (the gate itself resolves names only with --allow-remote); that it made no DNS lookup at all, prefetching included, wasn't measured.`,
   );
   if (blocked.size)
     limitations.push(
@@ -1258,7 +1315,8 @@ export async function runPlan(
     },
     target: { label: targetLabel, url, digest: targetHash },
     environment: {
-      browser: `Chromium ${browserVersion}`,
+      browser: `Chromium ${browserVersion}, ${build}`,
+      browserBuild: build,
       playwright: version,
       os: `${os.type()} ${os.release()} (${os.arch()})`,
       node: `Node ${process.version}`,
