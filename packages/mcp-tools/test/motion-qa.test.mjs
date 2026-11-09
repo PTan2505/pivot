@@ -717,83 +717,193 @@ document.getElementById("go").addEventListener("click", () => {
     120_000,
   );
 
-  it.skipIf(!lan)(
-    "sends no WebRTC packet to another host, from the page or a frame, with either guard alone and in a full run",
-    async () => {
-      // A UDP recorder on another address of this machine stands in for a STUN server on another host.
-      const udp = dgram.createSocket("udp4");
-      let packets = 0;
-      udp.on("message", () => packets++);
-      await new Promise((r) => udp.bind(0, "0.0.0.0", r));
-      const stun = `stun:${lan}:${udp.address().port}`;
-      const connect = (ctor) =>
-        `try { const pc = new ${ctor}({ iceServers: [{ urls: "${stun}" }] }); pc.createDataChannel("x"); pc.createOffer().then((o) => pc.setLocalDescription(o)); } catch {}`;
-      // The page itself, a sandboxed frame, and the constructor taken from a fresh same-origin frame.
-      const fixture = `<!doctype html><title>rtc</title><div id="box">x</div><script>${connect("RTCPeerConnection")}</script>
-<iframe sandbox="allow-scripts" srcdoc="<script>${connect("RTCPeerConnection").replaceAll('"', "&quot;")}</script>"></iframe>
-<script>const f = document.createElement("iframe"); document.body.append(f);
-${connect("f.contentWindow.RTCPeerConnection")}</script>`;
-      const site = http.createServer((req, res) => {
-        res.setHeader("content-type", "text/html");
-        res.end(fixture);
-      });
-      await new Promise((r) => site.listen(0, "127.0.0.1", r));
-      const url = `http://127.0.0.1:${site.address().port}/`;
-      const { chromium } = qa.loadPlaywright();
-      const gate = await qa.startGate({
-        decide: qa.destinationPolicy({ allowed: [qa.originKey(url)] }),
-        blocked: new Set(),
-        blockedWrites: new Set(),
-      });
-      const gated = { proxy: { server: gate.server, bypass: "<-loopback>" } };
-      const sent = async (launch, init) => {
-        const browser = await chromium.launch(launch);
+  // Which Chromium binaries can run here. motion-qa launches the headless shell (Playwright's default); full Chromium
+  // runs too when it is installed. The WebRTC switches and the init script behave differently in the two (BROWSER_ARGS).
+  const fullChromium = (() => {
+    try {
+      return fs.existsSync(qa.loadPlaywright().chromium.executablePath());
+    } catch {
+      return false;
+    }
+  })();
+  const binaries = [
+    { build: "headless shell", channel: undefined, installed: true },
+    { build: "full Chromium", channel: "chromium", installed: fullChromium },
+  ];
+
+  // A Playwright that records what runPlan launches and how it prepares each context, then runs the real one.
+  const watchedPlaywright = (channel) => {
+    const real = qa.loadPlaywright();
+    const seen = { launches: [], contexts: [] };
+    const pass = (target, key) => {
+      const value = Reflect.get(target, key);
+      return typeof value === "function" ? value.bind(target) : value;
+    };
+    const chromium = {
+      launch: async (options) => {
+        seen.launches.push(options);
+        const browser = await real.chromium.launch({ ...options, ...(channel ? { channel } : {}) });
+        return new Proxy(browser, {
+          get: (b, key) =>
+            key === "newContext"
+              ? async (...args) => {
+                  const context = await b.newContext(...args);
+                  const record = { inits: [], initsBeforeFirstPage: null };
+                  seen.contexts.push(record);
+                  return new Proxy(context, {
+                    get: (c, k) => {
+                      if (k === "addInitScript")
+                        return (script, ...rest) => {
+                          record.inits.push(script);
+                          return c.addInitScript(script, ...rest);
+                        };
+                      if (k === "newPage")
+                        return (...rest) => {
+                          record.initsBeforeFirstPage ??= [...record.inits];
+                          return c.newPage(...rest);
+                        };
+                      return pass(c, k);
+                    },
+                  });
+                }
+              : pass(b, key),
+        });
+      },
+    };
+    return { playwright: { ...real, chromium }, seen };
+  };
+
+  for (const { build, channel, installed } of binaries)
+    it.skipIf(!lan || !installed)(
+      `sends no WebRTC packet to another host from any frame, guard by guard and through runPlan (${build}${
+        channel ? ", skipped when it isn't installed" : ""
+      })`,
+      async () => {
+        // A UDP recorder on another address of this machine stands in for a STUN server on another host.
+        const udp = dgram.createSocket("udp4");
+        let packets = 0;
+        udp.on("message", () => packets++);
+        await new Promise((r) => udp.bind(0, "0.0.0.0", r));
+        const stun = `stun:${lan}:${udp.address().port}`;
+        const connect = (realm) =>
+          `try { const C = ${realm}.RTCPeerConnection; const pc = new C({ iceServers: [{ urls: "${stun}" }] }); (window.keep ||= []).push(pc); pc.createDataChannel("x"); pc.createOffer().then((o) => pc.setLocalDescription(o)); } catch {}`;
+        const attr = (s) => s.replaceAll('"', "&quot;");
+        // Every vector gets its own page, and each must reach the recorder unguarded (the control below).
+        const vectors = {
+          page: `<script>${connect("window")}</script>`,
+          "sandboxed srcdoc frame": `<iframe sandbox="allow-scripts" srcdoc="${attr(`<script>${connect("window")}</script>`)}"></iframe>`,
+          "sandboxed frame": `<iframe sandbox="allow-scripts" src="/child"></iframe>`,
+          "nested sandboxed frame": `<iframe sandbox="allow-scripts" srcdoc="${attr(`<iframe sandbox="allow-scripts" src="/child"></iframe>`)}"></iframe>`,
+          "constructor from a loaded same-origin frame": `<iframe id="f" src="/empty"></iframe><script>document.getElementById("f").onload = () => { ${connect('document.getElementById("f").contentWindow')} };</script>`,
+        };
+        const names = Object.keys(vectors);
+        const page = (body) => `<!doctype html><title>rtc</title><div id="box">x</div>${body}`;
+        const site = http.createServer((req, res) => {
+          res.setHeader("content-type", "text/html");
+          if (req.url === "/child") return res.end(`<!doctype html><script>${connect("window")}</script>`);
+          if (req.url === "/empty") return res.end("<!doctype html><title>empty</title>");
+          const i = /^\/v\/(\d+)$/.exec(req.url)?.[1];
+          res.end(page(i != null ? vectors[names[i]] : Object.values(vectors).join("\n")));
+        });
+        await new Promise((r) => site.listen(0, "127.0.0.1", r));
+        const base = `http://127.0.0.1:${site.address().port}`;
+        const { chromium } = qa.loadPlaywright();
+        const gate = await qa.startGate({
+          decide: qa.destinationPolicy({ allowed: [qa.originKey(base)] }),
+          blocked: new Set(),
+          blockedWrites: new Set(),
+        });
+        // Packets per vector, one fresh context each, in one browser launched with `launch` and prepared by `guard`.
+        const measure = async (launch, guard) => {
+          const browser = await chromium.launch({ ...launch, ...(channel ? { channel } : {}) });
+          const counts = {};
+          try {
+            for (const [i, name] of names.entries()) {
+              const context = await browser.newContext();
+              try {
+                if (guard) await guard(context);
+                const before = packets;
+                await (await context.newPage()).goto(`${base}/v/${i}`);
+                await new Promise((r) => setTimeout(r, 1500));
+                counts[name] = packets - before;
+              } finally {
+                await context.close();
+              }
+            }
+          } finally {
+            await browser.close();
+          }
+          return counts;
+        };
+        const gateOnly = { proxy: { server: gate.server, bypass: "<-loopback>" } };
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "motion-qa-rtc-"));
         try {
-          const context = await browser.newContext();
-          if (init) await context.addInitScript(init);
+          // Control: every vector reaches the recorder through the gate alone, so a zero below is a guard at work.
+          const control = await measure(gateOnly);
+          for (const name of names)
+            expect(control[name], `control, ${name}: no packet without a guard`).toBeGreaterThan(0);
+          // Each guard alone, exactly as runPlan uses it, so neither hides a regression in the other.
+          const switches = await measure(qa.launchOptions(gate.server));
+          for (const name of names) expect(switches[name], `the switches alone, ${name}`).toBe(0);
+          const init = await measure(gateOnly, qa.guardContext);
+          for (const name of names)
+            // Measured on full Chromium 156: the init script doesn't reach sandboxed srcdoc frames there.
+            if (!(channel && name === "sandboxed srcdoc frame"))
+              expect(init[name], `the init script alone, ${name}`).toBe(0);
+          const both = await measure(qa.launchOptions(gate.server), qa.guardContext);
+          for (const name of names) expect(both[name], `both guards, ${name}`).toBe(0);
+
+          // Real runs, on the page and as an interactive mockup in the viewer's sandboxed srcdoc frame. The watched
+          // Playwright shows runPlan launched with launchOptions and guarded every context before its first page.
+          fs.writeFileSync(path.join(dir, "mockup-1.html"), page(vectors.page + vectors["sandboxed srcdoc frame"]));
+          const { playwright, seen } = watchedPlaywright(channel);
           const before = packets;
-          await (await context.newPage()).goto(url);
-          await new Promise((r) => setTimeout(r, 1500));
-          return packets - before;
+          for (const [name, target] of [
+            ["url", { url: `${base}/all` }],
+            ["viewer", { viewer: dir, version: 1, interactive: true }],
+          ]) {
+            const report = await qa.runPlan(
+              {
+                target,
+                viewports: ["desktop"],
+                items: [
+                  {
+                    id: "M1",
+                    name: "x",
+                    tag: "essential",
+                    trigger: "load",
+                    target: "#box",
+                    expect: { animates: false },
+                  },
+                ],
+              },
+              { out: path.join(dir, `qa-${name}`), playwright },
+            );
+            expect(report.environment.browserBuild).toBe(build);
+            expect(report.environment.browser).toContain(build);
+          }
+          await new Promise((r) => setTimeout(r, 500));
+          expect(packets - before, "runPlan").toBe(0);
+          expect(seen.launches.length).toBe(2);
+          for (const launch of seen.launches) {
+            expect(launch.args, "runPlan launches with BROWSER_ARGS").toEqual(qa.BROWSER_ARGS);
+            expect(launch.proxy).toMatchObject({ server: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+$/) });
+            expect(launch.proxy.bypass).toBe("<-loopback>");
+          }
+          expect(seen.contexts.length).toBeGreaterThan(0);
+          for (const context of seen.contexts)
+            expect(context.initsBeforeFirstPage, "runPlan guards every context before its first page").toContain(
+              qa.noWebRtc,
+            );
         } finally {
-          await browser.close();
+          await gate.close();
+          site.close();
+          udp.close();
+          fs.rmSync(dir, { recursive: true, force: true });
         }
-      };
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "motion-qa-rtc-"));
-      try {
-        // Control: the recorder hears an unguarded browser, so a zero below is a guard at work.
-        expect(await sent({}), "no packet even without a guard: this machine can't show a leak").toBeGreaterThan(0);
-        // Each guard holds alone, so neither one hides a regression in the other (such as a switch Chromium ignores).
-        expect(await sent({ ...gated, args: qa.BROWSER_ARGS }), "the switches alone").toBe(0);
-        expect(await sent(gated, qa.noWebRtc), "the init script alone").toBe(0);
-        // A real run, on the page and as an interactive mockup in the viewer's sandboxed frame.
-        fs.writeFileSync(path.join(dir, "mockup-1.html"), fixture);
-        const before = packets;
-        for (const [name, target] of [
-          ["url", { url }],
-          ["viewer", { viewer: dir, version: 1, interactive: true }],
-        ])
-          await qa.runPlan(
-            {
-              target,
-              viewports: ["desktop"],
-              items: [
-                { id: "M1", name: "x", tag: "essential", trigger: "load", target: "#box", expect: { animates: false } },
-              ],
-            },
-            { out: path.join(dir, `qa-${name}`) },
-          );
-        await new Promise((r) => setTimeout(r, 500));
-        expect(packets - before, "a full run").toBe(0);
-      } finally {
-        await gate.close();
-        site.close();
-        udp.close();
-        fs.rmSync(dir, { recursive: true, force: true });
-      }
-    },
-    120_000,
-  );
+      },
+      240_000,
+    );
 
   it("on the fixture page: catches the defects, repeats on Replay, keeps evidence with its provenance", async () => {
     const out = fs.mkdtempSync(path.join(os.tmpdir(), "motion-qa-test-"));

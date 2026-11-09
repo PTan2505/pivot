@@ -111,7 +111,8 @@ The user must be able to see each **essential** item before gate 2 (§6).
     can't be blocked by any policy: in the checks that request didn't leave either, and the viewer then stopped the
     version, but don't rely on it, so keep prototypes free of redirects. Not covered by the checks: DNS prefetching
     (the viewer asks the browser not to prefetch, unverified) and WebRTC from an interactive script in the browser
-    you open the viewer in (`motion-qa.mjs`'s own browser turns WebRTC off, §9), and browsers other than Chromium.
+    you open the viewer in (`motion-qa.mjs`'s own browser turns WebRTC off, with the limits in §9), and browsers
+    other than Chromium.
     The inliner's markup rewriting is a
     convenience, not the protection: the sandbox and the policy are.
   - Static versions stay script-free in the viewer too.
@@ -233,10 +234,16 @@ intended, what was observed running, what is inferred or unverified, and what de
    - Previews must be local (a loopback URL, a file or a mockup folder), never PIVOT's own app. The browser can reach
      only the preview's exact origin (its own WebSocket, such as a dev server's reload channel, included): not another
      port or another name for this machine, and not other hosts, redirects, WebSockets and workers included. Every
-     connection goes through a gate the script runs. WebRTC is off: UDP may only go through the gate, which carries
-     none, and the page's WebRTC constructors are removed in every frame (a test checks no packet reaches another
-     address). The browser resolves no host name itself; the gate resolves what it lets through. A preview that needs
-     WebRTC can't be observed here. `--allow-origin <origin>` adds another local origin the preview
+     connection goes through a gate the script runs. WebRTC is turned off by two layers: Chromium switches that allow
+     UDP only through the gate (which carries none), and an init script that removes the WebRTC constructors. How
+     each layer holds depends on the binary, and the report names the one that ran. Measured on Chromium 156: the
+     headless shell motion QA starts by default obeys one switch name and full Chromium the other, so both are
+     passed; the init script reached every frame tested in the headless shell but not sandboxed `srcdoc` frames in
+     full Chromium. With both layers, a test sees no STUN packet reach another address of the machine from the page
+     or any tested frame, on each binary installed. That is evidence for those builds, not a guarantee for others.
+     The browser is set to resolve no host name itself, and the gate resolves what it lets through; that the browser
+     made no DNS lookup at all wasn't measured. A preview that needs WebRTC can't be observed here.
+     `--allow-origin <origin>` adds another local origin the preview
      needs (an API on another port), and `--allow-remote` adds public hosts (never this machine or a private network).
    - Requests that could change data (anything but GET, HEAD and OPTIONS) are blocked, so a click can't delete or
      submit anything; the report lists them. `--allow-writes` lifts that, only against
