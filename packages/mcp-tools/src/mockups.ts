@@ -9,10 +9,15 @@ import path from "node:path";
 //   reference is resolved against the document or stylesheet that makes it, percent-decoded exactly once, and must
 //   stay inside the folder before and after symlinks are followed. Only regular files are read: stylesheets for
 //   <link> and @import, images and fonts for url() and image attributes.
+// - The HTML file is an untrusted entry point too: an absolute path to a regular .html/.htm file that is not a symlink
+//   and has no other hard links, checked on the open descriptor before anything is read. An .html name is a filter,
+//   not proof: any text file saved under that name is still read as the mockup.
 // - Fail closed: a reference that could reach a file outside the folder (absolute and Windows paths, `..` that leaves
-//   it, encoded traversal, NUL, backslashes, file: URLs, malformed percent-encoding, a symlink out, a directory or
-//   device) fails the whole mockup with MockupRejected, and so does going over the 2 MB inlining budget. Nothing is
-//   stored, and errors name the reference as written, never a file's contents.
+//   it, encoded traversal, NUL, backslashes, file: URLs, malformed percent-encoding, a symlink out, a hard link, a
+//   directory or device) fails the whole mockup with MockupRejected, and so does going over the 2 MB inlining budget.
+//   Nothing is stored, and errors name the reference as written, never a file's contents.
+// - Known gap: a process writing in the folder at the same time can swap a parent directory for a symlink and back
+//   between the checks and the open. The checks narrow that window; they don't close it.
 // - Remote URLs, other URL schemes, scripts, frames and plugins are removed and listed in `dropped`. Local files that
 //   don't exist are listed in `missing`. Files inside the folder that can't be inlined (another type, a circular
 //   @import, one more than 4 levels deep) are left out and listed in `skipped`.
@@ -107,6 +112,97 @@ const attr = (tag: string, name: string) =>
     ?.slice(1)
     .find((v) => v != null);
 
+/**
+ * Removes elements in one forward pass. `open` is a global, case-insensitive regex for `<name\b`; a start tag ends at
+ * the first ">" after it, as in the regexes this replaces, and `cut` says where the removal ends (or null to keep the
+ * tag). The next ">" and a missing close tag are remembered, so the pass is linear in the input: the equivalent
+ * `[^>]*` and `[\s\S]*?` regexes rescan the rest of the document for every unclosed tag.
+ */
+function sweep(
+  html: string,
+  open: RegExp,
+  cut: (name: string, start: number, tagEnd: number) => number | null,
+  onCut: (removed: string, name: string) => void,
+): string {
+  let out = "";
+  let last = 0;
+  let gt = -1;
+  open.lastIndex = 0;
+  for (let m = open.exec(html); m; m = open.exec(html)) {
+    if (gt < m.index) gt = html.indexOf(">", m.index);
+    if (gt < 0) break; // no ">" left: no later tag can end either
+    const name = m[1].toLowerCase();
+    const end = cut(name, m.index, gt + 1);
+    if (end === null) continue;
+    out += html.slice(last, m.index);
+    onCut(html.slice(m.index, end), name);
+    last = end;
+    open.lastIndex = end;
+  }
+  return out + html.slice(last);
+}
+
+/** Finds the end of the first `</name\s*>` at or after `from`, remembering where none is left. -1 when there is none. */
+function closer(html: string) {
+  const res = new Map<string, RegExp>();
+  const none = new Map<string, number>();
+  return (name: string, from: number): number => {
+    if (from >= (none.get(name) ?? Infinity)) return -1;
+    let re = res.get(name);
+    if (!re) res.set(name, (re = new RegExp(`</${name}\\s*>`, "gi")));
+    re.lastIndex = from;
+    const m = re.exec(html);
+    if (!m) {
+      none.set(name, from);
+      return -1;
+    }
+    return m.index + m[0].length;
+  };
+}
+
+/** Removes scripts, frames and plugins, <base>, and <meta http-equiv> refresh, CSP and set-cookie, in linear time. */
+export function stripActive(html: string, dropped: string[]): string {
+  // scripts never run in PIVOT. Each <script> goes up to its </script>; without one, a self-closed tag goes alone and
+  // an open one takes the rest of the document, as a browser would treat it as script text.
+  let close = closer(html);
+  html = sweep(
+    html,
+    /<(script)\b/gi,
+    (name, start, tagEnd) => {
+      const end = close(name, tagEnd);
+      if (end >= 0) return end;
+      return html[tagEnd - 2] === "/" ? tagEnd : html.length;
+    },
+    (removed) => dropped.push(attr(removed, "src") ?? "inline <script>"),
+  );
+  // nor frames and plugins: the tag, and its content up to the first matching close tag when there is one
+  close = closer(html);
+  html = sweep(
+    html,
+    /<(iframe|frame|object|embed|applet)\b/gi,
+    (name, _start, tagEnd) => {
+      const end = close(name, tagEnd);
+      return end >= 0 ? end : tagEnd;
+    },
+    (_removed, name) => dropped.push(`<${name}>`),
+  );
+  // and nothing may re-base or redirect the page or loosen its policy
+  const equiv: [number, number][] = [];
+  for (const m of html.matchAll(/http-equiv\s*=\s*["']?(?:refresh|content-security-policy|set-cookie)\b/gi))
+    equiv.push([m.index, m.index + m[0].length]);
+  let next = 0;
+  return sweep(
+    html,
+    /<(base|meta)\b/gi,
+    (name, start, tagEnd) => {
+      if (name === "base") return tagEnd;
+      while (next < equiv.length && equiv[next][0] < start + 5) next++;
+      return next < equiv.length && equiv[next][1] < tagEnd ? tagEnd : null;
+    },
+    (_removed, name) => dropped.push(name === "base" ? "<base>" : "<meta http-equiv>"),
+  );
+}
+
 interface Located {
   /** The path as resolved from the reference, inside the folder as written. */
   lexical: string;
@@ -114,13 +210,53 @@ interface Located {
   real: string;
 }
 
+/**
+ * Reads the mockup's HTML file, an untrusted entry point: an absolute .html/.htm path to a regular file that is not a
+ * symlink and has no other hard links, within the budget. Its metadata is checked on the open descriptor, before
+ * anything is read. Returns the text and the folder it defines, as written and with symlinks followed.
+ */
+async function readEntry(file: string): Promise<{ html: string; lexRoot: string; realRoot: string }> {
+  if (typeof file !== "string" || file.includes("\0") || !path.isAbsolute(file))
+    throw new MockupRejected([`${show(String(file))} is not an absolute path`]);
+  if (!/\.html?$/i.test(file)) throw new MockupRejected([`${show(file)} is not an .html or .htm file`]);
+  const lexFile = path.resolve(file);
+  // The name itself, without following it: a symlink, or a directory, FIFO, socket or device, is refused unopened.
+  const named = await fs.lstat(lexFile);
+  if (named.isSymbolicLink()) throw new MockupRejected([`${show(file)} is a symlink`]);
+  if (!named.isFile()) throw new MockupRejected([`${show(file)} is not a regular file`]);
+  let fh: fs.FileHandle;
+  try {
+    fh = await fs.open(lexFile, OPEN_FLAGS); // O_NOFOLLOW and O_NONBLOCK, in case it was swapped since
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ELOOP") throw new MockupRejected([`${show(file)} is a symlink`]);
+    throw e;
+  }
+  try {
+    const st = await fh.stat();
+    if (!st.isFile()) throw new MockupRejected([`${show(file)} is not a regular file`]);
+    if (st.nlink !== 1)
+      throw new MockupRejected([`${show(file)} has other hard links, so it may be a file from elsewhere`]);
+    if (st.size > INLINE_BUDGET) throw new MockupRejected([`${show(file)} is over 2 MB`]);
+    const lexRoot = path.dirname(lexFile);
+    const realRoot = await fs.realpath(lexRoot);
+    const realFile = await fs.realpath(lexFile);
+    const again = await fs.stat(realFile);
+    if (!within(realRoot, realFile) || again.ino !== st.ino || again.dev !== st.dev)
+      throw new MockupRejected([`${show(file)} changed while it was being read`]);
+    const buf = Buffer.alloc(st.size);
+    const html = buf.subarray(0, (await fh.read(buf, 0, st.size, 0)).bytesRead).toString("utf8");
+    return { html, lexRoot, realRoot };
+  } finally {
+    await fh.close();
+  }
+}
+
 export async function inlineMockup(file: string): Promise<InlineReport> {
   const dropped: string[] = [];
   const missing: string[] = [];
   const skipped: string[] = [];
   const problems: string[] = [];
-  const lexRoot = path.dirname(path.resolve(file));
-  const realRoot = await fs.realpath(lexRoot);
+  const { html: source, lexRoot, realRoot } = await readEntry(file);
   const cache = new Map<string, Buffer>();
   let used = 0;
 
@@ -194,6 +330,10 @@ export async function inlineMockup(file: string): Promise<InlineReport> {
             (await fs.realpath(at.real)) !== at.real
           ) {
             reject(raw, "changed while it was being read");
+            return null;
+          }
+          if (st.nlink !== 1) {
+            reject(raw, "has other hard links, so it may be a file from outside the mockup's folder");
             return null;
           }
           if (used + cost(st.size) > INLINE_BUDGET) overBudget(raw); // the size is checked before anything is read
@@ -272,44 +412,7 @@ export async function inlineMockup(file: string): Promise<InlineReport> {
     return out + text.slice(last);
   }
 
-  // The HTML file itself: a regular file in its folder (not a symlink out of it), within the budget.
-  const realFile = await fs.realpath(file);
-  if (!within(realRoot, realFile))
-    throw new MockupRejected([`${show(file)} is a symlink to a file outside its folder`]);
-  const fh = await fs.open(realFile, OPEN_FLAGS);
-  let html: string;
-  try {
-    const st = await fh.stat();
-    if (!st.isFile()) throw new MockupRejected([`${show(file)} is not a regular file`]);
-    if (st.size > INLINE_BUDGET) throw new MockupRejected([`${show(file)} is over 2 MB`]);
-    const buf = Buffer.alloc(st.size);
-    html = buf.subarray(0, (await fh.read(buf, 0, st.size, 0)).bytesRead).toString("utf8");
-  } finally {
-    await fh.close();
-  }
-
-  // scripts never run in PIVOT (an unclosed <script> runs to the end of the document, so it goes to the end too)
-  html = await replaceAll(
-    html,
-    /<script\b[^>]*>[\s\S]*?<\/script\s*>|<script\b[^>]*\/>|<script\b[^>]*>[\s\S]*$/gi,
-    async (m) => {
-      dropped.push(attr(m[0], "src") ?? "inline <script>");
-      return "";
-    },
-  );
-  // nor frames and plugins; and nothing may redirect or re-base the page or loosen its policy
-  html = await replaceAll(html, /<(iframe|frame|object|embed|applet)\b[^>]*>(?:[\s\S]*?<\/\1\s*>)?/gi, async (m) => {
-    dropped.push(`<${m[1].toLowerCase()}>`);
-    return "";
-  });
-  html = await replaceAll(
-    html,
-    /<base\b[^>]*>|<meta\b[^>]*http-equiv\s*=\s*["']?(?:refresh|content-security-policy|set-cookie)\b[^>]*>/gi,
-    async (m) => {
-      dropped.push(m[0].toLowerCase().startsWith("<base") ? "<base>" : "<meta http-equiv>");
-      return "";
-    },
-  );
+  let html = stripActive(source, dropped);
   // <link>: local stylesheets become <style>; everything else that points elsewhere goes
   html = await replaceAll(html, /<link\b[^>]*>/gi, async (m) => {
     const href = attr(m[0], "href") ?? "";
