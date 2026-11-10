@@ -10,7 +10,7 @@ and approval (gate 2), to implementation and QA, and covers the failure paths al
 - motion QA (`motion-qa.mjs`);
 - axe-core.
 
-**TEST-ONLY:** both gates belong to the owner. Here, gate 1 is a fixture (the references the "owner" picked). Gate 2
+**TEST-ONLY:** both gates belong to the owner. The run sets the scratch instance's owner passphrase itself, with the CLI (`scripts/owner-passphrase.mjs --stdin`); it never touches your real one. Here, gate 1 is a fixture (the references the "owner" picked). Gate 2
 is clicked in PIVOT's own session page by the test, the way the owner would. The report labels both. A passing run
 proves the mechanics; it doesn't prove that a real owner approved anything.
 

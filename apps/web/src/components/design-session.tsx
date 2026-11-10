@@ -54,8 +54,8 @@ function StatusStepper({
     exploring: approvals.length
       ? "Changed since the last approval: approve the new direction to go on."
       : s.mockups.length
-        ? "Waiting for you to approve a version below, or a direction in the chat."
-        : "Waiting for you to approve a direction.",
+        ? "Waiting for you to approve a version below, with your owner passphrase."
+        : "Waiting for a version to approve: Claude saves the direction here as a mockup.",
     approved: `Direction approved on ${approvedOn}. Ready to build.`,
     building: "The approved direction is being built.",
     done: "Built and checked.",

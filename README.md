@@ -85,7 +85,7 @@ Two pieces let Claude Code design and redesign screens in any project from **you
 | `get_reference_images`   | read  | Look at it: the cover, the full page in ~2,000-token slices, motion keyframes or interaction states         |
 | `search_external`        | read  | Free public component catalogs (Magic UI, React Bits, shadcn/ui), only when the library falls short         |
 | `save_design_brief`      | write | Store the brief at a milestone: `initial` (opens a design session), `approved`, `major_change`              |
-| `record_design_decision` | write | Record your `approval`, a `change` after approval, or a QA `deviation`                                      |
+| `record_design_decision` | write | Record a `change` after approval or a QA `deviation` (approvals are yours, in PIVOT)                        |
 | `save_design_mockups`    | write | Put a round of mockups on the session's page in PIVOT, where you compare them and approve one               |
 | `set_design_status`      | write | Mark an approved session `building` when Claude starts coding, and `done` after the build and QA            |
 | `get_design_session`     | read  | Read a session to continue earlier work, or the approval you made in PIVOT                                  |

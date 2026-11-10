@@ -6,7 +6,7 @@
 // TEST-ONLY: the two gates are the owner's. Here gate 1 is a fixture (the references the "owner" picked) and gate 2
 // is clicked in PIVOT's own session page by this test, as the owner would. Both are labelled TEST-ONLY in the
 // report. This proves the mechanics, not that a real owner approved anything.
-import { execFile, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import { createRequire } from "node:module";
@@ -34,6 +34,29 @@ const tool = (name: string) => [...TOOLS, ...WRITE_TOOLS].find((t) => t.name ===
 const call = async (name: string, input: unknown) => runTool(tool(name), source, input);
 const textOf = (r: { content: { type: string; text?: string }[] }) => r.content.map((c) => c.text ?? "").join("\n");
 const log: string[] = [];
+/** TEST-ONLY: the scratch instance's owner passphrase, set by this run. A real owner sets theirs in their own terminal. */
+const PASS = "TEST-ONLY scratch owner passphrase";
+const sameOrigin = (extra: Record<string, string> = {}) => ({
+  "content-type": "application/json",
+  origin: BASE,
+  "sec-fetch-site": "same-origin",
+  ...extra,
+});
+const challengeFor = async (sessionId: string, m: { id: string; digest: string }) =>
+  (await (
+    await fetch(`${BASE}/api/design/mockups/${m.id}/approval-challenge?session=${sessionId}&digest=${m.digest}`)
+  ).json()) as { ready: boolean; challenge?: string };
+/** TEST-ONLY: what the owner's page sends once the owner typed the passphrase (only used on scratch sessions). */
+async function ownerApprove(sessionId: string, m: { id: string; digest: string }, note = "TEST-ONLY") {
+  const { challenge } = await challengeFor(sessionId, m);
+  const body = { note, digest: m.digest, sessionId, challenge, passphrase: PASS };
+  const res = await fetch(`${BASE}/api/design/mockups/${m.id}/approve`, {
+    method: "POST",
+    headers: sameOrigin(),
+    body: JSON.stringify(body),
+  });
+  return { res, body };
+}
 const note = (line: string) => log.push(line);
 const shot = (name: string) => path.join(OUT, name);
 
@@ -74,6 +97,11 @@ beforeAll(async () => {
   qa = await import(pathToFileURL(path.join(SKILL, "scripts/motion-qa.mjs")).href);
   pv = await import(pathToFileURL(path.join(SKILL, "scripts/preview.mjs")).href);
   source = new HttpSource(BASE);
+  // TEST-ONLY: the owner passphrase of this scratch instance, set the way the owner would (the CLI, not the API)
+  execFileSync(process.execPath, [path.join(REPO, "scripts/owner-passphrase.mjs"), "--stdin", "--replace"], {
+    input: `${PASS}\n`,
+    env: { ...process.env, PIVOT_DATA_DIR: process.env.PIVOT_DATA_DIR },
+  });
   fs.mkdirSync(OUT, { recursive: true });
   note(`Scratch PIVOT ${BASE}; evidence in ${OUT}`);
 });
@@ -254,24 +282,86 @@ describe("D · interactive preview and approval (gate 2)", () => {
       .loadVersions({ base: BASE, sessionId: state.sessionId, fetchImpl: tampered })
       .catch((e: Error) => e);
     expect((err as { code?: number }).code).toBe(2);
-    const bad = await call("record_design_decision", {
-      sessionId: state.sessionId,
-      kind: "approval",
-      summary: "TEST-ONLY: an approval without a version must be refused",
-    });
-    expect(bad.isError).toBe(true);
-    expect(textOf(bad)).toMatch(/^conflict: This session has mockups in PIVOT: pass the mockupId/);
-    const wrong = await call("record_design_decision", {
-      sessionId: state.sessionId,
-      kind: "approval",
-      summary: "TEST-ONLY: wrong digest",
-      mockupId: state.mockups[2].id,
-      mockupDigest: "0".repeat(12),
-    });
-    expect(wrong.isError).toBe(true);
-    expect(textOf(wrong)).toMatch(/^conflict: .*isn't the stored one/);
+    const res = await fetch(
+      `${BASE}/api/design/mockups/${state.mockups[2].id}/approval-challenge?session=${state.sessionId}&digest=${"0".repeat(64)}`,
+    );
+    expect(res.status).toBe(409);
     note(
-      `D · Failure paths: tampered HTML → preview exit code 2; approval without a version → "${textOf(bad).slice(0, 70)}…"; wrong digest → "${textOf(wrong).slice(0, 70)}…".`,
+      `D · Failure paths: tampered HTML → preview exit code 2; an approval form for a digest that isn't the stored one → ${res.status}.`,
+    );
+  });
+
+  it("an agent can't approve: not with the token, forged browser headers, a missing challenge or other routes", async () => {
+    const token = fs.readFileSync(path.join(process.env.PIVOT_DATA_DIR!, "api-token"), "utf8").trim();
+    const m = state.mockups[2];
+    const post = (url: string, headers: Record<string, string>, body: unknown, method = "POST") =>
+      fetch(`${BASE}${url}`, { method, headers, body: JSON.stringify(body) });
+    const results: string[] = [];
+    // 1. the agent's MCP tool has no approval at all
+    const viaTool = await call("record_design_decision", {
+      sessionId: state.sessionId,
+      kind: "approval",
+      summary: "TEST-ONLY: the user said yes in the chat",
+      mockupId: m.id,
+      mockupDigest: m.digest,
+    });
+    expect(viaTool.isError).toBe(true);
+    results.push(`MCP record_design_decision approval → refused`);
+    // 2. the decision route with the token
+    const viaRoute = await post(
+      `/api/design/sessions/${state.sessionId}/decisions`,
+      { "content-type": "application/json", authorization: `Bearer ${token}` },
+      { kind: "approval", summary: "TEST-ONLY", mockupId: m.id, mockupDigest: m.digest },
+    );
+    expect(viaRoute.status).toBe(409);
+    results.push(`decisions route with token → ${viaRoute.status}`);
+    // 3. the approve route with the token, even carrying a valid challenge and the right passphrase
+    const c1 = await challengeFor(state.sessionId, m);
+    const withToken = await post(
+      `/api/design/mockups/${m.id}/approve`,
+      { "content-type": "application/json", authorization: `Bearer ${token}` },
+      { digest: m.digest, sessionId: state.sessionId, challenge: c1.challenge, passphrase: PASS },
+    );
+    expect(withToken.status).toBe(403);
+    results.push(`approve with token (+ right passphrase) → ${withToken.status}`);
+    // 4. forged same-origin browser headers, a valid challenge, no passphrase
+    const c2 = await challengeFor(state.sessionId, m);
+    const forged = await post(
+      `/api/design/mockups/${m.id}/approve`,
+      sameOrigin({ referer: `${BASE}/design/${state.sessionId}` }),
+      { digest: m.digest, sessionId: state.sessionId, challenge: c2.challenge },
+    );
+    expect(forged.status).toBe(401);
+    results.push(`approve with forged browser headers, no passphrase → ${forged.status}`);
+    // 5. no challenge (a forged or cross-site form)
+    const noChallenge = await post(`/api/design/mockups/${m.id}/approve`, sameOrigin(), {
+      digest: m.digest,
+      sessionId: state.sessionId,
+      passphrase: PASS,
+    });
+    expect(noChallenge.status).toBe(409);
+    results.push(`approve without a challenge → ${noChallenge.status}`);
+    // 6. building and restore with the token
+    const building = await post(
+      `/api/design/sessions/${state.sessionId}`,
+      { "content-type": "application/json", authorization: `Bearer ${token}` },
+      { status: "building" },
+      "PATCH",
+    );
+    expect(building.status).toBe(409);
+    results.push(`PATCH building with token → ${building.status}`);
+    const restore = await post(
+      "/api/backup/restore",
+      { "content-type": "application/json", authorization: `Bearer ${token}` },
+      { dir: "/tmp/forged-backup", passphrase: PASS },
+    );
+    expect(restore.status).toBe(403);
+    results.push(`restore with token → ${restore.status}`);
+    const s = (await source.getDesignSession(state.sessionId))!;
+    expect(s.status).toBe("exploring");
+    expect(s.currentApprovalId).toBeNull();
+    note(
+      `D · Agent-side approval attempts, all refused; session still exploring with no approval: ${results.join("; ")}.`,
     );
   });
 
@@ -305,7 +395,11 @@ describe("D · interactive preview and approval (gate 2)", () => {
     await page.screenshot({ path: shot("pivot-session-interactive.png") });
     // TEST-ONLY: this click stands in for the owner's.
     await page.getByRole("button", { name: /Approve this version/ }).click();
-    await page.getByRole("textbox").fill("TEST-ONLY approval by the workflow demo, not by the owner.");
+    await page.getByLabel(/Note for the build/).fill("TEST-ONLY approval by the workflow demo, not by the owner.");
+    await page.getByLabel("Owner passphrase").fill(PASS); // TEST-ONLY: the scratch instance's passphrase
+    await page.getByRole("dialog").waitFor({ state: "visible" });
+    await page.waitForTimeout(400); // let the dialog finish fading in before the evidence screenshot
+    await page.screenshot({ path: shot("pivot-approve-dialog.png") });
     await page.getByRole("button", { name: /^Approve$/ }).click();
     await page
       .getByText(/Approved/)
@@ -322,7 +416,7 @@ describe("D · interactive preview and approval (gate 2)", () => {
     const woke = JSON.parse((await watcher).trim().split("\n").at(-1)!);
     expect(woke).toMatchObject({ event: "approved", source: "owner" });
     note(
-      `D · TEST-ONLY gate 2: clicked Approve on version 3 in PIVOT's page (not the owner); approval bound to ${state.mockups[2].digest.slice(0, 12)} = the digest the preview showed; wait-for-decision woke with ${JSON.stringify(woke).slice(0, 80)}. Screenshot: pivot-session-interactive.png.`,
+      `D · TEST-ONLY gate 2: clicked Approve on version 3 in PIVOT's page and typed the scratch passphrase (not the owner); approval bound to ${state.mockups[2].digest.slice(0, 12)} = the digest the preview showed; wait-for-decision woke with ${JSON.stringify(woke).slice(0, 80)}. Screenshot: pivot-session-interactive.png.`,
     );
   });
 });
@@ -525,15 +619,15 @@ describe("failure path · stale approval", () => {
     const sessionId = (r.structuredContent as { sessionId: string }).sessionId;
     await call("save_design_mockups", { sessionId, mockups: [{ title: "Only", html: "<p>only</p>" }] });
     const s1 = (await source.getDesignSession(sessionId))!;
-    const ok = await call("record_design_decision", {
-      sessionId,
-      kind: "approval",
-      summary: "TEST-ONLY approval to make it stale",
-      direction: "Version 1",
-      mockupId: s1.mockups[0].id,
-      mockupDigest: s1.mockups[0].digest,
+    const { res, body } = await ownerApprove(sessionId, s1.mockups[0], "TEST-ONLY approval to make it stale");
+    expect(res.status).toBe(201);
+    // the same request again (a replay) is refused: its challenge is spent
+    const replay = await fetch(`${BASE}/api/design/mockups/${s1.mockups[0].id}/approve`, {
+      method: "POST",
+      headers: sameOrigin(),
+      body: JSON.stringify(body),
     });
-    expect(ok.isError).toBeFalsy();
+    expect(replay.status).toBe(409);
     await call("save_design_brief", {
       sessionId,
       title: "Stale demo",
@@ -543,6 +637,8 @@ describe("failure path · stale approval", () => {
     });
     const building = await call("set_design_status", { sessionId, status: "building" });
     expect(building.isError).toBe(true);
-    note(`Failure path · stale approval: after a major change, building → "${textOf(building).slice(0, 90)}…"`);
+    note(
+      `Failure path · stale approval: a replayed approval request → ${replay.status}; after a major change, building → "${textOf(building).slice(0, 90)}…"`,
+    );
   });
 });

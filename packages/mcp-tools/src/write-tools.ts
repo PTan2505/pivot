@@ -70,36 +70,38 @@ const saveDesignBrief: PivotTool<typeof briefInput> = {
 
 // ---- record_design_decision -------------------------------------------------------------------------------------
 
+/** What an agent may record: never an approval, which only the owner makes, in PIVOT. */
+const AGENT_DECISION_KINDS = DESIGN_DECISION_KINDS.filter((k) => k !== "approval") as [
+  Exclude<(typeof DESIGN_DECISION_KINDS)[number], "approval">,
+  ...Exclude<(typeof DESIGN_DECISION_KINDS)[number], "approval">[],
+];
+
 const decisionInput = {
   sessionId: z.string().regex(UUID).describe("The design session."),
   kind: z
-    .enum(DESIGN_DECISION_KINDS)
+    .enum(AGENT_DECISION_KINDS)
     .describe(
-      "approval: the user explicitly approved a direction (only then build). change: the user changed an approved decision. deviation: QA found the build departs from the approved direction.",
+      "change: the user changed an approved decision. deviation: QA found the build departs from the approved direction. (Approvals are the owner's alone: they approve in PIVOT, never through this tool.)",
     ),
   summary: z.string().min(1).max(2000).describe("One or two sentences: what was decided or found."),
-  direction: z.string().max(2000).optional().describe("The chosen direction or mix, for an approval."),
+  direction: z.string().max(2000).optional().describe("The direction it concerns."),
   details: z.string().max(50_000).optional().describe("Anything else worth keeping, in Markdown."),
   mockupId: z
     .string()
     .regex(UUID)
     .optional()
-    .describe(
-      "For an approval of a mockup version saved in PIVOT: its id (from get_design_session). The approval is then bound to that version's content digest, and building checks it.",
-    ),
+    .describe("The mockup version it concerns, when there is one (its id, from get_design_session)."),
   mockupDigest: z
     .string()
     .regex(/^[0-9a-f]{12,64}$/i)
     .optional()
-    .describe(
-      "The digest the user saw (at least its first 12 characters, as PIVOT shows it). PIVOT refuses the record if it isn't that version's digest.",
-    ),
+    .describe("That version's digest (at least its first 12 characters). PIVOT refuses it if it isn't that version's."),
 };
 
 const recordDesignDecision: PivotTool<typeof decisionInput> = {
   name: "record_design_decision",
   title: "Record a design decision",
-  description: `Records an approval, a change after approval, or a deviation found in QA in the design session's history. Record an approval only after the user explicitly approved a direction in this conversation. ${NOT_IN_REPO}`,
+  description: `Records a change after approval, or a deviation found in QA, in the design session's history. It can't record an approval: approvals are the owner's alone. When the user chooses a version in the chat, give them the session page's link and ask them to press Approve this version there (it needs their owner passphrase); get_design_session and the watcher then show the approval. ${NOT_IN_REPO}`,
   inputSchema: decisionInput,
   async run(source, { sessionId, ...input }) {
     const res = await writer(source).recordDesignDecision(sessionId, input);

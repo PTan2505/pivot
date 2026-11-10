@@ -5,7 +5,6 @@
 // Run it in the background right after saving mockups (save_design_mockups). It only reads PIVOT (GET, no token) every
 // few seconds and exits as soon as the session leaves "exploring", printing one JSON line:
 //   {"event":"approved","source":"owner","direction":"Version 3: …","note":"…","approvedAt":"…"}  the user approved in PIVOT
-//   {"event":"approved","source":"agent",…}   an approval recorded from the chat (you can ignore it: you recorded it)
 //   {"event":"abandoned"} | {"event":"status","status":"…"}   the user moved the session another way
 //   {"event":"timeout"}   nothing happened before --timeout-min
 // The exit is what wakes the agent up; the JSON says what happened. Network errors (PIVOT restarting) are retried.

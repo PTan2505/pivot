@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "./db/client";
 import { designDecisions, designMockups, designSessions, designSnapshots } from "./db/schema";
+import { authorizeOwner } from "./owner-approval";
 import type {
   DesignDecisionDTO,
   DesignDecisionKind,
@@ -159,7 +160,14 @@ async function approvalState(sessionId: string) {
         mockupDigest: designDecisions.mockupDigest,
       })
       .from(designDecisions)
-      .where(and(eq(designDecisions.sessionId, sessionId), eq(designDecisions.kind, "approval")))
+      // only the owner's approvals count: an approval is the owner's decision, made in PIVOT with the owner passphrase
+      .where(
+        and(
+          eq(designDecisions.sessionId, sessionId),
+          eq(designDecisions.kind, "approval"),
+          eq(designDecisions.source, "owner"),
+        ),
+      )
   ).map((a) => ({ ...a, at: big(a.at)! }));
   return pickCurrentApproval(approvals, big(s.resetAt), {
     status: s.status as DesignStatus,
@@ -310,6 +318,11 @@ export async function recordDesignDecision(input: {
   const [s] = await db.select().from(designSessions).where(eq(designSessions.id, input.sessionId)).limit(1);
   if (!s) throw new DesignError(`No design session ${input.sessionId}.`);
   if (input.mockupDigest && !input.mockupId) throw new DesignError("mockupDigest needs the mockupId it belongs to.");
+  // An approval is the owner's alone (approveDesignMockup, after the owner passphrase): an agent can't record one.
+  if (input.kind === "approval" && input.source !== "owner")
+    throw new DesignError(
+      "Approvals are the owner's: ask the user to approve the version in PIVOT (Approve this version, with the owner passphrase). An agent can't record one.",
+    );
   if (input.kind === "approval" && !input.mockupId) {
     // Once a session has mockups in PIVOT, an approval names the version approved (a mix names the version it starts
     // from, the rest goes in details). Only a session without any mockup can be approved without one.
@@ -344,8 +357,8 @@ export async function recordDesignDecision(input: {
 
 /**
  * Changes a session's status by hand. "approved" and "building" need an approval that counts now (pickCurrentApproval):
- * an approval is the user's decision, recorded with record_design_decision or made in PIVOT, never a status flipped in
- * the UI. Building also checks that the approved version is still the content approved. Going back to exploring (Reopen)
+ * an approval is the owner's decision, made in PIVOT with the owner passphrase, never a status flipped in the UI or a
+ * decision an agent recorded. Building also checks that the approved version is still the content approved. Going back to exploring (Reopen)
  * means the direction needs approving again: approvals recorded before it stop counting.
  */
 export async function setDesignSessionStatus(sessionId: string, status: DesignStatus) {
@@ -514,10 +527,17 @@ export async function getDesignMockupHtml(id: string) {
  * direction and the owner's note, verbatim, as the details, bound to the version's digest. `seenDigest` is the digest
  * of the copy the page showed: a stale page can't approve content it didn't show. Only while the session is exploring.
  */
-export async function approveDesignMockup(mockupId: string, note = "", seenDigest?: string) {
+export async function approveDesignMockup(
+  mockupId: string,
+  note = "",
+  seenDigest?: string,
+  { sessionId }: { sessionId?: string } = {},
+) {
   const db = await getDb();
   const [m] = await db.select(MOCKUP_COLUMNS).from(designMockups).where(eq(designMockups.id, mockupId)).limit(1);
   if (!m) return null;
+  if (sessionId !== undefined && m.sessionId !== sessionId)
+    throw new DesignError("This version belongs to another design session.");
   const [s] = await db.select().from(designSessions).where(eq(designSessions.id, m.sessionId)).limit(1);
   if (s?.status !== "exploring")
     throw new DesignError(`The session is ${s?.status}. A version can be approved while the session is exploring.`);
@@ -532,4 +552,31 @@ export async function approveDesignMockup(mockupId: string, note = "", seenDiges
     mockupDigest: seenDigest,
   });
   return { id, sessionId: m.sessionId };
+}
+
+/**
+ * The owner approves a version from PIVOT's page: the owner check (no API token, the owner passphrase, a single-use
+ * challenge for this session, version and digest) and then the approval, bound to that digest. The only way an approval
+ * is recorded. Throws OwnerAuthError when the check fails, DesignError when the version can't be approved.
+ */
+export async function approveAsOwner(input: {
+  mockupId: string;
+  sessionId: string;
+  digest: string;
+  note?: string;
+  challenge?: string | null;
+  passphrase?: string | null;
+  bearer?: string | null;
+}) {
+  authorizeOwner({
+    bearer: input.bearer,
+    passphrase: input.passphrase,
+    approval: {
+      challenge: input.challenge,
+      sessionId: input.sessionId,
+      mockupId: input.mockupId,
+      digest: input.digest,
+    },
+  });
+  return approveDesignMockup(input.mockupId, input.note ?? "", input.digest, { sessionId: input.sessionId });
 }
