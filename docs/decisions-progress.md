@@ -16,6 +16,42 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
 | P1c   | Motion QA                              | Done (PR #66) |
 | P1b-1 | Approval bound to mockup content       | In review     |
 
+### Ship-to-usable — gate 1 in PIVOT, external discovery, F3, incident guardrails (2026-11-10)
+
+- Status: Done for the code; real owner acceptance still to run (docs/owner-acceptance-test.md).
+- Existing functionality reused:
+  - the capture pipeline (`screenshotUrl`, `assertPublicUrl`) for external previews;
+  - the blob store;
+  - the owner passphrase and challenges (extended with a purpose) for skill writes;
+  - the workflow demo, interactive preview, motion QA and axe for checks.
+- Files changed:
+  - `design-candidates.ts` plus migration 0011 (additive);
+  - candidate routes and the References section;
+  - MCP `propose_references` / `select_references`;
+  - `pivot-design` §1, §2, §4, §6 and `motion.md`;
+  - `write-target.ts`;
+  - owner-only skill writes (`skills.ts`, `owner-approval.ts`, write routes, dialog);
+  - test guard in `config.ts`;
+  - `scripts/start.mjs` scratch isolation, plus `launch-guard.mjs`;
+  - incident record;
+  - SPEC §1 #9 and #13, §10, §18, §19; DESIGN.md.
+- Checks run and results:
+  - full suite in pre-push: core 186+, MCP 259+, extension 12; typecheck and lint;
+  - `pnpm format:check` fails on 6 files untouched since the first commit, which are identical on `dev`;
+  - workflow E2E 19/19, with a real external page;
+  - two independent security reviews: the first found 3 bypasses of the first skill-write gate plus 2 low issues; all fixed and re-verified.
+- Manual verification: a live run on a scratch PIVOT for the synthetic SaaS project "Relay":
+  - real web search; 5 real external pages captured by PIVOT;
+  - TEST-ONLY gates; 3 mockups and the interactive preview;
+  - the build, then QA 21/21; 0 differing pixels against the approved mockup;
+  - the skill-write dialog tried in the browser, with a content-swap attack.
+- Remaining issues:
+  - an agent can trigger the owner lockout (availability);
+  - backup omits `design_candidates`;
+  - catalog search needs R2;
+  - F1 (inliner race) awaits the owner's decision.
+- Next step: owner merges the stack and runs the acceptance test.
+
 ### Release hardening — the approval gate is the owner's (2026-11-10)
 
 - Status: In review (PR stacked on the P1b part 2 PR, which is stacked on PR #70).
