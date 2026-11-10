@@ -63,7 +63,7 @@ Pass them with `claude mcp add â€¦ -e PIVOT_URL=http://127.0.0.1:4400 -- node â€
 ## Troubleshooting
 
 - **`app_unreachable`:** PIVOT isn't running at `PIVOT_URL`. Start it, then retry; the server doesn't need restarting.
-- **Tools missing in `/mcp`:** rebuild (`pnpm mcp:build`) and restart Claude Code. The server logs to stderr: run `node apps/mcp/dist/server.js` by hand and it prints `PIVOT MCP ready (13 tools), reading <PIVOT_URL>`.
+- **Tools missing in `/mcp`:** rebuild (`pnpm mcp:build`) and restart Claude Code. The server logs to stderr: run `node apps/mcp/dist/server.js` by hand and it prints `PIVOT MCP ready (15 tools), reading <PIVOT_URL>`.
 - **Search results differ from the app:** both use `searchResources` / `listResources` in `packages/core`. Check you're pointing at the same app (`PIVOT_URL`) and that it was rebuilt after the last pull.
 
 ## Remove
