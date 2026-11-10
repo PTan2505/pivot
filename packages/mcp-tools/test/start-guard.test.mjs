@@ -89,6 +89,23 @@ describe("a scratch PIVOT is isolated", () => {
   }, 30_000);
 });
 
+describe("the normal launcher fails closed without its configuration", async () => {
+  const { missingConfig } = await import(path.resolve(here, "../../../scripts/launch-guard.mjs"));
+  it("refuses a Neon library's data folder (token, no local database) when DATABASE_URL is missing", () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), "launch-guard-"));
+    fs.writeFileSync(path.join(d, "api-token"), "t");
+    expect(missingConfig({ dataDir: d, env: {}, envFile: "/repo/.env" })).toMatch(
+      /probably in Neon.*Nothing was started/,
+    );
+    // positive controls: with DATABASE_URL, a local library (db folder), and a brand-new data folder
+    expect(missingConfig({ dataDir: d, env: { DATABASE_URL: "postgres://x" }, envFile: "" })).toBeNull();
+    fs.mkdirSync(path.join(d, "db"));
+    expect(missingConfig({ dataDir: d, env: {}, envFile: "" })).toBeNull();
+    expect(missingConfig({ dataDir: path.join(d, "new"), env: {}, envFile: "" })).toBeNull();
+    fs.rmSync(d, { recursive: true, force: true });
+  });
+});
+
 describe("scripts that write check for a scratch PIVOT first", async () => {
   const { assertScratch } = await import(path.resolve(here, "../../../scripts/qa/scratch-guard.mjs"));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "scratch-guard-"));

@@ -109,6 +109,20 @@ if (!process.env.PIVOT_DATA_DIR && !fs.existsSync(dataDir) && fs.existsSync(lega
   console.log(`› Moved ${legacyDataDir} to ${dataDir}`);
 }
 
+// fail closed: never start an empty local library in place of one kept in Neon because .env is missing
+if (scratchAt < 0) {
+  const { missingConfig } = await import("./launch-guard.mjs");
+  const why = missingConfig({
+    dataDir: process.env.PIVOT_DATA_DIR ? path.resolve(process.env.PIVOT_DATA_DIR) : dataDir,
+    env: process.env,
+    envFile: path.join(root, ".env"),
+  });
+  if (why) {
+    console.error(`› ${why}`);
+    process.exit(1);
+  }
+}
+
 process.env.PIVOT_MIGRATIONS_DIR ??= path.join(root, "packages/core/src/db/migrations");
 const port = process.env.PORT || "4321";
 

@@ -33,6 +33,7 @@ its retention window), and R2 deletions of objects that had no asset row (the bu
 
 - `node scripts/start.mjs --scratch <dir>`: no `.env`, `DATABASE_URL` and `R2_*` cleared, Claude Code's skill and plugin folders moved inside `<dir>` (added after review: before, a scratch PIVOT still read `~/.claude/skills`), refuses `~/.pivot`,
   `~/.stan-bag`, the repository and port 4321; unknown arguments are refused before anything starts.
+- The normal launcher fails closed: a data folder with PIVOT's API token but no local database belongs to a Neon library, so without `DATABASE_URL` (a checkout with no `.env`, the cause of incident 2) it refuses to start instead of creating an empty local database there (`scripts/launch-guard.mjs`).
 - `scripts/qa/scratch-guard.mjs`: QA scripts refuse a server that isn't a marked scratch instance.
 - `.claude/launch.json` has a `pivot-scratch` config; agents use it, never `pivot`.
 - Under the test runner, `packages/core` refuses the real data folder, `~/.claude`, and any non-loopback database or
