@@ -18,7 +18,7 @@ export function DesignCandidates({ candidates }: { candidates: DesignCandidateDT
     if (window.location.hash === "#references") document.getElementById("references")?.scrollIntoView();
   }, []);
   return (
-    <section id="references" aria-labelledby="references-heading" className="space-y-4">
+    <section id="references" aria-labelledby="references-heading" className="scroll-mt-28 space-y-4">
       <div className="max-w-4xl space-y-1">
         <h2 id="references-heading" className="text-xl font-medium tracking-[-0.02em] text-ink">
           References
