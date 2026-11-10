@@ -29,7 +29,8 @@ can do: a real pick, a real approval, and judging the result.
 
    Expected: `Owner passphrase set (~/.pivot/owner-approval.json)…`
 
-4. Start PIVOT and open <http://127.0.0.1:4321>:
+4. Start PIVOT and open <http://127.0.0.1:4321> **in your own browser**. Never type the passphrase in a browser Claude is
+   driving (Claude in Chrome, or the app's browser pane): an agent that controls or watches it could read what you type.
 
    ```bash
    npm start
