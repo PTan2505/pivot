@@ -131,6 +131,12 @@ const mockupsInput = {
             "Absolute path of the mockup's HTML file. Local CSS, images and fonts in its folder are inlined; a reference outside the folder fails the save.",
           ),
         html: z.string().optional().describe("The mockup's HTML instead of a path, already self-contained."),
+        interactive: z
+          .boolean()
+          .optional()
+          .describe(
+            "true for a prototype whose scripts carry its interactions or motion: its scripts are kept (local .js files inlined) and run only in the separate, network-locked preview browser (scripts/preview.mjs), never on PIVOT's pages. Default false: a static mockup, scripts removed.",
+          ),
       }),
     )
     .min(1)
@@ -142,7 +148,7 @@ const mockupsInput = {
 const saveDesignMockups: PivotTool<typeof mockupsInput> = {
   name: "save_design_mockups",
   title: "Save mockups to a design session",
-  description: `Stores a round of mockup versions (static HTML) in the design session, where the user compares them as tabs at desktop, tablet and phone width and can approve one with a note. Local stylesheets, images and fonts from the mockup's own folder are inlined (2 MB in all); a reference outside that folder fails the save and nothing is stored; scripts and remote files are removed (they don't load in PIVOT). Each call is a new round; the same set again returns the same round. Only while the session is exploring. Returns the page's link. ${NOT_IN_REPO}`,
+  description: `Stores a round of mockup versions in the design session, where the user compares them as tabs at desktop, tablet and phone width and can approve one with a note. Local stylesheets, images and fonts from the mockup's own folder are inlined (2 MB in all); a reference outside that folder fails the save and nothing is stored; scripts and remote files are removed (they don't load in PIVOT). A version marked interactive keeps its scripts: PIVOT's page shows it without them, and the user tries it in the interactive preview (scripts/preview.mjs), a separate browser locked to the stored, digest-checked versions. Each call is a new round; the same set again returns the same round. Only while the session is exploring. Returns the page's link. ${NOT_IN_REPO}`,
   inputSchema: mockupsInput,
   async run(source, { sessionId, snapshotId, mockups }) {
     const w = writer(source);
@@ -158,7 +164,7 @@ const saveDesignMockups: PivotTool<typeof mockupsInput> = {
         if (!m.path.startsWith("/") && !/^[a-z]:[\\/]/i.test(m.path))
           throw new ToolError("invalid_input", `Version ${i + 1}: path must be absolute.`);
         try {
-          const r = await inlineMockup(m.path);
+          const r = await inlineMockup(m.path, { interactive: m.interactive === true });
           html = r.html;
           r.dropped.forEach((d) => dropped.add(d));
           r.missing.forEach((d) => missing.add(d));
@@ -178,7 +184,7 @@ const saveDesignMockups: PivotTool<typeof mockupsInput> = {
           "invalid_input",
           `Version ${i + 1} is over 2 MB once inlined: use smaller or fewer images (screenshots as WebP or JPEG).`,
         );
-      versions.push({ title: m.title, html });
+      versions.push({ title: m.title, html, ...(m.interactive ? { interactive: true } : {}) });
     }
     const res = await w.saveDesignMockups(sessionId, { snapshotId, mockups: versions });
     const url = w.appUrl ? `${w.appUrl}/design/${sessionId}?round=${res.round}` : undefined;
@@ -186,6 +192,9 @@ const saveDesignMockups: PivotTool<typeof mockupsInput> = {
       `${res.created ? "Saved" : "Already saved as"} round ${res.round} with ${versions.length} version${versions.length === 1 ? "" : "s"}.`,
       url ? `The user opens it at ${url}` : "",
       "The user can approve a version there, with a note; get_design_session then shows that approval with source owner.",
+      versions.some((v) => "interactive" in v)
+        ? `Interactive versions: ${versions.flatMap((v, i) => ("interactive" in v ? [i + 1] : [])).join(", ")}. Their scripts don't run on PIVOT's page; open them for the user with the interactive preview (node <pivot-design skill>/scripts/preview.mjs ${sessionId}).`
+        : "",
       dropped.size ? `Removed (scripts and remote files don't load in PIVOT): ${[...dropped].join(", ")}` : "",
       missing.size ? `Missing local files: ${[...missing].join(", ")}` : "",
       skipped.size ? `Not inlined: ${[...skipped].join(", ")}` : "",

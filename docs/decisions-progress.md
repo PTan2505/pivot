@@ -16,6 +16,35 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
 | P1c   | Motion QA                              | Done (PR #66) |
 | P1b-1 | Approval bound to mockup content       | In review     |
 
+### P1b part 2 — Interactive preview (2026-11-10)
+
+- Status: In review (PR stacked on PR #70, the inliner containment fix; retarget to `dev` once #70 merges).
+- Owner's decisions:
+  - D1: an optional `interactive` flag on `save_design_mockups`, default false;
+  - interactive mockups run in a separate Chromium behind motion QA's network gate, never on PIVOT's origin;
+  - iframe sandbox and CSP alone are not the network boundary;
+  - reuse the existing approval binding.
+- Existing functionality reused:
+  - motion QA's gate (`startGate`, `destinationPolicy`, `launchOptions`, `guardContext`, `loadPlaywright`);
+  - approval binding (`mockupDigest`, approve route and dialog, `record_design_decision`);
+  - the inliner's containment;
+  - the watcher;
+  - the local viewer as fallback.
+- Files changed:
+  - `pivot-design/scripts/preview.mjs` (new);
+  - `mockups.ts` (interactive mode);
+  - `write-tools.ts` and `source.ts` (the flag);
+  - `design.ts` (store the flag, digest, round identity unchanged for static sets);
+  - the mockups POST route;
+  - `design-mockups.tsx` (Interactive chip and notice);
+  - `SKILL.md`, `motion.md`, SPEC, DESIGN.md;
+  - tests: `preview.test.mjs`, mockups, write-tools, design, skills.
+- Checks: in the PR.
+- Not covered:
+  - browsers other than Chromium;
+  - DNS measured at a resolver;
+  - a real user's approval through the preview. Tests use fixtures and headless Chromium; the owner's own use is the remaining verification.
+
 ### P1b part 1 — Approval bound to mockup content (2026-11-04)
 
 - Status: In review (PR into `dev`).

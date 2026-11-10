@@ -9,6 +9,7 @@ const input = z.object({
       z.object({
         title: z.string().min(1).max(MOCKUP_LIMITS.title),
         html: z.string().min(1),
+        interactive: z.boolean().optional(),
       }),
     )
     .min(1)

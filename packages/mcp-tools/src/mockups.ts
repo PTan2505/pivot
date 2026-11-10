@@ -21,6 +21,9 @@ import path from "node:path";
 //   they don't close it (940 leaks in 4000 attempts against a tight swap loop). It matters when the agent is sandboxed
 //   and this MCP server is not; an unsandboxed agent can read those files itself. Only a pinned directory (cwd or fd)
 //   closes it, which needs OS-specific code that is deliberately not used here.
+// - Interactive versions (a motion or interaction prototype) keep their scripts: inline ones as written, local
+//   `<script src>` files (.js, .mjs) inlined under the same containment and budget, remote ones removed. They run only
+//   in the separate, network-gated preview browser (scripts/preview.mjs), never on PIVOT's own pages.
 // - Remote URLs, other URL schemes, scripts, frames and plugins are removed and listed in `dropped`. Local files that
 //   don't exist are listed in `missing`. Files inside the folder that can't be inlined (another type, a circular
 //   @import, one more than 4 levels deep) are left out and listed in `skipped`.
@@ -164,20 +167,22 @@ function closer(html: string) {
 }
 
 /** Removes scripts, frames and plugins, <base>, and <meta http-equiv> refresh, CSP and set-cookie, in linear time. */
-export function stripActive(html: string, dropped: string[]): string {
+export function stripActive(html: string, dropped: string[], { keepScripts = false } = {}): string {
   // scripts never run in PIVOT. Each <script> goes up to its </script>; without one, a self-closed tag goes alone and
-  // an open one takes the rest of the document, as a browser would treat it as script text.
+  // an open one takes the rest of the document, as a browser would treat it as script text. Interactive versions keep
+  // them here: inlineMockup handles their sources.
   let close = closer(html);
-  html = sweep(
-    html,
-    /<(script)\b/gi,
-    (name, start, tagEnd) => {
-      const end = close(name, tagEnd);
-      if (end >= 0) return end;
-      return html[tagEnd - 2] === "/" ? tagEnd : html.length;
-    },
-    (removed) => dropped.push(attr(removed, "src") ?? "inline <script>"),
-  );
+  if (!keepScripts)
+    html = sweep(
+      html,
+      /<(script)\b/gi,
+      (name, start, tagEnd) => {
+        const end = close(name, tagEnd);
+        if (end >= 0) return end;
+        return html[tagEnd - 2] === "/" ? tagEnd : html.length;
+      },
+      (removed) => dropped.push(attr(removed, "src") ?? "inline <script>"),
+    );
   // nor frames and plugins: the tag, and its content up to the first matching close tag when there is one
   close = closer(html);
   html = sweep(
@@ -205,6 +210,27 @@ export function stripActive(html: string, dropped: string[]): string {
     (_removed, name) => dropped.push(name === "base" ? "<base>" : "<meta http-equiv>"),
   );
 }
+
+/** The script elements of a document, in order, found with the same linear rules as the sweep that removes them. */
+export function scriptElements(html: string): { start: number; tagEnd: number; end: number }[] {
+  const out: { start: number; tagEnd: number; end: number }[] = [];
+  const close = closer(html);
+  sweep(
+    html,
+    /<(script)\b/gi,
+    (name, start, tagEnd) => {
+      const c = close(name, tagEnd);
+      const end = c >= 0 ? c : html[tagEnd - 2] === "/" ? tagEnd : html.length;
+      out.push({ start, tagEnd, end });
+      return end;
+    },
+    () => {},
+  );
+  return out;
+}
+
+/** What an interactive version may load as a script file: plain and module JavaScript, inlined as text. */
+const SCRIPT_TYPES = new Set([".js", ".mjs"]);
 
 interface Located {
   /** The path as resolved from the reference, inside the folder as written. */
@@ -254,7 +280,7 @@ async function readEntry(file: string): Promise<{ html: string; lexRoot: string;
   }
 }
 
-export async function inlineMockup(file: string): Promise<InlineReport> {
+export async function inlineMockup(file: string, { interactive = false } = {}): Promise<InlineReport> {
   const dropped: string[] = [];
   const missing: string[] = [];
   const skipped: string[] = [];
@@ -415,7 +441,31 @@ export async function inlineMockup(file: string): Promise<InlineReport> {
     return out + text.slice(last);
   }
 
-  let html = stripActive(source, dropped);
+  let html = stripActive(source, dropped, { keepScripts: interactive });
+  if (interactive) {
+    // inline scripts stay; local script files are inlined (contained, budgeted); remote ones go
+    let out = "";
+    let last = 0;
+    for (const el of scriptElements(html)) {
+      const tag = html.slice(el.start, el.tagEnd);
+      const src = attr(tag, "src");
+      if (src == null) continue;
+      out += html.slice(last, el.start);
+      last = el.end;
+      const at = await locate(src, lexRoot);
+      if (at === "keep") dropped.push(src.trim() || "<script src>");
+      if (at === "keep" || at === null) continue; // data: scripts, remote, rejected or missing: removed and listed
+      if (!SCRIPT_TYPES.has(path.extname(at.real).toLowerCase())) {
+        skipped.push(`${src} (not a .js or .mjs script)`);
+        continue;
+      }
+      const data = await read(src, at, (n) => n);
+      if (!data) continue;
+      const open = tag.replace(/\ssrc\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i, "");
+      out += `${open}${data.toString("utf8").replace(/<\/script/gi, "<\\/script")}</script>`;
+    }
+    html = out + html.slice(last);
+  }
   // <link>: local stylesheets become <style>; everything else that points elsewhere goes
   html = await replaceAll(html, /<link\b[^>]*>/gi, async (m) => {
     const href = attr(m[0], "href") ?? "";

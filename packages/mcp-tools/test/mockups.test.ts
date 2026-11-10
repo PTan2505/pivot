@@ -835,3 +835,49 @@ describe("inliner: budget accounting (F6)", () => {
     }
   });
 });
+
+describe("inliner: interactive versions (P1b part 2)", () => {
+  it("keeps inline scripts and handlers, inlines local script files, and drops remote ones", async () => {
+    await put("js/app.js", 'document.body.dataset.ready = "1"; const s = "</script>";');
+    const file = await page(
+      `<button onclick="go()">Go</button><script>function go(){}</script><script src="js/app.js" defer></script>` +
+        `<script src="https://cdn.example/lib.js"></script><script src="data:text/javascript,alert(1)"></script>`,
+    );
+    const r = await inlineMockup(file, { interactive: true });
+    expect(r.html).toContain('<button onclick="go()">Go</button><script>function go(){}</script>');
+    expect(r.html).toContain('<script defer>document.body.dataset.ready = "1"; const s = "<\\/script>";</script>');
+    expect(r.html).not.toMatch(/cdn\.example|data:text\/javascript/);
+    expect(r.dropped).toEqual(expect.arrayContaining(["https://cdn.example/lib.js", "data:text/javascript,alert(1)"]));
+    // the same file saved static loses every script
+    expect((await inlineMockup(file)).html).not.toContain("<script");
+  });
+
+  it("applies the same containment, type and budget rules to script files", async () => {
+    await fs.writeFile(path.join(outside, "steal.js"), `const k = "${SECRET}";`);
+    await expect(
+      inlineMockup(await page(`<script src="../outside/steal.js"></script>`), { interactive: true }),
+    ).rejects.toThrow(/points outside/);
+    await fs.link(path.join(outside, "steal.js"), path.join(root, "hl.js"));
+    await expect(inlineMockup(await page(`<script src="hl.js"></script>`), { interactive: true })).rejects.toThrow(
+      /other hard links/,
+    );
+    await put("notes.txt", SECRET);
+    const r = await inlineMockup(await page(`<script src="notes.txt"></script>`), { interactive: true });
+    expect(r.html).not.toContain(SECRET);
+    expect(r.skipped).toEqual(["notes.txt (not a .js or .mjs script)"]);
+    await put("big.js", Buffer.alloc(INLINE_BUDGET + 1, 0x61));
+    await expect(inlineMockup(await page(`<script src="big.js"></script>`), { interactive: true })).rejects.toThrow(
+      /budget/,
+    );
+  });
+
+  it("still removes frames, plugins, <base> and meta refresh", async () => {
+    const r = await inlineMockup(
+      await page(
+        `<base href="https://x.example/"><meta http-equiv="refresh" content="0"><iframe src="x"></iframe><p>ok</p><script>1</script>`,
+      ),
+      { interactive: true },
+    );
+    expect(r.html).toBe("<!doctype html><p>ok</p><script>1</script>");
+  });
+});
