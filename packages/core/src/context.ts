@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { absoluteAssetPath, getAsset, listResourceAssets } from "./assets";
-import { expandHome, skillsDir } from "./config";
+import { dataDir, expandHome, skillsDir } from "./config";
 import { getResourcesByIds } from "./resources";
 import type { SkillMeta } from "./skills";
 import { estimateImageTokens, estimateTextTokens, scaledImageSize, CLAUDE_MAX_IMAGE_EDGE } from "./tokens";
@@ -184,11 +184,56 @@ async function copyDir(src: string, dest: string) {
   }
 }
 
-/** Writes a self-contained bundle folder: context.md plus prompts, skills, rules… and copied assets. */
+/** Whether `p` is `root` or below it (path segments, never a string prefix). */
+function within(root: string, p: string) {
+  const rel = path.relative(root, p);
+  return rel === "" || (!path.isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${path.sep}`));
+}
+
+/** `p` with symlinks followed as far as it exists, then the rest as written (for a folder about to be created). */
+async function realish(p: string): Promise<string> {
+  const rest: string[] = [];
+  let cur = path.resolve(p);
+  for (;;) {
+    try {
+      return path.join(await fs.realpath(cur), ...rest.reverse());
+    } catch {
+      const parent = path.dirname(cur);
+      if (parent === cur) return path.resolve(p);
+      rest.push(path.basename(cur));
+      cur = parent;
+    }
+  }
+}
+
+/**
+ * A skill's folder to copy into a bundle: only one inside the skills folder the app scans, never a path a resource's
+ * metadata names elsewhere. Null otherwise (only SKILL.md is then written).
+ */
+async function skillSource(realPath: unknown): Promise<string | null> {
+  if (typeof realPath !== "string" || !path.isAbsolute(realPath)) return null;
+  const real = await fs.realpath(realPath).catch(() => null);
+  const root = await fs.realpath(skillsDir()).catch(() => null);
+  return real && root && real !== root && within(root, real) ? real : null;
+}
+
+/** A skill's folder name inside the bundle: one plain name, never a path; otherwise the resource's slug. */
+const safeSkillName = (name: unknown, fallback: string) => {
+  const n = String(name ?? "");
+  return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(n) && !n.includes("..") ? n : fallback;
+};
+
+/**
+ * Writes a self-contained bundle folder: context.md plus prompts, skills, rules… and copied assets. Everything goes into
+ * a new folder under `targetDir`, never outside it, and never into the app's data folder.
+ */
 export async function exportBundle(opts: ExportOptions) {
   const raw = opts.targetDir.trim();
   if (!raw.startsWith("~") && !path.isAbsolute(raw)) throw new Error("Choose an absolute folder path.");
   const base = path.resolve(expandHome(raw));
+  // a new bundle folder is created under `base`; inside the data folder it could shadow the app's own files
+  if (within(await realish(dataDir()), await realish(base)))
+    throw new Error("Choose a folder outside PIVOT's data folder.");
   await fs.mkdir(base, { recursive: true });
 
   const bundleSlug = slugify(opts.bundleName, "ui-context");
@@ -227,10 +272,12 @@ export async function exportBundle(opts: ExportOptions) {
     // Text content → <exportDir>/<slug>.<ext>
     let fileRef: string | null = null;
     if (r.type === "skill") {
-      const skillName = String((meta as SkillMeta).skillName ?? slug);
+      const skillName = safeSkillName((meta as SkillMeta).skillName, slug);
       const dest = path.join(root, "skills", skillName);
-      const realPath = (meta as SkillMeta).realPath;
-      if (realPath && (await pathExists(realPath))) await copyDir(realPath, dest);
+      if (!within(path.join(root, "skills"), dest) || dest === path.join(root, "skills"))
+        throw new Error(`"${skillName}" isn't a skill folder name.`);
+      const source = await skillSource((meta as SkillMeta).realPath);
+      if (source) await copyDir(source, dest);
       await fs.mkdir(dest, { recursive: true });
       await fs.writeFile(path.join(dest, "SKILL.md"), r.content, "utf8");
       fileRef = `skills/${skillName}/SKILL.md`;
