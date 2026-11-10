@@ -106,6 +106,17 @@ describe("versions are checked before anything is shown", () => {
     expect(err2.code).toBe(2);
   });
 
+  it("refuses an answer for another session", async () => {
+    const other = async (url) => {
+      const r = await fakePivot([version(1, "A", false, "<p>a</p>")])(url);
+      if (!url.includes("/sessions/")) return r;
+      return new Response(JSON.stringify({ ...(await r.json()), id: "99999999-2222-4333-8444-555555555555" }));
+    };
+    await expect(loadVersions({ base: "http://pivot.test", sessionId: SID, fetchImpl: other })).rejects.toThrow(
+      /another session/,
+    );
+  });
+
   it("says so when the session has no mockups", async () => {
     await expect(loadVersions({ base: "http://pivot.test", sessionId: SID, fetchImpl: fakePivot([]) })).rejects.toThrow(
       /no mockups yet/,
@@ -237,7 +248,73 @@ try { window.open("about:blank"); } catch {}
     page = preview.page();
     await page.waitForSelector("body[data-ready=true]");
     expect(await page.locator("[role=tab]").count()).toBe(2);
+    // it doesn't reload the version that crashed: it waits for a pick
+    expect(await page.isVisible("#crashed")).toBe(true);
+    expect(await page.locator("iframe").count()).toBe(0);
+    await page.click("[data-tab='0']");
+    expect(await page.locator("iframe").count()).toBe(1);
   }, 30_000);
+
+  it("serves a version only with its own token, and only to its own address", async () => {
+    const meta = await (await fetch(`${preview.origin}/versions.json`)).json();
+    expect(meta.map((v) => v.src)).toEqual([
+      expect.stringMatching(/^\/v\/1\?t=[0-9a-f]{32}$/),
+      expect.stringMatching(/^\/v\/2\?t=[0-9a-f]{32}$/),
+    ]);
+    expect((await fetch(`${preview.origin}${meta[1].src}`)).status).toBe(200);
+    expect((await fetch(`${preview.origin}/v/2`)).status).toBe(404);
+    expect((await fetch(`${preview.origin}/v/2?t=${"0".repeat(32)}`)).status).toBe(404);
+    const rebound = await new Promise((resolve) =>
+      http.get(`${preview.origin}/versions.json`, { headers: { host: "rebind.attacker.example" } }, (r) =>
+        resolve(r.statusCode),
+      ),
+    );
+    expect(rebound).toBe(421);
+  });
+
+  it("keeps a version from loading another one in its frame (no mislabelled content)", async () => {
+    const own = version(1, "Jumper", true, `<p id=x>ONE</p><script>location.href = "/v/2?r=0";</script>`);
+    const two = version(2, "Two", false, `<p id=x>VERSION TWO</p>`);
+    const p2 = await startPreview({
+      session,
+      versions: [own, two],
+      pivotPage: `http://127.0.0.1:4321/design/${SID}`,
+      headless: true,
+    });
+    try {
+      const pg = p2.page();
+      await pg.waitForSelector("body[data-ready=true]");
+      await pg.waitForTimeout(800);
+      const texts = await Promise.all(
+        pg.frames().map((f) => f.evaluate(() => document.body?.innerText ?? "").catch(() => "")),
+      );
+      expect(texts.join(" ")).not.toContain("VERSION TWO");
+      expect(await pg.textContent("#identity")).toContain("Version 1");
+    } finally {
+      await p2.close();
+    }
+  }, 30_000);
+
+  it("stops after three crashes in a minute instead of crashing forever", async () => {
+    const seen = [];
+    const p3 = await startPreview({
+      session,
+      versions: [stat],
+      pivotPage: `http://127.0.0.1:4321/design/${SID}`,
+      headless: true,
+      onEvent: (e) => seen.push(e.event),
+    });
+    for (let i = 0; i < 3 && !seen.includes("stopped"); i++) {
+      const before = seen.length;
+      await (await p3.context.newCDPSession(p3.page())).send("Page.crash").catch(() => {});
+      for (let t = 0; t < 50 && seen.length === before; t++) await new Promise((r) => setTimeout(r, 100));
+      for (let t = 0; t < 50 && !seen.includes("stopped") && seen.at(-1) !== "reloaded"; t++)
+        await new Promise((r) => setTimeout(r, 100));
+    }
+    await p3.closed;
+    expect(seen.filter((e) => e === "crashed")).toHaveLength(3);
+    expect(seen.at(-1)).toBe("stopped");
+  }, 60_000);
 
   describe("network and files, with the versions' CSP switched off: the gate alone holds", () => {
     let open;
@@ -322,6 +399,17 @@ setTimeout(() => { location.href = "file://${secretFile}"; }, 900);
 });
 
 describe("the preview script", () => {
+  it("takes only a PIVOT on this machine as --url", async () => {
+    const script = path.resolve(here, "../../../.claude/skills/pivot-design/scripts/preview.mjs");
+    const { status, stderr } = await new Promise((resolve) =>
+      execFile(process.execPath, [script, SID, "--url", "https://pivot.example.com"], (e, _o, err) =>
+        resolve({ status: e?.code ?? 0, stderr: String(err) }),
+      ),
+    );
+    expect(status).toBe(1);
+    expect(stderr).toMatch(/must be PIVOT on this machine/);
+  });
+
   it("exits 2 and shows nothing when a version doesn't match its digest", async () => {
     const stored = [version(1, "A", false, "<p>a</p>")];
     const api = http.createServer(async (req, res) => {

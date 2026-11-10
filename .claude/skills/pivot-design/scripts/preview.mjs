@@ -81,6 +81,7 @@ export async function loadVersions({ base, sessionId, round, fetchImpl = fetch }
     return res;
   };
   const session = await (await get(`/api/design/sessions/${encodeURIComponent(sessionId)}`)).json();
+  if (session.id !== sessionId) throw new PreviewError(`PIVOT answered with another session (${session.id}).`);
   const mockups = session.mockups ?? [];
   if (!mockups.length) throw new PreviewError("This session has no mockups yet: save a round first.");
   const want = round ?? Math.max(...mockups.map((m) => m.round));
@@ -115,7 +116,7 @@ const esc = (s) =>
 function shellHtml({ session, pivotPage }) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Preview · ${esc(session.title)}</title><link rel="stylesheet" href="/shell.css"></head><body>
-<header><div class="title"><strong>Interactive preview</strong><span>${esc(session.title)} · round ${session.round}</span></div>
+<header><div class="title"><strong>Interactive preview</strong><span>${esc(session.title)} · round ${session.round} · from PIVOT at ${esc(new URL(pivotPage).origin)}</span></div>
 <nav id="tabs" role="tablist" aria-label="Versions"></nav></header>
 <div class="bar">
   <div class="group" role="group" aria-label="Width"><button data-width="desktop" aria-pressed="true">Desktop</button><button data-width="tablet" aria-pressed="false">Tablet</button><button data-width="phone" aria-pressed="false">Phone</button></div>
@@ -149,6 +150,7 @@ footer{border-top:1px solid var(--line);font-size:13px;flex-direction:column;ali
 const SHELL_JS = `(() => {
 const WIDTHS = ${JSON.stringify(WIDTHS)};
 let versions = [], current = 0, width = "desktop", comparing = false, nonce = 0;
+let paused = new URLSearchParams(location.search).has("crashed");
 const $ = (id) => document.getElementById(id);
 const frame = (v, w, scale) => {
   const box = document.createElement("div"); box.className = "frame";
@@ -156,7 +158,7 @@ const frame = (v, w, scale) => {
   f.title = "Version " + v.n + ": " + v.title;
   f.setAttribute("sandbox", v.interactive ? "allow-scripts" : "");
   f.setAttribute("referrerpolicy", "no-referrer");
-  f.src = "/v/" + v.n + "?r=" + nonce;
+  f.src = v.src + "&r=" + nonce;
   const h = Math.max(400, $("stage").clientHeight - 40);
   f.style.width = w + "px"; f.style.height = Math.round(h / scale) + "px";
   box.style.width = Math.round(w * scale) + "px"; box.style.height = h + "px";
@@ -165,6 +167,11 @@ const frame = (v, w, scale) => {
 };
 function render() {
   const stage = $("stage"); stage.replaceChildren();
+  if (paused) {
+    const p = document.createElement("p"); p.id = "crashed"; p.className = "muted";
+    p.textContent = "The preview crashed while showing a version (it may use too much memory or CPU). Pick a version to continue.";
+    stage.appendChild(p); return;
+  }
   const list = comparing ? versions : [versions[current]];
   const avail = (stage.clientWidth - 24 - 12 * (list.length - 1)) / list.length;
   for (const v of list) {
@@ -185,7 +192,7 @@ const showMedia = () => { $("media").textContent = "This window: " + (media.matc
 media.addEventListener("change", showMedia);
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button"); if (!b) return;
-  if (b.dataset.tab) { current = Number(b.dataset.tab); comparing = false; render(); }
+  if (b.dataset.tab) { current = Number(b.dataset.tab); comparing = false; paused = false; render(); }
   else if (b.dataset.width) { width = b.dataset.width; render(); }
   else if (b.dataset.motion) {
     await window.pivotPreview({ reducedMotion: b.dataset.motion === "reduce" });
@@ -198,7 +205,7 @@ document.addEventListener("click", async (e) => {
 document.addEventListener("keydown", (e) => {
   if (e.target.closest && e.target.closest("input")) return;
   const n = Number(e.key);
-  if (n >= 1 && n <= versions.length) { current = n - 1; comparing = false; render(); }
+  if (n >= 1 && n <= versions.length) { current = n - 1; comparing = false; paused = false; render(); }
   else if (e.key === "ArrowRight") { current = (current + 1) % versions.length; comparing = false; render(); }
   else if (e.key === "ArrowLeft") { current = (current + versions.length - 1) % versions.length; comparing = false; render(); }
 });
@@ -216,10 +223,14 @@ fetch("/versions.json").then((r) => r.json()).then((list) => {
 })();`;
 
 const SHELL_POLICY =
-  "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'";
+  "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
 /** The preview's local server: the page, its script and style, the checked versions' metadata, and the versions. */
 export async function startServer({ session, versions, pivotPage, policy = versionPolicy }) {
+  // Each version is served only with its own unguessable token. Only the preview's page learns the tokens (from
+  // /versions.json, which an opaque mockup frame can't read), so a version can't load another one in its frame and be
+  // shown under the wrong label.
+  const tokens = new Map(versions.map((v) => [v.n, crypto.randomBytes(16).toString("hex")]));
   const meta = versions.map(({ id, n, round, title, interactive, digest }) => ({
     id,
     n,
@@ -227,7 +238,9 @@ export async function startServer({ session, versions, pivotPage, policy = versi
     title,
     interactive,
     digest,
+    src: `/v/${n}?t=${tokens.get(n)}`,
   }));
+  let host = "";
   const send = (res, status, type, body, extra = {}) => {
     res.writeHead(status, {
       "Content-Type": type,
@@ -239,6 +252,8 @@ export async function startServer({ session, versions, pivotPage, policy = versi
     res.end(body);
   };
   const server = http.createServer((req, res) => {
+    // only this address: a name that resolves here (DNS rebinding) gets nothing
+    if (req.headers.host !== host) return send(res, 421, "text/plain", "");
     const u = new URL(req.url, "http://preview");
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "text/plain", "");
     if (u.pathname === "/")
@@ -250,14 +265,15 @@ export async function startServer({ session, versions, pivotPage, policy = versi
     if (u.pathname === "/versions.json") return send(res, 200, "application/json", JSON.stringify(meta));
     const m = /^\/v\/(\d+)$/.exec(u.pathname);
     const v = m && versions.find((x) => x.n === Number(m[1]));
-    if (v)
+    if (v && u.searchParams.get("t") === tokens.get(v.n))
       return send(res, 200, "text/html; charset=utf-8", v.html, {
         ...(policy(v.interactive) ? { "Content-Security-Policy": policy(v.interactive) } : {}),
       });
     send(res, 404, "text/plain", "");
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
-  const origin = `http://127.0.0.1:${server.address().port}`;
+  host = `127.0.0.1:${server.address().port}`;
+  const origin = `http://${host}`;
   return { origin, close: () => new Promise((r) => server.close(() => r())) };
 }
 
@@ -315,21 +331,36 @@ export async function startPreview({
   let closing = false;
   let recovering = false;
   let page;
-  // A crashed page is replaced by a fresh one on the same checked versions; closing the window ends the preview.
-  const open = async () => {
+  const crashes = [];
+  // A crashed page is replaced by a fresh one on the same checked versions, which waits for the user to pick a version
+  // (not the one that crashed); three crashes in a minute end the preview. Closing the window ends it too.
+  const open = async (path = "/") => {
+    if (closing) return;
     page = await context.newPage();
     page.on("crash", async () => {
+      if (closing) return;
       recovering = true;
+      crashes.push(Date.now());
       onEvent({ event: "crashed" });
       await page.close().catch(() => {});
-      await open();
-      recovering = false;
-      onEvent({ event: "reloaded" });
+      if (crashes.filter((t) => Date.now() - t < 60_000).length >= 3) {
+        onEvent({ event: "stopped", reason: "the preview crashed three times in a minute" });
+        await close();
+        return;
+      }
+      try {
+        await open("/?crashed=1");
+        onEvent({ event: "reloaded" });
+      } catch {
+        await close();
+      } finally {
+        recovering = false;
+      }
     });
     page.on("close", () => {
       if (!recovering) close();
     });
-    await page.goto(`${site.origin}/`);
+    await page.goto(`${site.origin}${path}`);
   };
   const close = async () => {
     if (closing) return closed;
@@ -353,6 +384,11 @@ async function main(argv) {
     process.exit(1);
   }
   const base = opt("--url", process.env.PIVOT_URL ?? "http://127.0.0.1:4321").replace(/\/+$/, "");
+  const where = URL.canParse(base) ? new URL(base) : null;
+  if (!where || where.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(where.hostname)) {
+    console.error(`--url must be PIVOT on this machine (http://127.0.0.1:<port>), not ${base}`);
+    process.exit(1);
+  }
   const round = argv.includes("--round") ? Number(opt("--round")) : undefined;
   const timeoutMs = Number(opt("--timeout-min", 240)) * 60_000;
   const say = (o) => console.log(JSON.stringify({ sessionId, ...o }));

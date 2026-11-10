@@ -110,7 +110,8 @@ The user must be able to see each **essential** item before gate 2 (§6).
     (exit 2);
   - the window's only way out is motion QA's gate (only the preview's own origin; PIVOT is never reachable from it),
     with WebRTC and DNS off; each version runs in a sandboxed frame that can't reach the window's controls, and the
-    preview serves only the checked versions from memory, never a file. It can't approve anything: the user approves
+    preview serves only the checked versions from memory, never a file, each only with its own token (so one version
+    can't load another under its label) and only to its own address. It can't approve anything: the user approves
     in PIVOT or in the chat, bound to the same digest.
   - Tested (`packages/mcp-tools/test/preview.test.mjs`, Chromium headless shell): with the versions' own policy
     switched off, the gate alone kept fetch, XHR, images, WebSocket, EventSource, forms, frame navigation, a loopback

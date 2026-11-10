@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { constants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -442,16 +443,25 @@ export async function inlineMockup(file: string, { interactive = false } = {}): 
   }
 
   let html = stripActive(source, dropped, { keepScripts: interactive });
+  // Interactive versions keep their script elements, put aside so the passes below can't rewrite script text.
+  const scripts: string[] = [];
+  const mark = `pivot-script-${crypto.randomUUID()}`;
   if (interactive) {
     // inline scripts stay; local script files are inlined (contained, budgeted); remote ones go
     let out = "";
     let last = 0;
     for (const el of scriptElements(html)) {
       const tag = html.slice(el.start, el.tagEnd);
-      const src = attr(tag, "src");
-      if (src == null) continue;
+      // every way a script element can name a source: src (after a space or a "/"), and SVG's href and xlink:href
+      const sources = [...tag.matchAll(/[\s/](src|href|xlink:href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi)];
+      if (!sources.length) continue;
       out += html.slice(last, el.start);
       last = el.end;
+      if (sources.length > 1 || sources[0][1].toLowerCase() !== "src") {
+        dropped.push("<script> with several or unusual sources");
+        continue;
+      }
+      const src = sources[0][2] ?? sources[0][3] ?? sources[0][4];
       const at = await locate(src, lexRoot);
       if (at === "keep") dropped.push(src.trim() || "<script src>");
       if (at === "keep" || at === null) continue; // data: scripts, remote, rejected or missing: removed and listed
@@ -461,8 +471,16 @@ export async function inlineMockup(file: string, { interactive = false } = {}): 
       }
       const data = await read(src, at, (n) => n);
       if (!data) continue;
-      const open = tag.replace(/\ssrc\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i, "");
+      const open = tag.replace(/[\s/]src\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i, (m) => (m[0] === "/" ? " " : ""));
       out += `${open}${data.toString("utf8").replace(/<\/script/gi, "<\\/script")}</script>`;
+    }
+    html = out + html.slice(last);
+    out = "";
+    last = 0;
+    for (const el of scriptElements(html)) {
+      out += `${html.slice(last, el.start)}<!--${mark}-${scripts.length}-->`;
+      scripts.push(html.slice(el.start, el.end));
+      last = el.end;
     }
     html = out + html.slice(last);
   }
@@ -510,6 +528,8 @@ export async function inlineMockup(file: string, { interactive = false } = {}): 
   });
 
   if (problems.length) throw new MockupRejected([...new Set(problems)]);
+  if (scripts.length)
+    html = html.replace(new RegExp(`<!--${mark}-(\\d+)-->`, "g"), (_m, i: string) => scripts[Number(i)]);
   return {
     html,
     dropped: [...new Set(dropped)],

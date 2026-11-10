@@ -871,6 +871,21 @@ describe("inliner: interactive versions (P1b part 2)", () => {
     );
   });
 
+  it("drops a script whose source isn't one plain src, and leaves script text alone", async () => {
+    const r = await inlineMockup(
+      await page(
+        `<script/src="https://evil.example/a.js"></script><script src="ok.js" src="https://evil.example/c.js"></script>` +
+          `<svg><script href="https://evil.example/s.js"></script><script xlink:href="https://evil.example/x.js"></script></svg>` +
+          `<script>const t = '<img src="x.png">' + ' style="color:red" ';</script>`,
+      ),
+      { interactive: true },
+    );
+    expect(r.html).not.toContain("evil.example");
+    expect(r.dropped).toContain("<script> with several or unusual sources");
+    expect(r.html).toContain(`<script>const t = '<img src="x.png">' + ' style="color:red" ';</script>`);
+    expect(r.missing).toEqual([]);
+  });
+
   it("still removes frames, plugins, <base> and meta refresh", async () => {
     const r = await inlineMockup(
       await page(
