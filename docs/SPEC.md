@@ -20,7 +20,7 @@
 | 10 | Prompt variables | Có. Cú pháp `{{variable}}`; khi copy sẽ hiện form điền biến. |
 | 11 | Lịch sử phiên bản | Không làm. |
 | 12 | Collections | Có trong MVP ở mức đơn giản (gom resource, export cả collection). Liên kết trực tiếp resource ↔ resource để P1. |
-| 13 | Export | Thư mục đích tùy chọn (luôn tạo thư mục con mới, không ghi đè); ước tính token; tùy chọn resize ảnh (cạnh dài tối đa 1568px). |
+| 13 | Export | Thư mục đích tùy chọn (luôn tạo thư mục con mới, không ghi đè); ước tính token; tùy chọn resize ảnh (cạnh dài tối đa 1568px). (cập nhật 2026-11-10) Mọi file của bundle nằm trong thư mục con mới đó: tên thư mục skill là một tên thường (không có `/`, `..`), file đi kèm skill chỉ được chép từ thư mục skill app tự quét, không bao giờ từ đường dẫn ghi trong metadata. Không export được vào thư mục dữ liệu (trừ thư mục export mặc định `<thư mục dữ liệu>/exports`) hay vào thư mục ẩn (một phần đường dẫn bắt đầu bằng dấu chấm, như `~/.claude`, `.git`). |
 | 14 | Xóa | Thùng rác (soft delete), tự dọn sau 30 ngày. File asset chỉ bị xóa khi không còn resource nào dùng. |
 | 15–16 | Backup/restore | Chưa làm. |
 | 17 | Import | Nhập thủ công; có ô dán **nhiều URL** (mỗi dòng một URL) để thêm hàng loạt. |
