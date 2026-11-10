@@ -211,7 +211,9 @@ export function authorizeOwner({
     );
   if (approval && !(approval.challenge && consumeChallenge(approval.challenge, approval, now)))
     throw new OwnerAuthError(
-      "This approval form expired or was already used, or names another version. Open the dialog again.",
+      approval.purpose === "skill-write"
+        ? "This form expired or was already used, or the skill changed. Open the dialog again."
+        : "This approval form expired or was already used, or names another version. Open the dialog again.",
       409,
     );
   const until = ownerLockedUntil(now);
