@@ -35,8 +35,8 @@ const ordered = (text: string, words: string[]) => {
 describe("skills name real MCP tools and values", () => {
   const tools = all(/name: "([a-z_]+)"/g, src);
 
-  it("packages/mcp-tools defines 13 tools", () => {
-    expect(tools.size).toBe(13);
+  it("packages/mcp-tools defines 15 tools", () => {
+    expect(tools.size).toBe(15);
   });
 
   // get_reference_images' `which` values, from the tool's own schema
@@ -546,5 +546,20 @@ describe("motion QA traces to the approved brief and never passes on missing evi
     expect(r).toContain("a `motion-qa.mjs` run on the current build, before any edit, gives the before");
     for (const x of ["Motion QA", "motion-qa.mjs", "Not Verified"]) expect(spec.includes(x), x).toBe(true);
     expect(read("docs/PIVOT_DECISIONS.md")).toContain("**Orchestrator v2, P1c: motion QA**");
+  });
+});
+
+describe("pivot-design: discovery and gate 1 (L1, text only)", () => {
+  it("opens the session at the requirements, proposes references in PIVOT, and records only the user's pick", () => {
+    expect(d).toMatch(/open the design session/);
+    expect(d).toMatch(/`propose_references`/);
+    expect(d).toMatch(/`select_references` \(their numbers, and their words quoted exactly\)/);
+    expect(d).toMatch(/\*\*end your turn\*\*/);
+    expect(d).toMatch(/never call `select_references` with numbers they didn't give/);
+  });
+  it("searches the web for real pages only, never guessing URLs or sending private words", () => {
+    expect(d).toMatch(/never build or guess a URL/);
+    expect(d).toMatch(/never a client name or private copy/);
+    expect(d).toMatch(/Nothing external is saved to the library/);
   });
 });

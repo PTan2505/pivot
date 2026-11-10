@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { ToolError, type PivotSource, type PivotWriter } from "@pivot/mcp-tools/source";
 import type {
+  DesignCandidateDTO,
   CollectionDTO,
   DesignSessionDetailDTO,
   DesignStatus,
@@ -149,6 +150,36 @@ export class HttpSource implements PivotSource, PivotWriter {
       `/api/design/sessions/${encodeURIComponent(sessionId)}/mockups`,
       input,
     );
+  }
+
+  proposeReferences(sessionId: string, candidates: Parameters<NonNullable<PivotWriter["proposeReferences"]>>[1]) {
+    return this.post<{ candidates: DesignCandidateDTO[] }>(
+      `/api/design/sessions/${encodeURIComponent(sessionId)}/candidates`,
+      { candidates },
+    );
+  }
+
+  async listCandidates(sessionId: string) {
+    return (
+      (
+        await this.json<{ candidates: DesignCandidateDTO[] }>(
+          `/api/design/sessions/${encodeURIComponent(sessionId)}/candidates`,
+        )
+      )?.candidates ?? []
+    );
+  }
+
+  selectReferences(sessionId: string, input: { numbers: number[]; userWords: string }) {
+    return this.post<{ selected: DesignCandidateDTO[] }>(
+      `/api/design/sessions/${encodeURIComponent(sessionId)}/candidates/select`,
+      input,
+    );
+  }
+
+  async getCandidatePreview(candidateId: string) {
+    const res = await this.call(`/api/design/candidates/${encodeURIComponent(candidateId)}/preview`);
+    if (!res) return null;
+    return { data: Buffer.from(await res.arrayBuffer()), mimeType: res.headers.get("content-type") ?? "image/webp" };
   }
 
   setDesignStatus(sessionId: string, status: DesignStatus) {

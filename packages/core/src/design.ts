@@ -429,6 +429,8 @@ export async function getDesignSession(id: string): Promise<DesignSessionDetailD
     snapshots: snapshots.map(snapshotDTO),
     decisions: decisions.map((d) => decisionDTO(d, digests)),
     mockups: mockups.map(mockupDTO),
+    // loaded lazily: design-candidates imports this module
+    candidates: await (await import("./design-candidates")).listCandidates(id),
   };
 }
 

@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { DesignSessionDetailDTO, DesignStatus } from "@pivot/core/types";
 import { ConfirmButton } from "@/components/confirm-button";
+import { DesignCandidates } from "@/components/design-candidates";
 import { DesignMockups } from "@/components/design-mockups";
 import { Markdown } from "@/components/markdown";
 import { Button } from "@/components/ui/button";
@@ -241,6 +242,7 @@ export function DesignSessionView({ id }: { id: string }) {
         </p>
         <StatusStepper session={s} saving={saving} onChange={setStatus} />
       </div>
+      {s.candidates?.length > 0 && <DesignCandidates candidates={s.candidates} />}
       {s.mockups.length > 0 && <DesignMockups session={s} />}
       <ol className="max-w-4xl space-y-3">
         {timeline.map((item) =>

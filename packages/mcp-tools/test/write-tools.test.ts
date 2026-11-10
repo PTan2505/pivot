@@ -60,18 +60,26 @@ function writerSource() {
 }
 
 describe("PIVOT MCP write tools", () => {
-  it("are the eight design and library writes, and the design ones say briefs stay out of the repo", () => {
+  it("are the ten design and library writes, and the design ones say briefs stay out of the repo", () => {
     expect(WRITE_TOOLS.map((t) => t.name)).toEqual([
       "save_design_brief",
       "record_design_decision",
       "save_design_mockups",
       "set_design_status",
       "get_design_session",
+      "propose_references",
+      "select_references",
       "suggest_metadata",
       "annotate_reference",
       "save_reference",
     ]);
-    for (const name of ["save_design_brief", "record_design_decision", "save_design_mockups"]) {
+    for (const name of [
+      "save_design_brief",
+      "record_design_decision",
+      "save_design_mockups",
+      "propose_references",
+      "select_references",
+    ]) {
       expect(tool(name).description).toMatch(/never write them into the project's repository/);
     }
     expect(tool("record_design_decision").description).toMatch(
@@ -397,5 +405,81 @@ describe("save_design_mockups", () => {
       mockups: [{ title: "x", html: "<p>" }],
     });
     expect(res.content[0]).toMatchObject({ text: expect.stringMatching(/^read_only/) });
+  });
+});
+
+describe("gate 1: propose_references and select_references", () => {
+  const cand = (n: number, extra: Record<string, unknown> = {}) => ({
+    id: `c${n}`,
+    n,
+    kind: "external" as const,
+    resourceId: null,
+    title: `Site ${n}`,
+    url: `https://example.com/${n}`,
+    source: "web search",
+    why: `fits ${n}`,
+    take: "",
+    avoid: "",
+    previewUrl: null,
+    previewError: null,
+    previewStatus: "pending" as const,
+    selected: false,
+    selectedWords: null,
+    createdAt: "",
+    ...extra,
+  });
+
+  it("waits for PIVOT's previews, returns them as images, and points the user at the session page", async () => {
+    const { source, calls } = writerSource();
+    let listed = 0;
+    const s = {
+      ...source,
+      proposeReferences: async (...args: unknown[]) => {
+        calls.push({ method: "proposeReferences", args });
+        return { candidates: [cand(1), cand(2)] };
+      },
+      listCandidates: async () => {
+        listed++;
+        return [
+          cand(1, { previewStatus: "ready", previewUrl: "/api/design/candidates/c1/preview" }),
+          cand(2, { previewStatus: "failed", previewError: "HTTP 403" }),
+        ];
+      },
+      getCandidatePreview: async (id: string) => ({ data: Buffer.from(`img-${id}`), mimeType: "image/webp" }),
+    };
+    const r = await tool("propose_references").run(s, {
+      sessionId: ID,
+      candidates: [
+        { url: "https://example.com/1", why: "fits 1" },
+        { url: "https://example.com/2", why: "fits 2" },
+      ],
+    });
+    expect(listed).toBeGreaterThan(0);
+    const out = r.content[0].type === "text" ? r.content[0].text : "";
+    expect(out).toMatch(/1\. Site 1 — external, web search — https:\/\/example.com\/1/);
+    expect(out).toMatch(/Preview: none \(HTTP 403\)/);
+    expect(out).toContain(`http://127.0.0.1:4321/design/${ID}#references`);
+    expect(out).toMatch(/wait for their pick \(gate 1\)/);
+    expect(r.content.filter((c) => c.type === "image")).toEqual([
+      { type: "image", data: Buffer.from("img-c1").toString("base64"), mimeType: "image/webp" },
+    ]);
+  });
+
+  it("records the user's own words with the pick; an app without the feature says so", async () => {
+    const { source } = writerSource();
+    const got: unknown[] = [];
+    const s = {
+      ...source,
+      selectReferences: async (...args: unknown[]) => {
+        got.push(args);
+        return { selected: [cand(2, { selected: true, selectedWords: "just 2" })] };
+      },
+    };
+    const r = await tool("select_references").run(s, { sessionId: ID, numbers: [2], userWords: "just 2" });
+    expect(got).toEqual([[ID, { numbers: [2], userWords: "just 2" }]]);
+    expect(r.content[0].type === "text" && r.content[0].text).toMatch(/Recorded the user's pick: "just 2"/);
+    await expect(
+      tool("propose_references").run(source, { sessionId: ID, candidates: [{ url: "https://e.com/", why: "x" }] }),
+    ).rejects.toMatchObject({ code: "not_supported" });
   });
 });

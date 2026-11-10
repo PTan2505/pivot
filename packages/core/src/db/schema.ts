@@ -323,6 +323,42 @@ export const designMockups = pgTable(
 );
 
 /**
+ * A reference proposed for a design session (gate 1): one from the library (`resourceId`) or a real page found outside
+ * it (`url`, with a preview PIVOT captured itself). External candidates stay with the session and are never added to the
+ * library; the user saves one only by asking. `selected` is set from the user's own pick, kept word for word.
+ */
+export const designCandidates = pgTable(
+  "design_candidates",
+  {
+    id: id(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => designSessions.id, { onDelete: "cascade" }),
+    /** 1, 2… per session, the number the user picks by. */
+    n: integer("n").notNull(),
+    /** A library reference, or null for an external page. */
+    resourceId: text("resource_id"),
+    title: text("title").notNull(),
+    url: text("url"),
+    /** Where it came from: "library", or the site or search it was found through. */
+    source: text("source").notNull(),
+    why: text("why").notNull().default(""),
+    take: text("take").notNull().default(""),
+    avoid: text("avoid").notNull().default(""),
+    /** Blob key of PIVOT's own capture of an external page, and the store it is in. */
+    previewKey: text("preview_key"),
+    previewStorage: text("preview_storage"),
+    /** Why there is no preview (blocked, timed out…), shown instead of one. */
+    previewError: text("preview_error"),
+    selected: boolean("selected").notNull().default(false),
+    /** The user's own words when they picked, kept word for word. */
+    selectedWords: text("selected_words"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("design_candidates_n_idx").on(t.sessionId, t.n)],
+);
+
+/**
  * Metadata an agent suggests for a reference: a facet, a collection, a title, a visual description. Searchable, but not
  * official until you accept it; accepting never overwrites what you confirmed yourself.
  */
