@@ -35,6 +35,12 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
   - 14 new core security tests;
   - 10 of 10 mutations of the gate caught;
   - the end-to-end demo, with an HTTP stage that tries every agent-side route to an approval.
+- **Found by the independent review and fixed (critical, from before this work, since `974b4a6`):** the export bundle took a skill's folder name and source folder from the resource's metadata, which the API token can write. So `skillName: "../.."` plus `realPath` wrote attacker-chosen files anywhere the user can write. That included replacing the owner passphrase's hash, which defeated the gate end to end (observed). Now:
+  - the folder name must be a plain name;
+  - every write stays inside the new bundle folder;
+  - files are copied only from the skill folders PIVOT scans;
+  - the data folder can't be a target.
+    Checks: 3 tests, 3 of 3 mutations caught, and the reviewer's attack now fails.
 - **Not covered:** a process running as the same OS user with an unrestricted shell (it can read the hash, edit the data folder or drive the browser). The owner's own first use is the remaining verification.
 
 ### P1b part 2 — Interactive preview (2026-11-10)
