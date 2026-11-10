@@ -37,6 +37,9 @@ export const candidateDeps = {
     (await screenshotUrl(url, { fullPage: false, timeoutMs: PREVIEW_TIMEOUT_MS })).viewport,
 };
 
+/** Only http(s) links are ever shown as a page link (a library resource's sourceUrl isn't checked when saved). */
+const webUrl = (u: string | null | undefined) => (u && /^https?:\/\//i.test(u) ? u : null);
+
 const clip = (s: unknown, max: number = CANDIDATE_LIMITS.text) =>
   String(s ?? "")
     .trim()
@@ -51,7 +54,7 @@ function toDTO(r: typeof designCandidates.$inferSelect, cover: Map<string, strin
     kind: external ? "external" : "library",
     resourceId: r.resourceId,
     title: r.title,
-    url: r.url,
+    url: webUrl(r.url),
     source: r.source,
     why: r.why,
     take: r.take,
@@ -126,6 +129,7 @@ export async function addCandidates(
   const seen = new Set(existing.map((r) => r.resourceId ?? r.url));
   const added: string[] = [];
   const captures: { id: string; url: string }[] = [];
+  const rows: (typeof designCandidates.$inferInsert)[] = [];
   for (const item of items) {
     if (!!item.resourceId === !!item.url)
       throw new DesignError("Each reference needs either resourceId (library) or url (external), not both.");
@@ -142,7 +146,7 @@ export async function addCandidates(
         n: ++n,
         resourceId: r.id,
         title: clip(item.title || r.title, CANDIDATE_LIMITS.title),
-        url: r.sourceUrl,
+        url: webUrl(r.sourceUrl),
         source: "library",
         why,
         take: clip(item.take),
@@ -171,6 +175,10 @@ export async function addCandidates(
         avoid: clip(item.avoid),
       };
     }
+    rows.push(row);
+  }
+  // every item was checked before any is stored: one bad item stores nothing
+  for (const row of rows) {
     const [inserted] = await db.insert(designCandidates).values(row).returning({ id: designCandidates.id });
     added.push(inserted.id);
     if (!row.resourceId) captures.push({ id: inserted.id, url: row.url! });

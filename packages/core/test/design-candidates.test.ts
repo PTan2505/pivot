@@ -114,3 +114,23 @@ describe("references proposed for a design session", () => {
     expect(s.candidates[1].selectedWords).toBe("actually just 2");
   });
 });
+
+describe("candidate edge cases", () => {
+  it("one bad item in a batch stores nothing; a non-web sourceUrl is never offered as a link", async () => {
+    const id = await session();
+    await expect(
+      cands.addCandidates(id, [
+        { url: "https://93.184.215.14/fine", why: "ok" },
+        { url: "http://127.0.0.1/", why: "private" },
+      ]),
+    ).rejects.toThrow();
+    expect((await design.getDesignSession(id))!.candidates).toEqual([]);
+    const bad = await resources.createResource({
+      type: "reference",
+      title: "Odd link",
+      sourceUrl: "javascript:alert(document.domain)//",
+    });
+    const [c] = await cands.addCandidates(id, [{ resourceId: bad.id, why: "x" }]);
+    expect(c.url).toBeNull();
+  });
+});
