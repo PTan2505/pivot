@@ -88,12 +88,9 @@ async function serve(dir: string) {
 
 beforeAll(async () => {
   // Never run against the owner's PIVOT: a scratch instance on another port, with its own data folder.
-  if (!BASE || /:4321$/.test(BASE) || process.env.PIVOT_E2E_SCRATCH !== "1")
-    throw new Error(
-      "Set PIVOT_URL to a scratch PIVOT (not :4321), PIVOT_DATA_DIR to its data folder, and PIVOT_E2E_SCRATCH=1.",
-    );
-  const ping = await fetch(`${BASE}/api/counts`).catch(() => null);
-  if (!ping?.ok) throw new Error(`No PIVOT at ${BASE}`);
+  // Never the owner's PIVOT: a scratch one (scripts/start.mjs --scratch), checked before anything is written.
+  const guard = await import(pathToFileURL(path.join(REPO, "scripts/qa/scratch-guard.mjs")).href);
+  await guard.assertScratch({ base: BASE, dataDir: process.env.PIVOT_DATA_DIR });
   qa = await import(pathToFileURL(path.join(SKILL, "scripts/motion-qa.mjs")).href);
   pv = await import(pathToFileURL(path.join(SKILL, "scripts/preview.mjs")).href);
   source = new HttpSource(BASE);

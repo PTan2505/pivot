@@ -817,9 +817,17 @@ async function boundary(base, dataDir) {
 
 const [mode, arg, arg2] = process.argv.slice(2);
 if (mode === "viewer") await viewer();
-else if (mode === "pivot" && arg) await pivot(arg.replace(/\/+$/, ""));
-else if (mode === "boundary" && arg && arg2) await boundary(arg.replace(/\/+$/, ""), arg2);
-else {
+else if (mode === "pivot" && arg) {
+  // writes a session: only to a scratch PIVOT (node scripts/start.mjs --scratch <dir>, then PIVOT_DATA_DIR=<dir>)
+  const { assertScratch } = await import(pathToFileURL(path.join(repo, "scripts/qa/scratch-guard.mjs")).href);
+  await assertScratch({ base: arg, dataDir: process.env.PIVOT_DATA_DIR });
+  await pivot(arg.replace(/\/+$/, ""));
+} else if (mode === "boundary" && arg && arg2) {
+  // needs a PIVOT with no token yet, so the token check is skipped; the rest still must say scratch
+  const { assertScratch } = await import(pathToFileURL(path.join(repo, "scripts/qa/scratch-guard.mjs")).href);
+  await assertScratch({ base: arg, dataDir: arg2, checkToken: false });
+  await boundary(arg.replace(/\/+$/, ""), arg2);
+} else {
   console.error(
     "Usage: node scripts/qa/preview-checks.mjs viewer | pivot <PIVOT url> | boundary <PIVOT url> <its data folder>",
   );
