@@ -4,6 +4,7 @@ import path from "node:path";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getAsset, readAssetBytes, saveAsset } from "./assets";
 import { expandHome, paths } from "./config";
+import { resolveWriteTarget, WriteTargetError } from "./write-target";
 import { getDb } from "./db/client";
 import { mockupDigest } from "./design";
 import {
@@ -80,7 +81,10 @@ export async function createBackup({ targetDir }: { targetDir?: string } = {}) {
   const assetIds = [...new Set(ra.map((r) => r.assetId))];
   const assetRows = assetIds.length ? await db.select().from(assets).where(inArray(assets.id, assetIds)) : [];
 
-  const root = path.join(folderFor(targetDir), `pivot-backup-${new Date().toISOString().replace(/[:.]/g, "-")}`);
+  const base = await resolveWriteTarget(targetDir).catch((err) => {
+    throw err instanceof WriteTargetError ? new BackupError(err.message) : err;
+  });
+  const root = path.join(base, `pivot-backup-${new Date().toISOString().replace(/[:.]/g, "-")}`);
   await fs.mkdir(path.join(root, "assets"), { recursive: true });
   const data: BackupData = {
     resources: live,

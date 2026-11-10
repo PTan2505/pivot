@@ -128,4 +128,35 @@ describe("export bundles stay in their own folder", () => {
         },
       );
   });
+
+  it("share and backup folders follow the same rules; `~name` isn't a path; a symlinked export folder isn't trusted", async () => {
+    const note = await resources.createResource({ type: "prompt", title: "Shared", content: "hello" });
+    const share = await import("../src/share");
+    const backup = await import("../src/backup");
+    for (const targetDir of [path.join(tmp, ".claude", "commands"), data, path.join(data, "sub"), "~nobody/x"]) {
+      await expect(share.createSharePackage([note.id], { targetDir })).rejects.toThrow(/hidden|data folder|absolute/);
+      await expect(backup.createBackup({ targetDir })).rejects.toThrow(/hidden|data folder|absolute/);
+      await expect(context.exportBundle({ targetDir, bundleName: "x", resourceIds: [note.id] })).rejects.toThrow(
+        /hidden|data folder|absolute/,
+      );
+    }
+    // positive controls: the default (PIVOT's export folder) and an ordinary folder
+    await expect(share.createSharePackage([note.id])).resolves.toBeTruthy();
+    await expect(backup.createBackup({ targetDir: path.join(tmp, "backups") })).resolves.toBeTruthy();
+    // a planted symlink in place of the export folder doesn't make a hidden folder writable
+    const { paths } = await import("../src/config");
+    const planted = path.join(tmp, ".planted");
+    await fs.mkdir(planted, { recursive: true });
+    await fs.rename(paths.exports(), path.join(tmp, "exports-moved"));
+    await fs.symlink(planted, paths.exports());
+    try {
+      await expect(
+        context.exportBundle({ targetDir: paths.exports(), bundleName: "x", resourceIds: [note.id] }),
+      ).rejects.toThrow(/isn't hidden/);
+      expect(await fs.readdir(planted)).toEqual([]);
+    } finally {
+      await fs.rm(paths.exports());
+      await fs.rename(path.join(tmp, "exports-moved"), paths.exports());
+    }
+  });
 });

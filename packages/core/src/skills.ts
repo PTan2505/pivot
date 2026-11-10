@@ -7,6 +7,7 @@ import { z } from "zod";
 import { pluginsDir, skillLockPath, skillsDir } from "./config";
 import { getDb } from "./db/client";
 import { resources, skillPacks } from "./db/schema";
+import { authorizeOwner, OwnerAuthError } from "./owner-approval";
 import { createResource, setResourceFields } from "./resources";
 import type { SkillPackDTO, SkillStatusDTO, SkillSyncState } from "./types";
 
@@ -450,8 +451,29 @@ function slugify(s: string) {
     .slice(0, 64);
 }
 
-/** Writes the app's version of a skill to ~/.claude/skills/<name>/SKILL.md. */
-export async function writeSkillToDisk(resourceId: string, { force = false } = {}) {
+/**
+ * How the owner proves a skill write: the owner passphrase, a single-use challenge from `issueSkillWriteChallenge`, and
+ * the hash of the content they saw. `bearer` is the request's Authorization header: any value (an agent's API token)
+ * is refused, because a skill in Claude Code's skills folder is loaded into every session as instructions.
+ */
+export interface OwnerProof {
+  bearer: string | null | undefined;
+  passphrase: string | null | undefined;
+  challenge: string | null | undefined;
+  contentHash: string;
+}
+
+/** The hash a skill-write challenge binds: of the app's current SKILL.md content. */
+export const skillContentHash = (content: string) => hashText(content);
+
+/**
+ * Writes the app's version of a skill to ~/.claude/skills/<name>/SKILL.md. Owner only (see OwnerProof): throws
+ * OwnerAuthError when the proof fails or the content changed since the owner saw it.
+ */
+export async function writeSkillToDisk(
+  resourceId: string,
+  { force = false, owner }: { force?: boolean; owner: OwnerProof },
+) {
   const db = await getDb();
   const [row] = await db.select().from(resources).where(eq(resources.id, resourceId)).limit(1);
   if (!row || row.type !== "skill") throw new Error("Skill not found.");
@@ -462,6 +484,20 @@ export async function writeSkillToDisk(resourceId: string, { force = false } = {
 
   const skillName = meta.skillName ?? slugify(frontmatter(row.content).name ?? row.title);
   if (!SKILL_NAME_RE.test(skillName)) throw new Error(`"${skillName}" is not a valid skill folder name.`);
+  // nothing is read from or written to disk before the owner is proven
+  authorizeOwner({
+    bearer: owner.bearer,
+    passphrase: owner.passphrase,
+    approval: {
+      purpose: "skill-write",
+      challenge: owner.challenge,
+      sessionId: "skill-write",
+      mockupId: resourceId,
+      digest: owner.contentHash,
+    },
+  });
+  if (owner.contentHash.toLowerCase() !== hashText(row.content))
+    throw new OwnerAuthError("The skill changed after you opened this dialog. Review it and save again.", 409);
 
   const existing = await findDiskSkill(skillName);
   if (
@@ -479,7 +515,17 @@ export async function writeSkillToDisk(resourceId: string, { force = false } = {
 
   const dir = existing?.realPath ?? path.join(/* turbopackIgnore: true */ skillsDir(), skillName);
   await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path.join(dir, "SKILL.md"), row.content, "utf8");
+  // never through a symlinked SKILL.md (it could point anywhere)
+  const fh = await fs.open(
+    path.join(dir, "SKILL.md"),
+    fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | fs.constants.O_NOFOLLOW,
+    0o644,
+  );
+  try {
+    await fh.writeFile(row.content, "utf8");
+  } finally {
+    await fh.close();
+  }
   const d = (await findDiskSkill(skillName))!;
   await setResourceFields(resourceId, { meta: { ...meta, ...diskMeta(d) } });
   return { path: path.join(d.dirPath, "SKILL.md") };

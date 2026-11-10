@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { getAsset, listResourceAssets, materializeAsset, readAssetBytes } from "./assets";
-import { dataDir, expandHome, paths, pluginsDir, skillsDir } from "./config";
+import { pluginsDir, skillsDir } from "./config";
+import { resolveWriteTarget, within } from "./write-target";
 import { getResourcesByIds } from "./resources";
 import type { SkillMeta } from "./skills";
 import { estimateImageTokens, estimateTextTokens, scaledImageSize, CLAUDE_MAX_IMAGE_EDGE } from "./tokens";
@@ -215,28 +216,6 @@ async function copyDir(src: string, dest: string) {
   }
 }
 
-/** Whether `p` is `root` or below it (path segments, never a string prefix). */
-function within(root: string, p: string) {
-  const rel = path.relative(root, p);
-  return rel === "" || (!path.isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${path.sep}`));
-}
-
-/** `p` with symlinks followed as far as it exists, then the rest as written (for a folder about to be created). */
-async function realish(p: string): Promise<string> {
-  const rest: string[] = [];
-  let cur = path.resolve(p);
-  for (;;) {
-    try {
-      return path.join(await fs.realpath(cur), ...rest.reverse());
-    } catch {
-      const parent = path.dirname(cur);
-      if (parent === cur) return path.resolve(p);
-      rest.push(path.basename(cur));
-      cur = parent;
-    }
-  }
-}
-
 /**
  * A skill's folder to copy into a bundle: only one PIVOT itself scans (the global skills folder or a plugin's), never a
  * path a resource's metadata names elsewhere. Null when it isn't one of those (only SKILL.md is then written).
@@ -264,17 +243,8 @@ const safeSkillName = (name: unknown, fallback: string) => {
  * passphrase live there).
  */
 export async function exportBundle(opts: ExportOptions) {
-  const raw = opts.targetDir.trim();
-  if (!raw.startsWith("~") && !path.isAbsolute(raw)) throw new Error("Choose an absolute folder path.");
-  const base = path.resolve(expandHome(raw));
-  // Where a bundle may go: PIVOT's own export folder, or any folder that isn't in the data folder (it could shadow
-  // PIVOT's files) or a hidden folder (~/.claude, ~/.ssh, .git…, where tools load configuration and commands).
-  const target = await realish(base);
-  if (!within(await realish(paths.exports()), target)) {
-    if (within(await realish(dataDir()), target)) throw new Error("Choose a folder outside PIVOT's data folder.");
-    if (target.split(path.sep).some((part) => part.startsWith(".")))
-      throw new Error("Choose a folder that isn't hidden (a folder whose name starts with a dot).");
-  }
+  // a real folder PIVOT may write into (see write-target.ts); everything below is written under it, never `targetDir`
+  const base = await resolveWriteTarget(opts.targetDir);
   await fs.mkdir(base, { recursive: true });
 
   const bundleSlug = slugify(opts.bundleName, "ui-context");

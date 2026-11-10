@@ -120,7 +120,16 @@ function recordFailure(now: number) {
 
 // ---- challenges ----------------------------------------------------------------------------------------------------
 
+/** What a challenge is for: approving a design version, or writing a skill into Claude Code's skills folder. */
+type Purpose = "approve" | "skill-write";
+interface Bind {
+  purpose?: Purpose;
+  sessionId: string;
+  mockupId: string;
+  digest: string;
+}
 interface Challenge {
+  purpose: Purpose;
   sessionId: string;
   mockupId: string;
   digest: string;
@@ -137,21 +146,36 @@ export function issueApprovalChallenge(
   for (const [k, c] of challenges) if (c.expires <= now) challenges.delete(k);
   while (challenges.size >= 200) challenges.delete(challenges.keys().next().value!);
   const challenge = crypto.randomBytes(24).toString("base64url");
-  challenges.set(challenge, { ...bind, digest: bind.digest.toLowerCase(), expires: now + CHALLENGE_TTL_MS });
+  challenges.set(challenge, {
+    ...bind,
+    purpose: "approve",
+    digest: bind.digest.toLowerCase(),
+    expires: now + CHALLENGE_TTL_MS,
+  });
   return { challenge, expiresAt: new Date(now + CHALLENGE_TTL_MS).toISOString() };
 }
 
+/**
+ * A single-use challenge for writing one skill to disk, bound to the skill and the hash of the content the owner is
+ * looking at, so a request can't be replayed, and content changed after the owner saw it isn't written.
+ */
+export function issueSkillWriteChallenge(bind: { resourceId: string; contentHash: string }, now = Date.now()) {
+  const c = issueApprovalChallenge(
+    { sessionId: "skill-write", mockupId: bind.resourceId, digest: bind.contentHash },
+    now,
+  );
+  challenges.get(c.challenge)!.purpose = "skill-write";
+  return c;
+}
+
 /** Uses up a challenge: true only for an unexpired one issued for exactly this session, version and digest. */
-function consumeChallenge(
-  challenge: string,
-  bind: { sessionId: string; mockupId: string; digest: string },
-  now: number,
-) {
+function consumeChallenge(challenge: string, bind: Bind, now: number) {
   const c = challenges.get(challenge);
   if (!c) return false;
   challenges.delete(challenge);
   return (
     c.expires > now &&
+    c.purpose === (bind.purpose ?? "approve") &&
     c.sessionId === bind.sessionId &&
     c.mockupId === bind.mockupId &&
     c.digest === bind.digest.toLowerCase()
@@ -172,7 +196,7 @@ export function authorizeOwner({
 }: {
   bearer: string | null | undefined;
   passphrase: string | null | undefined;
-  approval?: { challenge: string | null | undefined; sessionId: string; mockupId: string; digest: string };
+  approval?: Bind & { challenge: string | null | undefined };
   now?: number;
 }) {
   if (bearer)

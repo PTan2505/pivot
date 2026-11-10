@@ -33,6 +33,7 @@ import { Markdown } from "@/components/markdown";
 import { AddToCollection } from "@/components/selection-bar";
 import { PackField, SkillGuide } from "@/components/skill-guide";
 import { SKILL_STATE_LABEL, SKILL_STATE_TONE } from "@/components/skill-sync-panel";
+import { SkillWriteDialog } from "@/components/skill-write-dialog";
 import { SourceInfo } from "@/components/source-groups";
 import { TagsEditor } from "@/components/tags-editor";
 import { TypeIcon } from "@/components/type-icon";
@@ -434,21 +435,9 @@ function SkillBar({ resource, flush }: { resource: ResourceDetailDTO; flush: () 
   const status = statuses?.find((s) => s.resourceId === resource.id);
   const [busy, setBusy] = useState(false);
 
-  const write = async (force = false) => {
-    setBusy(true);
-    try {
-      await flush();
-      const r = await api<{ path: string }>(`/api/skills/${resource.id}/write`, { method: "POST", json: { force } });
-      toast.success(`Saved to ${r.path}`);
-      invalidate(resource.id);
-    } catch (err) {
-      if (err instanceof ApiError && err.data.conflict)
-        toast.error(err.message, { description: "Use “Overwrite disk” or “Use disk version”." });
-      else toast.error(err instanceof Error ? err.message : "Could not write skill");
-    } finally {
-      setBusy(false);
-    }
-  };
+  // writing to disk is owner only: the dialog asks for the owner passphrase (null while closed, else whether to force)
+  const [writing, setWriting] = useState<null | { force: boolean }>(null);
+  const write = (force = false) => setWriting({ force });
   const pull = async () => {
     setBusy(true);
     try {
@@ -513,6 +502,14 @@ function SkillBar({ resource, flush }: { resource: ResourceDetailDTO; flush: () 
           )
         )}
       </div>
+      <SkillWriteDialog
+        resourceId={resource.id}
+        force={!!writing?.force}
+        open={!!writing}
+        onOpenChange={(o) => !o && setWriting(null)}
+        flush={flush}
+        onWritten={() => invalidate(resource.id)}
+      />
     </div>
   );
 }
