@@ -2,7 +2,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
-import { dataDir } from "./config";
+import { assertTestService, dataDir } from "./config";
 
 export type StorageKind = "local" | "r2";
 
@@ -95,6 +95,7 @@ export interface R2Config {
 export function r2ConfigFromEnv(): R2Config | null {
   const { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_ENDPOINT } = process.env;
   if (!R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET || !(R2_ACCOUNT_ID || R2_ENDPOINT)) return null;
+  assertTestService("R2_ENDPOINT", R2_ENDPOINT);
   return {
     accountId: R2_ACCOUNT_ID ?? "",
     accessKeyId: R2_ACCESS_KEY_ID,
