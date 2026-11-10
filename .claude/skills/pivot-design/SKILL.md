@@ -230,6 +230,10 @@ Mockups are **temporary design prototypes**, not the implementation.
 ## 10. QA
 
 - Check the result in the browser against the approved direction, at desktop and phone widths, in the states that matter (empty, error, long content, keyboard focus).
+- **Against the approved version itself, layout and accessibility:**
+  - Open the approved version's stored HTML (`<PIVOT_URL>/api/design/mockups/<mockupId>`, the digest you built from) and the build at the same widths with reduced motion, and compare them side by side. Classify each difference as below.
+  - No sideways scroll at 390, 768 and 1440 px.
+  - Go through every control with the keyboard, and run axe-core when it's available. `scripts/qa/workflow-demo/workflow.e2e.ts` in the PIVOT repo shows one way to do each. Serious or critical findings are bugs.
 - **Motion** (standard or advanced): run motion QA as motion.md §9 says: a plan from the approved Motion block (its M-numbers), `scripts/motion-qa.mjs` against the build, then by hand what the script doesn't cover. Report each essential item as Pass, Fail or Not Verified with the report's path; the overall status is Pass only when every essential item passed. What you couldn't trigger or measure is Not Verified, never a pass; reduced motion checked by the script is browser emulation, and a real device is unverified unless the user checked it.
 - Fix what is a bug.
 - **Classify every other difference** by comparing it with the approved brief, the mockup and the approval's `direction` and `details`. A responsive adjustment can fall into any of the first three classes, so don't judge by how small it looks.

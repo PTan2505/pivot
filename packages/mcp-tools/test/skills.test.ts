@@ -93,6 +93,12 @@ describe("mockups in PIVOT and the decision watcher", () => {
     }
     expect(d).toContain("stop the watcher");
   });
+  it("QA compares the build with the approved version's stored HTML, checks sideways scroll and accessibility", () => {
+    expect(d).toContain("**Against the approved version itself, layout and accessibility:**");
+    expect(d).toContain("No sideways scroll at 390, 768 and 1440 px.");
+    expect(d).toContain("run axe-core when it's available");
+  });
+
   it("interactive versions open in the gated preview, whose script exists; the viewer is its fallback", () => {
     expect(fs.existsSync(path.join(root, ".claude/skills/pivot-design/scripts/preview.mjs"))).toBe(true);
     expect(d).toContain("node <skill>/scripts/preview.mjs <sessionId>");
