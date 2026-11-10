@@ -66,6 +66,29 @@ describe("the launcher fails closed", () => {
   }, 90_000);
 });
 
+describe("a scratch PIVOT is isolated", () => {
+  it("uses its own data, database, storage and Claude skill folders, whatever the shell has", async () => {
+    const dir = path.join(home, "isolated");
+    const r = await run(["--scratch", dir], {
+      PIVOT_LAUNCH_DRY_RUN: "1",
+      DATABASE_URL: "postgres://u:p@ep-real.neon.tech/db",
+      R2_ENDPOINT: "https://real.r2.cloudflarestorage.com",
+      CLAUDE_SKILLS_DIR: path.join(home, ".claude", "skills"),
+    });
+    expect(r.code).toBe(0);
+    const marker = JSON.parse(fs.readFileSync(path.join(dir, "pivot-scratch.json"), "utf8"));
+    expect(marker).toMatchObject({
+      scratch: true,
+      database: "pglite",
+      storage: "local",
+      claudeSkillsDir: path.join(dir, "claude", "skills"),
+      claudePluginsDir: path.join(dir, "claude", "plugins"),
+    });
+    expect(r.out).toMatch(/its own Claude skill folders/);
+    expect(fs.existsSync(path.join(home, ".claude"))).toBe(false);
+  }, 30_000);
+});
+
 describe("scripts that write check for a scratch PIVOT first", async () => {
   const { assertScratch } = await import(path.resolve(here, "../../../scripts/qa/scratch-guard.mjs"));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "scratch-guard-"));

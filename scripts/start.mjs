@@ -64,18 +64,38 @@ if (scratchAt >= 0) {
     if (dir === real || dir.startsWith(real + path.sep)) fail(`${dir} is (inside) your real data folder`);
   if (dir === root || dir.startsWith(root + path.sep)) fail("keep scratch data outside the repository");
   // empty values count as unset: no Neon, no R2, whatever the shell has
-  for (const k of ["DATABASE_URL", "R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"])
+  for (const k of [
+    "DATABASE_URL",
+    "R2_ACCOUNT_ID",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "R2_BUCKET",
+    "R2_ENDPOINT",
+  ])
     process.env[k] = "";
   process.env.PIVOT_DATA_DIR = dir;
+  // Claude Code's own folders too: a scratch PIVOT never reads or writes your real skills, plugins or skill lock
+  process.env.CLAUDE_SKILLS_DIR = path.join(dir, "claude", "skills");
+  process.env.CLAUDE_PLUGINS_DIR = path.join(dir, "claude", "plugins");
+  process.env.AGENTS_SKILL_LOCK = path.join(dir, "agents", ".skill-lock.json");
   process.env.PORT ||= "4400";
   if (process.env.PORT === "4321") fail("4321 is the real PIVOT's port");
   process.env.PIVOT_NO_OPEN = "1";
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(
     path.join(dir, "pivot-scratch.json"),
-    JSON.stringify({ scratch: true, database: "pglite", storage: "local", startedAt: new Date().toISOString() }),
+    JSON.stringify({
+      scratch: true,
+      database: "pglite",
+      storage: "local",
+      claudeSkillsDir: process.env.CLAUDE_SKILLS_DIR,
+      claudePluginsDir: process.env.CLAUDE_PLUGINS_DIR,
+      startedAt: new Date().toISOString(),
+    }),
   );
-  console.log(`› Scratch PIVOT: data in ${dir}, no .env, no Neon, no R2`);
+  console.log(`› Scratch PIVOT: data in ${dir}, no .env, no Neon, no R2, its own Claude skill folders`);
+  // tests: stop once the scratch environment is set, before installing, building or serving anything
+  if (process.env.PIVOT_LAUNCH_DRY_RUN === "1") process.exit(0);
 } else {
   loadEnv(path.join(root, ".env"));
 }

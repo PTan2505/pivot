@@ -31,7 +31,7 @@ its retention window), and R2 deletions of objects that had no asset row (the bu
 
 ## Guardrails
 
-- `node scripts/start.mjs --scratch <dir>`: no `.env`, `DATABASE_URL` and `R2_*` cleared, refuses `~/.pivot`,
+- `node scripts/start.mjs --scratch <dir>`: no `.env`, `DATABASE_URL` and `R2_*` cleared, Claude Code's skill and plugin folders moved inside `<dir>` (added after review: before, a scratch PIVOT still read `~/.claude/skills`), refuses `~/.pivot`,
   `~/.stan-bag`, the repository and port 4321; unknown arguments are refused before anything starts.
 - `scripts/qa/scratch-guard.mjs`: QA scripts refuse a server that isn't a marked scratch instance.
 - `.claude/launch.json` has a `pivot-scratch` config; agents use it, never `pivot`.

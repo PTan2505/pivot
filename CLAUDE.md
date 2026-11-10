@@ -54,7 +54,7 @@ pnpm mcp:build         # build the stdio MCP server into apps/mcp/dist (setup: a
 pnpm skill:install     # link the pivot-design / pivot-redesign skills and the pivot-specialist agent into ~/.claude
 ```
 
-Run `pnpm check` (format check, lint, typecheck, tests) before saying a change is done. To try the app without touching the real Neon database, R2 bucket or data folder, start a scratch PIVOT: `node scripts/start.mjs --scratch <tmp dir>` (port 4400; it never reads `.env`, refuses `~/.pivot` and port 4321), or the `pivot-scratch` launch configuration. Tests, demos and QA scripts never start or write to the real PIVOT: anything that writes to a PIVOT checks it first with `scripts/qa/scratch-guard.mjs`. Never start the `pivot` launch configuration for testing.
+Run `pnpm check` (format check, lint, typecheck, tests) before saying a change is done. To try the app without touching the real Neon database, R2 bucket or data folder, start a scratch PIVOT: `node scripts/start.mjs --scratch <tmp dir>` (port 4400; it never reads `.env`, keeps its own data and Claude skill folders, refuses `~/.pivot` and port 4321), or the `pivot-scratch` launch configuration. Tests, demos and QA scripts never start or write to the real PIVOT: anything that writes to a PIVOT checks it first with `scripts/qa/scratch-guard.mjs`. Never start the `pivot` launch configuration for testing.
 
 ## Hooks
 
