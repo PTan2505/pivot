@@ -271,8 +271,10 @@ describe("context & export", () => {
 async function asOwner(write: (typeof import("../src/skills"))["writeSkillToDisk"], id: string, force = false) {
   const owner = await import("../src/owner-approval");
   if (!owner.ownerPassphraseStatus().set) owner.setOwnerPassphrase("a test-only owner passphrase");
-  const contentHash = core.skills.skillContentHash((await core.resources.getResource(id))!.content ?? "");
-  const { challenge } = owner.issueSkillWriteChallenge({ resourceId: id, contentHash });
+  const r = (await core.resources.getResource(id))!;
+  const contentHash = core.skills.skillContentHash(r.content ?? "");
+  const binding = core.skills.skillWriteBinding(force, core.skills.skillFolderName(r), contentHash);
+  const { challenge } = owner.issueSkillWriteChallenge({ resourceId: id, binding });
   return write(id, {
     force,
     owner: { bearer: null, passphrase: "a test-only owner passphrase", challenge, contentHash },

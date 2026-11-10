@@ -156,14 +156,12 @@ export function issueApprovalChallenge(
 }
 
 /**
- * A single-use challenge for writing one skill to disk, bound to the skill and the hash of the content the owner is
- * looking at, so a request can't be replayed, and content changed after the owner saw it isn't written.
+ * A single-use challenge for writing one skill to disk, bound to the skill and to `binding` (skills.ts
+ * `skillWriteBinding`: overwrite or not, the target folder and the hash of the content the owner is looking at), so a
+ * request can't be replayed, and nothing else than what the owner saw is written.
  */
-export function issueSkillWriteChallenge(bind: { resourceId: string; contentHash: string }, now = Date.now()) {
-  const c = issueApprovalChallenge(
-    { sessionId: "skill-write", mockupId: bind.resourceId, digest: bind.contentHash },
-    now,
-  );
+export function issueSkillWriteChallenge(bind: { resourceId: string; binding: string }, now = Date.now()) {
+  const c = issueApprovalChallenge({ sessionId: "skill-write", mockupId: bind.resourceId, digest: bind.binding }, now);
   challenges.get(c.challenge)!.purpose = "skill-write";
   return c;
 }

@@ -48,10 +48,12 @@ beforeEach(async () => {
 async function skill(name: string, meta: Record<string, unknown> = {}) {
   return resources.createResource({ type: "skill", title: name, content: md(name), meta });
 }
-/** What the owner's page sends: a fresh challenge for this skill's stored content, and the passphrase. */
-async function proof(id: string, extra: Partial<import("../src/skills").OwnerProof> = {}) {
-  const contentHash = skills.skillContentHash((await resources.getResource(id))!.content ?? "");
-  const { challenge } = owner.issueSkillWriteChallenge({ resourceId: id, contentHash });
+/** What the owner's page sends: a fresh challenge for this skill's stored content and target, and the passphrase. */
+async function proof(id: string, extra: Partial<import("../src/skills").OwnerProof> = {}, force = false) {
+  const r = (await resources.getResource(id))!;
+  const contentHash = skills.skillContentHash(r.content ?? "");
+  const binding = skills.skillWriteBinding(force, skills.skillFolderName(r), contentHash);
+  const { challenge } = owner.issueSkillWriteChallenge({ resourceId: id, binding });
   return { bearer: null, passphrase: PASS, challenge, contentHash, ...extra };
 }
 /** Every file under the fake HOME, so a test can see that nothing else was written. */
@@ -93,7 +95,7 @@ describe("only the owner can write a skill to Claude Code's skills folder", () =
   it("a challenge works once, for one skill, for the content it was issued for, and only for skill writes", async () => {
     const a = await skill("challenge-a");
     const b = await skill("challenge-b");
-    const p = await proof(a.id);
+    const p = await proof(a.id, {}, true);
     await skills.writeSkillToDisk(a.id, { owner: p, force: true });
     // replay
     await expect(skills.writeSkillToDisk(a.id, { owner: p, force: true })).rejects.toMatchObject({ status: 409 });
@@ -111,7 +113,7 @@ describe("only the owner can write a skill to Claude Code's skills folder", () =
     const forApproval = owner.issueApprovalChallenge({
       sessionId: "skill-write",
       mockupId: b.id,
-      digest: (await proof(b.id)).contentHash,
+      digest: skills.skillWriteBinding(false, "challenge-b", (await proof(b.id)).contentHash),
     });
     await expect(
       skills.writeSkillToDisk(b.id, { owner: await proof(b.id, { challenge: forApproval.challenge }) }),
@@ -119,7 +121,7 @@ describe("only the owner can write a skill to Claude Code's skills folder", () =
     const { sessionId } = await design.saveDesignBrief({ title: "G", milestone: "initial", markdown: "## G" });
     await design.saveDesignMockups({ sessionId, mockups: [{ title: "V1", html: "<p>v1</p>" }] });
     const m = (await design.getDesignSession(sessionId))!.mockups[0];
-    const skillChallenge = owner.issueSkillWriteChallenge({ resourceId: m.id, contentHash: m.digest });
+    const skillChallenge = owner.issueSkillWriteChallenge({ resourceId: m.id, binding: m.digest });
     await expect(
       design.approveAsOwner({
         mockupId: m.id,
@@ -157,7 +159,29 @@ describe("only the owner can write a skill to Claude Code's skills folder", () =
     await fs.mkdir(path.join(skillsRoot, "linked"), { recursive: true });
     await fs.symlink(outside, path.join(skillsRoot, "linked", "SKILL.md"));
     const s = await skill("linked", { skillName: "linked" });
-    await expect(skills.writeSkillToDisk(s.id, { owner: await proof(s.id), force: true })).rejects.toThrow();
+    await expect(skills.writeSkillToDisk(s.id, { owner: await proof(s.id, {}, true), force: true })).rejects.toThrow();
     expect(await fs.readFile(outside, "utf8")).toBe("original");
+  });
+
+  it("the challenge names the target folder and whether it overwrites: neither can change after the owner saw them", async () => {
+    const s = await skill("bound-target");
+    const p = await proof(s.id);
+    // the target folder changes after the challenge (it can't through the API any more; here, directly)
+    await resources.updateResource(s.id, { meta: { skillName: "other-target" } });
+    await expect(skills.writeSkillToDisk(s.id, { owner: p })).rejects.toMatchObject({ status: 409 });
+    await expect(fs.access(path.join(skillsRoot, "other-target"))).rejects.toThrow();
+    // a challenge for a plain write can't be used to force an overwrite
+    const t = await skill("no-force");
+    await expect(skills.writeSkillToDisk(t.id, { owner: await proof(t.id), force: true })).rejects.toMatchObject({
+      status: 409,
+    });
+  });
+
+  it("the API can't set the metadata that aims a write or skips the conflict checks", () => {
+    const forged = {
+      content: "x",
+      meta: { skillName: "victim", diskHash: "abc", realPath: "/etc", readonly: false, whenToUse: "kept" },
+    };
+    expect(skills.withoutServerOwnedMeta(forged)).toEqual({ content: "x", meta: { whenToUse: "kept" } });
   });
 });

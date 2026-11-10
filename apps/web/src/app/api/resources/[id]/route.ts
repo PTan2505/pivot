@@ -1,3 +1,4 @@
+import { withoutServerOwnedMeta } from "@pivot/core/skills";
 import { getResource, trashResources, updateResource } from "@pivot/core/resources";
 import { body, HttpError, json, route, type IdParams } from "@/lib/server/http";
 
@@ -8,7 +9,7 @@ export const GET = route(async (_req: Request, { params }: IdParams) => {
 });
 
 export const PATCH = route(async (req: Request, { params }: IdParams) => {
-  const r = await updateResource((await params).id, await body(req));
+  const r = await updateResource((await params).id, withoutServerOwnedMeta(await body(req)));
   if (!r) throw new HttpError(404, "Resource not found.");
   return json(r);
 });

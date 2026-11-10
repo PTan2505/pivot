@@ -467,6 +467,45 @@ export interface OwnerProof {
 export const skillContentHash = (content: string) => hashText(content);
 
 /**
+ * Skill metadata only PIVOT itself sets, from what it finds on disk. The API (and so an agent with the token) can't set
+ * it: a forged `skillName` or `diskHash` would aim a write at another skill or skip the "changed on disk" check.
+ */
+export const SERVER_OWNED_SKILL_META = [
+  "skillName",
+  "dirPath",
+  "realPath",
+  "isSymlink",
+  "diskHash",
+  "files",
+  "syncedAt",
+  "origin",
+  "readonly",
+  "packId",
+] as const;
+export function withoutServerOwnedMeta<T extends { meta?: unknown }>(input: T): T {
+  if (!input?.meta || typeof input.meta !== "object") return input;
+  const meta = { ...(input.meta as Record<string, unknown>) };
+  for (const k of SERVER_OWNED_SKILL_META) delete meta[k];
+  return { ...input, meta };
+}
+
+/** Claude Code's skills folder, for showing where a write goes. */
+export const skillsDirPath = () => skillsDir();
+
+/** The folder name a skill is written to: its synced name, else from its frontmatter name or title. */
+export function skillFolderName(row: { content: string | null; title: string; meta: unknown }) {
+  const meta = (row.meta ?? {}) as SkillMeta;
+  return meta.skillName ?? slugify(frontmatter(row.content ?? "").name ?? row.title);
+}
+
+/**
+ * What a skill-write challenge is bound to: overwrite or not, the target folder and the content. The owner's dialog
+ * shows all three, so a write can't land in another folder, force an overwrite, or carry other content than approved.
+ */
+export const skillWriteBinding = (force: boolean, skillName: string, contentHash: string) =>
+  `${force ? "overwrite" : "write"}:${skillName}:${contentHash.toLowerCase()}`;
+
+/**
  * Writes the app's version of a skill to ~/.claude/skills/<name>/SKILL.md. Owner only (see OwnerProof): throws
  * OwnerAuthError when the proof fails or the content changed since the owner saw it.
  */
@@ -482,9 +521,9 @@ export async function writeSkillToDisk(
   const problems = validateSkillContent(row.content);
   if (problems.length) throw new Error(problems.join(" "));
 
-  const skillName = meta.skillName ?? slugify(frontmatter(row.content).name ?? row.title);
+  const skillName = skillFolderName(row);
   if (!SKILL_NAME_RE.test(skillName)) throw new Error(`"${skillName}" is not a valid skill folder name.`);
-  // nothing is read from or written to disk before the owner is proven
+  // nothing is read from or written to disk before the owner is proven; the challenge names the folder and the content
   authorizeOwner({
     bearer: owner.bearer,
     passphrase: owner.passphrase,
@@ -493,7 +532,7 @@ export async function writeSkillToDisk(
       challenge: owner.challenge,
       sessionId: "skill-write",
       mockupId: resourceId,
-      digest: owner.contentHash,
+      digest: skillWriteBinding(force, skillName, owner.contentHash),
     },
   });
   if (owner.contentHash.toLowerCase() !== hashText(row.content))

@@ -22,8 +22,15 @@ import { api, ApiError } from "@/lib/api";
  * as instructions. The dialog saves the editor first, then asks for the owner passphrase, with a single-use challenge
  * bound to exactly the content saved.
  */
+/** sha256 hex of text, as the server hashes a skill's content. */
+async function sha256(text: string) {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export function SkillWriteDialog({
   resourceId,
+  content,
   force,
   open,
   onOpenChange,
@@ -31,6 +38,8 @@ export function SkillWriteDialog({
   onWritten,
 }: {
   resourceId: string;
+  /** The content the editor shows: the challenge is refused if the stored content isn't exactly this. */
+  content: string;
   force: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -41,12 +50,17 @@ export function SkillWriteDialog({
   const [saving, setSaving] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const prepared = useQuery({
-    queryKey: ["skill-write-challenge", resourceId, attempt],
+    queryKey: ["skill-write-challenge", resourceId, force, attempt],
     queryFn: async () => {
-      await flush(); // the challenge binds the content as stored, so store the draft first
-      return api<{ ready: boolean; challenge?: string; contentHash?: string }>(
-        `/api/skills/${resourceId}/write-challenge`,
-      );
+      await flush(); // store the draft first; the server then checks the stored content is what this page shows
+      const hash = await sha256(content);
+      return api<{
+        ready: boolean;
+        challenge?: string;
+        contentHash?: string;
+        content?: string;
+        target?: string;
+      }>(`/api/skills/${resourceId}/write-challenge?hash=${hash}${force ? "&force=1" : ""}`);
     },
     enabled: open,
     gcTime: 0,
@@ -92,14 +106,19 @@ export function SkillWriteDialog({
             Claude Code loads skills in its skills folder into every session, so only you can put one there, never an
             agent.
             {force && " The file on disk was changed outside PIVOT; writing replaces those changes."}
-            {ready && (
-              <>
-                {" "}
-                Content <span className="font-mono">{ready.contentHash?.slice(0, 12)}</span>.
-              </>
-            )}
           </DialogDescription>
         </DialogHeader>
+        {ready && (
+          <div className="space-y-1.5">
+            <p className="text-[13px] text-ink-muted">
+              Writes <span className="font-mono [overflow-wrap:anywhere] text-ink">{ready.target}</span> (content{" "}
+              <span className="font-mono">{ready.contentHash?.slice(0, 12)}</span>), exactly this:
+            </p>
+            <pre className="max-h-56 overflow-auto rounded-[10px] bg-surface-raised p-3 font-mono text-xs whitespace-pre-wrap text-ink-secondary">
+              {ready.content}
+            </pre>
+          </div>
+        )}
         {prepared.error ? (
           <p role="alert" className="text-[13px] text-danger">
             {prepared.error.message}

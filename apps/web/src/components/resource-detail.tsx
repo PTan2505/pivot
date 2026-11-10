@@ -429,7 +429,15 @@ function ContentEditor({
   );
 }
 
-function SkillBar({ resource, flush }: { resource: ResourceDetailDTO; flush: () => Promise<void> }) {
+function SkillBar({
+  resource,
+  flush,
+  content,
+}: {
+  resource: ResourceDetailDTO;
+  flush: () => Promise<void>;
+  content: string;
+}) {
   const { data: statuses } = useSkillStatuses();
   const invalidate = useInvalidate();
   const status = statuses?.find((s) => s.resourceId === resource.id);
@@ -504,6 +512,7 @@ function SkillBar({ resource, flush }: { resource: ResourceDetailDTO; flush: () 
       </div>
       <SkillWriteDialog
         resourceId={resource.id}
+        content={content}
         force={!!writing?.force}
         open={!!writing}
         onOpenChange={(o) => !o && setWriting(null)}
@@ -630,7 +639,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
         <div className="min-w-0 space-y-5">
           {resource.reviewStatus === "needs_review" && <ReviewBanner id={resource.id} />}
           <Suggestions resourceId={resource.id} />
-          {draft.type === "skill" && <SkillBar resource={resource} flush={flush} />}
+          {draft.type === "skill" && <SkillBar resource={resource} flush={flush} content={draft.content ?? ""} />}
           {draft.type === "skill" && <SkillGuide meta={draft.meta} sourceUrl={draft.sourceUrl} onChange={change} />}
           {draft.type === "typography" && (
             <section className="space-y-3" aria-label="Palette">
