@@ -101,6 +101,19 @@ describe("export bundles stay in their own folder", () => {
     for (const f of got) expect(await fs.readFile(path.join(r.path, f), "utf8")).not.toContain(SECRET);
   });
 
+  it("PIVOT's own export folder (the default) works; hidden folders are refused", async () => {
+    const note = await resources.createResource({ type: "prompt", title: "Default", content: "hello" });
+    const { paths } = await import("../src/config");
+    // positive control: the export dialog's default, inside the data folder
+    await expect(
+      context.exportBundle({ targetDir: paths.exports(), bundleName: "x", resourceIds: [note.id] }),
+    ).resolves.toMatchObject({ fileCount: 2 });
+    for (const targetDir of [path.join(tmp, ".claude"), path.join(tmp, "project", ".git", "hooks")])
+      await expect(context.exportBundle({ targetDir, bundleName: "commands", resourceIds: [note.id] })).rejects.toThrow(
+        /isn't hidden/,
+      );
+  });
+
   it("an export can't target PIVOT's data folder or a folder inside it", async () => {
     const note = await resources.createResource({ type: "prompt", title: "Note", content: "hello" });
     for (const targetDir of [data, path.join(data, "sub")])

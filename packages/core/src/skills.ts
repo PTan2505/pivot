@@ -276,6 +276,8 @@ export async function scanDiskSkills(): Promise<DiskSkill[]> {
 
 async function findDiskSkill(skillName: string): Promise<DiskSkill | null> {
   if (!skillName.includes(":")) {
+    // one folder name inside the skills folder, never a path out of it
+    if (!SKILL_NAME_RE.test(skillName)) return null;
     const dirPath = path.join(skillsDir(), skillName);
     const dir = await readSkillDir(dirPath);
     if (!dir) return null;
