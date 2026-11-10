@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { absoluteAssetPath, getAsset, listResourceAssets } from "./assets";
-import { dataDir, expandHome, skillsDir } from "./config";
+import { dataDir, expandHome, paths, skillsDir } from "./config";
 import { getResourcesByIds } from "./resources";
 import type { SkillMeta } from "./skills";
 import { estimateImageTokens, estimateTextTokens, scaledImageSize, CLAUDE_MAX_IMAGE_EDGE } from "./tokens";
@@ -231,9 +231,14 @@ export async function exportBundle(opts: ExportOptions) {
   const raw = opts.targetDir.trim();
   if (!raw.startsWith("~") && !path.isAbsolute(raw)) throw new Error("Choose an absolute folder path.");
   const base = path.resolve(expandHome(raw));
-  // a new bundle folder is created under `base`; inside the data folder it could shadow the app's own files
-  if (within(await realish(dataDir()), await realish(base)))
-    throw new Error("Choose a folder outside PIVOT's data folder.");
+  // Where a bundle may go: the app's own export folder, or any folder that isn't in the data folder (it could shadow the
+  // app's files) or a hidden folder (~/.claude, ~/.ssh, .git…, where tools load configuration and commands).
+  const target = await realish(base);
+  if (!within(await realish(paths.exports()), target)) {
+    if (within(await realish(dataDir()), target)) throw new Error("Choose a folder outside PIVOT's data folder.");
+    if (target.split(path.sep).some((part) => part.startsWith(".")))
+      throw new Error("Choose a folder that isn't hidden (a folder whose name starts with a dot).");
+  }
   await fs.mkdir(base, { recursive: true });
 
   const bundleSlug = slugify(opts.bundleName, "ui-context");

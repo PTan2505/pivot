@@ -51,6 +51,8 @@ async function listFiles(root: string, rel = "", out: string[] = []): Promise<st
 }
 
 async function readDiskSkill(skillName: string): Promise<DiskSkill | null> {
+  // one folder name inside the skills folder, never a path out of it
+  if (!SKILL_NAME_RE.test(skillName)) return null;
   const dirPath = path.join(skillsDir(), skillName);
   try {
     const lst = await fs.lstat(dirPath);
