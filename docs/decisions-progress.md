@@ -40,6 +40,8 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
   - `SKILL.md`, `motion.md`, SPEC, DESIGN.md;
   - tests: `preview.test.mjs`, mockups, write-tools, design, skills.
 - Checks: in the PR.
+- Also fixed on the way: the decisions route answered 404 for every refused decision, so the agent read "not found" instead of the reason. It now answers 409 with the reason; 404 only for an unknown session.
+- End-to-end demo: `scripts/qa/workflow-demo/` runs the whole workflow on a synthetic project against a scratch PIVOT, with gates 1 and 2 as labelled TEST-ONLY stand-ins: 18 of 18 stages pass.
 - Not covered:
   - browsers other than Chromium;
   - DNS measured at a resolver;

@@ -1,0 +1,13 @@
+:root {
+  --paper: #f5efe6;
+  --ink: #231d19;
+  --muted: #5e534b;
+  --leaf: #2f4a3a;
+  --leaf-ink: #f5efe6;
+  --card: #ece3d6;
+  --line: #cdbfae;
+  --focus: #b5651d;
+  --radius: 18px;
+  --serif: Georgia, "Times New Roman", serif;
+  --sans: system-ui, sans-serif;
+}

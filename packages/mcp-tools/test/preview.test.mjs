@@ -203,7 +203,7 @@ try { window.open("about:blank"); } catch {}
     await page.click("[data-motion='reduce']");
     await page.frameLocator("iframe").locator("#b").click();
     expect(await page.frameLocator("iframe").locator("#m").textContent()).toBe("reduce");
-    expect(await page.textContent("#media")).toBe("This window: reduced motion");
+    await page.waitForFunction(() => document.getElementById("media")?.textContent === "This window: reduced motion");
     await page.click("[data-motion='no-preference']");
     await page.click("[data-width='desktop']");
   });
