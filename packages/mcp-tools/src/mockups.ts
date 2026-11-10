@@ -16,8 +16,11 @@ import path from "node:path";
 //   it, encoded traversal, NUL, backslashes, file: URLs, malformed percent-encoding, a symlink out, a hard link, a
 //   directory or device) fails the whole mockup with MockupRejected, and so does going over the 2 MB inlining budget.
 //   Nothing is stored, and errors name the reference as written, never a file's contents.
-// - Known gap: a process writing in the folder at the same time can swap a parent directory for a symlink and back
-//   between the checks and the open. The checks narrow that window; they don't close it.
+// - Known gap (F1, open; the owner decides whether to accept it): a process writing in the folder at the same time can
+//   swap a parent directory for a symlink and back between the checks and the open. The checks narrow that window;
+//   they don't close it (940 leaks in 4000 attempts against a tight swap loop). It matters when the agent is sandboxed
+//   and this MCP server is not; an unsandboxed agent can read those files itself. Only a pinned directory (cwd or fd)
+//   closes it, which needs OS-specific code that is deliberately not used here.
 // - Remote URLs, other URL schemes, scripts, frames and plugins are removed and listed in `dropped`. Local files that
 //   don't exist are listed in `missing`. Files inside the folder that can't be inlined (another type, a circular
 //   @import, one more than 4 levels deep) are left out and listed in `skipped`.
