@@ -7,7 +7,7 @@ import {
   TAG_KINDS,
   type DesignSessionDetailDTO,
 } from "@pivot/core/types";
-import { inlineMockup } from "./mockups";
+import { inlineMockup, MockupRejected } from "./mockups";
 import { canWrite, ToolError, type PivotSource, type PivotWriter } from "./source";
 import type { PivotTool, ToolResult } from "./tools";
 
@@ -127,7 +127,9 @@ const mockupsInput = {
         path: z
           .string()
           .optional()
-          .describe("Absolute path of the mockup's HTML file. Local CSS, images and fonts are inlined."),
+          .describe(
+            "Absolute path of the mockup's HTML file. Local CSS, images and fonts in its folder are inlined; a reference outside the folder fails the save.",
+          ),
         html: z.string().optional().describe("The mockup's HTML instead of a path, already self-contained."),
       }),
     )
@@ -140,12 +142,13 @@ const mockupsInput = {
 const saveDesignMockups: PivotTool<typeof mockupsInput> = {
   name: "save_design_mockups",
   title: "Save mockups to a design session",
-  description: `Stores a round of mockup versions (static HTML) in the design session, where the user compares them as tabs at desktop, tablet and phone width and can approve one with a note. Local stylesheets, images and fonts are inlined; scripts and remote files are removed (they don't load in PIVOT). Each call is a new round; the same set again returns the same round. Only while the session is exploring. Returns the page's link. ${NOT_IN_REPO}`,
+  description: `Stores a round of mockup versions (static HTML) in the design session, where the user compares them as tabs at desktop, tablet and phone width and can approve one with a note. Local stylesheets, images and fonts from the mockup's own folder are inlined (2 MB in all); a reference outside that folder fails the save and nothing is stored; scripts and remote files are removed (they don't load in PIVOT). Each call is a new round; the same set again returns the same round. Only while the session is exploring. Returns the page's link. ${NOT_IN_REPO}`,
   inputSchema: mockupsInput,
   async run(source, { sessionId, snapshotId, mockups }) {
     const w = writer(source);
     const dropped = new Set<string>();
     const missing = new Set<string>();
+    const skipped = new Set<string>();
     const versions = [];
     for (const [i, m] of mockups.entries()) {
       if ((m.path == null) === (m.html == null))
@@ -159,7 +162,14 @@ const saveDesignMockups: PivotTool<typeof mockupsInput> = {
           html = r.html;
           r.dropped.forEach((d) => dropped.add(d));
           r.missing.forEach((d) => missing.add(d));
-        } catch {
+          r.skipped.forEach((d) => skipped.add(d));
+        } catch (e) {
+          // Fail closed: one reference outside the mockup's folder (or over budget) and nothing in the round is saved.
+          if (e instanceof MockupRejected)
+            throw new ToolError(
+              "invalid_input",
+              `Version ${i + 1} was not saved: ${e.problems.join("; ")}. A mockup may only use files inside its own folder, by relative path.`,
+            );
           throw new ToolError("invalid_input", `Version ${i + 1}: can't read ${m.path}.`);
         }
       }
@@ -178,10 +188,18 @@ const saveDesignMockups: PivotTool<typeof mockupsInput> = {
       "The user can approve a version there, with a note; get_design_session then shows that approval with source owner.",
       dropped.size ? `Removed (scripts and remote files don't load in PIVOT): ${[...dropped].join(", ")}` : "",
       missing.size ? `Missing local files: ${[...missing].join(", ")}` : "",
+      skipped.size ? `Not inlined: ${[...skipped].join(", ")}` : "",
     ];
     return {
       content: [text(lines.filter(Boolean).join("\n"))],
-      structuredContent: { ...res, sessionId, url, dropped: [...dropped], missing: [...missing] },
+      structuredContent: {
+        ...res,
+        sessionId,
+        url,
+        dropped: [...dropped],
+        missing: [...missing],
+        skipped: [...skipped],
+      },
     };
   },
 };
