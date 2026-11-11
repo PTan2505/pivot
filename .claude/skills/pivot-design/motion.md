@@ -101,7 +101,9 @@ The user must be able to see each **essential** item before gate 2 (§6).
 - **Interactive preview (Advanced, or any essential CSS can't show).** Build only the top 1–2 directions as
   interactive prototypes, in the same scratch folder, and save them in the same `save_design_mockups` round as the
   static versions with `interactive: true`. Their scripts never run on PIVOT's page (it shows them without scripts and
-  labels them Interactive). Open them for the user with
+  labels them Interactive), so **all their content must show without scripts**: hide things for an entrance only from
+  a class the script adds (`document.documentElement.classList.add("js")`, then `.js .reveal { opacity: 0 }`), never
+  from plain CSS. Open them for the user with
   `node <skill>/scripts/preview.mjs <sessionId>` (Bash `run_in_background`; `--url` when PIVOT isn't at the default):
   - a separate Chromium window with tabs per version, Desktop / Tablet / Phone, **Motion: reduced** (browser
     emulation), Replay and Compare;

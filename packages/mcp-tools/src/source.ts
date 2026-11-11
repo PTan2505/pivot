@@ -1,4 +1,5 @@
 import type {
+  DesignCandidateDTO,
   CollectionDTO,
   DesignDecisionKind,
   DesignMilestone,
@@ -79,6 +80,30 @@ export interface PivotWriter {
     sessionId: string,
     input: { snapshotId?: string; mockups: { title: string; html: string; interactive?: boolean }[] },
   ): Promise<{ round: number; ids: string[]; created: boolean }>;
+  /**
+   * Gate 1: proposes references for a session (library ones by id, external pages by URL; PIVOT captures a preview of
+   * each external page in the background). Optional, so an older app makes the tool say so.
+   */
+  proposeReferences?(
+    sessionId: string,
+    candidates: {
+      resourceId?: string;
+      url?: string;
+      title?: string;
+      source?: string;
+      why: string;
+      take?: string;
+      avoid?: string;
+    }[],
+  ): Promise<{ candidates: DesignCandidateDTO[] }>;
+  listCandidates?(sessionId: string): Promise<DesignCandidateDTO[]>;
+  /** Records the user's pick, with their own words. */
+  selectReferences?(
+    sessionId: string,
+    input: { numbers: number[]; userWords: string },
+  ): Promise<{ selected: DesignCandidateDTO[] }>;
+  /** PIVOT's capture of an external candidate. */
+  getCandidatePreview?(candidateId: string): Promise<{ data: Buffer; mimeType: string } | null>;
   /** Where the user opens PIVOT, for links to a session page. */
   readonly appUrl?: string;
   /** Sets a session's status by hand (PATCH); the app refuses "approved" without an approval record. */

@@ -5,6 +5,7 @@ import {
   RESOURCE_TYPES,
   SUGGESTION_KINDS,
   TAG_KINDS,
+  type DesignCandidateDTO,
   type DesignSessionDetailDTO,
 } from "@pivot/core/types";
 import { inlineMockup, MockupRejected } from "./mockups";
@@ -266,6 +267,128 @@ const setDesignStatus: PivotTool<typeof statusInput> = {
   },
 };
 
+// ---- propose_references / select_references (gate 1) --------------------------------------------------------------
+
+const candidateText = (c: DesignCandidateDTO) =>
+  `${c.n}. ${c.title} — ${c.kind === "library" ? `library reference (id ${c.resourceId})` : `external, ${c.source}`}${
+    c.url ? ` — ${c.url}` : ""
+  }${c.selected ? " — PICKED by the user" : ""}\n   Why: ${c.why}${c.take ? `\n   Take: ${c.take}` : ""}${
+    c.avoid ? `\n   Avoid: ${c.avoid}` : ""
+  }${
+    c.kind === "external"
+      ? c.previewStatus === "ready"
+        ? "\n   Preview: captured by PIVOT"
+        : c.previewStatus === "failed"
+          ? `\n   Preview: none (${c.previewError})`
+          : "\n   Preview: still capturing"
+      : ""
+  }`;
+
+const proposeInput = {
+  sessionId: z.string().regex(UUID).describe("The design session (exploring)."),
+  candidates: z
+    .array(
+      z.object({
+        resourceId: z.string().regex(UUID).optional().describe("A library reference, from search_references."),
+        url: z
+          .string()
+          .url()
+          .optional()
+          .describe(
+            "An external page you found and checked is real (a web search, a gallery, a component catalog): the page itself, never a search-results page.",
+          ),
+        title: z.string().max(200).optional().describe("Defaults to the reference's title, or the page's host."),
+        source: z
+          .string()
+          .max(120)
+          .optional()
+          .describe('Where an external page was found, e.g. "web search", "land-book.com", "React Bits".'),
+        why: z.string().min(1).max(1000).describe("Why it fits this brief, from what you saw."),
+        take: z.string().max(1000).optional().describe("What to take from it."),
+        avoid: z.string().max(1000).optional().describe("What to leave or avoid."),
+      }),
+    )
+    .min(1)
+    .max(12)
+    .describe("Library references and external pages, in the order to show them."),
+};
+
+const PREVIEW_WAIT_MS = 120_000;
+
+const proposeReferences: PivotTool<typeof proposeInput> = {
+  name: "propose_references",
+  title: "Propose references for the user to pick (gate 1)",
+  description: `Puts the references you recommend on the design session's page in PIVOT, numbered, so the user can see them and pick: library references by id, and real external pages by URL. PIVOT captures its own preview of each external page (public http/https only) and returns those previews here so you can check each one is what you said; a page that can't be captured (blocked, login, timeout) is listed with the reason. External pages are NOT saved to the library (save_reference only if the user asks). Never invent a URL: propose only pages you found and opened. After this, show the user the numbered list with the session link and wait for their pick (gate 1); record it with select_references. ${NOT_IN_REPO}`,
+  inputSchema: proposeInput,
+  async run(source, { sessionId, candidates }) {
+    const w = writer(source);
+    if (!w.proposeReferences || !w.listCandidates)
+      throw new ToolError(
+        "not_supported",
+        "This PIVOT app can't hold proposed references yet (update and restart it).",
+      );
+    const { candidates: added } = await w.proposeReferences(sessionId, candidates);
+    const ids = new Set(added.map((c) => c.id));
+    // wait for PIVOT to finish capturing the external pages, so the user and you see the same previews
+    let current = added;
+    for (
+      const until = Date.now() + PREVIEW_WAIT_MS;
+      current.some((c) => c.previewStatus === "pending") && Date.now() < until;
+    ) {
+      await new Promise((r) => setTimeout(r, 2000));
+      current = (await w.listCandidates(sessionId)).filter((c) => ids.has(c.id));
+    }
+    const images = [];
+    for (const c of current.filter((c) => c.kind === "external" && c.previewStatus === "ready").slice(0, 8)) {
+      const img = await w.getCandidatePreview?.(c.id);
+      if (img) images.push({ type: "image" as const, data: img.data.toString("base64"), mimeType: img.mimeType });
+    }
+    const url = w.appUrl ? `${w.appUrl}/design/${sessionId}#references` : undefined;
+    const skipped = candidates.length - added.length;
+    const lines = [
+      `Proposed ${current.length} reference${current.length === 1 ? "" : "s"}${skipped ? ` (${skipped} already proposed, skipped)` : ""}:`,
+      ...current.map(candidateText),
+      url ? `The user sees them, with previews, at ${url}` : "",
+      "Previews of the external pages follow, in order. Check each matches what you wrote; if not, say so to the user.",
+      "Now show the user the numbered list and the link, and wait for their pick (gate 1). Record it with select_references, quoting their words.",
+    ];
+    return {
+      content: [text(lines.filter(Boolean).join("\n")), ...images],
+      structuredContent: { sessionId, url, candidates: current },
+    };
+  },
+};
+
+const selectInput = {
+  sessionId: z.string().regex(UUID).describe("The design session."),
+  numbers: z.array(z.number().int().min(1)).min(1).max(30).describe("The numbers the user picked."),
+  userWords: z
+    .string()
+    .min(1)
+    .max(2000)
+    .describe('The user\'s own words for the pick, quoted exactly, e.g. "2 and 5: the cards of 2, the type of 5".'),
+};
+
+const selectReferences: PivotTool<typeof selectInput> = {
+  name: "select_references",
+  title: "Record the user's pick of references (gate 1)",
+  description: `Records which proposed references the user picked, with their own words, on the session's page. Call it only with numbers the user gave you in this conversation; never pick for them (if they said "you choose", quote that). Exactly these become the picked ones. ${NOT_IN_REPO}`,
+  inputSchema: selectInput,
+  async run(source, { sessionId, numbers, userWords }) {
+    const w = writer(source);
+    if (!w.selectReferences)
+      throw new ToolError(
+        "not_supported",
+        "This PIVOT app can't hold proposed references yet (update and restart it).",
+      );
+    const { selected } = await w.selectReferences(sessionId, { numbers, userWords });
+    return {
+      content: [text([`Recorded the user's pick: "${userWords}"`, ...selected.map(candidateText)].join("\n"))],
+      structuredContent: { sessionId, selected },
+    };
+  },
+};
+
 // ---- get_design_session -----------------------------------------------------------------------------------------
 
 const sessionInput = {
@@ -313,6 +436,14 @@ function sessionText(s: DesignSessionDetailDTO) {
               .join(", ")}`,
         )
         .join(" | ")}`,
+    );
+  }
+  if (s.candidates?.length) {
+    const picked = s.candidates.filter((c) => c.selected);
+    lines.push(
+      "",
+      `Proposed references (gate 1): ${picked.length ? `the user picked ${picked.map((c) => c.n).join(", ")} ("${picked[0].selectedWords}")` : "not picked yet"}`,
+      ...s.candidates.map(candidateText),
     );
   }
   const last = s.snapshots.at(-1);
@@ -463,6 +594,8 @@ export const WRITE_TOOLS = [
   saveDesignMockups,
   setDesignStatus,
   getDesignSession,
+  proposeReferences,
+  selectReferences,
   suggestMetadata,
   annotateReference,
   saveReference,

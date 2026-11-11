@@ -165,20 +165,60 @@ describe("B · references (gate 1)", () => {
     );
   });
 
-  it("TEST-ONLY gate 1: the references the owner picked (fixture), then the brief is saved", async () => {
-    // TEST-ONLY: in the real workflow the agent stops here until the owner picks references in the chat.
-    const brief = fs.readFileSync(path.join(HERE, "brief.md"), "utf8");
-    const res = await call("save_design_brief", {
+  it("TEST-ONLY gate 1: the session opens at the requirements, references are proposed on its page, the pick is recorded", async () => {
+    const opened = await call("save_design_brief", {
       title: "Kettle & Leaf landing page (demo)",
       targetProject: "kettle-and-leaf-site",
       surface: "landing page",
+      milestone: "initial",
+      markdown: "## Requirements\n\nA landing page for a loose-leaf tea subscription (see brief.md).",
+    });
+    expect(opened.isError).toBeFalsy();
+    state.sessionId = (opened.structuredContent as { sessionId: string }).sessionId;
+    const before = (await (await fetch(`${BASE}/api/counts`)).json()) as Record<string, number>;
+    // a real external page, only when one is given (the live discovery route needs the network); never a guessed URL
+    const external = process.env.E2E_EXTERNAL_URL;
+    const proposed = await call("propose_references", {
+      sessionId: state.sessionId,
+      candidates: [
+        ...state.refIds.map((id, i) => ({ resourceId: id, why: `Synthetic reference ${i + 1}`, take: "structure" })),
+        ...(external ? [{ url: external, source: "E2E_EXTERNAL_URL", why: "A real page outside the library" }] : []),
+      ],
+    });
+    expect(proposed.isError).toBeFalsy();
+    const cands = (proposed.structuredContent as { candidates: { n: number; kind: string; previewStatus: string }[] })
+      .candidates;
+    expect(cands.map((c) => c.n)).toEqual(cands.map((_, i) => i + 1));
+    if (external) expect(cands.at(-1)).toMatchObject({ kind: "external" });
+    // external pages are never saved to the library
+    expect(await (await fetch(`${BASE}/api/counts`)).json()).toEqual(before);
+    // TEST-ONLY: in the real workflow the agent stops here until the owner picks, and quotes their words
+    const picked = await call("select_references", {
+      sessionId: state.sessionId,
+      numbers: [1, 2, 3],
+      userWords: "TEST-ONLY fixture pick: 1, 2 and 3",
+    });
+    expect(picked.isError).toBeFalsy();
+    const brief = fs.readFileSync(path.join(HERE, "brief.md"), "utf8");
+    const res = await call("save_design_brief", {
+      sessionId: state.sessionId,
+      title: "Kettle & Leaf landing page (demo)",
       milestone: "initial",
       markdown: brief,
       referenceIds: state.refIds,
     });
     expect(res.isError).toBeFalsy();
-    state.sessionId = (res.structuredContent as { sessionId: string }).sessionId;
-    note(`B · TEST-ONLY gate 1 fixture: all three references "picked"; brief saved, session ${state.sessionId}.`);
+    const s = (await call("get_design_session", { sessionId: state.sessionId })).structuredContent as {
+      candidates: { selected: boolean }[];
+    };
+    expect(s.candidates.filter((c) => c.selected)).toHaveLength(3);
+    note(
+      `B · Session ${state.sessionId} opened at the requirements; ${cands.length} references proposed on its page (${
+        external
+          ? `incl. external ${external}, preview ${cands.at(-1)!.previewStatus}`
+          : "library only: no E2E_EXTERNAL_URL"
+      }); library unchanged; TEST-ONLY gate 1 pick 1–3 recorded; brief saved.`,
+    );
   });
 
   it("production gates hold before any approval: no building, no approval without a version", async () => {

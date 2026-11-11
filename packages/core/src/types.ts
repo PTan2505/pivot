@@ -785,6 +785,28 @@ export interface DesignMockupDTO {
   createdAt: string;
 }
 
+/** A reference proposed for a design session; see `design_candidates`. */
+export interface DesignCandidateDTO {
+  id: string;
+  n: number;
+  kind: "library" | "external";
+  resourceId: string | null;
+  title: string;
+  url: string | null;
+  source: string;
+  why: string;
+  take: string;
+  avoid: string;
+  /** Where the page shows a preview: the library reference's cover, or PIVOT's capture of the external page. */
+  previewUrl: string | null;
+  previewError: string | null;
+  /** "pending" while PIVOT is still capturing an external page. */
+  previewStatus: "ready" | "pending" | "failed" | "none";
+  selected: boolean;
+  selectedWords: string | null;
+  createdAt: string;
+}
+
 export interface DesignSessionDetailDTO extends DesignSessionDTO {
   /** The approval that counts now (newest after the last return to exploring, unambiguous), or null: build only from it. */
   currentApprovalId: string | null;
@@ -792,6 +814,8 @@ export interface DesignSessionDetailDTO extends DesignSessionDTO {
   decisions: DesignDecisionDTO[];
   /** Every saved version, oldest round first. */
   mockups: DesignMockupDTO[];
+  /** The references proposed for the user to pick from (gate 1), by number. */
+  candidates: DesignCandidateDTO[];
 }
 
 export const SUGGESTION_KINDS = ["facet", "collection", "title", "description"] as const;

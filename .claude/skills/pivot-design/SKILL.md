@@ -7,27 +7,29 @@ description: Design or redesign an interface from the user's own PIVOT reference
 
 PIVOT is the user's library of saved UI references: screenshots of real websites (cover + full page) tagged with **page type**, **domain**, **style** and **pattern** facets, plus design **sources** (sites to browse) and **collections**. The `pivot` MCP server reads it, and stores the work of a design session:
 
-| Tool                     | Use it to                                                                                                         |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `list_facets`            | Learn the vocabulary once per task: which page types, domains, styles, patterns and collections exist.            |
-| `search_references`      | Find candidates by words and facets (by name), inside a collection or from a source.                              |
-| `get_reference`          | Read one candidate: link, description, the user's notes, facets, which screenshots exist.                         |
-| `get_reference_images`   | Look at it: the cover, and the full page in ~2,000-token slices (`fromSlice` to page on).                         |
-| `search_external`        | Outside the library: free component catalogs (Magic UI, React Bits, shadcn/ui) plus links to other sites' search. |
-| `save_design_brief`      | Save the brief in PIVOT at a milestone (`initial` opens the session, `approved`, `major_change`).                 |
-| `record_design_decision` | Record a change after approval, or a deviation found in QA. Never an approval: only the owner approves, in PIVOT. |
-| `save_design_mockups`    | Put a round of mockups on the session's page in PIVOT, where the user compares them and can approve one.          |
-| `set_design_status`      | Mark an approved session `building` when you start, and `done` when the build and QA are finished.                |
-| `get_design_session`     | Read a session (briefs, decisions, mockup rounds), to continue it or to read the user's approval made in PIVOT.   |
-| `suggest_metadata`       | Suggest facets, a collection, a title or a visual description for a reference you looked at.                      |
-| `annotate_reference`     | Add a short, dated agent note to a reference (the user's notes stay as they are).                                 |
-| `save_reference`         | Save a page to the library, only when the user asks for it.                                                       |
+| Tool                     | Use it to                                                                                                                                                  |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_facets`            | Learn the vocabulary once per task: which page types, domains, styles, patterns and collections exist.                                                     |
+| `search_references`      | Find candidates by words and facets (by name), inside a collection or from a source.                                                                       |
+| `get_reference`          | Read one candidate: link, description, the user's notes, facets, which screenshots exist.                                                                  |
+| `get_reference_images`   | Look at it: the cover, and the full page in ~2,000-token slices (`fromSlice` to page on).                                                                  |
+| `search_external`        | Outside the library: free component catalogs (Magic UI, React Bits, shadcn/ui) plus links to other sites' search.                                          |
+| `propose_references`     | Put the 6–10 references you recommend (library ids and real external pages) on the session's page, numbered; PIVOT captures previews of the external ones. |
+| `select_references`      | Record the user's pick of those numbers, in their own words (gate 1).                                                                                      |
+| `save_design_brief`      | Save the brief in PIVOT at a milestone (`initial` opens the session, `approved`, `major_change`).                                                          |
+| `record_design_decision` | Record a change after approval, or a deviation found in QA. Never an approval: only the owner approves, in PIVOT.                                          |
+| `save_design_mockups`    | Put a round of mockups on the session's page in PIVOT, where the user compares them and can approve one.                                                   |
+| `set_design_status`      | Mark an approved session `building` when you start, and `done` when the build and QA are finished.                                                         |
+| `get_design_session`     | Read a session (briefs, decisions, mockup rounds), to continue it or to read the user's approval made in PIVOT.                                            |
+| `suggest_metadata`       | Suggest facets, a collection, a title or a visual description for a reference you looked at.                                                               |
+| `annotate_reference`     | Add a short, dated agent note to a reference (the user's notes stay as they are).                                                                          |
+| `save_reference`         | Save a page to the library, only when the user asks for it.                                                                                                |
 
 The flow is **understand → search → inspect → shortlist (the user picks) → brief → design session → mockups → approval → build → QA**, in that order:
 
 - The brief is written and shown before any mockup, and the mockups illustrate its directions.
 - Saving it (§6) comes right after you show it, before the mockups.
-- The shortlist (§4) is the one pause before the brief: the user picks the references, unless they told you to choose.
+- The shortlist (§4) is the one pause before the brief (**gate 1**): the user picks the references, unless they told you to choose. The session is opened first (§1), so the proposed references, with previews, are on its page in PIVOT.
 - Showing the brief is not an approval gate: unless an open question blocks the mockups, carry on to them in the same turn. The approval gate is §8.
 
 **Nothing is built before the user approves a direction.** "Just build it" or "skip mockups" doesn't remove the approval: it means one mockup, or a one-paragraph direction, instead of several, and you still stop and wait for a yes.
@@ -78,6 +80,8 @@ Pin down, from the request and the codebase (ask only for what you can't infer):
 - hard constraints: platform, breakpoints, the existing layout it lives in, content that must appear;
 - **the motion level:** write `Motion: none | standard | advanced — <reason> (auto | set by you)` as [motion.md](motion.md) §2 says. The user's words override; none is the default and needs nothing more. For standard or advanced, follow motion.md through the brief, mockups, approval, build and QA.
 
+Then **open the design session** (full flow only): `save_design_brief` with `milestone: "initial"`, no `sessionId`, `targetProject`, `surface`, and a short `## Requirements` markdown (goal, audience, constraints, motion level, what you will search for). Keep its `sessionId`: the proposed references (§4) go on its page. The complete brief (§5) is saved later to the same session.
+
 ## 2. Search
 
 1. Call `list_facets` once per task, before your first general library search. Reuse its result for the rest of the task, including after a resume.
@@ -93,9 +97,9 @@ Pin down, from the request and the codebase (ask only for what you can't infer):
 
 - `search_external` with **generic UI words only** ("animated list", "pricing table"): never a client or product name, private copy, or text from the brief. Its direct results are real catalog items (component pages with licence and attribution); its "search pages on other sites" are **not references**: never cite one, offer it to the user to browse.
 - If the user has the official **21st.dev MCP** installed, you may use its search and inspiration tools. Never call its `generate` tool (it spends paid credits) and never fetch or install a component's code unless the user asks.
-- Use your own web search only when the user explicitly asks for external inspiration from the web, and only with the tools and plan limits they have.
+- **The web, for real pages** (`WebSearch`, and `WebFetch` to open a result), when the library and catalogs give fewer than 6 strong candidates, or the user asks for fresh inspiration. Search with generic words ("saas landing page dark hero", "pricing page design inspiration"), never a client name or private copy. Good places are galleries of real sites (land-book.com, lapa.ninja, saaslandingpage.com, godly.website, onepagelove.com, awwwards.com) and the sites they link to; Dribbble and Behance shots when the user wants concepts (they often block automated previews). Propose the page itself (a live site, or a shot's own page), never a search-results page, and only pages you actually saw in a result or fetched: never build or guess a URL. If web search isn't available to you, say so and continue with the library and catalogs.
 - **Never use paid sources' MCP tools or APIs** (Mobbin, Refero, Nicely Done, Savee…), even if they are installed: PIVOT is free-first. Name them as places to browse instead.
-- Nothing external is saved. `save_reference` only when the user asks.
+- Nothing external is saved to the library: `propose_references` keeps external pages with the session only. `save_reference` only when the user asks.
 
 ## 3. Inspect
 
@@ -104,24 +108,23 @@ Pin down, from the request and the codebase (ask only for what you can't infer):
 - Budget: about 12 images per task. Each costs ~2,000 tokens.
 - **Motion** (level standard or advanced): read each candidate's `motionEvidence` in `get_reference`, and look at keyframes (`which: "keyframes"`) only for the 1–2 references whose motion matters; they count toward the image budget. A screenshot never proves an animation: label motion evidence as [motion.md](motion.md) §3 says.
 - Screenshots have limits: an element cut between two captured screens can look half revealed, and pages behind a login only have the user's own view. Don't read meaning into those artefacts.
-- External references have no screenshot in PIVOT. Open the page only if you have a tool to (and the user is fine with it); otherwise judge from the catalog's title and description and mark it **metadata only**. Never describe how something looks unless you saw it.
+- External pages get a screenshot when you propose them: `propose_references` returns PIVOT's own capture of each, and you check it matches what you wrote (fix or drop the candidate if not). A page PIVOT couldn't capture (blocked, login, timeout) is listed with the reason: judge it from what you fetched, and mark it **metadata only**. Never describe how something looks unless you saw it.
 
 ## 4. Shortlist, and let the user pick
 
 **Show what you found, then stop for the user's pick.** This is a choice, not an approval: nothing is recorded, and no brief or mockup is made before the answer.
 
-1. **Show 6–10 candidates as a numbered table**, the best first. Include those the user named, marked "named by you". Columns:
-   - `#`;
-   - the title, linked to its PIVOT page (`<PIVOT_URL>/r/<id>`, default `http://127.0.0.1:4321`) so the user can look at it there;
-   - the site;
-   - its facets;
-   - one line on why it matches this request;
-   - what you looked at (cover / full page / metadata only).
+1. **Propose 6–10 candidates with `propose_references`**, the best first, library and external together (fewer only when there aren't that many real ones; never pad). Include those the user named, with "named by you" in `why`. For each: `why` (one line on why it matches this request), `take` and `avoid`. Then **show the same numbered table** in the chat with the session's link (`<PIVOT_URL>/design/<sessionId>#references`), where the user sees every preview:
+   - `#` (the number PIVOT gave it);
+   - the title, linked to its PIVOT page (`/r/<id>`) for a library reference, or to the page itself for an external one;
+   - the source (library, or where you found it);
+   - one line on why it matches;
+   - what you looked at (cover / full page / PIVOT preview / metadata only).
 2. **Order them by the criteria below,** and say in a line what you'd take from the strongest two or three.
-3. **Ask the user to pick,** for example "2, 5, 7: the table of 5, the cards of 2". Their picks, and what they liked in each, become the brief's references and Take column.
+3. **Ask the user to pick,** for example "2, 5, 7: the table of 5, the cards of 2", and **end your turn**. When they answer, record it with `select_references` (their numbers, and their words quoted exactly). Their picks, and what they liked in each, become the brief's references and Take column. Never pick for them, and never call `select_references` with numbers they didn't give.
 4. **Re-check the motion level** once their picks are known (motion.md §2): references can raise it, the user can lower it.
-5. **Skip the pause only when the user said so** ("you choose", "use the ones you think fit"). Then pick 2–4 yourself, and say which and why.
-6. **A thin library:** with fewer than 3 relevant candidates, say so, show what there is, and offer `search_external` (§2) before asking.
+5. **Skip the pause only when the user said so** ("you choose", "use the ones you think fit"). Then pick 2–4 yourself, say which and why, and record them with `select_references`, quoting those words.
+6. **A thin library:** with fewer than 3 relevant library candidates, say so, and fill the list from the catalogs and the web (§2) before asking.
 
 **How to judge candidates** (for the order, and for what to take or leave):
 
@@ -155,14 +158,14 @@ Leave out the **Component API** line for a page. When the motion level isn't non
 
 ## 6. Design session
 
-A design session starts with the first completed brief. It groups the chosen references, the brief, the mockups and the decisions for this piece of work. Small fixes don't get one.
+A design session starts at §1, with the requirements. It groups the proposed and chosen references, the brief, the mockups and the decisions for this piece of work. Small fixes don't get one.
 
 - Continuing earlier work? `get_design_session` (no id) lists sessions; read the matching one and keep its `sessionId`. **Read its status before doing anything:**
   - `abandoned`: the user stopped this work. Don't continue; ask whether to restore it.
   - `exploring` with an earlier approval: the user reopened it, or a major change was saved. The old approval no longer covers building, so show the direction again and wait for a new approval (§8).
   - `building` or `done`: carry on, or ask what's next.
   - In every case, a specialist already in the latest brief's Specialists ledger isn't run again for the same phase.
-- Save the brief with `save_design_brief` at three moments only: the **first completed brief**, right after you show it and before the mockups (`milestone: "initial"`, no `sessionId`: this opens the session; pass `targetProject` and `surface`), the **approved brief** (`approved`), and any **major change** after approval (`major_change`, with a `note` on what changed). Not on every small edit. Pass the ids of the references the brief uses.
+- Save the brief with `save_design_brief` at these moments only: the **requirements** at §1 (`milestone: "initial"`, no `sessionId`: this opens the session; pass `targetProject` and `surface`), the **first completed brief**, right after you show it and before the mockups (`milestone: "initial"`, with the `sessionId`), the **approved brief** (`approved`), and any **major change** after approval (`major_change`, with a `note` on what changed). Not on every small edit. Pass the ids of the library references the brief uses; the picked external ones are already on the session.
 - If a write fails or the tools aren't there (`read_only`, `unauthorized`, `app_unreachable`), tell the user in one line that the brief isn't saved in PIVOT, and why. Don't write it into the target project instead, and don't pretend it was saved.
 
 ## 7. Mockups
