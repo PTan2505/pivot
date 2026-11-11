@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Kettle &amp; Leaf: loose-leaf tea, monthly</title>
+    <link rel="stylesheet" href="styles/tokens.css" />
+    <link rel="stylesheet" href="styles/site.css" />
+    <script src="scripts/site.js" defer></script>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <a class="brand" href="#"><img src="logo.svg" alt="" width="32" height="32" />Kettle &amp; Leaf</a>
+        <nav class="links" aria-label="Main">
+          <a href="#teas">Teas</a><a href="#pricing">Pricing</a><a href="#">Journal</a>
+        </nav>
+        <button class="menu-button" id="menu-button" aria-controls="drawer" aria-expanded="false">Menu</button>
+      </header>
+      <main>
+        <section class="hero" id="hero">
+          <h1>Better tea, without the shop.</h1>
+          <p class="muted">
+            Three loose-leaf teas a month, picked by people who taste for a living. Pause or skip whenever you like.
+          </p>
+          <a class="cta" href="#pricing">Start my box</a>
+        </section>
+        <section class="pricing" id="pricing" aria-labelledby="pricing-h">
+          <h2 id="pricing-h">Pricing</h2>
+          <div class="switch">
+            <span>Monthly</span
+            ><button id="billing" role="switch" aria-checked="false" aria-label="Bill yearly"></button
+            ><span>Yearly, two months free</span>
+          </div>
+          <div class="plans">
+            <div class="plan">
+              <h3>Taster</h3>
+              <p>
+                <span class="amount" data-monthly="14" data-yearly="12">$14</span>
+                <span class="muted" id="per">a month</span>
+              </p>
+              <p>Two teas, 50 g each.</p>
+            </div>
+            <div class="plan">
+              <h3>Daily</h3>
+              <p><span class="amount" data-monthly="24" data-yearly="20">$24</span></p>
+              <p>Three teas, 100 g each.</p>
+            </div>
+          </div>
+        </section>
+        <section class="teas" id="teas" aria-labelledby="teas-h">
+          <h2 id="teas-h">This month’s teas</h2>
+          <div class="tabs" role="tablist" aria-label="Tea types">
+            <button role="tab" id="tab-green" aria-controls="panel-green" aria-selected="true">Green</button>
+            <button role="tab" id="tab-black" aria-controls="panel-black" aria-selected="false" tabindex="-1">
+              Black
+            </button>
+            <button role="tab" id="tab-herbal" aria-controls="panel-herbal" aria-selected="false" tabindex="-1">
+              Herbal
+            </button>
+          </div>
+          <div class="panel" role="tabpanel" id="panel-green" aria-labelledby="tab-green">
+            <p>A spring sencha from Shizuoka: grassy, sweet, best at 70 °C.</p>
+          </div>
+          <div class="panel" role="tabpanel" id="panel-black" aria-labelledby="tab-black" hidden>
+            <p>An Assam second flush: malty and round, strong enough for milk.</p>
+          </div>
+          <div class="panel" role="tabpanel" id="panel-herbal" aria-labelledby="tab-herbal" hidden>
+            <p>Lemon verbena and mint: bright, caffeine-free, good iced.</p>
+          </div>
+        </section>
+      </main>
+    </div>
+    <div class="scrim" id="scrim" hidden></div>
+    <nav class="drawer" id="drawer" aria-label="Menu" data-open="false">
+      <button id="close-menu">Close</button><a href="#teas">Teas</a><a href="#pricing">Pricing</a
+      ><a href="#">Journal</a>
+    </nav>
+  </body>
+</html>

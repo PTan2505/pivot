@@ -1,0 +1,59 @@
+<!doctype html><title>Pricing cards with switch</title
+><style>
+  body {
+    margin: 0;
+    font: 16px/1.5 system-ui;
+    background: #101418;
+    color: #e8eef3;
+    padding: 64px;
+  }
+  h2 {
+    font-size: 40px;
+    margin: 0 0 16px;
+  }
+  .sw {
+    display: inline-flex;
+    background: #1d242b;
+    border-radius: 999px;
+    padding: 4px;
+    margin-bottom: 32px;
+  }
+  .sw b {
+    padding: 8px 18px;
+    border-radius: 999px;
+  }
+  .sw b:first-child {
+    background: #e8eef3;
+    color: #101418;
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+  .card {
+    background: #1d242b;
+    border-radius: 16px;
+    padding: 28px;
+  }
+  .price {
+    font-size: 36px;
+    font-weight: 700;
+  }
+</style>
+<h2>Simple pricing</h2>
+<div class="sw"><b>Monthly</b><b>Yearly −20%</b></div>
+<div class="cards">
+  <div class="card">
+    <p>Starter</p>
+    <p class="price">$9</p>
+  </div>
+  <div class="card">
+    <p>Team</p>
+    <p class="price">$29</p>
+  </div>
+  <div class="card">
+    <p>Scale</p>
+    <p class="price">$79</p>
+  </div>
+</div>

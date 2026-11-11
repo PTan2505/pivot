@@ -77,7 +77,7 @@ export interface PivotWriter {
   /** Stores a round of self-contained mockup versions; the app refuses it unless the session is exploring. */
   saveDesignMockups(
     sessionId: string,
-    input: { snapshotId?: string; mockups: { title: string; html: string }[] },
+    input: { snapshotId?: string; mockups: { title: string; html: string; interactive?: boolean }[] },
   ): Promise<{ round: number; ids: string[]; created: boolean }>;
   /** Where the user opens PIVOT, for links to a session page. */
   readonly appUrl?: string;

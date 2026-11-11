@@ -169,6 +169,65 @@ describe("approvals are bound to the exact mockup content", () => {
     expect(rows.rows[0].d).toBe(design.mockupDigest(html, false));
   });
 
+  it("an interactive version stores its kind in its digest, approves the same way, and keeps static rounds as they were", async () => {
+    const { sessionId } = await design.saveDesignBrief({ title: "Live", milestone: "initial", markdown: "## Live" });
+    const html = "<button>Go</button><script>1</script>";
+    const one = await design.saveDesignMockups({
+      sessionId,
+      mockups: [
+        { title: "Still", html },
+        { title: "Live", html, interactive: true },
+      ],
+    });
+    const s = (await design.getDesignSession(sessionId))!;
+    expect(s.mockups.map((m) => [m.interactive, m.digest])).toEqual([
+      [false, design.mockupDigest(html, false)],
+      [true, design.mockupDigest(html, true)],
+    ]);
+    // the same set again is the same round; flipping the flag is a different round
+    expect(
+      await design.saveDesignMockups({
+        sessionId,
+        mockups: [
+          { title: "Still", html },
+          { title: "Live", html, interactive: true },
+        ],
+      }),
+    ).toEqual({
+      ...one,
+      created: false,
+    });
+    const flipped = await design.saveDesignMockups({
+      sessionId,
+      mockups: [
+        { title: "Still", html },
+        { title: "Live", html },
+      ],
+    });
+    expect(flipped.created).toBe(true);
+    // a static set saved without the flag keeps the round identity it had before the flag existed
+    expect(
+      await design.saveDesignMockups({
+        sessionId,
+        mockups: [
+          { title: "Still", html },
+          { title: "Live", html, interactive: false },
+        ],
+      }),
+    ).toEqual({
+      ...flipped,
+      created: false,
+    });
+    // the owner approves the interactive version by the digest the preview and the page show
+    await expect(design.approveDesignMockup(one.ids[1], "", design.mockupDigest(html, false))).rejects.toThrow(
+      /reload it before approving/,
+    );
+    await design.approveDesignMockup(one.ids[1], "The live one", design.mockupDigest(html, true).slice(0, 12));
+    expect((await design.getDesignSession(sessionId))!.decisions.at(-1)).toMatchObject({
+      binding: { mockupId: one.ids[1], digest: design.mockupDigest(html, true), status: "bound" },
+    });
+  });
+
   it("the owner's approval stores the version and the digest the page showed; a stale or wrong digest is refused", async () => {
     const { sessionId, ids, mockups } = await exploring("Owner", [
       { title: "One", html: "<p>1</p>" },

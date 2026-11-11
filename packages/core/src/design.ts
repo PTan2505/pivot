@@ -429,7 +429,8 @@ export const MOCKUP_LIMITS = { versions: 9, bytes: 2 * 1024 * 1024, title: 120 }
 export async function saveDesignMockups(input: {
   sessionId: string;
   snapshotId?: string;
-  mockups: { title: string; html: string }[];
+  /** `interactive` marks a prototype that runs its own scripts, only ever in the separate preview browser. */
+  mockups: { title: string; html: string; interactive?: boolean }[];
 }): Promise<{ round: number; ids: string[]; created: boolean }> {
   const { mockups } = input;
   if (mockups.length < 1 || mockups.length > MOCKUP_LIMITS.versions)
@@ -445,7 +446,10 @@ export async function saveDesignMockups(input: {
   if (!s) throw new DesignError(`No design session ${input.sessionId}.`);
   const digest = crypto
     .createHash("sha256")
-    .update(JSON.stringify(mockups.map((m) => [m.title.trim(), m.html])))
+    // static versions hash as before, so re-saving an existing static round still finds it
+    .update(
+      JSON.stringify(mockups.map((m) => (m.interactive ? [m.title.trim(), m.html, true] : [m.title.trim(), m.html]))),
+    )
     .digest("hex");
   const same = await db
     .select({ id: designMockups.id, round: designMockups.round })
@@ -484,8 +488,8 @@ export async function saveDesignMockups(input: {
         n: i + 1,
         title: m.title.trim(),
         html: m.html,
-        interactive: false,
-        digest: mockupDigest(m.html, false),
+        interactive: m.interactive === true,
+        digest: mockupDigest(m.html, m.interactive === true),
         roundDigest: digest,
       })),
     )

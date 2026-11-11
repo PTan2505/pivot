@@ -93,6 +93,22 @@ describe("mockups in PIVOT and the decision watcher", () => {
     }
     expect(d).toContain("stop the watcher");
   });
+  it("QA compares the build with the approved version's stored HTML, checks sideways scroll and accessibility", () => {
+    expect(d).toContain("**Against the approved version itself, layout and accessibility:**");
+    expect(d).toContain("No sideways scroll at 390, 768 and 1440 px.");
+    expect(d).toContain("run axe-core when it's available");
+  });
+
+  it("interactive versions open in the gated preview, whose script exists; the viewer is its fallback", () => {
+    expect(fs.existsSync(path.join(root, ".claude/skills/pivot-design/scripts/preview.mjs"))).toBe(true);
+    expect(d).toContain("node <skill>/scripts/preview.mjs <sessionId>");
+    expect(d).toContain("`interactive: true`");
+    expect(d).toContain("It can't approve anything itself.");
+    const motion = read(".claude/skills/pivot-design/motion.md");
+    expect(motion).toContain("**Interactive preview (Advanced, or any essential CSS can't show).**");
+    expect(motion).toContain("**Executable local preview (fallback):**");
+  });
+
   it("the local viewer is only a fallback, and its script exists", () => {
     expect(d).toContain("**Fallback:** use it instead of PIVOT");
     expect(d).toContain("viewer/make-viewer.mjs");
@@ -434,7 +450,8 @@ describe("motion is part of the design", () => {
   it("approval stays inside gate 2, with the Advanced rule and the exception", () => {
     expect(motion).toContain("There is no separate motion approval");
     expect(d).toContain("**Motion is approved here too, not in a separate step**");
-    expect(motion).toContain("**Every essential item in the executable local preview**");
+    expect(motion).toContain("**Every essential item in the interactive preview**");
+    expect(motion).toContain("previewed (pivot-interactive \\| local, digest <d>)");
     expect(motion).toContain("`Exception (owner):");
     expect(motion).toContain("don't call `set_design_status` with `building`");
   });

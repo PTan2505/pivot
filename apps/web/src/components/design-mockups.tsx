@@ -277,6 +277,11 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
             >
               <span className="font-mono tabular-nums opacity-70">{m.n}</span>
               {m.title}
+              {m.interactive && (
+                <span className="rounded-full bg-surface-raised px-1.5 text-[12px] text-ink-secondary">
+                  Interactive
+                </span>
+              )}
               {approved && (
                 <span className="flex items-center gap-1 rounded-full bg-success px-1.5 text-[12px] text-on-inverse">
                   <Check className="size-3" aria-hidden /> Approved
@@ -326,6 +331,13 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
         </p>
       )}
 
+      {current.interactive && (
+        <p className="text-[13px] text-ink-muted">
+          <b className="font-medium text-ink">Interactive version.</b> Its scripts don’t run on this page, so its
+          interactions and motion are missing here. Ask Claude to open the interactive preview: a separate browser
+          window that runs this exact version (same digest) with no network and no access to PIVOT.
+        </p>
+      )}
       <div id="mockup-panel" role="tabpanel" aria-label={`Version ${current.n}: ${current.title}`}>
         <Frame mockup={current} width={width} run={run} />
       </div>

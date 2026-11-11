@@ -340,6 +340,29 @@ describe("save_design_mockups", () => {
     expect(out).toMatch(/Removed .*app\.js/);
   });
 
+  it("keeps an interactive version's scripts, marks it, and points to the interactive preview", async () => {
+    await fs.writeFile(path.join(dir, "i.html"), `<button onclick="t()">T</button><script>function t(){}</script>`);
+    const { source, calls } = writerSource();
+    const res = await runTool(tool("save_design_mockups"), source, {
+      sessionId: ID,
+      mockups: [
+        { title: "Static", path: path.join(dir, "i.html") },
+        { title: "Live", path: path.join(dir, "i.html"), interactive: true },
+      ],
+    });
+    expect(res.isError).toBeFalsy();
+    const sent = calls.find((c) => c.method === "saveDesignMockups")!.args[1] as {
+      mockups: { title: string; html: string; interactive?: boolean }[];
+    };
+    expect(sent.mockups[0]).toEqual({ title: "Static", html: '<button onclick="t()">T</button>' });
+    expect(sent.mockups[1]).toEqual({
+      title: "Live",
+      html: '<button onclick="t()">T</button><script>function t(){}</script>',
+      interactive: true,
+    });
+    expect((res.content[0] as { text: string }).text).toMatch(/Interactive versions: 2\..*preview\.mjs 11111111-/);
+  });
+
   it("needs exactly one of path or html, an absolute path, and at most 9 versions", async () => {
     const { source } = writerSource();
     const run = (mockups: unknown[]) => runTool(tool("save_design_mockups"), source, { sessionId: ID, mockups });

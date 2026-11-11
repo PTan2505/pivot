@@ -98,8 +98,28 @@ The user must be able to see each **essential** item before gate 2 (§6).
   scroll-driven animations (`animation-timeline`) can show most Standard motion. Also draw the end states statically,
   so the version reads without motion. The session page has **Replay** (a fresh frame, so motion restarts with
   nothing left from the last run) and a line saying whether the browser has reduced motion on.
-- **Executable local preview (Advanced, or any essential CSS can't show).** Build only the top 1–2 directions as
-  interactive prototypes, in the same scratch folder, and run the local viewer with them marked interactive:
+- **Interactive preview (Advanced, or any essential CSS can't show).** Build only the top 1–2 directions as
+  interactive prototypes, in the same scratch folder, and save them in the same `save_design_mockups` round as the
+  static versions with `interactive: true`. Their scripts never run on PIVOT's page (it shows them without scripts and
+  labels them Interactive). Open them for the user with
+  `node <skill>/scripts/preview.mjs <sessionId>` (Bash `run_in_background`; `--url` when PIVOT isn't at the default):
+  - a separate Chromium window with tabs per version, Desktop / Tablet / Phone, **Motion: reduced** (browser
+    emulation), Replay and Compare;
+  - every version is fetched from PIVOT and checked against its digest first, and the window names each version's id
+    and digest, the same digest PIVOT shows next to **Approve this version**. One mismatch and it shows nothing
+    (exit 2);
+  - the window's only way out is motion QA's gate (only the preview's own origin; PIVOT is never reachable from it),
+    with WebRTC and DNS off; each version runs in a sandboxed frame that can't reach the window's controls, and the
+    preview serves only the checked versions from memory, never a file, each only with its own token (so one version
+    can't load another under its label) and only to its own address. It can't approve anything: the user approves
+    in PIVOT or in the chat, bound to the same digest.
+  - Tested (`packages/mcp-tools/test/preview.test.mjs`, Chromium headless shell): with the versions' own policy
+    switched off, the gate alone kept fetch, XHR, images, WebSocket, EventSource, forms, frame navigation, a loopback
+    alias, PIVOT's address and WebRTC from leaving, and `file://` from reading; a mockup couldn't reach the window's
+    page or its reduced-motion control, and a crashed window came back with the same checked versions. Not covered:
+    browsers other than Chromium, and DNS (the switches turn it off; it isn't measured).
+- **Executable local preview (fallback):** when PIVOT can't store the round or the preview can't start (no Chromium:
+  `pnpm setup:browser` in the PIVOT repo), run the local viewer with the prototypes marked interactive:
   `node <skill>/viewer/make-viewer.mjs <folder> --title "<surface>" --interactive <n,…>`.
   - Scripts must be inline or local files inside the folder (a library copied from the target's own
     `node_modules`, when its licence allows). Nothing is fetched: the viewer runs each version in a sandbox with no
@@ -135,11 +155,11 @@ The user must be able to see each **essential** item before gate 2 (§6).
 
 There is no separate motion approval: the user approves the direction **and** its motion at gate 2.
 
-| Level    | Before gate 2 can approve                                                                                                                                                         | Add to the approval's `details`, after the user's exact words                                                                                    |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| None     | Static mockups.                                                                                                                                                                   | –                                                                                                                                                |
-| Standard | Each **essential** item visible in CSS motion in PIVOT or in the local viewer, and seen running by you; details may be described.                                                 | `Motion: standard — previewed (pivot-css \| local, digest <d>) — essentials: <list>`                                                             |
-| Advanced | **Every essential item in the executable local preview**, seen running by you (until PIVOT can run interactive mockups). Screenshots, keyframes, recordings and text don't count. | `Motion: advanced — previewed (local, digest <d>) — essentials: <list> — reduced motion: <emulated \| OS setting, by the user \| not previewed>` |
+| Level    | Before gate 2 can approve                                                                                                                                                           | Add to the approval's `details`, after the user's exact words                                                                                                         |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| None     | Static mockups.                                                                                                                                                                     | –                                                                                                                                                                     |
+| Standard | Each **essential** item visible in CSS motion in PIVOT or in the local viewer, and seen running by you; details may be described.                                                   | `Motion: standard — previewed (pivot-css \| local, digest <d>) — essentials: <list>`                                                                                  |
+| Advanced | **Every essential item in the interactive preview** (`preview.mjs`, or the local viewer as fallback), seen running by you. Screenshots, keyframes, recordings and text don't count. | `Motion: advanced — previewed (pivot-interactive \| local, digest <d>) — essentials: <list> — reduced motion: <emulated \| OS setting, by the user \| not previewed>` |
 
 - **Exception.** If an essential item can't be previewed, say which one, why, and what the user would approve
   instead, in the gate-2 message itself (not as an extra step), and ask once. Only an explicit yes counts; record
