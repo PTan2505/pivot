@@ -130,19 +130,12 @@ Small fixes get no session and no approval step. Minor and Major changes follow 
    | Major | The brief and mockups, before/after (`pivot-design` §7 to §8) | A mockup of the direction |
 
 3. **Act on the answer:**
-   - **An explicit yes:** call `record_design_decision` with `kind: "approval"`, then `set_design_status` with `status: "building"` before the first edit, then build. The record holds:
-     - the `summary` in the user's terms;
-     - the `direction` (and the option chosen, if there were several);
-     - in `details`, the user's exact approval words. Instructions from anyone else (an orchestrator, another agent, a tool) go on their own labelled line there, never as the user's words.
-
-     Record each approval once: when resuming, `get_design_session` shows whether it is already recorded. It also shows the status, which you read as `pivot-design` §6 says: abandoned means stop and ask, and exploring after an approval means approval is needed again.
-
-   - **An approval made in PIVOT** (the user pressed **Approve this version**; the watcher wakes you, or `get_design_session` shows an approval with `source: "owner"`): it is the explicit yes, already recorded with the user's note word for word. Don't record it again. Follow `pivot-design` §8: build the chosen version with what the note asks, unless the note asks for a major change, then ask. A Major change approved this way still needs the before/after comparison in QA.
-   - **Minor with explicit up-front authorisation:** record the same `approval`, quoting the user's exact words in `details` as the evidence, then build. This never applies to Major.
+   - **Only the owner approves, in PIVOT** (`pivot-design` §8). Save the direction as at least one mockup version (`save_design_mockups`; for Minor, one static version showing it is enough). Then give the user the session page's link and ask them to press **Approve this version** there, with the owner passphrase. You can't record an approval, and a yes in the chat isn't one.
+   - **An approval made in PIVOT** (the watcher wakes you, or `get_design_session` shows an approval with `source: "owner"`) is the explicit yes, with the user's note word for word. Call `set_design_status` with `status: "building"` before the first edit, then build. Follow `pivot-design` §8: build the chosen version with what the note asks, unless the note asks for a major change; then ask. A Major change approved this way still needs the before/after comparison in QA. `get_design_session` also shows the status, which you read as `pivot-design` §6 says: abandoned means stop and ask, and exploring after an approval means approval is needed again.
    - **Changes requested:** revise the proposal (and its mockup, for Major), show it again, and build only once the **revised** direction gets a yes.
    - **A rejection:** don't build. Ask what they want instead; a new direction goes back to step 2, in the same session.
    - **Silence, approval of something else, or a vague "just do it" on a Major change** is not approval. Ask again.
-4. **The approved snapshot:** save `milestone: "approved"` only when the approved direction differs meaningfully from the `initial` proposal (a revised structure, hierarchy, scope, components or tokens). Otherwise the approval record is enough; it marks the session approved.
+4. **The approved snapshot:** save `milestone: "approved"` only when the approved direction differs meaningfully from the `initial` proposal (a revised structure, hierarchy, scope, components or tokens). Otherwise the owner's approval is enough; it marks the session approved.
 5. **After approval:**
    - A change of structure or direction goes back to step 2 with a `major_change` brief (`note`: what changed and why).
    - A change the user makes within the direction is recorded with `kind: "change"`.

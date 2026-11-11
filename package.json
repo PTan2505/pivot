@@ -22,7 +22,8 @@
     "format:check": "prettier --check .",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "mcp:build": "pnpm --filter @pivot/mcp build",
-    "skill:install": "node scripts/install-skill.mjs"
+    "skill:install": "node scripts/install-skill.mjs",
+    "owner:passphrase": "node scripts/owner-passphrase.mjs"
   },
   "devDependencies": {
     "lefthook": "^2.2.2",

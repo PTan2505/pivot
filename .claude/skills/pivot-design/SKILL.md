@@ -15,7 +15,7 @@ PIVOT is the user's library of saved UI references: screenshots of real websites
 | `get_reference_images`   | Look at it: the cover, and the full page in ~2,000-token slices (`fromSlice` to page on).                         |
 | `search_external`        | Outside the library: free component catalogs (Magic UI, React Bits, shadcn/ui) plus links to other sites' search. |
 | `save_design_brief`      | Save the brief in PIVOT at a milestone (`initial` opens the session, `approved`, `major_change`).                 |
-| `record_design_decision` | Record the user's approval, a change after approval, or a deviation found in QA.                                  |
+| `record_design_decision` | Record a change after approval, or a deviation found in QA. Never an approval: only the owner approves, in PIVOT. |
 | `save_design_mockups`    | Put a round of mockups on the session's page in PIVOT, where the user compares them and can approve one.          |
 | `set_design_status`      | Mark an approved session `building` when you start, and `done` when the build and QA are finished.                |
 | `get_design_session`     | Read a session (briefs, decisions, mockup rounds), to continue it or to read the user's approval made in PIVOT.   |
@@ -196,29 +196,25 @@ Mockups are **temporary design prototypes**, not the implementation.
 ## 8. Approval
 
 - Ask the user to pick, mix or change a direction, then **stop**. No production code until they explicitly approve one. Silence, or approval of something else, is not approval.
-- **Motion is approved here too, not in a separate step** (motion.md §6). For standard and advanced, the gate-2 message lists the essential motion items and where each can be seen. Advanced needs every essential item in the executable preview, and you must have seen each one run there yourself; a static version, screenshot or recording never stands in for it. If one can't be previewed, say so in the same message and ask once for an explicit exception. Without the preview or that yes, don't build. Add the `Motion: …` line (and any exception, word for word) to the approval's `details` after the user's words.
-- **An approval the user made in PIVOT** is an explicit approval. It is the approval record with `source: "owner"` that `get_design_session` shows, and the watcher (§7) prints it when it exits:
-  - Don't record it again; it already holds the version as `direction`, the user's note, word for word, as `details`, and the version's id and content digest as its `binding`.
-  - Read the session with `get_design_session` to confirm it, then treat the note as the user's instructions for the build: follow what it asks inside the chosen version (keep, drop or borrow a part from another version).
-  - If the note asks for a major change (a different structure or direction than the version shows), don't build: say what you understood and ask, as for a major change below.
+- **Only the owner approves, in PIVOT.** An approval is the session page's **Approve this version**, confirmed with the owner passphrase. PIVOT records it with `source: "owner"`, bound to that version's content digest. You can't record one: `record_design_decision` has no approval, and PIVOT refuses any approval that carries the API token.
+  - **When the user chooses in the chat** ("I choose version 3"), that is their pick, not the approval. Give them the session page's link (with `?round=`), name the version and its digest, and ask them to press **Approve this version** there. Add any note to the build in the dialog. Keep the watcher (§7) running: it wakes you when they approve.
+  - **The first time,** the dialog may say no owner passphrase is set. Tell the user to run `pnpm owner:passphrase` in the PIVOT folder, **in their own terminal**. Never ask for the passphrase, never type it, and never run that command yourself.
+  - **Without PIVOT** (`read_only`, `unauthorized`, `app_unreachable`, with the local viewer as fallback): there is no PIVOT approval. The user's explicit words in the chat approve that build, and PIVOT's session status stays as it is. Say so.
+- **Motion is approved here too, not in a separate step** (motion.md §6). For standard and advanced, the gate-2 message lists the essential motion items and where each can be seen. Advanced needs every essential item in the executable preview, and you must have seen each one run there yourself; a static version, screenshot or recording never stands in for it. If one can't be previewed, say so in the same message and ask once for an explicit exception. Without the preview or that yes, don't build. Give the user the `Motion: …` line (and any exception, in their words) to paste into their approval note.
+- **An approval the user made in PIVOT** is the explicit approval. It is the approval record with `source: "owner"` that `get_design_session` shows, and the watcher (§7) prints it when it exits:
+  - It already holds:
+    - the version, as `direction`;
+    - the user's note, word for word, as `details`;
+    - the version's id and content digest, as its `binding`.
+  - Read the session with `get_design_session` to confirm it. Treat the note as the user's instructions for the build: follow what it asks inside the chosen version (keep, drop or borrow a part from another version).
+  - If the note asks for a major change (a different structure or direction than the version shows), don't build. Say what you understood and ask, as for a major change below.
   - Otherwise tell the user in one line what you are building and from which note, then go straight to §9. They don't need to confirm in the chat.
-- **When the watcher exits for another reason:** `abandoned` means stop and say so; `timeout` means say you stopped waiting and that they can approve in PIVOT or reply here; an `approved` with `source: "agent"` is one you recorded yourself.
-- **An approval in the chat** while the watcher runs: record it as below, then stop the watcher (its task id) so it doesn't wake you again.
+- **When the watcher exits for another reason:** `abandoned` means stop and say so; `timeout` means say you stopped waiting and that they can approve in PIVOT whenever they're ready.
 - When they ask for changes, revise the brief or the mockups and ask again.
-- Once approved, `record_design_decision` with `kind: "approval"`, then `save_design_brief` with `milestone: "approved"`.
-- **Before building, check the binding:** if `get_design_session` shows the approval's `binding.status` as `changed` or `missing`, the approved content is no longer what PIVOT holds. Don't build; ask for approval again. `set_design_status` refuses `building` in that case too.
-  - The approval record holds:
-    - the summary in the user's terms;
-    - the direction;
-    - what was mixed in;
-    - open points;
-    - in `details`, the user's **exact approval words**.
-  - Instructions that reached you from anyone else (an orchestrator, another agent, a tool) go in `details` on their own labelled line. Never present them as the user's words.
-  - **Bind it to the version.** Once the session has mockups in PIVOT, every approval passes the `mockupId` of the version approved (from `get_design_session`), and the digest the user named as `mockupDigest` when they named one; PIVOT refuses an approval without it. For a mix, pass the version it starts from and describe the mix in `details`; for a local prototype, pass its static stand-in and name the prototype's viewer digest in `details` (motion.md §6). PIVOT stores the version's content digest with the approval and refuses a digest that isn't that version's. Only a session with no mockup at all is approved without one.
-  - Record an approval only after the user explicitly approved in this conversation (an approval made in PIVOT is already recorded).
-  - Record it once. When resuming, `get_design_session` shows whether it is already recorded.
+- Once approved, `save_design_brief` with `milestone: "approved"` when the approved direction differs from the brief (a mix, the note's changes).
+- **Before building, check the binding:** if `get_design_session` shows the approval's `binding.status` as `changed` or `missing`, the approved content is no longer what PIVOT holds. Don't build; ask for approval again. `set_design_status` refuses `building` in that case too, and without a current owner approval.
 - A change the user makes to an approved decision is `kind: "change"`.
-- **A major change after approval goes back here.** If the build needs a different structure, hierarchy or direction from what was approved, stop and ask, with what changed and why, and save the changed brief as `major_change` (the session then needs approving again). Small adjustments inside the approved direction (spacing, a wrapped label, a state the mockup didn't show) don't need a new approval.
+- **A major change after approval goes back here.** If the build needs a different structure, hierarchy or direction from what was approved, stop and ask, with what changed and why. Save the changed brief as `major_change`; the session then needs approving again, in PIVOT. Small adjustments inside the approved direction (spacing, a wrapped label, a state the mockup didn't show) don't need a new approval.
 
 ## 9. Build
 

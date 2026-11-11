@@ -1,3 +1,4 @@
+import { withoutServerOwnedMeta } from "@pivot/core/skills";
 import { z } from "zod";
 import { createResource, listResources, type ListFilters } from "@pivot/core/resources";
 import { SearchInputError, searchResources } from "@pivot/core/search";
@@ -81,6 +82,6 @@ export const GET = route(async (req: Request) => {
 });
 
 export const POST = route(async (req: Request) => {
-  const created = await createResource(await body(req));
+  const created = await createResource(withoutServerOwnedMeta(await body(req)));
   return json(created, { status: 201 });
 });

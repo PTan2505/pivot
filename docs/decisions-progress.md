@@ -16,6 +16,33 @@ Tracks [design-orchestrator-v2.md](design-orchestrator-v2.md). Each phase is aut
 | P1c   | Motion QA                              | Done (PR #66) |
 | P1b-1 | Approval bound to mockup content       | In review     |
 
+### Release hardening — the approval gate is the owner's (2026-11-10)
+
+- Status: In review (PR stacked on the P1b part 2 PR, which is stacked on PR #70).
+- **Problem found:** PIVOT had no owner identity. The approve route recorded an owner approval for any request that passed the proxy: the agent's API token, or forged same-origin headers. The decisions route let the token record approvals that unlocked building. A restore could bring in approvals from a file.
+- **Model now:**
+  - an owner passphrase, set once from the owner's terminal (`pnpm owner:passphrase`, never over HTTP), stored as a scrypt hash;
+  - approving needs the passphrase plus a single-use challenge bound to the session, version and digest;
+  - any request carrying the API token is refused;
+  - only owner approvals count for approved and building;
+  - agents can't record approvals; restore needs the passphrase;
+  - 5 wrong passphrases in 15 minutes lock owner actions for 15 minutes.
+- **Workflow changes:**
+  - a choice in the chat is a pick: the agent sends the user to PIVOT to approve;
+  - Minor redesigns save one version for the owner to approve;
+  - legacy agent approvals no longer unlock building.
+- **Checks:**
+  - 14 new core security tests;
+  - 10 of 10 mutations of the gate caught;
+  - the end-to-end demo, with an HTTP stage that tries every agent-side route to an approval.
+- **Found by the independent review and fixed (critical, from before this work, since `974b4a6`):** the export bundle took a skill's folder name and source folder from the resource's metadata, which the API token can write. So `skillName: "../.."` plus `realPath` wrote attacker-chosen files anywhere the user can write. That included replacing the owner passphrase's hash, which defeated the gate end to end (observed). Now:
+  - the folder name must be a plain name;
+  - every write stays inside the new bundle folder;
+  - files are copied only from the skill folders PIVOT scans;
+  - the data folder can't be a target.
+    Checks: 3 tests, 3 of 3 mutations caught, and the reviewer's attack now fails.
+- **Not covered:** a process running as the same OS user with an unrestricted shell (it can read the hash, edit the data folder or drive the browser). The owner's own first use is the remaining verification.
+
 ### P1b part 2 — Interactive preview (2026-11-10)
 
 - Status: In review (PR stacked on PR #70, the inliner containment fix; retarget to `dev` once #70 merges).

@@ -3,7 +3,7 @@
 import { Check, ExternalLink, Loader2, RotateCcw } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { DesignMockupDTO, DesignSessionDetailDTO } from "@pivot/core/types";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
@@ -108,30 +109,57 @@ function ApproveDialog({
 }) {
   const qc = useQueryClient();
   const [note, setNote] = useState("");
+  const [passphrase, setPassphrase] = useState("");
   const [saving, setSaving] = useState(false);
+  // A single-use challenge for this version and digest, fetched fresh for every attempt: `null` while loading, `false`
+  // when no owner passphrase is set yet.
+  const [attempt, setAttempt] = useState(0);
+  const prepared = useQuery({
+    queryKey: ["approval-challenge", mockup.id, mockup.digest, attempt],
+    queryFn: () =>
+      api<{ ready: boolean; challenge?: string }>(
+        `/api/design/mockups/${mockup.id}/approval-challenge?session=${sessionId}&digest=${mockup.digest}`,
+      ),
+    enabled: open,
+    gcTime: 0,
+    staleTime: Infinity,
+    retry: false,
+  });
+  const challenge = prepared.data ? (prepared.data.ready && prepared.data.challenge) || false : null;
   const approve = async () => {
+    if (!challenge) return;
     setSaving(true);
     try {
       const s = await api<DesignSessionDetailDTO>(`/api/design/mockups/${mockup.id}/approve`, {
         method: "POST",
-        // the digest of the copy this page shows: the approval is bound to exactly that content
-        json: { note, digest: mockup.digest },
+        // the digest of the copy this page shows, the session and a single-use challenge: the approval is bound to
+        // exactly that content, and only the owner passphrase makes it the owner's
+        json: { note, digest: mockup.digest, sessionId, challenge, passphrase },
       });
       qc.setQueryData(["design-session", sessionId], s);
       await qc.invalidateQueries({ queryKey: ["design-sessions"] });
       onOpenChange(false);
       setNote("");
+      setPassphrase("");
       toast.success(`Approved version ${mockup.n}`, {
         description: "A Claude Code session waiting on this starts building it.",
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not approve this version");
+      setAttempt((a) => a + 1); // each challenge works once
     } finally {
       setSaving(false);
     }
   };
   return (
-    <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (saving) return;
+        if (!o) setAttempt((a) => a + 1);
+        onOpenChange(o);
+      }}
+    >
       <DialogContent
         className="sm:max-w-lg"
         // the dialog has no Radix trigger: focus goes back to the button, or to the chosen version once it is approved
@@ -164,11 +192,34 @@ function ApproveDialog({
             placeholder="Keep the table from version 2."
           />
         </div>
+        {prepared.error ? (
+          <p role="alert" className="text-[13px] text-danger">
+            {prepared.error.message}
+          </p>
+        ) : challenge === false ? (
+          <p role="alert" className="text-[13px] text-ink-muted">
+            Approving needs your owner passphrase, so that only you can approve, never an agent. Set it once in a
+            terminal in the PIVOT folder: <span className="font-mono text-ink">pnpm owner:passphrase</span>, then open
+            this dialog again.
+          </p>
+        ) : (
+          <div className="space-y-1.5">
+            <Label htmlFor="approve-passphrase">Owner passphrase</Label>
+            <Input
+              id="approve-passphrase"
+              type="password"
+              autoComplete="current-password"
+              value={passphrase}
+              onChange={(e) => setPassphrase(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && passphrase && !saving && void approve()}
+            />
+          </div>
+        )}
         <DialogFooter>
           <Button variant="ghost" disabled={saving} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button disabled={saving} onClick={approve}>
+          <Button disabled={saving || !challenge || !passphrase} onClick={approve}>
             {saving ? <Loader2 className="animate-spin" /> : <Check />} Approve
           </Button>
         </DialogFooter>

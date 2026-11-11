@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { getAsset, listResourceAssets, materializeAsset, readAssetBytes } from "./assets";
-import { expandHome, skillsDir } from "./config";
+import { pluginsDir, skillsDir } from "./config";
+import { resolveWriteTarget, within } from "./write-target";
 import { getResourcesByIds } from "./resources";
 import type { SkillMeta } from "./skills";
 import { estimateImageTokens, estimateTextTokens, scaledImageSize, CLAUDE_MAX_IMAGE_EDGE } from "./tokens";
@@ -215,11 +216,35 @@ async function copyDir(src: string, dest: string) {
   }
 }
 
-/** Writes a self-contained bundle folder: context.md plus prompts, skills, rules… and copied assets. */
+/**
+ * A skill's folder to copy into a bundle: only one PIVOT itself scans (the global skills folder or a plugin's), never a
+ * path a resource's metadata names elsewhere. Null when it isn't one of those (only SKILL.md is then written).
+ */
+async function skillSource(realPath: unknown): Promise<string | null> {
+  if (typeof realPath !== "string" || !path.isAbsolute(realPath)) return null;
+  const real = await fs.realpath(realPath).catch(() => null);
+  if (!real) return null;
+  for (const root of [skillsDir(), pluginsDir()]) {
+    const r = await fs.realpath(root).catch(() => null);
+    if (r && real !== r && within(r, real)) return real;
+  }
+  return null;
+}
+
+/** A skill's folder name inside the bundle: one plain name, never a path; otherwise the resource's slug. */
+const safeSkillName = (name: unknown, fallback: string) => {
+  const n = String(name ?? "");
+  return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(n) && !n.includes("..") ? n : fallback;
+};
+
+/**
+ * Writes a self-contained bundle folder: context.md plus prompts, skills, rules… and copied assets. Everything goes into
+ * a new folder under `targetDir`, never outside it, and never into PIVOT's data folder (its database, token and owner
+ * passphrase live there).
+ */
 export async function exportBundle(opts: ExportOptions) {
-  const raw = opts.targetDir.trim();
-  if (!raw.startsWith("~") && !path.isAbsolute(raw)) throw new Error("Choose an absolute folder path.");
-  const base = path.resolve(expandHome(raw));
+  // a real folder PIVOT may write into (see write-target.ts); everything below is written under it, never `targetDir`
+  const base = await resolveWriteTarget(opts.targetDir);
   await fs.mkdir(base, { recursive: true });
 
   const bundleSlug = slugify(opts.bundleName, "ui-context");
@@ -258,10 +283,12 @@ export async function exportBundle(opts: ExportOptions) {
     // Text content → <exportDir>/<slug>.<ext>
     let fileRef: string | null = null;
     if (r.type === "skill") {
-      const skillName = String((meta as SkillMeta).skillName ?? slug);
+      const skillName = safeSkillName((meta as SkillMeta).skillName, slug);
       const dest = path.join(root, "skills", skillName);
-      const realPath = (meta as SkillMeta).realPath;
-      if (realPath && (await pathExists(realPath))) await copyDir(realPath, dest);
+      if (!within(path.join(root, "skills"), dest) || dest === path.join(root, "skills"))
+        throw new Error(`"${skillName}" isn't a skill folder name.`);
+      const source = await skillSource((meta as SkillMeta).realPath);
+      if (source) await copyDir(source, dest);
       await fs.mkdir(dest, { recursive: true });
       await fs.writeFile(path.join(dest, "SKILL.md"), r.content, "utf8");
       fileRef = `skills/${skillName}/SKILL.md`;

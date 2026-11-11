@@ -28,6 +28,13 @@ afterAll(async () => {
   await fs.rm(tmp, { recursive: true, force: true });
 });
 
+/**
+ * Records a decision as the tests of the approval rules need it: an approval is recorded as the owner's, the only kind
+ * that counts (in the app it comes from approveAsOwner, after the owner passphrase).
+ */
+const recordAs = (input: Parameters<typeof design.recordDesignDecision>[0]) =>
+  design.recordDesignDecision(input.kind === "approval" ? { source: "owner", ...input } : input);
+
 describe("design sessions", () => {
   it("opens a session with the first brief, keeps snapshots and decisions, and asks again after a major change", async () => {
     await expect(design.saveDesignBrief({ title: "x", milestone: "approved", markdown: "# B" })).rejects.toThrow(
@@ -51,7 +58,7 @@ describe("design sessions", () => {
     });
     expect(again).toMatchObject({ snapshotId: first.snapshotId, duplicate: true });
 
-    await design.recordDesignDecision({ sessionId: first.sessionId, kind: "approval", summary: "A with B's columns" });
+    await recordAs({ sessionId: first.sessionId, kind: "approval", summary: "A with B's columns" });
     await design.saveDesignBrief({
       sessionId: first.sessionId,
       title: "",
@@ -84,7 +91,7 @@ describe("design sessions", () => {
     await design.setDesignSessionStatus(sessionId, "abandoned");
     expect((await design.getDesignSession(sessionId))!.status).toBe("abandoned");
 
-    await design.recordDesignDecision({ sessionId, kind: "approval", summary: "Direction 2" });
+    await recordAs({ sessionId, kind: "approval", summary: "Direction 2" });
     await design.setDesignSessionStatus(sessionId, "building");
     await design.setDesignSessionStatus(sessionId, "approved");
     expect((await design.getDesignSession(sessionId))!.status).toBe("approved");
@@ -137,7 +144,7 @@ describe("design sessions", () => {
       /session is approved/,
     );
     // agent records keep their source
-    await design.recordDesignDecision({ sessionId, kind: "change", summary: "Tighter rows" });
+    await recordAs({ sessionId, kind: "change", summary: "Tighter rows" });
     expect((await design.getDesignSession(sessionId))!.decisions.at(-1)!.source).toBe("agent");
   });
 });
@@ -249,14 +256,12 @@ describe("approvals are bound to the exact mockup content", () => {
     const a = await exploring("Agent A", [{ title: "A", html: "<p>a</p>" }]);
     const b = await exploring("Agent B", [{ title: "B", html: "<p>b</p>" }]);
     const base = { sessionId: a.sessionId, kind: "approval" as const, summary: "User approved A" };
-    await expect(design.recordDesignDecision({ ...base, mockupId: b.ids[0] })).rejects.toThrow(/No mockup version/);
-    await expect(design.recordDesignDecision({ ...base, mockupDigest: a.mockups[0].digest })).rejects.toThrow(
-      /needs the mockupId/,
+    await expect(recordAs({ ...base, mockupId: b.ids[0] })).rejects.toThrow(/No mockup version/);
+    await expect(recordAs({ ...base, mockupDigest: a.mockups[0].digest })).rejects.toThrow(/needs the mockupId/);
+    await expect(recordAs({ ...base, mockupId: a.ids[0], mockupDigest: b.mockups[0].digest })).rejects.toThrow(
+      /isn't the stored one/,
     );
-    await expect(
-      design.recordDesignDecision({ ...base, mockupId: a.ids[0], mockupDigest: b.mockups[0].digest }),
-    ).rejects.toThrow(/isn't the stored one/);
-    await design.recordDesignDecision({ ...base, mockupId: a.ids[0] });
+    await recordAs({ ...base, mockupId: a.ids[0] });
     expect((await design.getDesignSession(a.sessionId))!.decisions.at(-1)!.binding).toEqual({
       mockupId: a.ids[0],
       digest: a.mockups[0].digest,
@@ -297,6 +302,7 @@ describe("approvals are bound to the exact mockup content", () => {
     await d.insert(designDecisions).values({
       sessionId,
       kind: "approval",
+      source: "owner",
       summary: "inserted",
       createdAt: at,
       mockupId: binding.mockupId ?? null,
@@ -307,18 +313,18 @@ describe("approvals are bound to the exact mockup content", () => {
   it("an unbound approval can't be recorded once the session has mockups; without mockups it can, and builds", async () => {
     const { sessionId } = await exploring("Unbound", [{ title: "One", html: "<p>u</p>" }]);
     await expect(
-      design.recordDesignDecision({ sessionId, kind: "approval", summary: "Approved in chat", direction: "1" }),
+      recordAs({ sessionId, kind: "approval", summary: "Approved in chat", direction: "1" }),
     ).rejects.toThrow(/pass the mockupId/);
     expect((await design.getDesignSession(sessionId))!.status).toBe("exploring");
     // a change or a deviation needs no version
-    await design.recordDesignDecision({ sessionId, kind: "deviation", summary: "QA found a gap" });
+    await recordAs({ sessionId, kind: "deviation", summary: "QA found a gap" });
 
     const { sessionId: plain } = await design.saveDesignBrief({
       title: "Plain",
       milestone: "initial",
       markdown: "# P",
     });
-    await design.recordDesignDecision({ sessionId: plain, kind: "approval", summary: "One-paragraph direction" });
+    await recordAs({ sessionId: plain, kind: "approval", summary: "One-paragraph direction" });
     await design.setDesignSessionStatus(plain, "building");
     expect((await design.getDesignSession(plain))!.status).toBe("building");
   });
@@ -347,7 +353,7 @@ describe("approvals are bound to the exact mockup content", () => {
       { title: "B", html: "<p>B</p>" },
     ]);
     const approve = (n: number) =>
-      design.recordDesignDecision({ sessionId, kind: "approval", summary: `Approved ${n}`, mockupId: ids[n] });
+      recordAs({ sessionId, kind: "approval", summary: `Approved ${n}`, mockupId: ids[n] });
     await approve(0);
     await new Promise((r) => setTimeout(r, 5));
     await approve(1);
@@ -357,11 +363,9 @@ describe("approvals are bound to the exact mockup content", () => {
     await tamper(ids[1], "<p>B edited</p>");
     await expect(design.setDesignSessionStatus(sessionId, "building")).rejects.toThrow(/Ask for approval again/);
     // a newer approval that would be unbound, or names an unknown version, isn't recorded, so nothing older takes over
-    await expect(design.recordDesignDecision({ sessionId, kind: "approval", summary: "x" })).rejects.toThrow(
-      /mockupId/,
-    );
+    await expect(recordAs({ sessionId, kind: "approval", summary: "x" })).rejects.toThrow(/mockupId/);
     await expect(
-      design.recordDesignDecision({ sessionId, kind: "approval", summary: "x", mockupId: crypto.randomUUID() }),
+      recordAs({ sessionId, kind: "approval", summary: "x", mockupId: crypto.randomUUID() }),
     ).rejects.toThrow(/No mockup version/);
     await expect(design.setDesignSessionStatus(sessionId, "building")).rejects.toThrow(/Ask for approval again/);
     const { db: d, designMockups, eq } = await raw();
@@ -414,7 +418,7 @@ describe("approvals are bound to the exact mockup content", () => {
     await d.execute(
       sql`update design_sessions set approval_reset_at = now() + interval '1 second' where id = ${a.sessionId}`,
     );
-    await design.recordDesignDecision({
+    await recordAs({
       sessionId: a.sessionId,
       kind: "approval",
       summary: "after",
@@ -425,7 +429,7 @@ describe("approvals are bound to the exact mockup content", () => {
 
     // a reset made right after an approval ends it
     const b = await exploring("Before reset", [{ title: "A", html: "<p>br</p>" }]);
-    await design.recordDesignDecision({
+    await recordAs({
       sessionId: b.sessionId,
       kind: "approval",
       summary: "before",
@@ -443,11 +447,11 @@ describe("approvals are bound to the exact mockup content", () => {
       { title: "A", html: "<p>r1</p>" },
       { title: "B", html: "<p>r2</p>" },
     ]);
-    await design.recordDesignDecision({ sessionId: c.sessionId, kind: "approval", summary: "A", mockupId: c.ids[0] });
+    await recordAs({ sessionId: c.sessionId, kind: "approval", summary: "A", mockupId: c.ids[0] });
     await d.execute(
       sql`update design_decisions set created_at = now() + interval '1 second' where session_id = ${c.sessionId}`,
     );
-    await design.recordDesignDecision({ sessionId: c.sessionId, kind: "approval", summary: "B", mockupId: c.ids[1] });
+    await recordAs({ sessionId: c.sessionId, kind: "approval", summary: "B", mockupId: c.ids[1] });
     const sc = (await design.getDesignSession(c.sessionId))!;
     expect(sc.decisions.find((x) => x.id === sc.currentApprovalId)!.binding!.mockupId).toBe(c.ids[1]);
   });
@@ -474,6 +478,7 @@ describe("approvals are bound to the exact mockup content", () => {
     await d.insert(designDecisions).values({
       sessionId,
       kind: "approval",
+      source: "owner",
       summary: "approved 300 µs after the reset, in the same millisecond",
       mockupId: ids[0],
       mockupDigest: mockups[0].digest,

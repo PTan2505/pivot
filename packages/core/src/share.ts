@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getAsset, readAssetBytes } from "./assets";
-import { expandHome, paths } from "./config";
+import { resolveWriteTarget, WriteTargetError } from "./write-target";
 import { getResource } from "./resources";
 import { TAG_KIND_LABELS, TYPE_DEFS } from "./types";
 
@@ -26,12 +26,10 @@ export async function createSharePackage(
   }: { targetDir?: string; title?: string; includeNotes?: boolean; includePrivate?: boolean } = {},
 ) {
   if (!ids.length) throw new ShareError("Choose at least one reference.");
-  const raw = (targetDir ?? paths.exports()).trim();
-  if (!raw.startsWith("~") && !path.isAbsolute(raw)) throw new ShareError("Choose an absolute folder path.");
-  const root = path.join(
-    path.resolve(expandHome(raw)),
-    `pivot-share-${new Date().toISOString().replace(/[:.]/g, "-")}`,
-  );
+  const base = await resolveWriteTarget(targetDir).catch((err) => {
+    throw err instanceof WriteTargetError ? new ShareError(err.message) : err;
+  });
+  const root = path.join(base, `pivot-share-${new Date().toISOString().replace(/[:.]/g, "-")}`);
   await fs.mkdir(path.join(root, "images"), { recursive: true });
   const items: Record<string, unknown>[] = [];
   const left: { id: string; title: string; why: string }[] = [];

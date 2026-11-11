@@ -155,16 +155,17 @@ The user must be able to see each **essential** item before gate 2 (§6).
 
 There is no separate motion approval: the user approves the direction **and** its motion at gate 2.
 
-| Level    | Before gate 2 can approve                                                                                                                                                           | Add to the approval's `details`, after the user's exact words                                                                                                         |
+| Level    | Before gate 2 can approve                                                                                                                                                           | The line the user adds to their approval note in PIVOT                                                                                                                |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | None     | Static mockups.                                                                                                                                                                     | –                                                                                                                                                                     |
 | Standard | Each **essential** item visible in CSS motion in PIVOT or in the local viewer, and seen running by you; details may be described.                                                   | `Motion: standard — previewed (pivot-css \| local, digest <d>) — essentials: <list>`                                                                                  |
 | Advanced | **Every essential item in the interactive preview** (`preview.mjs`, or the local viewer as fallback), seen running by you. Screenshots, keyframes, recordings and text don't count. | `Motion: advanced — previewed (pivot-interactive \| local, digest <d>) — essentials: <list> — reduced motion: <emulated \| OS setting, by the user \| not previewed>` |
 
 - **Exception.** If an essential item can't be previewed, say which one, why, and what the user would approve
-  instead, in the gate-2 message itself (not as an extra step), and ask once. Only an explicit yes counts; record
-  `Exception (owner): "<exact words>" — essentials not previewed: <list>`. Without a preview or that yes, don't
-  build: don't call `set_design_status` with `building`.
+  instead, in the gate-2 message itself (not as an extra step), and ask once. Only an explicit yes counts: the user
+  adds `Exception (owner): "<their words>" — essentials not previewed: <list>` to their approval note in PIVOT. You
+  can't record an approval. Without a preview or that yes, don't build:
+  don't call `set_design_status` with `building`.
 - An approval made in PIVOT counts for motion only when the user could see the preview (the version itself, or the
   local preview of the version they approved) and the note doesn't reject the motion. A static version or its
   screenshot is never counted as the executable preview.

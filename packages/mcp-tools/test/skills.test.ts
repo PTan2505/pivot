@@ -86,12 +86,15 @@ describe("mockups in PIVOT and the decision watcher", () => {
     expect(d).toContain("run_in_background");
     expect(fs.existsSync(P(".claude/skills/pivot-design/scripts/wait-for-decision.mjs"))).toBe(true);
   });
-  it("an owner approval made in PIVOT isn't recorded again; a chat approval stops the watcher", () => {
-    for (const t of [d, r]) {
-      expect(t).toContain('source: "owner"');
-      expect(t).toContain("Don't record it again");
-    }
-    expect(d).toContain("stop the watcher");
+  it("only the owner approves, in PIVOT: the agent can't record an approval and sends the user there", () => {
+    for (const t of [d, r]) expect(t).toContain('source: "owner"');
+    expect(d).toContain("**Only the owner approves, in PIVOT.**");
+    expect(d).toContain("You can't record one");
+    expect(d).toContain("that is their pick, not the approval");
+    expect(d).toContain("Never ask for the passphrase, never type it, and never run that command yourself.");
+    expect(r).toContain("**Only the owner approves, in PIVOT**");
+    expect(r).toContain("You can't record an approval, and a yes in the chat isn't one.");
+    expect(r).not.toContain("Minor with explicit up-front authorisation");
   });
   it("QA compares the build with the approved version's stored HTML, checks sideways scroll and accessibility", () => {
     expect(d).toContain("**Against the approved version itself, layout and accessibility:**");
@@ -163,12 +166,10 @@ describe("approval provenance", () => {
     ["pivot-design", d],
     ["pivot-redesign", r],
   ] as const) {
-    it(`${f}: exact words, other instructions labelled, recorded once`, () => {
-      expect(t).toContain("exact approval words");
-      expect(t).toContain("labelled line");
-      expect(t).toContain("user's words");
+    it(`${f}: the owner's own note is the approval's words, read back with get_design_session`, () => {
+      expect(t).toMatch(/the user's note,? word for word/);
       expect(t).toContain("get_design_session");
-      expect(t).toMatch(/Record (it|each approval) once/);
+      expect(t).not.toMatch(/call `record_design_decision` with `kind: "approval"`/);
     });
   }
   it("specialists.md and SPEC agree", () => {
@@ -256,7 +257,7 @@ describe("shortlist, mockups and slop check", () => {
   });
   it("an approval is the user's message or their own click in PIVOT", () => {
     expect(d).toContain("an approval made there is the user's message");
-    expect(d).toContain("An approval the user made in PIVOT** is an explicit approval");
+    expect(d).toContain("**An approval the user made in PIVOT** is the explicit approval");
   });
   it("the slop check always runs and the critique stays text-only", () => {
     expect(d).toContain("Slop check.");
@@ -286,7 +287,7 @@ describe("session status", () => {
     expect(d).toContain("The old approval no longer covers building");
   });
   it("pivot-redesign: building after approval, done at QA, status read on resume", () => {
-    expect(r).toContain('then `set_design_status` with `status: "building"` before the first edit');
+    expect(r).toContain('Call `set_design_status` with `status: "building"` before the first edit');
     expect(r).toContain("**Close the session**");
     expect(r).toContain("abandoned means stop and ask");
   });
@@ -437,8 +438,8 @@ describe("motion is part of the design", () => {
     expect(motion).toContain("digest <d>");
     expect(d).toContain("a static version, screenshot or recording never stands in for it");
     expect(motion).toContain("**What an approval is bound to:**");
-    expect(d).toContain("**Bind it to the version.**");
-    expect(d).toContain("PIVOT refuses an approval without it");
+    expect(d).toContain("bound to that version's content digest");
+    expect(d).toContain("PIVOT refuses any approval that carries the API token");
     expect(d).toContain("**Before building, check the binding:**");
     expect(src).toContain("mockupId: z");
   });

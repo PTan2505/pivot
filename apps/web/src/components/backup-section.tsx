@@ -39,6 +39,7 @@ export function BackupSection() {
   const [busy, setBusy] = useState<string | null>(null);
   const [made, setMade] = useState<{ path: string; counts: Record<string, number> } | null>(null);
   const [dir, setDir] = useState("");
+  const [passphrase, setPassphrase] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
   const [conflicts, setConflicts] = useState<Choice>("keep");
   const [restored, setRestored] = useState<Record<string, number> | null>(null);
@@ -149,11 +150,23 @@ export function BackupSection() {
                   </Select>
                 </>
               )}
+              <Input
+                type="password"
+                autoComplete="current-password"
+                value={passphrase}
+                onChange={(e) => setPassphrase(e.target.value)}
+                aria-label="Owner passphrase"
+                placeholder="Owner passphrase (restoring brings back design approvals)"
+                className="max-w-md"
+              />
               <Button
                 disabled={!!busy}
                 onClick={async () => {
                   const res = await run("restore", () =>
-                    api<Record<string, number>>("/api/backup/restore", { method: "POST", json: { dir, conflicts } }),
+                    api<Record<string, number>>("/api/backup/restore", {
+                      method: "POST",
+                      json: { dir, conflicts, passphrase },
+                    }),
                   );
                   if (res) {
                     setRestored(res);

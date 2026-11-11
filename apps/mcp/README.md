@@ -22,10 +22,10 @@ Lets Claude Code search and look at your PIVOT library while you design and buil
 | Tool                     | What it does                                                                                                                                        |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `save_design_brief`      | Saves a design brief in PIVOT at a milestone: `initial` (opens a design session), `approved`, `major_change`. The same brief twice is one snapshot. |
-| `record_design_decision` | Records an `approval`, a `change` after approval, or a `deviation` found in QA.                                                                     |
+| `record_design_decision` | Records a `change` after approval or a `deviation` found in QA. Never an approval: only you approve, in PIVOT.                                      |
 | `save_design_mockups`    | Saves a round of 1–9 static mockups (files are inlined) on the session's page, where the user can approve one with a note. Only while exploring.    |
 | `set_design_status`      | Moves a session to `building` (only from approved) or `done` (only from building). The same status twice changes nothing. Never sets the others.    |
-| `get_design_session`     | Reads a session's briefs, decisions (with who approved: you in PIVOT, or the agent) and mockup rounds, or lists sessions (read-only).               |
+| `get_design_session`     | Reads a session's briefs, decisions (approvals are always yours, made in PIVOT) and mockup rounds, or lists sessions (read-only).                   |
 | `suggest_metadata`       | Suggests facets, a collection, a title or a visual description for a reference. They wait in the Inbox until you accept them.                       |
 | `annotate_reference`     | Appends a dated "agent" line to a reference's notes; your own text isn't changed.                                                                   |
 | `save_reference`         | Saves a page to the library (only when you ask): duplicates skipped, screenshots taken in the background, lands in the Inbox.                       |
@@ -81,7 +81,7 @@ Two skills in `.claude/skills` tell Claude how to use these tools:
   2. `list_facets`, search and look;
   3. a brief with attributed references, saved as `initial`;
   4. 2–3 mockups by default, saved to the session in PIVOT;
-  5. your explicit approval, in the chat or with **Approve this version** in PIVOT (Claude waits on it in the background and builds right away);
+  5. your explicit approval, with **Approve this version** in PIVOT and your owner passphrase (set it once in your own terminal with `pnpm owner:passphrase`) (Claude waits on it in the background and builds right away);
   6. build;
   7. QA.
 - **`pivot-redesign`** for existing UI. It sets a path and a risk level (small fix / Minor / Major) that decides the approval step. It also checks the impact on shared code, and compares the result with "before" screenshots.

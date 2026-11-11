@@ -7,6 +7,13 @@
       "runtimeArgs": ["start"],
       "port": 4321,
       "url": "http://127.0.0.1:4321"
+    },
+    {
+      "name": "pivot-scratch",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/start.mjs", "--scratch", "/tmp/pivot-scratch"],
+      "port": 4400,
+      "url": "http://127.0.0.1:4400"
     }
   ]
 }

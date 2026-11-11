@@ -106,7 +106,11 @@ describe("skill packs", () => {
 
     const plugin = all.find((r) => (r.meta as { skillName?: string }).skillName === "impeccable:impeccable")!;
     expect(plugin.meta).toMatchObject({ origin: "plugin", readonly: true, invocation: "/impeccable:impeccable" });
-    await expect(skills.writeSkillToDisk(plugin.id)).rejects.toThrow(/belongs to a plugin/);
+    await expect(
+      skills.writeSkillToDisk(plugin.id, {
+        owner: { bearer: null, passphrase: null, challenge: null, contentHash: "" },
+      }),
+    ).rejects.toThrow(/belongs to a plugin/);
   });
 
   it("imports guides, moves skills between packs and survives a re-sync", async () => {

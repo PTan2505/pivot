@@ -267,6 +267,20 @@ describe("context & export", () => {
   });
 });
 
+/** Writes a skill to disk the way the owner's page does: owner passphrase, a fresh challenge and the content hash. */
+async function asOwner(write: (typeof import("../src/skills"))["writeSkillToDisk"], id: string, force = false) {
+  const owner = await import("../src/owner-approval");
+  if (!owner.ownerPassphraseStatus().set) owner.setOwnerPassphrase("a test-only owner passphrase");
+  const r = (await core.resources.getResource(id))!;
+  const contentHash = core.skills.skillContentHash(r.content ?? "");
+  const binding = core.skills.skillWriteBinding(force, core.skills.skillFolderName(r), contentHash);
+  const { challenge } = owner.issueSkillWriteChallenge({ resourceId: id, binding });
+  return write(id, {
+    force,
+    owner: { bearer: null, passphrase: "a test-only owner passphrase", challenge, contentHash },
+  });
+}
+
 describe("skills", () => {
   const skillMd = (desc: string) => `---\nname: demo-skill\ndescription: ${desc}\n---\n\n# Demo\n`;
 
@@ -294,7 +308,7 @@ describe("skills", () => {
     // App edit is written back on request.
     await core.resources.updateResource(id, { content: skillMd("v3") });
     expect((await skillStatuses())[0].state).toBe("app-changed");
-    await writeSkillToDisk(id);
+    await asOwner(writeSkillToDisk, id);
     expect(await fs.readFile(path.join(dir, "SKILL.md"), "utf8")).toContain("v3");
     expect((await skillStatuses())[0].state).toBe("synced");
 
@@ -303,7 +317,7 @@ describe("skills", () => {
     await fs.writeFile(path.join(dir, "SKILL.md"), skillMd("disk"));
     [status] = await skillStatuses();
     expect(status.state).toBe("conflict");
-    await expect(writeSkillToDisk(id)).rejects.toThrow(/changed on disk/);
+    await expect(asOwner(writeSkillToDisk, id)).rejects.toThrow(/changed on disk/);
     await pullSkillFromDisk(id);
     expect((await core.resources.getResource(id))!.description).toBe("disk");
   });

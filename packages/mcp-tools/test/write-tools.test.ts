@@ -74,7 +74,9 @@ describe("PIVOT MCP write tools", () => {
     for (const name of ["save_design_brief", "record_design_decision", "save_design_mockups"]) {
       expect(tool(name).description).toMatch(/never write them into the project's repository/);
     }
-    expect(tool("record_design_decision").description).toMatch(/only after the user explicitly approved/);
+    expect(tool("record_design_decision").description).toMatch(
+      /can't record an approval: approvals are the owner's alone/,
+    );
     expect(tool("suggest_metadata").description).toMatch(/never change the reference by themselves/);
   });
 
@@ -111,7 +113,7 @@ describe("PIVOT MCP write tools", () => {
     expect((await runTool(tool("annotate_reference"), source, { id: "nope", note: "x" })).isError).toBe(true);
   });
 
-  it("record_design_decision binds an approval to a mockup version and its digest, and checks their form", async () => {
+  it("record_design_decision can't record an approval: it never reaches PIVOT", async () => {
     const { source, calls } = writerSource();
     const M = "22222222-3333-4444-8555-666666666666";
     const res = await runTool(tool("record_design_decision"), source, {
@@ -121,9 +123,23 @@ describe("PIVOT MCP write tools", () => {
       mockupId: M,
       mockupDigest: "0123456789ab",
     });
+    expect(res.isError).toBe(true);
+    expect(calls).toEqual([]);
+  });
+
+  it("record_design_decision records a deviation bound to a version, and checks the binding's form", async () => {
+    const { source, calls } = writerSource();
+    const M = "22222222-3333-4444-8555-666666666666";
+    const res = await runTool(tool("record_design_decision"), source, {
+      sessionId: ID,
+      kind: "deviation",
+      summary: "QA: the hero lost its entrance",
+      mockupId: M,
+      mockupDigest: "0123456789ab",
+    });
     expect(calls[0]).toMatchObject({
       method: "recordDesignDecision",
-      args: [ID, { kind: "approval", mockupId: M, mockupDigest: "0123456789ab" }],
+      args: [ID, { kind: "deviation", mockupId: M, mockupDigest: "0123456789ab" }],
     });
     expect(res.structuredContent).toMatchObject({ mockupId: M });
     for (const bad of [
@@ -135,7 +151,7 @@ describe("PIVOT MCP write tools", () => {
         (
           await runTool(tool("record_design_decision"), source, {
             sessionId: ID,
-            kind: "approval",
+            kind: "deviation",
             summary: "x",
             ...bad,
           })
