@@ -282,7 +282,7 @@ Mọi loại đều có các trường chung: `title`, `description`, `sourceUrl
     - **Vùng chạm:** nên ít nhất 44×44 CSS px khi làm được, nhất là nút chính trên điện thoại. 24×24 CSS px là mức tối thiểu của WCAG 2.2 AA (2.5.8), có ngoại lệ (đủ khoảng trống quanh vùng nhỏ, có nút tương đương, link trong đoạn văn…), là ngưỡng để đạt chuẩn chứ không phải kích thước để thiết kế theo. Không thu nhỏ vùng chạm đang có nếu chưa được duyệt.
     - Baseline chỉ cập nhật cho khác biệt có chủ đích; không commit ảnh so sánh nếu project chưa làm vậy.
   - Free-First như `pivot-design`; tài liệu thiết kế nằm trong PIVOT, không ghi vào project đích.
-- **Specialist tùy chọn cho hai skill thiết kế** (bổ sung 2026-11-02): `pivot-design` và `pivot-redesign` có thể hỏi ý kiến các skill khác đang cài trên máy (`ui-ux-pro-max`, `design-taste-frontend` tức Taste Skill v2, `impeccable`) theo một chính sách chung ở `.claude/skills/pivot-design/specialists.md`.
+- **Specialist cho hai skill thiết kế** (bổ sung 2026-11-02, cập nhật 2026-11-12): `pivot-design` và `pivot-redesign` hỏi ý kiến các skill khác đang cài trên máy (`ui-ux-pro-max`, `design-taste-frontend` tức Taste Skill v2, `impeccable`) theo một chính sách chung ở `.claude/skills/pivot-design/specialists.md`.
   - PIVOT vẫn điều phối. Specialist chỉ góp ý: không duyệt thay người dùng, không lưu tài liệu thiết kế, không tự sửa code.
   - **Thứ tự ưu tiên:** yêu cầu rõ ràng của người dùng → hướng dẫn của project đích → quy trình và quy tắc an toàn của PIVOT → brief và quyết định đã duyệt → gợi ý của specialist.
   - **Các quy tắc không được bỏ qua.** Hướng dẫn của project đích và specialist đều không được lặng lẽ vượt qua những quy tắc sau:
@@ -295,8 +295,8 @@ Mọi loại đều có các trường chung: `title`, `description`, `sourceUrl
 
     Khi hướng dẫn của project đích xung đột với một quy tắc trong số này, skill nêu rõ xung đột, không làm theo bên nào, và hỏi người dùng.
 
-  - **Điểm quyết định specialist** (bổ sung 2026-11-02): ngay sau bước hiểu yêu cầu (`pivot-design`) hoặc dòng phân loại (`pivot-redesign`), và một lần nữa ở bước QA, skill ghi một dòng `Specialists: none — <lý do>` hoặc `Specialists: <tên> — <giai đoạn> — <mục đích>`.
-    - "none" là lựa chọn hợp lệ.
+  - **Điểm quyết định specialist** (bổ sung 2026-11-02, cập nhật 2026-11-12): ngay sau bước hiểu yêu cầu (`pivot-design`) hoặc dòng phân loại (`pivot-redesign`), và một lần nữa ở bước QA, skill hiện cho người dùng trong chat một dòng `Specialists: none — <lý do>` hoặc `Specialists: <tên> — <giai đoạn> — <mục đích>`. Specialist chạy xong thì skill báo một dòng: nó khuyến nghị gì và có áp dụng không.
+    - "none" chỉ hợp lệ cho sửa nhỏ, hoặc khi người dùng nói không dùng specialist (trích nguyên lời). Project có design system hay token **không bao giờ** là lý do bỏ qua: token quyết định giao diện trông thế nào, không trả lời được cấu trúc có hợp lý không.
     - Chỉ ghi tên specialist sau khi đã đọc `specialists.md` và đọc được `SKILL.md` của nó.
     - Không nạp trước hướng dẫn của mọi specialist.
     - Đọc hướng dẫn của specialist không có nghĩa là đã chạy nó. Kết quả mỗi specialist được báo bằng đúng một nhãn: `ran (skill)`, `ran (script)`, `consulted` hoặc `unavailable`.
@@ -305,11 +305,12 @@ Mọi loại đều có các trường chung: `title`, `description`, `sourceUrl
     - Skill chính không bao giờ tự gọi specialist bằng tool Skill. Khi `pivot-specialist` không có (agent chỉ được nạp lúc mở session), skill chỉ đọc file hoặc chạy lệnh được phép và ghi đúng nhãn; không dùng agent khác hay tiến trình `claude -p` thay thế. Specialist không có (chưa cài, hoặc tool Skill từ chối) thì bỏ qua và ghi `unavailable`, không có gì thay cho nó.
     - Mỗi specialist chạy tối đa một lần mỗi giai đoạn. Brief lưu một dòng sổ ghi (ledger) cho mỗi specialist: tên, giai đoạn, nhãn chạy, kết luận (`adopted`, `partially adopted`, `rejected`, `not applicable`) và lý do. Khi tiếp tục session, specialist đã có trong ledger không chạy lại.
     - Xung đột giữa các specialist: specialist phụ trách lĩnh vực đó thắng (UX → `ui-ux-pro-max`, hình ảnh trang công khai → Taste, motion → specialist motion); accessibility và reduced motion luôn thắng gợi ý thẩm mỹ. Gợi ý trái với quyết định đã duyệt bị bác hoặc được đưa cho người dùng như một đề xuất thay đổi, không bao giờ áp dụng lặng lẽ.
-  - **Chọn specialist.** Chỉ dùng skill đã kiểm tra là có cài (đọc thẳng `SKILL.md`, không tin kết quả rỗng của Glob vì skill hay được cài qua symlink). Không cài, không cập nhật, không tải gì. Không dùng chỉ vì skill có cài. Mặc định:
-    - sửa nhỏ không dùng, trừ khi người dùng yêu cầu;
-    - mức Nhỏ dùng tối đa một specialist ở giai đoạn thiết kế; cái thứ hai chỉ khi giải quyết một vấn đề riêng mà cái đầu không làm được, và phải nêu lý do;
-    - mức Lớn có thể dùng nhiều specialist nếu vai trò bổ sung cho nhau;
-    - ở bước QA luôn có phần kiểm tra AI slop (`impeccable detect` nếu đã cài, checklist, critique cho mức Lớn); có thể thêm một specialist audit khác. Cả hai đều không tính vào giới hạn của giai đoạn thiết kế.
+  - **Chọn specialist** (cập nhật 2026-11-12: từ "tùy chọn" thành mặc định bắt buộc theo mức rủi ro). Chỉ dùng skill đã kiểm tra là có cài (đọc thẳng `SKILL.md`, không tin kết quả rỗng của Glob vì skill hay được cài qua symlink). Không cài, không cập nhật, không tải gì. Không thêm specialist chỉ vì nó có cài. Mặc định bắt buộc:
+    - sửa nhỏ: không dùng, trừ khi người dùng yêu cầu;
+    - mức Nhỏ: một specialist ở giai đoạn thiết kế, là cái phụ trách vấn đề (`ui-ux-pro-max` cho UX hay màn hình app, Taste cho giao diện trang công khai); cái thứ hai chỉ khi giải quyết một vấn đề riêng mà cái đầu không làm được, và phải nêu lý do;
+    - thiết kế mới (`pivot-design`) và mức Lớn: luôn chạy `ui-ux-pro-max` trên brief; thêm Taste nếu là trang web công khai; thêm `animate` khi motion ở mức standard hoặc advanced;
+    - ở bước QA luôn có phần kiểm tra AI slop (`impeccable detect` nếu đã cài, checklist, critique cho thiết kế mới và mức Lớn). Thiết kế mới và mức Lớn còn có một **audit `impeccable` qua `pivot-specialist`** (đọc file đã đổi, ảnh after và kết quả detector). Có thể thêm audit khác (Taste `lint.mjs`/`inspect.mjs` cho trang công khai). Các audit QA không tính vào mặc định của giai đoạn thiết kế;
+    - specialist bắt buộc mà không chạy được (chưa cài, tool Skill từ chối, hoặc session không có `pivot-specialist`) thì ghi `unavailable` (hoặc `consulted` nếu chỉ đọc file), không chặn công việc, và không có gì thay cho nó.
 
     Taste dành cho trang công khai. Với dashboard, trang admin hay màn hình app, chỉ dùng khi người dùng yêu cầu rõ: skill giải thích các quy tắc dễ xung đột, chờ xác nhận, rồi chỉ áp dụng phần phù hợp. Không bao giờ thay bằng biến thể Taste khác.
 

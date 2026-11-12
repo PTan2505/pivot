@@ -9,27 +9,27 @@ A redesign changes how something **that already exists** looks and is laid out. 
 
 **Design documents live in PIVOT, never in the target project.** Briefs, decisions and session notes are not written into the project's repository.
 
-**Specialists are optional.** Other installed skills can advise on Minor and Major redesigns:
+**Specialists review Minor and Major redesigns.** Other installed skills advise at set steps; they never approve anything:
 
 - `ui-ux-pro-max`: UX structure and patterns;
 - `design-taste-frontend`: visual direction, for public web pages only;
 - `impeccable`: a technical QA audit;
 - a motion specialist, when the change is about motion.
 
-You decide and run them yourself, through the `pivot-specialist` agent (`specialists.md` §1); the user doesn't invoke them. A specialist never replaces this skill's approval, design-system or impact rules.
+You run them yourself, through the `pivot-specialist` agent (`specialists.md` §1); the user doesn't invoke them. A specialist never replaces this skill's approval, design-system or impact rules.
 
-**Specialist checkpoint.** Right after the classification line (§0), write one line, and write it again at §6 for any QA audit beyond the slop check:
+**Specialist checkpoint.** Right after the classification line (§0), show the user one line in the chat, and again at §6 for QA:
 
-- `Specialists: none — <reason>`, or
-- `Specialists: <name> — <stage> — <purpose>`.
+- `Specialists: <name> — <stage> — <purpose>`, or
+- `Specialists: none — <reason>` (only as allowed below).
 
-Defaults by risk:
+Required defaults by risk (`specialists.md` §2):
 
 - **Small fix:** none, unless the user asks.
-- **Minor and Major:** decide explicitly from the problem, not from what is installed. "None" is a valid answer.
-  - **Minor:** at most one design-stage specialist by default.
-  - **Major:** several, when their jobs complement each other.
-- **QA audit:** decided separately.
+- **Minor:** one design-stage specialist, the one that owns the problem (`ui-ux-pro-max` for UX or an app screen, Taste for a public page's look).
+- **Major:** `ui-ux-pro-max` on the brief, always; plus Taste for a public web page; plus `animate` when motion changes. At QA, an `impeccable` audit through `pivot-specialist` after the slop check.
+- **"None" at Minor or Major** only when the user said not to use specialists (quote their words). The project's design system or tokens are never the reason: they decide how it looks, not whether the structure works.
+- A required specialist that can't run is reported as `unavailable` (or `consulted`) and doesn't block the work.
 
 Before naming a specialist:
 
@@ -170,7 +170,7 @@ If the write tools fail or the connection is read-only, say so in one line and s
 
 **Slop check** (Minor and Major): always run `pivot-design` §10's slop check on the changed files and the after screenshots. That is the detector when `impeccable` is installed, the checklist, and for Major the critique. It runs whatever the specialist checkpoint said.
 
-**Specialist audits** (the QA checkpoint, then `specialists.md`) are optional additions at the Minor and Major levels, never replacements for these checks. Report their functional and aesthetic findings separately. Pre-existing or out-of-scope findings are follow-ups, not deviations (`pivot-design` §10).
+**Specialist audits** (the QA checkpoint, then `specialists.md`): Major gets an `impeccable` audit through `pivot-specialist`; other audits are optional additions at the Minor and Major levels. They never replace these checks. Report their functional and aesthetic findings separately. Pre-existing or out-of-scope findings are follow-ups, not deviations (`pivot-design` §10).
 
 **Small fix: minimal.** Check the changed thing where it's used, at the widths it affects, and that nothing next to it moved. No screenshot matrix, no session.
 

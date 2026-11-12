@@ -38,27 +38,38 @@ The flow is **understand → search → inspect → shortlist (the user picks) �
 
 **Design documents live in PIVOT, never in the target project.** Briefs, decisions and session notes are not written into the project's repository, not even as a fallback. Only the implementation (source code and the files the project itself needs) goes there. If PIVOT can't store them yet (see §6), say so.
 
-**Specialists are optional.** Other installed skills can advise at some steps:
+**Specialists review the work, by risk.** Other installed skills advise at set steps; they never approve anything:
 
-- `ui-ux-pro-max`: UX structure and patterns;
+- `ui-ux-pro-max`: UX structure and patterns, for any surface;
 - `design-taste-frontend`: visual direction, for public web pages only;
-- `impeccable`: a technical QA audit;
+- `impeccable`: a technical QA audit of the build;
 - a motion specialist (`animate`, `find-animation-opportunities`…), when the motion level is standard or advanced ([motion.md](motion.md)).
 
-You don't ask the user to invoke them: you decide, and you run them for real through the `pivot-specialist` agent (`specialists.md` §1).
+You don't ask the user to invoke them: you run them for real through the `pivot-specialist` agent (`specialists.md` §1), by the defaults below. The user's requirements, the project's design system and this workflow's gates always win over their advice.
 
-Without any specialist, this workflow is complete. The user's requirements, the project's design system and this workflow's gates always win.
+**Required by default** (`specialists.md` §2, "By risk"):
 
-The §10 **slop check** (`impeccable`'s detector when it is installed, a checklist, and a critique for Major work) is part of this workflow, not a specialist choice. It runs whatever the checkpoint below says.
+| Work                                                         | Design stage (on the brief, before the mockups)                                                                                   | QA (§10)                                                              |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **New design** (this skill's full flow), or a Major redesign | `ui-ux-pro-max`; plus `design-taste-frontend` for a public web page; plus `animate` when the motion level is standard or advanced | the slop check, plus an `impeccable` audit through `pivot-specialist` |
+| Minor redesign                                               | one: the specialist that owns the problem (`ui-ux-pro-max` for UX, Taste for a public page's look)                                | the slop check                                                        |
+| Small fix                                                    | none, unless the user asks                                                                                                        | verify the fix                                                        |
 
-**Specialist checkpoint.** After §1, write one line, and write it again at §10 for any QA audit beyond the slop check:
+- **"None" is only for a small fix, or when the user said not to use specialists** (quote their words). A project that has a design system or brand tokens is never a reason: tokens decide how it looks, not whether the structure works.
+- **A required specialist that can't run** (not installed, refused by the Skill tool, or `pivot-specialist` isn't in this session) is reported with its label (`unavailable`, or `consulted` when you read its files instead) and doesn't block the work. Never claim it ran.
+- Add one beyond the defaults only for a distinct problem they don't cover, and say why in one line.
 
-- `Specialists: none — <reason>`, or
-- `Specialists: <name> — <stage> — <purpose>`.
+The §10 **slop check** (`impeccable`'s detector when it is installed, a checklist, and a critique for new designs and Major work) is part of this workflow, not a specialist choice. It always runs.
 
-How to fill it in:
+**Specialist checkpoint.** Show the user one line in the chat after §1, and again at §10 for QA:
 
-- **Decide from the problem, not from what is installed.** "None" is a valid answer. A new design may use more than one specialist when their jobs complement each other.
+- `Specialists: <name> — <stage> — <purpose>` (one per specialist you will run), or
+- `Specialists: none — <reason>` (only as allowed above).
+
+When a specialist has run, tell the user in one line what it recommended and whether you adopted it, and keep its ledger line in the brief (`specialists.md` §5).
+
+How to run them:
+
 - **Before naming a specialist:**
   - read [specialists.md](specialists.md) in this folder (who suits which interface and risk, how to run it safely, how to record its influence);
   - confirm the specialist is installed by reading its `SKILL.md` (`specialists.md` §1).
@@ -256,7 +267,7 @@ Mockups are **temporary design prototypes**, not the implementation.
      - everything given the same weight, so nothing leads.
   3. **Critique, for new designs and Major redesigns:** read `impeccable`'s `reference/critique.md`. Judge the after screenshots against its criteria, as text only: never its `critique-storage write`.
   - Findings from all three follow the classes above: fix a bug, and report a refinement, a departure or a pre-existing issue as such.
-- **The QA specialist checkpoint (see top)** covers anything beyond the slop check: another audit is optional and only adds to these checks (`specialists.md` §3–§4).
+- **The QA specialist checkpoint (see top).** For a new design or a Major redesign, run the `impeccable` audit through `pivot-specialist` after the slop check: its handoff folder holds the changed files' paths, the after screenshots and the detector's output (`specialists.md` §1). Further audits are optional and only add to these checks (`specialists.md` §3–§4).
   - Report functional defects and aesthetic findings separately.
   - Propose anything outside the approved scope; don't build it.
 - **Report the evidence as it is.**
