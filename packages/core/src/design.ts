@@ -3,16 +3,22 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "./db/client";
 import { designDecisions, designMockups, designSessions, designSnapshots } from "./db/schema";
 import { authorizeOwner } from "./owner-approval";
-import type {
-  DesignDecisionDTO,
-  DesignDecisionKind,
-  DesignDecisionSource,
-  DesignMilestone,
-  DesignMockupDTO,
-  DesignSessionDetailDTO,
-  DesignSessionDTO,
-  DesignSnapshotDTO,
-  DesignStatus,
+import {
+  DESIGN_QA_DETECTOR,
+  DESIGN_QA_LEVELS,
+  SPECIALIST_PHASES,
+  SPECIALIST_RUN_LABELS,
+  type DesignDecisionDTO,
+  type DesignDecisionKind,
+  type DesignDecisionSource,
+  type DesignQaInput,
+  type DesignRecordKind,
+  type DesignMilestone,
+  type DesignMockupDTO,
+  type DesignSessionDetailDTO,
+  type DesignSessionDTO,
+  type DesignSnapshotDTO,
+  type DesignStatus,
 } from "./types";
 
 export class DesignError extends Error {}
@@ -63,7 +69,7 @@ function decisionDTO(
   return {
     id: r.id,
     sessionId: r.sessionId,
-    kind: r.kind as DesignDecisionKind,
+    kind: r.kind as DesignRecordKind,
     summary: r.summary,
     direction: r.direction,
     details: r.details,
@@ -177,6 +183,26 @@ async function approvalState(sessionId: string) {
 
 const currentApproval = approvalState;
 
+/**
+ * The QA report that counts now: the newest one recorded after the approval that counts (a report from before a new
+ * approval doesn't cover what is built from it). A session without a counting approval (an older one, from before
+ * owner approvals) takes any report. Compared in microseconds, like approvals.
+ */
+async function currentQa(sessionId: string, approvalId: string | null) {
+  const db = await getDb();
+  const rows = await db
+    .select({ id: designDecisions.id, kind: designDecisions.kind, at: micros(designDecisions.createdAt) })
+    .from(designDecisions)
+    .where(and(eq(designDecisions.sessionId, sessionId), inArray(designDecisions.kind, ["qa", "approval"])));
+  const approvedAt = approvalId ? big(rows.find((r) => r.id === approvalId)?.at) : null;
+  const reports = rows
+    .filter((r) => r.kind === "qa")
+    .map((r) => ({ id: r.id, at: big(r.at)! }))
+    .filter((r) => approvedAt === null || r.at > approvedAt)
+    .sort((a, b) => (a.at === b.at ? (a.id < b.id ? 1 : -1) : a.at > b.at ? -1 : 1));
+  return reports[0]?.id ?? null;
+}
+
 const latestApproval = (sessionId: string) =>
   sql`(select max(${designDecisions.createdAt}) from ${designDecisions} where ${designDecisions.sessionId} = ${sessionId} and ${designDecisions.kind} = 'approval')`;
 /**
@@ -188,6 +214,10 @@ const resetMoment = (sessionId: string) =>
   sql`greatest(now(), coalesce(${latestApproval(sessionId)}, '-infinity'::timestamptz) + interval '1 microsecond')`;
 const approvalMoment = (sessionId: string) =>
   sql`greatest(now(), coalesce(${latestApproval(sessionId)}, '-infinity'::timestamptz) + interval '1 microsecond', coalesce((select ${designSessions.approvalResetAt} from ${designSessions} where ${designSessions.id} = ${sessionId}), '-infinity'::timestamptz) + interval '1 microsecond')`;
+
+/** A QA report's time: strictly after the latest approval, so it never ties with the approval it follows. */
+const qaMoment = (sessionId: string) =>
+  sql`greatest(now(), coalesce(${latestApproval(sessionId)}, '-infinity'::timestamptz) + interval '1 microsecond')`;
 
 /**
  * Updates a session. `resetApprovals` marks the moment it went back to exploring with the database's clock, the same
@@ -355,13 +385,109 @@ export async function recordDesignDecision(input: {
   return row.id;
 }
 
+export const QA_LIMITS = { text: 4000, summary: 300, item: 300, specialists: 12, unverified: 30 } as const;
+
+const qaText = (v: unknown, max: number = QA_LIMITS.text) =>
+  String(v ?? "")
+    .trim()
+    .slice(0, max);
+const LEVEL_LABEL = { new: "New design", minor: "Minor redesign", major: "Major redesign" } as const;
+
+/**
+ * Records the QA report of a session that is building: the slop check (detector, checklist, and the critique for a new
+ * design or a Major redesign), the specialist ledger, and what stayed unverified. An agent marks the session done only
+ * after one (setDesignSessionStatus with requireQa). The report is the agent's account, kept as it was given: PIVOT
+ * checks that every part is there, not that the checks were run.
+ */
+export async function recordDesignQa(sessionId: string, input: DesignQaInput) {
+  const db = await getDb();
+  const [s] = await db.select().from(designSessions).where(eq(designSessions.id, sessionId)).limit(1);
+  if (!s) throw new DesignError(`No design session ${sessionId}.`);
+  if (s.status !== "building")
+    throw new DesignError(
+      `The session is ${s.status}: QA is recorded while it is building, after set_design_status building.`,
+    );
+  if (!DESIGN_QA_LEVELS.includes(input.level)) throw new DesignError(`Unknown level "${input.level}".`);
+  const summary = qaText(input.summary, QA_LIMITS.summary);
+  if (!summary) throw new DesignError("Say in one line what QA found (summary).");
+  const det = input.slopCheck?.detector;
+  if (!det || !DESIGN_QA_DETECTOR.includes(det.status))
+    throw new DesignError("Say whether impeccable's detector ran (slopCheck.detector.status).");
+  const detResult = qaText(det.result);
+  if (!detResult)
+    throw new DesignError(
+      "Give the detector's result, or why it didn't run (slopCheck.detector.result): a check not run is unverified.",
+    );
+  const checklist = qaText(input.slopCheck.checklist);
+  if (!checklist) throw new DesignError("Give what the checklist against DESIGN.md found (slopCheck.checklist).");
+  const critique = qaText(input.slopCheck.critique);
+  const heavy = input.level === "new" || input.level === "major";
+  if (heavy && !critique)
+    throw new DesignError("A new design or a Major redesign needs the text critique (slopCheck.critique).");
+  const specialists = (input.specialists ?? []).slice(0, QA_LIMITS.specialists).map((x) => ({
+    name: qaText(x.name, 80),
+    phase: x.phase,
+    run: x.run,
+    outcome: qaText(x.outcome, QA_LIMITS.item),
+  }));
+  for (const x of specialists) {
+    if (!x.name || !x.outcome) throw new DesignError("Each specialist needs its name and outcome.");
+    if (!SPECIALIST_PHASES.includes(x.phase)) throw new DesignError(`Unknown phase "${x.phase}" for ${x.name}.`);
+    if (!SPECIALIST_RUN_LABELS.includes(x.run)) throw new DesignError(`Unknown run label "${x.run}" for ${x.name}.`);
+  }
+  const designStage = specialists.some((x) => x.phase === "brief" || x.phase === "mockups");
+  if (!designStage)
+    throw new DesignError(
+      "List the design-stage specialist (phase brief or mockups) with its run label, or `none` with the user's words.",
+    );
+  if (heavy && !specialists.some((x) => x.phase === "qa"))
+    throw new DesignError(
+      "A new design or a Major redesign lists its QA audit (impeccable, phase qa) with its run label, or `none` with the user's words.",
+    );
+  const unverified = (input.unverified ?? [])
+    .slice(0, QA_LIMITS.unverified)
+    .map((u) => qaText(u, QA_LIMITS.item))
+    .filter(Boolean);
+  const details = [
+    `**Level:** ${LEVEL_LABEL[input.level]}`,
+    "",
+    "**Slop check**",
+    `- Detector (${det.status.replace("_", " ")}): ${detResult}`,
+    `- Checklist: ${checklist}`,
+    ...(critique ? [`- Critique: ${critique}`] : []),
+    "",
+    "**Specialists**",
+    ...specialists.map((x) => `- ${x.name} — ${x.phase} — ${x.run} — ${x.outcome}`),
+    "",
+    "**Unverified**",
+    ...(unverified.length ? unverified.map((u) => `- ${u}`) : ["- nothing"]),
+  ].join("\n");
+  const [row] = await db
+    .insert(designDecisions)
+    .values({ sessionId, kind: "qa", summary, details, source: "agent", createdAt: qaMoment(sessionId) })
+    .returning({ id: designDecisions.id });
+  await touch(sessionId);
+  return row.id;
+}
+
 /**
  * Changes a session's status by hand. "approved" and "building" need an approval that counts now (pickCurrentApproval):
  * an approval is the owner's decision, made in PIVOT with the owner passphrase, never a status flipped in the UI or a
  * decision an agent recorded. Building also checks that the approved version is still the content approved. Going back to exploring (Reopen)
  * means the direction needs approving again: approvals recorded before it stop counting.
  */
-export async function setDesignSessionStatus(sessionId: string, status: DesignStatus) {
+export async function setDesignSessionStatus(
+  sessionId: string,
+  status: DesignStatus,
+  { requireQa = false }: { requireQa?: boolean } = {},
+) {
+  if (status === "done" && requireQa) {
+    const { approval } = await currentApproval(sessionId);
+    if (!(await currentQa(sessionId, approval?.id ?? null)))
+      throw new DesignError(
+        "Record the QA first (record_design_qa: the slop check, the specialist ledger and what stayed unverified), then mark the session done.",
+      );
+  }
   if (status === "approved" || status === "building") {
     const { approval, reason } = await currentApproval(sessionId);
     if (!approval) throw new DesignError(`${reason} Approve a direction first.`);
@@ -426,6 +552,7 @@ export async function getDesignSession(id: string): Promise<DesignSessionDetailD
   return {
     ...sessionDTO(s),
     currentApprovalId: current.approval?.id ?? null,
+    currentQaId: await currentQa(id, current.approval?.id ?? null),
     snapshots: snapshots.map(snapshotDTO),
     decisions: decisions.map((d) => decisionDTO(d, digests)),
     mockups: mockups.map(mockupDTO),

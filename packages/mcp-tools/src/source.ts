@@ -4,6 +4,7 @@ import type {
   DesignDecisionKind,
   DesignMilestone,
   DesignSessionDetailDTO,
+  DesignQaInput,
   DesignStatus,
   DesignSessionDTO,
   DirectProviderId,
@@ -106,6 +107,11 @@ export interface PivotWriter {
   getCandidatePreview?(candidateId: string): Promise<{ data: Buffer; mimeType: string } | null>;
   /** Where the user opens PIVOT, for links to a session page. */
   readonly appUrl?: string;
+  /**
+   * Records a session's QA report while it is building; the app refuses "done" from an agent without one. Optional, so
+   * an older app makes the tool say so.
+   */
+  recordDesignQa?(sessionId: string, input: DesignQaInput): Promise<{ id: string }>;
   /** Sets a session's status by hand (PATCH); the app refuses "approved" without an approval record. */
   setDesignStatus(sessionId: string, status: DesignStatus): Promise<DesignSessionDetailDTO>;
   getDesignSession(id: string): Promise<DesignSessionDetailDTO | null>;

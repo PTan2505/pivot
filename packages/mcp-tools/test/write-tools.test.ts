@@ -33,6 +33,7 @@ function writerSource() {
   const writer: PivotWriter = {
     saveDesignBrief: rec("saveDesignBrief", { sessionId: ID, snapshotId: "s1", created: true, duplicate: false }),
     recordDesignDecision: rec("recordDesignDecision", { id: "d1" }),
+    recordDesignQa: rec("recordDesignQa", { id: "qa1" }),
     saveDesignMockups: rec("saveDesignMockups", { round: 2, ids: ["m1", "m2"], created: true }),
     appUrl: "http://127.0.0.1:4321",
     getDesignSession: rec("getDesignSession", null),
@@ -60,10 +61,11 @@ function writerSource() {
 }
 
 describe("PIVOT MCP write tools", () => {
-  it("are the ten design and library writes, and the design ones say briefs stay out of the repo", () => {
+  it("are the eleven design and library writes, and the design ones say briefs stay out of the repo", () => {
     expect(WRITE_TOOLS.map((t) => t.name)).toEqual([
       "save_design_brief",
       "record_design_decision",
+      "record_design_qa",
       "save_design_mockups",
       "set_design_status",
       "get_design_session",
@@ -254,10 +256,10 @@ describe("PIVOT MCP write tools", () => {
 
 describe("set_design_status", () => {
   // A session in a given status, and a writer that records the status it was set to.
-  function withStatus(status: string) {
+  function withStatus(status: string, currentQaId: string | null = "qa1") {
     const set: string[] = [];
     const { source } = writerSource();
-    source.getDesignSession = async () => ({ id: ID, status, snapshots: [], decisions: [] }) as never;
+    source.getDesignSession = async () => ({ id: ID, status, currentQaId, snapshots: [], decisions: [] }) as never;
     source.setDesignStatus = async (_id, to) => {
       set.push(to);
       return { id: ID, status: to } as never;
@@ -273,6 +275,16 @@ describe("set_design_status", () => {
     const b = withStatus("building");
     expect((await run(b.source, "done")).isError).toBeFalsy();
     expect([...a.set, ...b.set]).toEqual(["building", "done"]);
+  });
+
+  it("refuses done until the QA is recorded", async () => {
+    const s = withStatus("building", null);
+    const res = await run(s.source, "done");
+    expect(res.isError).toBe(true);
+    expect(res.content[0]).toMatchObject({
+      text: expect.stringMatching(/^conflict: Record the QA first with record_design_qa/),
+    });
+    expect(s.set).toEqual([]);
   });
 
   it("changes nothing when the session already has that status", async () => {
@@ -303,6 +315,42 @@ describe("set_design_status", () => {
     }
     const res = await runTool(tool("set_design_status"), reader, { sessionId: ID, status: "building" });
     expect(res.content[0]).toMatchObject({ text: expect.stringMatching(/^read_only: /) });
+  });
+});
+
+describe("record_design_qa", () => {
+  const qa = {
+    sessionId: ID,
+    level: "new",
+    summary: "Matches the approved version.",
+    slopCheck: {
+      detector: { status: "not_installed", result: "impeccable isn't installed" },
+      checklist: "No findings",
+      critique: "Leads with the table.",
+    },
+    specialists: [
+      { name: "ui-ux-pro-max", phase: "brief", run: "ran (skill)", outcome: "adopted" },
+      { name: "impeccable", phase: "qa", run: "unavailable", outcome: "not installed" },
+    ],
+  };
+  it("passes the report to PIVOT, with an empty unverified list when none is given", async () => {
+    const { source, calls } = writerSource();
+    const res = await runTool(tool("record_design_qa"), source, qa);
+    expect(res.isError).toBeFalsy();
+    expect(res.content[0]).toMatchObject({ text: expect.stringMatching(/^Recorded the QA report \(qa1\)/) });
+    const { sessionId, ...rest } = qa;
+    expect(calls).toEqual([{ method: "recordDesignQa", args: [sessionId, { ...rest, unverified: [] }] }]);
+  });
+  it("refuses an unknown run label, a missing specialist list, and an app that can't store QA", async () => {
+    const { source } = writerSource();
+    expect((await runTool(tool("record_design_qa"), source, { ...qa, specialists: [] })).isError).toBe(true);
+    expect(
+      (await runTool(tool("record_design_qa"), source, { ...qa, specialists: [{ ...qa.specialists[0], run: "ran" }] }))
+        .isError,
+    ).toBe(true);
+    delete (source as Partial<PivotWriter>).recordDesignQa;
+    const res = await runTool(tool("record_design_qa"), source, qa);
+    expect(res.content[0]).toMatchObject({ text: expect.stringMatching(/^not_supported: /) });
   });
 });
 

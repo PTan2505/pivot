@@ -87,7 +87,8 @@ Two pieces let Claude Code design and redesign screens in any project from **you
 | `save_design_brief`      | write | Store the brief at a milestone: `initial` (opens a design session), `approved`, `major_change`              |
 | `record_design_decision` | write | Record a `change` after approval or a QA `deviation` (approvals are yours, in PIVOT)                        |
 | `save_design_mockups`    | write | Put a round of mockups on the session's page in PIVOT, where you compare them and approve one               |
-| `set_design_status`      | write | Mark an approved session `building` when Claude starts coding, and `done` after the build and QA            |
+| `record_design_qa`       | write | Record the QA report (slop check, specialists, what stayed unverified) before the session is marked done    |
+| `set_design_status`      | write | Mark an approved session `building` when Claude starts coding, and `done` after the build and recorded QA   |
 | `get_design_session`     | read  | Read a session to continue earlier work, or the approval you made in PIVOT                                  |
 | `suggest_metadata`       | write | Suggest facets or a title for a reference; it waits in your Inbox                                           |
 | `annotate_reference`     | write | Add a dated agent note to a reference; your notes stay as they are                                          |
@@ -124,9 +125,10 @@ Claude usually picks the right skill. Start with "Use pivot-design…" or "Use p
 
    Both also state a **motion level**: `none` (the default), `standard` (micro-interactions, transitions) or `advanced` (scroll storytelling, pinning, morphing…). Your words decide it when you say anything about motion. Changing how something moves is always Major. The rules live in `.claude/skills/pivot-design/motion.md`.
 
-2. **Specialist checkpoint.** One line: `Specialists: none — <reason>`, or `<name> — <stage> — <purpose>`.
-   - The installed specialists are `ui-ux-pro-max`, `design-taste-frontend` (public pages only) and `impeccable` (QA audit).
-   - "None" is a valid answer. Ask for one by name if you want it.
+2. **Specialist checkpoint.** One line shown to you: `Specialists: <name> — <stage> — <purpose>`, or `none — <reason>`.
+   - The specialists are `ui-ux-pro-max`, `design-taste-frontend` (public pages only), `impeccable` (QA audit) and `animate` (motion). Claude runs them through the read-only `pivot-specialist` agent.
+   - Required by risk: a new design or Major redesign always gets `ui-ux-pro-max` on the brief and an `impeccable` audit at QA (plus Taste on a public page, `animate` for motion); a Minor redesign gets the one that owns its problem; a small fix gets none.
+   - "None" otherwise only when you say not to use specialists. Your design system is never the reason to skip them.
 3. **Impact and baseline** (redesign):
    - the files, shared components and pages the change touches;
    - a keep list;

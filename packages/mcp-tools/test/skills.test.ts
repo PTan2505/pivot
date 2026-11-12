@@ -35,8 +35,8 @@ const ordered = (text: string, words: string[]) => {
 describe("skills name real MCP tools and values", () => {
   const tools = all(/name: "([a-z_]+)"/g, src);
 
-  it("packages/mcp-tools defines 15 tools", () => {
-    expect(tools.size).toBe(15);
+  it("packages/mcp-tools defines 16 tools", () => {
+    expect(tools.size).toBe(16);
   });
 
   // get_reference_images' `which` values, from the tool's own schema
@@ -203,18 +203,36 @@ describe("QA differences are classified in one place", () => {
   });
 });
 
-describe("specialists stay optional", () => {
+describe("specialists run by risk", () => {
   for (const [f, t] of [
     ["pivot-design", d],
     ["pivot-redesign", r],
   ] as const) {
-    it(`${f}: checkpoint line, "none" is valid, no preloading`, () => {
+    it(`${f}: checkpoint line shown to the user, "none" only for a small fix or the user's words, no preloading`, () => {
       expect(t).toContain("`Specialists: none — <reason>`");
       expect(t).toContain("`Specialists: <name> — <stage> — <purpose>`");
-      expect(t).toContain('"None" is a valid answer');
+      expect(t).toMatch(/show the user one line in the chat/i);
+      expect(t).toContain("the user said not to use specialists");
+      expect(t).toMatch(/(design system|tokens)[^.]*never (the|a) reason/);
+      expect(t).not.toContain('"None" is a valid answer');
+      expect(t).not.toContain("**Specialists are optional.**");
       expect(t).toContain("Don't preload every specialist's instructions");
     });
   }
+  it("new designs and Major redesigns always get ui-ux-pro-max on the brief and an impeccable audit at QA", () => {
+    expect(d).toContain("**New design** (this skill's full flow), or a Major redesign");
+    expect(d).toContain("plus an `impeccable` audit through `pivot-specialist`");
+    expect(d).toContain("run the `impeccable` audit through `pivot-specialist` after the slop check");
+    expect(r).toContain("**Major:** `ui-ux-pro-max` on the brief, always");
+    expect(specialists).toContain("`ui-ux-pro-max` on the brief, always");
+    expect(specialists).toContain("**`impeccable` audit through `pivot-specialist`**");
+    expect(specialists).toContain("required defaults");
+    expect(specialists).not.toContain("Most tasks need none");
+  });
+  it("a required specialist that can't run is labelled, never faked, and doesn't block", () => {
+    for (const t of [d, r, specialists]) expect(t).toMatch(/required specialist that can't run/i);
+    expect(d).toContain("Never claim it ran.");
+  });
   it("small fixes stay light", () => {
     expect(r).toContain("**Small fix:** none, unless the user asks.");
     expect(r).toContain("No screenshot matrix, no session.");
@@ -273,6 +291,21 @@ describe("shortlist, mockups and slop check", () => {
   it("SPEC describes the shortlist, mockups, viewer and slop check", () => {
     for (const s of ["shortlist", "**2–3 mockup**", "make-viewer.mjs", "Kiểm tra AI slop"])
       expect(spec.includes(s), s).toBe(true);
+  });
+});
+
+describe("QA is recorded before a session is done", () => {
+  it("pivot-design and pivot-redesign record the QA, then mark done", () => {
+    expect(d).toContain("**Record the QA** with `record_design_qa`");
+    expect(d).toContain("It refuses `done` until a QA report is recorded after the current approval.");
+    expect(d).toContain("record what you did, never what you meant to do");
+    expect(r).toContain("record the QA with `record_design_qa`");
+    expect(r).toContain("`done` is refused until the QA is recorded");
+  });
+  it("SPEC and the READMEs describe the QA report and the done gate", () => {
+    for (const t of [spec, read("README.md"), read("apps/mcp/README.md")]) expect(t).toContain("record_design_qa");
+    expect(spec).toContain("**Bản ghi QA**");
+    expect(spec).toContain("không phải ranh giới bảo mật");
   });
 });
 

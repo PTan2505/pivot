@@ -644,3 +644,90 @@ describe("agent suggestions", () => {
     expect((await resources.getResource(r.id))!.notes).toBe(`Mine.\n\n${line}`);
   });
 });
+
+describe("QA before done", () => {
+  const goodQa = (level: "new" | "minor" | "major" = "new") => ({
+    level,
+    summary: "Desktop and phone match the approved version; one spacing fix made.",
+    slopCheck: {
+      detector: { status: "ran" as const, result: "2 findings, both fixed: a hard-coded colour and a stray shadow." },
+      checklist: "No findings after the fixes.",
+      critique: "Hierarchy leads with the plan table; nothing generic.",
+    },
+    specialists: [
+      { name: "ui-ux-pro-max", phase: "brief" as const, run: "ran (skill)" as const, outcome: "adopted: error states" },
+      { name: "impeccable", phase: "qa" as const, run: "ran (skill)" as const, outcome: "adopted: focus ring fix" },
+    ],
+    unverified: ["Real device reduced motion"],
+  });
+
+  const building = async (title: string) => {
+    const { sessionId } = await design.saveDesignBrief({ title, milestone: "initial", markdown: `# ${title}` });
+    await recordAs({ sessionId, kind: "approval", summary: "Approved" });
+    await design.setDesignSessionStatus(sessionId, "building");
+    return sessionId;
+  };
+
+  it("an agent can't mark a session done before its QA is recorded; the owner's own click can", async () => {
+    const sessionId = await building("QA gate");
+    await expect(design.setDesignSessionStatus(sessionId, "done", { requireQa: true })).rejects.toThrow(
+      /Record the QA first/,
+    );
+    expect((await design.getDesignSession(sessionId))!.currentQaId).toBeNull();
+    const id = await design.recordDesignQa(sessionId, goodQa());
+    const s = await design.getDesignSession(sessionId);
+    expect(s!.currentQaId).toBe(id);
+    const qa = s!.decisions.find((d) => d.id === id)!;
+    expect(qa.kind).toBe("qa");
+    expect(qa.source).toBe("agent");
+    expect(qa.details).toContain("**Level:** New design");
+    expect(qa.details).toContain("- impeccable — qa — ran (skill) — adopted: focus ring fix");
+    expect(qa.details).toContain("- Real device reduced motion");
+    await design.setDesignSessionStatus(sessionId, "done", { requireQa: true });
+    expect((await design.getDesignSession(sessionId))!.status).toBe("done");
+
+    const owner = await building("Owner marks done");
+    await design.setDesignSessionStatus(owner, "done");
+    expect((await design.getDesignSession(owner))!.status).toBe("done");
+  });
+
+  it("refuses a report with a missing part, or outside building", async () => {
+    const sessionId = await building("QA parts");
+    const bad = async (patch: (q: ReturnType<typeof goodQa>) => unknown, re: RegExp) =>
+      expect(design.recordDesignQa(sessionId, patch(goodQa()) as ReturnType<typeof goodQa>)).rejects.toThrow(re);
+    await bad((q) => ({ ...q, summary: " " }), /summary/);
+    await bad((q) => ({ ...q, slopCheck: { ...q.slopCheck, detector: { status: "ran", result: "" } } }), /detector/);
+    await bad((q) => ({ ...q, slopCheck: { ...q.slopCheck, checklist: "" } }), /checklist/);
+    await bad((q) => ({ ...q, slopCheck: { ...q.slopCheck, critique: "" } }), /critique/);
+    await bad((q) => ({ ...q, specialists: q.specialists.filter((x) => x.phase === "qa") }), /design-stage specialist/);
+    await bad((q) => ({ ...q, specialists: q.specialists.filter((x) => x.phase !== "qa") }), /QA audit/);
+    await bad((q) => ({ ...q, specialists: [{ ...q.specialists[0], run: "ran" }] }), /run label/);
+    // a Minor redesign needs no critique and no QA audit, but still its design-stage specialist
+    const minor = goodQa("minor");
+    await design.recordDesignQa(sessionId, {
+      ...minor,
+      slopCheck: { ...minor.slopCheck, critique: undefined },
+      specialists: [{ name: "none", phase: "brief", run: "none", outcome: 'The user: "no specialists for this"' }],
+      unverified: [],
+    });
+    const { sessionId: exploring } = await design.saveDesignBrief({
+      title: "Not yet",
+      milestone: "initial",
+      markdown: "# N",
+    });
+    await expect(design.recordDesignQa(exploring, goodQa())).rejects.toThrow(/while it is building/);
+  });
+
+  it("a report from before the current approval doesn't count", async () => {
+    const sessionId = await building("QA then reapproval");
+    await design.recordDesignQa(sessionId, goodQa());
+    expect((await design.getDesignSession(sessionId))!.currentQaId).not.toBeNull();
+    await design.setDesignSessionStatus(sessionId, "exploring"); // Reopen
+    await recordAs({ sessionId, kind: "approval", summary: "Approved again" });
+    await design.setDesignSessionStatus(sessionId, "building");
+    expect((await design.getDesignSession(sessionId))!.currentQaId).toBeNull();
+    await expect(design.setDesignSessionStatus(sessionId, "done", { requireQa: true })).rejects.toThrow(
+      /Record the QA first/,
+    );
+  });
+});
