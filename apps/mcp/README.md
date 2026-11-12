@@ -19,16 +19,17 @@ Lets Claude Code search and look at your PIVOT library while you design and buil
 
 ## Write tools (need the API token)
 
-| Tool                     | What it does                                                                                                                                        |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `save_design_brief`      | Saves a design brief in PIVOT at a milestone: `initial` (opens a design session), `approved`, `major_change`. The same brief twice is one snapshot. |
-| `record_design_decision` | Records a `change` after approval or a `deviation` found in QA. Never an approval: only you approve, in PIVOT.                                      |
-| `save_design_mockups`    | Saves a round of 1–9 static mockups (files are inlined) on the session's page, where the user can approve one with a note. Only while exploring.    |
-| `set_design_status`      | Moves a session to `building` (only from approved) or `done` (only from building). The same status twice changes nothing. Never sets the others.    |
-| `get_design_session`     | Reads a session's briefs, decisions (approvals are always yours, made in PIVOT) and mockup rounds, or lists sessions (read-only).                   |
-| `suggest_metadata`       | Suggests facets, a collection, a title or a visual description for a reference. They wait in the Inbox until you accept them.                       |
-| `annotate_reference`     | Appends a dated "agent" line to a reference's notes; your own text isn't changed.                                                                   |
-| `save_reference`         | Saves a page to the library (only when you ask): duplicates skipped, screenshots taken in the background, lands in the Inbox.                       |
+| Tool                     | What it does                                                                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `save_design_brief`      | Saves a design brief in PIVOT at a milestone: `initial` (opens a design session), `approved`, `major_change`. The same brief twice is one snapshot.                 |
+| `record_design_decision` | Records a `change` after approval or a `deviation` found in QA. Never an approval: only you approve, in PIVOT.                                                      |
+| `save_design_mockups`    | Saves a round of 1–9 static mockups (files are inlined) on the session's page, where the user can approve one with a note. Only while exploring.                    |
+| `record_design_qa`       | Records the QA report while building: the slop check, the specialist ledger with run labels, what stayed unverified. Refuses a report missing a part.               |
+| `set_design_status`      | Moves a session to `building` (only from approved) or `done` (only from building, after a QA report). The same status twice changes nothing. Never sets the others. |
+| `get_design_session`     | Reads a session's briefs, decisions (approvals are always yours, made in PIVOT) and mockup rounds, or lists sessions (read-only).                                   |
+| `suggest_metadata`       | Suggests facets, a collection, a title or a visual description for a reference. They wait in the Inbox until you accept them.                                       |
+| `annotate_reference`     | Appends a dated "agent" line to a reference's notes; your own text isn't changed.                                                                                   |
+| `save_reference`         | Saves a page to the library (only when you ask): duplicates skipped, screenshots taken in the background, lands in the Inbox.                                       |
 
 Briefs and decisions are kept in PIVOT, never written into the project you are working on. Nothing an agent writes overwrites what you confirmed.
 

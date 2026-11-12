@@ -219,7 +219,7 @@ If the write tools fail or the connection is read-only, say so in one line and s
 
   It never ships silently.
 
-**Close the session** (Minor and Major) as `pivot-design` §10 says: `set_design_status` with `status: "done"` once the build and QA are finished with nothing left for the user to decide.
+**Close the session** (Minor and Major) as `pivot-design` §10 says: record the QA with `record_design_qa` (`level` `minor` or `major`; Minor needs no critique and no QA audit), then `set_design_status` with `status: "done"` once nothing is left for the user to decide. `done` is refused until the QA is recorded.
 
 **Baselines and reporting:**
 

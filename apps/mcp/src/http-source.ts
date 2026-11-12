@@ -6,6 +6,7 @@ import type {
   DesignCandidateDTO,
   CollectionDTO,
   DesignSessionDetailDTO,
+  DesignQaInput,
   DesignStatus,
   DesignSessionDTO,
   ResourceDetailDTO,
@@ -180,6 +181,10 @@ export class HttpSource implements PivotSource, PivotWriter {
     const res = await this.call(`/api/design/candidates/${encodeURIComponent(candidateId)}/preview`);
     if (!res) return null;
     return { data: Buffer.from(await res.arrayBuffer()), mimeType: res.headers.get("content-type") ?? "image/webp" };
+  }
+
+  recordDesignQa(sessionId: string, input: DesignQaInput) {
+    return this.post<{ id: string }>(`/api/design/sessions/${encodeURIComponent(sessionId)}/qa`, input);
   }
 
   setDesignStatus(sessionId: string, status: DesignStatus) {

@@ -174,7 +174,12 @@ function StatusStepper({
 }
 
 const MILESTONE_LABEL = { initial: "First brief", approved: "Approved brief", major_change: "Major change" } as const;
-const DECISION_LABEL = { approval: "Approved", change: "Changed", deviation: "Deviation found in QA" } as const;
+const DECISION_LABEL = {
+  approval: "Approved",
+  change: "Changed",
+  deviation: "Deviation found in QA",
+  qa: "QA report",
+} as const;
 
 /**
  * One design session: its briefs at each milestone and the decisions, in time order. The newest brief is open; older
