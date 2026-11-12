@@ -1,14 +1,44 @@
-import { and, asc, desc, eq, exists, ilike, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  ne,
+  or,
+  sql,
+  type SQL,
+  type SQLWrapper,
+} from "drizzle-orm";
 import matter from "gray-matter";
 import { z } from "zod";
 import { deleteOrphanAssets, listResourceAssets } from "./assets";
 import { getDb } from "./db/client";
-import { collectionItems, collections, resourceAssets, resources, resourceTags, tags } from "./db/schema";
+import {
+  assetAnnotations,
+  assets,
+  collectionItems,
+  collections,
+  resourceAssets,
+  resourceSuggestions,
+  resourceTags,
+  resources,
+  tags,
+} from "./db/schema";
 import { normalizeUrl, urlKey } from "./net-guard";
+import { parseQuery, type QueryTerm } from "./query";
+import { hostOf, knownSourceFor, knownSourceMeta, matchHost } from "./source-match";
 import {
   FACET_SUGGESTIONS,
   RESOURCE_TYPES,
+  SOURCE_CATEGORIES,
   TAG_KINDS,
+  type CaptureQuality,
   type CaptureStatus,
   type ResourceDetailDTO,
   type ResourceDTO,
@@ -31,6 +61,8 @@ export const resourceInput = z.object({
   meta: z.record(z.string(), z.unknown()).optional(),
   tags: z.array(tagInput).max(100).optional(),
   coverAssetId: z.string().nullable().optional(),
+  /** "needs_review" puts it in the Inbox; null takes it out. */
+  reviewStatus: z.enum(["needs_review"]).nullable().optional(),
 });
 
 export const resourcePatch = resourceInput.partial();
@@ -41,16 +73,31 @@ export type ResourcePatch = z.infer<typeof resourcePatch>;
 export interface ListFilters {
   q?: string;
   type?: ResourceType;
+  /** Any of these types (a section); ignored when `type` is set. */
+  types?: readonly ResourceType[];
+  /** Only resources saved from this source (matched by host). */
+  via?: string;
   tagIds?: string[];
   collectionId?: string;
+  /** Only the Inbox: quick saves still marked "needs review". */
+  needsReview?: boolean;
+  /** Only resources saved from this exact page (same normalised URL). */
+  url?: string;
+  /** Only resources whose URL is on this host (subdomains included). */
+  host?: string;
   trash?: boolean;
-  sort?: "updated" | "created" | "title";
+  /** `created` is newest first, `oldest` is by creation date the other way. */
+  sort?: "updated" | "created" | "oldest" | "title";
   limit?: number;
+  /** Rows to skip, for paging (see search.ts). */
+  offset?: number;
 }
 
 type ResourceRow = typeof resources.$inferSelect;
 
-function toDTO(row: ResourceRow, rowTags: TagDTO[]): ResourceDTO {
+type FullShot = ResourceDTO["fullShot"];
+
+function toDTO(row: ResourceRow, rowTags: TagDTO[], fullShot: FullShot = null): ResourceDTO {
   return {
     id: row.id,
     type: row.type as ResourceType,
@@ -63,11 +110,27 @@ function toDTO(row: ResourceRow, rowTags: TagDTO[]): ResourceDTO {
     coverAssetId: row.coverAssetId,
     captureStatus: row.captureStatus as CaptureStatus | null,
     captureError: row.captureError,
+    captureQuality: row.captureQuality as CaptureQuality | null,
+    reviewStatus: row.reviewStatus === "needs_review" ? "needs_review" : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     deletedAt: row.deletedAt?.toISOString() ?? null,
     tags: rowTags,
+    fullShot,
   };
+}
+
+async function fullShotsFor(resourceIds: string[]): Promise<Map<string, NonNullable<FullShot>>> {
+  const map = new Map<string, NonNullable<FullShot>>();
+  if (resourceIds.length === 0) return map;
+  const db = await getDb();
+  const rows = await db
+    .select({ resourceId: resourceAssets.resourceId, id: assets.id, width: assets.width, height: assets.height })
+    .from(resourceAssets)
+    .innerJoin(assets, eq(assets.id, resourceAssets.assetId))
+    .where(and(inArray(resourceAssets.resourceId, resourceIds), eq(resourceAssets.role, "screenshot-full")));
+  for (const r of rows) map.set(r.resourceId, { id: r.id, width: r.width, height: r.height });
+  return map;
 }
 
 async function tagsFor(resourceIds: string[]): Promise<Map<string, TagDTO[]>> {
@@ -92,33 +155,74 @@ function escapeLike(s: string) {
   return s.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
-export async function listResources(filters: ListFilters = {}): Promise<ResourceDTO[]> {
+/** True when the column matches any of the term's patterns (case-insensitive regular expressions). */
+function matchesTerm(column: SQLWrapper, term: QueryTerm) {
+  return sql`(${sql.join(
+    term.patterns.map((p) => sql`${column} ~* ${p}`),
+    sql` or `,
+  )})`;
+}
+
+/**
+ * Text of the agent suggestions still waiting for review (a visual description, a facet name): searchable before you
+ * accept them, as decision #30 asks, but never shown as confirmed facets.
+ */
+const pendingSuggestionText = sql`coalesce((select string_agg(coalesce(${resourceSuggestions.value}->>'text', ${resourceSuggestions.value}->>'name', ''), ' ') from ${resourceSuggestions} where ${resourceSuggestions.resourceId} = ${resources.id} and ${resourceSuggestions.status} = 'pending'), '')`;
+
+/** A source's category by its label ("Type & Color"), so "fonts" or "inspiration" find the sources filed there. */
+const categoryLabel = sql`(case ${resources.meta}->>'category' ${sql.join(
+  SOURCE_CATEGORIES.map((c) => sql`when ${c.value} then ${c.label}`),
+  sql` `,
+)} else '' end)`;
+
+function tagMatches(db: Awaited<ReturnType<typeof getDb>>, term: QueryTerm) {
+  return exists(
+    db
+      .select({ one: sql`1` })
+      .from(resourceTags)
+      .innerJoin(tags, eq(tags.id, resourceTags.tagId))
+      .where(and(eq(resourceTags.resourceId, resources.id), matchesTerm(tags.name, term))),
+  );
+}
+
+/** The WHERE and ORDER BY of a list, shared by `listResources` and `countResources` so a page and its total agree. */
+async function listQuery(filters: ListFilters) {
   const db = await getDb();
   const where: SQL[] = [filters.trash ? isNotNull(resources.deletedAt) : isNull(resources.deletedAt)];
   if (filters.type) where.push(eq(resources.type, filters.type));
+  else if (filters.types?.length) where.push(inArray(resources.type, [...filters.types]));
+  if (filters.via) {
+    const ids = (await sourceAttribution()).get(filters.via) ?? [];
+    where.push(ids.length ? inArray(resources.id, ids) : sql`false`);
+  }
+  if (filters.needsReview) where.push(eq(resources.reviewStatus, "needs_review"));
+  if (filters.url) {
+    const ids = (await findByUrl(filters.url).catch(() => [])).map((r) => r.id);
+    where.push(ids.length ? inArray(resources.id, ids) : sql`false`);
+  }
+  if (filters.host) {
+    const host = filters.host.toLowerCase().replace(/^www\./, "");
+    where.push(
+      sql`lower(coalesce(${resources.sourceUrl}, '')) ~ ${`^https?://([^/]*\\.)?${host.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(:\\d+)?(/|$)`}`,
+    );
+  }
 
   const q = filters.q?.trim();
-  if (q) {
-    // Every word must match somewhere (fields or tag names).
-    for (const word of q.split(/\s+/).slice(0, 8)) {
-      const pattern = `%${escapeLike(word)}%`;
-      where.push(
-        or(
-          ilike(resources.title, pattern),
-          ilike(resources.description, pattern),
-          ilike(resources.notes, pattern),
-          ilike(resources.content, pattern),
-          ilike(resources.sourceUrl, pattern),
-          exists(
-            db
-              .select({ one: sql`1` })
-              .from(resourceTags)
-              .innerJoin(tags, eq(tags.id, resourceTags.tagId))
-              .where(and(eq(resourceTags.resourceId, resources.id), ilike(tags.name, pattern))),
-          ),
-        )!,
-      );
-    }
+  const terms = q ? parseQuery(q) : [];
+  // Every term must match somewhere: a field, a tag name, or a source's category (see query.ts for what a term is).
+  for (const term of terms) {
+    where.push(
+      or(
+        matchesTerm(resources.title, term),
+        matchesTerm(resources.description, term),
+        matchesTerm(resources.notes, term),
+        matchesTerm(resources.content, term),
+        matchesTerm(sql`coalesce(${resources.sourceUrl}, '')`, term),
+        matchesTerm(categoryLabel, term),
+        tagMatches(db, term),
+        matchesTerm(pendingSuggestionText, term),
+      )!,
+    );
   }
 
   // AND semantics: the resource must carry every selected tag.
@@ -139,17 +243,23 @@ export async function listResources(filters: ListFilters = {}): Promise<Resource
         db
           .select({ one: sql`1` })
           .from(collectionItems)
-          .where(and(eq(collectionItems.resourceId, resources.id), eq(collectionItems.collectionId, filters.collectionId))),
+          .where(
+            and(eq(collectionItems.resourceId, resources.id), eq(collectionItems.collectionId, filters.collectionId)),
+          ),
       ),
     );
   }
 
-  // With a search, title matches come first, then description matches, then everything else.
-  const relevance = q
+  // With a search: the whole query in the title, then every term in the title, then a tag or category match, then the
+  // description, then the rest (notes, content, URL). Within a tier, the chosen sort.
+  const relevance = terms.length
     ? [
-        asc(
-          sql`case when ${resources.title} ilike ${`%${escapeLike(q)}%`} then 0 when ${resources.description} ilike ${`%${escapeLike(q)}%`} then 1 else 2 end`,
-        ),
+        asc(sql`case
+          when ${resources.title} ilike ${`%${escapeLike(q!)}%`} then 0
+          when ${and(...terms.map((t) => matchesTerm(resources.title, t)))} then 1
+          when ${or(...terms.map((t) => or(tagMatches(db, t), matchesTerm(categoryLabel, t))!))} then 2
+          when ${or(...terms.map((t) => matchesTerm(resources.description, t)))} then 3
+          else 4 end`),
       ]
     : [];
   const order =
@@ -157,26 +267,36 @@ export async function listResources(filters: ListFilters = {}): Promise<Resource
       ? [asc(sql`lower(${resources.title})`)]
       : filters.sort === "created"
         ? [desc(resources.createdAt)]
-        : filters.trash
-          ? [desc(resources.deletedAt)]
-          : [desc(resources.updatedAt)];
+        : filters.sort === "oldest"
+          ? [asc(resources.createdAt)]
+          : filters.trash
+            ? [desc(resources.deletedAt)]
+            : [desc(resources.updatedAt)];
+  // the id settles ties, so the same query always lists in the same order and pages never overlap
+  return { db, where: and(...where), orderBy: [...relevance, ...order, asc(resources.id)] };
+}
 
+export async function listResources(filters: ListFilters = {}): Promise<ResourceDTO[]> {
+  const { db, where, orderBy } = await listQuery(filters);
   const rows = await db
     .select()
     .from(resources)
-    .where(and(...where))
-    .orderBy(...relevance, ...order)
-    .limit(filters.limit ?? 1000);
-  const tagMap = await tagsFor(rows.map((r) => r.id));
-  return rows.map((r) => toDTO(r, tagMap.get(r.id) ?? []));
+    .where(where)
+    .orderBy(...orderBy)
+    .limit(filters.limit ?? 1000)
+    .offset(filters.offset ?? 0);
+  const ids = rows.map((r) => r.id);
+  const [tagMap, shots] = await Promise.all([tagsFor(ids), fullShotsFor(ids)]);
+  return rows.map((r) => toDTO(r, tagMap.get(r.id) ?? [], shots.get(r.id)));
 }
 
 export async function getResource(id: string): Promise<ResourceDetailDTO | null> {
   const db = await getDb();
   const [row] = await db.select().from(resources).where(eq(resources.id, id)).limit(1);
   if (!row) return null;
-  const [tagMap, assetList, cols] = await Promise.all([
+  const [tagMap, shots, assetList, cols, notes] = await Promise.all([
     tagsFor([id]),
+    fullShotsFor([id]),
     listResourceAssets(id),
     db
       .select({ id: collections.id, name: collections.name })
@@ -184,16 +304,38 @@ export async function getResource(id: string): Promise<ResourceDetailDTO | null>
       .innerJoin(collections, eq(collections.id, collectionItems.collectionId))
       .where(eq(collectionItems.resourceId, id))
       .orderBy(asc(collections.name)),
+    db
+      .select()
+      .from(assetAnnotations)
+      .where(eq(assetAnnotations.resourceId, id))
+      .orderBy(asc(assetAnnotations.createdAt)),
   ]);
-  return { ...toDTO(row, tagMap.get(id) ?? []), assets: assetList, collections: cols };
+  return {
+    ...toDTO(row, tagMap.get(id) ?? [], shots.get(id)),
+    assets: assetList,
+    collections: cols,
+    annotations: notes.map((n) => ({
+      id: n.id,
+      resourceId: n.resourceId,
+      assetId: n.assetId,
+      kind: n.kind as "pin" | "region",
+      x: n.x,
+      y: n.y,
+      width: n.width,
+      height: n.height,
+      note: n.note,
+      author: n.author as "user" | "agent",
+      createdAt: n.createdAt.toISOString(),
+    })),
+  };
 }
 
 export async function getResourcesByIds(ids: string[]): Promise<ResourceDTO[]> {
   if (ids.length === 0) return [];
   const db = await getDb();
   const rows = await db.select().from(resources).where(inArray(resources.id, ids));
-  const tagMap = await tagsFor(ids);
-  const byId = new Map(rows.map((r) => [r.id, toDTO(r, tagMap.get(r.id) ?? [])]));
+  const [tagMap, shots] = await Promise.all([tagsFor(ids), fullShotsFor(ids)]);
+  const byId = new Map(rows.map((r) => [r.id, toDTO(r, tagMap.get(r.id) ?? [], shots.get(r.id))]));
   return ids.map((id) => byId.get(id)).filter((r): r is ResourceDTO => !!r);
 }
 
@@ -250,18 +392,26 @@ function cleanUrl(url: string | null | undefined) {
 export async function createResource(input: ResourceInput): Promise<ResourceDetailDTO> {
   const data = resourceInput.parse(input);
   const db = await getDb();
-  const derived = data.type === "skill" && data.content ? deriveFromSkill(data.content) : {};
+  const derived: { title?: string; description?: string } =
+    data.type === "skill" && data.content ? deriveFromSkill(data.content) : {};
+  if (data.type === "source") {
+    // A site we know starts with its category, search URL and pricing filled in.
+    data.meta = { ...knownSourceMeta(data.sourceUrl), ...data.meta };
+    derived.description = knownSourceFor(data.sourceUrl)?.description;
+  }
   const [row] = await db
     .insert(resources)
     .values({
       type: data.type,
       title: data.title || derived.title || "Untitled",
-      description: data.description ?? derived.description ?? "",
+      // An empty description (a form left blank) still takes the derived one.
+      description: data.description || derived.description || "",
       sourceUrl: cleanUrl(data.sourceUrl),
       notes: data.notes ?? "",
       content: data.content ?? "",
       meta: data.meta ?? {},
       coverAssetId: data.coverAssetId ?? null,
+      reviewStatus: data.reviewStatus ?? null,
     })
     .returning();
   if (data.tags?.length) await setResourceTags(row.id, data.tags);
@@ -283,6 +433,7 @@ export async function updateResource(id: string, patch: ResourcePatch): Promise<
   if (data.content !== undefined) set.content = data.content;
   if (data.meta !== undefined) set.meta = { ...(current.meta ?? {}), ...data.meta };
   if (data.coverAssetId !== undefined) set.coverAssetId = data.coverAssetId;
+  if (data.reviewStatus !== undefined) set.reviewStatus = data.reviewStatus;
   if ((data.type ?? current.type) === "skill" && data.content !== undefined) {
     const d = deriveFromSkill(data.content);
     if (d.title) set.title = d.title;
@@ -342,6 +493,34 @@ export async function purgeExpiredTrash() {
   return rows.length;
 }
 
+/** How many resources the filters match, ignoring `limit` and `offset`. */
+export async function countResources(filters: ListFilters = {}): Promise<number> {
+  const { db, where } = await listQuery(filters);
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(resources)
+    .where(where);
+  return row?.n ?? 0;
+}
+
+/** Tag ids for facet or tag names, matched by kind and case-insensitively; names that don't exist are returned apart. */
+export async function resolveTagNames(names: { kind: TagKind; name: string }[]) {
+  if (!names.length) return { ids: [] as string[], unknown: [] as { kind: TagKind; name: string }[] };
+  const db = await getDb();
+  const ids: string[] = [];
+  const unknown: { kind: TagKind; name: string }[] = [];
+  for (const n of names) {
+    const [row] = await db
+      .select({ id: tags.id })
+      .from(tags)
+      .where(and(eq(tags.kind, n.kind), sql`lower(${tags.name}) = lower(${n.name.trim()})`))
+      .limit(1);
+    if (row) ids.push(row.id);
+    else unknown.push(n);
+  }
+  return { ids, unknown };
+}
+
 /** Live resources whose URL matches, ignoring protocol, www and trailing slashes. */
 export async function findByUrl(url: string, excludeId?: string): Promise<ResourceDTO[]> {
   const key = urlKey(url);
@@ -361,6 +540,44 @@ export async function findByUrl(url: string, excludeId?: string): Promise<Resour
   return rows.filter((r) => r.sourceUrl && urlKey(r.sourceUrl) === key).map((r) => toDTO(r, []));
 }
 
+/**
+ * Which saved resources came from which source, by host. Each resource goes to the most specific
+ * source that matches it, so a styles.refero.design page belongs to that source, not refero.design.
+ */
+export async function sourceAttribution(): Promise<Map<string, string[]>> {
+  const db = await getDb();
+  const rows = await db
+    .select({ id: resources.id, type: resources.type, sourceUrl: resources.sourceUrl })
+    .from(resources)
+    .where(and(isNull(resources.deletedAt), isNotNull(resources.sourceUrl)))
+    // two sources on one host: the one saved first owns it, every time
+    .orderBy(asc(resources.createdAt), asc(resources.id));
+  const sourceByHost = new Map<string, string>();
+  for (const r of rows) {
+    const host = r.type === "source" ? hostOf(r.sourceUrl) : null;
+    if (!host) continue;
+    // a known site's old domains (godly.website for recent.design) belong to the same source
+    const known = knownSourceFor(r.sourceUrl);
+    const hosts = known?.host === host ? [host, ...(known.aliases ?? [])] : [host];
+    for (const h of hosts) if (!sourceByHost.has(h)) sourceByHost.set(h, r.id);
+  }
+  const out = new Map<string, string[]>();
+  for (const r of rows) {
+    if (r.type === "source") continue;
+    const host = hostOf(r.sourceUrl);
+    const match = host && matchHost(host, sourceByHost.keys());
+    if (!match) continue;
+    const id = sourceByHost.get(match)!;
+    out.set(id, [...(out.get(id) ?? []), r.id]);
+  }
+  return out;
+}
+
+/** Number of saved resources per source id. */
+export async function sourceStats(): Promise<Record<string, number>> {
+  return Object.fromEntries([...(await sourceAttribution())].map(([id, ids]) => [id, ids.length]));
+}
+
 export async function typeCounts(): Promise<Record<string, number>> {
   const db = await getDb();
   const rows = await db
@@ -372,7 +589,22 @@ export async function typeCounts(): Promise<Record<string, number>> {
     .select({ count: sql<number>`count(*)::int` })
     .from(resources)
     .where(isNotNull(resources.deletedAt));
-  const counts: Record<string, number> = { trash: Number(trash[0]?.count ?? 0), all: 0 };
+  const [inbox] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(resources)
+    .where(and(isNull(resources.deletedAt), eq(resources.reviewStatus, "needs_review")));
+  // agent suggestions waiting in the Inbox, for references that are still around
+  const [suggested] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(resourceSuggestions)
+    .innerJoin(resources, eq(resources.id, resourceSuggestions.resourceId))
+    .where(and(isNull(resources.deletedAt), eq(resourceSuggestions.status, "pending")));
+  const counts: Record<string, number> = {
+    trash: Number(trash[0]?.count ?? 0),
+    inbox: Number(inbox?.count ?? 0),
+    suggestions: Number(suggested?.count ?? 0),
+    all: 0,
+  };
   for (const r of rows) {
     counts[r.type] = Number(r.count);
     counts.all += Number(r.count);
@@ -480,7 +712,10 @@ export async function getCollection(id: string) {
 export async function createCollection(input: z.infer<typeof collectionInput>) {
   const data = collectionInput.parse(input);
   const db = await getDb();
-  const [row] = await db.insert(collections).values({ name: data.name, description: data.description ?? "" }).returning();
+  const [row] = await db
+    .insert(collections)
+    .values({ name: data.name, description: data.description ?? "" })
+    .returning();
   return row;
 }
 
@@ -530,4 +765,11 @@ export async function collectionResourceIds(collectionId: string): Promise<strin
     .where(and(eq(collectionItems.collectionId, collectionId), isNull(resources.deletedAt)))
     .orderBy(asc(collectionItems.position));
   return rows.map((r) => r.id);
+}
+
+/** Takes resources out of the Inbox (or puts them back). */
+export async function setReviewStatus(ids: string[], reviewStatus: "needs_review" | null) {
+  if (!ids.length) return;
+  const db = await getDb();
+  await db.update(resources).set({ reviewStatus }).where(inArray(resources.id, ids));
 }

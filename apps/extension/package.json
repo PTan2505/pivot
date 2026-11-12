@@ -7,10 +7,11 @@
     "build": "tsc --noEmit && vite build",
     "dev": "vite build --watch --mode development",
     "icons": "node scripts/icons.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@stan-bag/core": "workspace:*",
+    "@pivot/core": "workspace:*",
     "lucide-react": "^1.61.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
@@ -24,6 +25,7 @@
     "sharp": "^0.35.5",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
-    "vite": "^8.3.5"
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
   }
 }

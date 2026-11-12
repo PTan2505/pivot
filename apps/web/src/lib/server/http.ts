@@ -1,9 +1,9 @@
 import { unstable_rethrow } from "next/navigation";
 import { connection, NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { AssetError } from "@stan-bag/core/assets";
-import { UnsafeUrlError } from "@stan-bag/core/net-guard";
-import { SkillConflictError } from "@stan-bag/core/skills";
+import { AssetError } from "@pivot/core/assets";
+import { UnsafeUrlError } from "@pivot/core/net-guard";
+import { SkillConflictError } from "@pivot/core/skills";
 
 export class HttpError extends Error {
   constructor(
@@ -34,9 +34,10 @@ export function route<Args extends unknown[]>(fn: (...args: Args) => Promise<Res
         const first = err.issues[0];
         return json({ error: `${first?.path.join(".") || "input"}: ${first?.message}` }, { status: 400 });
       }
-      if (err instanceof UnsafeUrlError || err instanceof AssetError) return json({ error: err.message }, { status: 400 });
+      if (err instanceof UnsafeUrlError || err instanceof AssetError)
+        return json({ error: err.message }, { status: 400 });
       if (err instanceof SkillConflictError) return json({ error: err.message, conflict: true }, { status: 409 });
-      console.error("[stan-bag]", err);
+      console.error("[pivot]", err);
       return json({ error: err instanceof Error ? err.message : "Something went wrong" }, { status: 500 });
     }
   };

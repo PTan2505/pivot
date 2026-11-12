@@ -3,7 +3,7 @@
 import { ClipboardCopy, PackageOpen, Trash2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ConfirmButton } from "@/components/confirm-button";
 import { LibraryView } from "@/components/library-view";
@@ -11,15 +11,18 @@ import { Button } from "@/components/ui/button";
 import { useUi } from "@/components/ui-store";
 import { copyContext } from "@/hooks/use-copy-resource";
 import { api, useInvalidate } from "@/lib/api";
-import type { CollectionDTO } from "@stan-bag/core/types";
+import type { CollectionDTO } from "@pivot/core/types";
 
 function NameInput({ id, initial }: { id: string; initial: string }) {
   const [name, setName] = useState(initial);
   const invalidate = useInvalidate();
+  const qc = useQueryClient();
   const rename = async () => {
     if (!name.trim() || name === initial) return setName(initial);
     await api(`/api/collections/${id}`, { method: "PATCH", json: { name } });
     invalidate();
+    // The breadcrumb and title read this collection's own query.
+    qc.invalidateQueries({ queryKey: ["collection", id] });
   };
   return (
     <input
@@ -40,7 +43,16 @@ function useCollection(id: string) {
 
 function CollectionTitle({ id }: { id: string }) {
   const { data } = useCollection(id);
-  return data ? <NameInput key={data.name} id={id} initial={data.name} /> : <span className="opacity-0">Collection</span>;
+  return data ? (
+    <NameInput key={data.name} id={id} initial={data.name} />
+  ) : (
+    <span className="opacity-0">Collection</span>
+  );
+}
+
+function CollectionName({ id }: { id: string }) {
+  const { data } = useCollection(id);
+  return <>{data?.name ?? "Collection"}</>;
 }
 
 function CollectionActions({ id }: { id: string }) {
@@ -59,7 +71,11 @@ function CollectionActions({ id }: { id: string }) {
       <Button variant="secondary" disabled={!all.length} onClick={() => copyContext(all)}>
         <ClipboardCopy /> Copy context
       </Button>
-      <Button variant="secondary" disabled={!all.length} onClick={() => openExport({ ids: all, name: data?.name ?? "collection" })}>
+      <Button
+        variant="secondary"
+        disabled={!all.length}
+        onClick={() => openExport({ ids: all, name: data?.name ?? "collection" })}
+      >
         <PackageOpen /> Export
       </Button>
       <ConfirmButton
@@ -88,11 +104,14 @@ function CollectionFromParams() {
       key={id}
       collectionId={id}
       title={<CollectionTitle id={id} />}
+      crumbs={[{ label: "Collections" }, { label: <CollectionName id={id} /> }]}
       actions={<CollectionActions id={id} />}
       emptyState={
         <div className="max-w-sm space-y-2">
           <p className="text-sm font-medium">This collection is empty</p>
-          <p className="text-sm text-muted-foreground">Select resources in the library and choose “Collection”, or add from a resource’s detail page.</p>
+          <p className="text-sm text-muted-foreground">
+            Select resources in the library and choose “Collection”, or add from a resource’s detail page.
+          </p>
         </div>
       }
     />

@@ -1,8 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import { absoluteAssetPath, getAsset, listResourceAssets } from "./assets";
-import { dataDir, expandHome, paths, skillsDir } from "./config";
+import { getAsset, listResourceAssets, materializeAsset, readAssetBytes } from "./assets";
+import { pluginsDir, skillsDir } from "./config";
+import { resolveWriteTarget, within } from "./write-target";
 import { getResourcesByIds } from "./resources";
 import type { SkillMeta } from "./skills";
 import { estimateImageTokens, estimateTextTokens, scaledImageSize, CLAUDE_MAX_IMAGE_EDGE } from "./tokens";
@@ -21,16 +22,35 @@ export interface TokenEstimate {
 
 interface PlannedAsset {
   asset: AssetDTO;
-  /** Absolute path of the stored original. */
-  source: string;
   /** Path written into context.md (absolute for clipboard, relative for exports). */
   ref: string;
 }
 
 const LANG_EXT: Record<string, string> = {
-  typescript: "ts", ts: "ts", tsx: "tsx", javascript: "js", js: "js", jsx: "jsx", css: "css", scss: "scss",
-  html: "html", python: "py", py: "py", json: "json", markdown: "md", md: "md", bash: "sh", sh: "sh",
-  shell: "sh", vue: "vue", svelte: "svelte", swift: "swift", kotlin: "kt", go: "go", rust: "rs", sql: "sql",
+  typescript: "ts",
+  ts: "ts",
+  tsx: "tsx",
+  javascript: "js",
+  js: "js",
+  jsx: "jsx",
+  css: "css",
+  scss: "scss",
+  html: "html",
+  python: "py",
+  py: "py",
+  json: "json",
+  markdown: "md",
+  md: "md",
+  bash: "sh",
+  sh: "sh",
+  shell: "sh",
+  vue: "vue",
+  svelte: "svelte",
+  swift: "swift",
+  kotlin: "kt",
+  go: "go",
+  rust: "rs",
+  sql: "sql",
 };
 
 export function slugify(s: string, fallback = "item") {
@@ -57,17 +77,18 @@ function fence(content: string, lang = "") {
 }
 
 function relevantAssets(assets: AssetDTO[], opts: ContextOptions) {
+  // Exports carry the Latest capture, states and attachments; the kept Original, the other colour scheme, the tablet
+  // and mobile shots and motion recordings stay in PIVOT.
   return assets.filter(
-    (a) => !a.missing && (a.role !== "screenshot-full" || opts.includeFullScreenshots) && a.kind !== "font",
+    (a) =>
+      !a.missing &&
+      ["screenshot", "screenshot-full", "state", "attachment"].includes(a.role) &&
+      (a.role !== "screenshot-full" || opts.includeFullScreenshots) &&
+      a.kind !== "font",
   );
 }
 
-function sectionFor(
-  r: ResourceDTO,
-  index: number,
-  planned: PlannedAsset[],
-  fileRef: string | null,
-) {
+function sectionFor(r: ResourceDTO, index: number, planned: PlannedAsset[], fileRef: string | null) {
   const def = TYPE_DEFS[r.type];
   const lines: string[] = [`## ${index}. ${r.title} — ${def.label}`, ""];
   const facts: string[] = [];
@@ -79,7 +100,8 @@ function sectionFor(
   const meta = r.meta as Record<string, unknown>;
   if (typeof meta.purpose === "string" && meta.purpose) facts.push(`- **Purpose:** ${meta.purpose}`);
   if (Array.isArray(meta.fonts) && meta.fonts.length) facts.push(`- **Fonts:** ${meta.fonts.join(", ")}`);
-  if (Array.isArray(meta.colors) && meta.colors.length) facts.push(`- **Colors:** ${meta.colors.map((c) => `\`${c}\``).join(" ")}`);
+  if (Array.isArray(meta.colors) && meta.colors.length)
+    facts.push(`- **Colors:** ${meta.colors.map((c) => `\`${c}\``).join(" ")}`);
   if (typeof meta.whenToUse === "string" && meta.whenToUse) facts.push(`- **When to use:** ${meta.whenToUse}`);
   if (facts.length) lines.push(...facts, "");
   if (r.description) lines.push(r.description.trim(), "");
@@ -115,13 +137,15 @@ function header(count: number) {
   return [
     "# UI Context",
     "",
-    `> ${count} resource${count === 1 ? "" : "s"} from Stan Bag, ${date}. Use them as references for the task — match the patterns, styles and rules described, and open the listed assets to see them.`,
+    `> ${count} resource${count === 1 ? "" : "s"} from PIVOT, ${date}. Use them as references for the task — match the patterns, styles and rules described, and open the listed assets to see them.`,
     "",
   ].join("\n");
 }
 
 function estimate(markdown: string, planned: PlannedAsset[]): TokenEstimate {
-  const images = planned.filter((p) => (p.asset.kind === "image" || p.asset.kind === "svg") && p.asset.width && p.asset.height);
+  const images = planned.filter(
+    (p) => (p.asset.kind === "image" || p.asset.kind === "svg") && p.asset.width && p.asset.height,
+  );
   const imageTokens = images.reduce((sum, p) => sum + estimateImageTokens(p.asset.width!, p.asset.height!), 0);
   const text = estimateTextTokens(markdown);
   return { text, images: imageTokens, total: text + imageTokens, imageCount: images.length };
@@ -138,8 +162,10 @@ export async function buildClipboardContext(resourceIds: string[], opts: Context
     for (const a of assets) {
       const row = await getAsset(a.id);
       if (!row) continue;
-      const source = absoluteAssetPath(row.storagePath);
-      planned.push({ asset: a, source, ref: source });
+      // R2 files are downloaded to a local cache so Claude Code can open them by path.
+      const local = await materializeAsset(row);
+      if (!local) continue;
+      planned.push({ asset: a, ref: local });
     }
     allPlanned.push(...planned);
     sections.push(sectionFor(r, i + 1, planned, null));
@@ -162,14 +188,20 @@ async function pathExists(p: string) {
     .catch(() => false);
 }
 
-async function copyAsset(source: string, dest: string, asset: AssetDTO, resize: boolean) {
+async function writeAsset(data: Buffer, dest: string, asset: AssetDTO, resize: boolean) {
   const resizable = asset.kind === "image" && asset.mimeType !== "image/gif";
-  if (resize && resizable && asset.width && asset.height && Math.max(asset.width, asset.height) > CLAUDE_MAX_IMAGE_EDGE) {
+  if (
+    resize &&
+    resizable &&
+    asset.width &&
+    asset.height &&
+    Math.max(asset.width, asset.height) > CLAUDE_MAX_IMAGE_EDGE
+  ) {
     const s = scaledImageSize(asset.width, asset.height);
-    await sharp(source).resize({ width: s.width, height: s.height }).toFile(dest);
+    await sharp(data).resize({ width: s.width, height: s.height }).toFile(dest);
     return { ...asset, width: s.width, height: s.height };
   }
-  await fs.copyFile(source, dest);
+  await fs.writeFile(dest, data);
   return asset;
 }
 
@@ -184,37 +216,19 @@ async function copyDir(src: string, dest: string) {
   }
 }
 
-/** Whether `p` is `root` or below it (path segments, never a string prefix). */
-function within(root: string, p: string) {
-  const rel = path.relative(root, p);
-  return rel === "" || (!path.isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${path.sep}`));
-}
-
-/** `p` with symlinks followed as far as it exists, then the rest as written (for a folder about to be created). */
-async function realish(p: string): Promise<string> {
-  const rest: string[] = [];
-  let cur = path.resolve(p);
-  for (;;) {
-    try {
-      return path.join(await fs.realpath(cur), ...rest.reverse());
-    } catch {
-      const parent = path.dirname(cur);
-      if (parent === cur) return path.resolve(p);
-      rest.push(path.basename(cur));
-      cur = parent;
-    }
-  }
-}
-
 /**
- * A skill's folder to copy into a bundle: only one inside the skills folder the app scans, never a path a resource's
- * metadata names elsewhere. Null otherwise (only SKILL.md is then written).
+ * A skill's folder to copy into a bundle: only one PIVOT itself scans (the global skills folder or a plugin's), never a
+ * path a resource's metadata names elsewhere. Null when it isn't one of those (only SKILL.md is then written).
  */
 async function skillSource(realPath: unknown): Promise<string | null> {
   if (typeof realPath !== "string" || !path.isAbsolute(realPath)) return null;
   const real = await fs.realpath(realPath).catch(() => null);
-  const root = await fs.realpath(skillsDir()).catch(() => null);
-  return real && root && real !== root && within(root, real) ? real : null;
+  if (!real) return null;
+  for (const root of [skillsDir(), pluginsDir()]) {
+    const r = await fs.realpath(root).catch(() => null);
+    if (r && real !== r && within(r, real)) return real;
+  }
+  return null;
 }
 
 /** A skill's folder name inside the bundle: one plain name, never a path; otherwise the resource's slug. */
@@ -225,20 +239,12 @@ const safeSkillName = (name: unknown, fallback: string) => {
 
 /**
  * Writes a self-contained bundle folder: context.md plus prompts, skills, rules… and copied assets. Everything goes into
- * a new folder under `targetDir`, never outside it, and never into the app's data folder.
+ * a new folder under `targetDir`, never outside it, and never into PIVOT's data folder (its database, token and owner
+ * passphrase live there).
  */
 export async function exportBundle(opts: ExportOptions) {
-  const raw = opts.targetDir.trim();
-  if (!raw.startsWith("~") && !path.isAbsolute(raw)) throw new Error("Choose an absolute folder path.");
-  const base = path.resolve(expandHome(raw));
-  // Where a bundle may go: the app's own export folder, or any folder that isn't in the data folder (it could shadow the
-  // app's files) or a hidden folder (~/.claude, ~/.ssh, .git…, where tools load configuration and commands).
-  const target = await realish(base);
-  if (!within(await realish(paths.exports()), target)) {
-    if (within(await realish(dataDir()), target)) throw new Error("Choose a folder outside PIVOT's data folder.");
-    if (target.split(path.sep).some((part) => part.startsWith(".")))
-      throw new Error("Choose a folder that isn't hidden (a folder whose name starts with a dot).");
-  }
+  // a real folder PIVOT may write into (see write-target.ts); everything below is written under it, never `targetDir`
+  const base = await resolveWriteTarget(opts.targetDir);
   await fs.mkdir(base, { recursive: true });
 
   const bundleSlug = slugify(opts.bundleName, "ui-context");
@@ -262,15 +268,15 @@ export async function exportBundle(opts: ExportOptions) {
     const planned: PlannedAsset[] = [];
     for (const a of relevantAssets(await listResourceAssets(r.id), opts)) {
       const row = await getAsset(a.id);
-      if (!row) continue;
-      const source = absoluteAssetPath(row.storagePath);
+      const data = row && (await readAssetBytes(row));
+      if (!row || !data) continue;
       const ext = path.extname(row.storagePath);
       const suffix = a.role === "screenshot-full" ? "-full" : "";
       const name = uniqueName(`${slug}${suffix}`, ext, usedAssetNames);
       await fs.mkdir(path.join(root, "assets"), { recursive: true });
-      const written = await copyAsset(source, path.join(root, "assets", name), a, !!opts.resizeImages);
+      const written = await writeAsset(data, path.join(root, "assets", name), a, !!opts.resizeImages);
       fileCount++;
-      planned.push({ asset: written, source, ref: `assets/${name}` });
+      planned.push({ asset: written, ref: `assets/${name}` });
     }
     allPlanned.push(...planned);
 
@@ -289,7 +295,11 @@ export async function exportBundle(opts: ExportOptions) {
       fileCount++;
     } else if (r.content.trim() && def.content !== "none") {
       const ext =
-        def.content === "json" ? ".json" : def.content === "code" ? `.${LANG_EXT[String(meta.language ?? "").toLowerCase()] ?? "txt"}` : ".md";
+        def.content === "json"
+          ? ".json"
+          : def.content === "code"
+            ? `.${LANG_EXT[String(meta.language ?? "").toLowerCase()] ?? "txt"}`
+            : ".md";
       const used = usedFileNames.get(def.exportDir) ?? new Set<string>();
       usedFileNames.set(def.exportDir, used);
       const name = uniqueName(slug, ext, used);

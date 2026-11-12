@@ -12,18 +12,18 @@ interface DbState {
 }
 
 // Survive Next.js dev hot reloads: one connection per process.
-const g = globalThis as unknown as { __stanBagDb?: DbState };
-const state: DbState = (g.__stanBagDb ??= {});
+const g = globalThis as unknown as { __pivotDb?: DbState };
+const state: DbState = (g.__pivotDb ??= {});
 
 function findMigrationsDir(): string {
-  if (process.env.STAN_BAG_MIGRATIONS_DIR) return process.env.STAN_BAG_MIGRATIONS_DIR;
+  if (process.env.PIVOT_MIGRATIONS_DIR) return process.env.PIVOT_MIGRATIONS_DIR;
   let dir = process.cwd();
   for (let i = 0; i < 6; i++) {
     const candidate = path.join(dir, "packages/core/src/db/migrations");
     if (fs.existsSync(candidate)) return candidate;
     dir = path.dirname(dir);
   }
-  throw new Error("Could not locate packages/core/src/db/migrations. Set STAN_BAG_MIGRATIONS_DIR.");
+  throw new Error("Could not locate packages/core/src/db/migrations. Set PIVOT_MIGRATIONS_DIR.");
 }
 
 function isAlive(pid: number): boolean {
@@ -42,7 +42,7 @@ function acquireLocalLock() {
     const pid = Number(fs.readFileSync(lock, "utf8").trim());
     if (pid && pid !== process.pid && isAlive(pid)) {
       throw new Error(
-        `The local database is already open in another Stan Bag process (pid ${pid}). Stop it before starting a new one.`,
+        `The local database is already open in another PIVOT process (pid ${pid}). Stop it before starting a new one.`,
       );
     }
   }

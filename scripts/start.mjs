@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 // `npm start`: install what's missing, rebuild if the code changed, then serve on 127.0.0.1.
 // `npm run dev` (this script with --dev): same environment, Next.js dev server.
+// `node scripts/start.mjs --scratch <folder>`: a throwaway PIVOT for tests and demos, on port 4400 by default. It never
+// reads .env, so it never reaches your Neon database or R2 bucket, never uses your data folder, never serves on 4321,
+// and leaves a marker (pivot-scratch.json) that test scripts check before they write anything.
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +14,15 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const web = path.join(root, "apps/web");
 const dev = process.argv.includes("--dev");
+// Unknown arguments stop everything before any side effect: a mistyped flag must never fall back to the real PIVOT
+// (your data folder, .env database, port 4321).
+for (const [i, arg] of process.argv.slice(2).entries()) {
+  if (process.argv[i + 1] === "--scratch") continue; // the folder given to --scratch
+  if (!["--dev", "--rebuild", "--scratch"].includes(arg)) {
+    console.error(`› Unknown argument ${JSON.stringify(arg)}: nothing was started.`);
+    process.exit(1);
+  }
+}
 
 function loadEnv(file) {
   if (!fs.existsSync(file)) return;
@@ -37,8 +50,80 @@ function newestMtime(dir) {
   return newest;
 }
 
-loadEnv(path.join(root, ".env"));
-process.env.STAN_BAG_MIGRATIONS_DIR ??= path.join(root, "packages/core/src/db/migrations");
+// Scratch mode is decided before anything else runs, and refuses anything that could be the real PIVOT.
+const scratchAt = process.argv.indexOf("--scratch");
+if (scratchAt >= 0) {
+  const fail = (why) => {
+    console.error(`› --scratch refused: ${why}`);
+    process.exit(1);
+  };
+  const raw = process.argv[scratchAt + 1];
+  if (!raw || raw.startsWith("--")) fail("give it a folder, e.g. --scratch /tmp/pivot-scratch");
+  const dir = path.resolve(raw.replace(/^~(?=$|\/)/, os.homedir()));
+  for (const real of [path.join(os.homedir(), ".pivot"), path.join(os.homedir(), ".stan-bag")])
+    if (dir === real || dir.startsWith(real + path.sep)) fail(`${dir} is (inside) your real data folder`);
+  if (dir === root || dir.startsWith(root + path.sep)) fail("keep scratch data outside the repository");
+  // empty values count as unset: no Neon, no R2, whatever the shell has
+  for (const k of [
+    "DATABASE_URL",
+    "R2_ACCOUNT_ID",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "R2_BUCKET",
+    "R2_ENDPOINT",
+  ])
+    process.env[k] = "";
+  process.env.PIVOT_DATA_DIR = dir;
+  // Claude Code's own folders too: a scratch PIVOT never reads or writes your real skills, plugins or skill lock
+  process.env.CLAUDE_SKILLS_DIR = path.join(dir, "claude", "skills");
+  process.env.CLAUDE_PLUGINS_DIR = path.join(dir, "claude", "plugins");
+  process.env.AGENTS_SKILL_LOCK = path.join(dir, "agents", ".skill-lock.json");
+  process.env.PORT ||= "4400";
+  if (process.env.PORT === "4321") fail("4321 is the real PIVOT's port");
+  process.env.PIVOT_NO_OPEN = "1";
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, "pivot-scratch.json"),
+    JSON.stringify({
+      scratch: true,
+      database: "pglite",
+      storage: "local",
+      claudeSkillsDir: process.env.CLAUDE_SKILLS_DIR,
+      claudePluginsDir: process.env.CLAUDE_PLUGINS_DIR,
+      startedAt: new Date().toISOString(),
+    }),
+  );
+  console.log(`› Scratch PIVOT: data in ${dir}, no .env, no Neon, no R2, its own Claude skill folders`);
+  // tests: stop once the scratch environment is set, before installing, building or serving anything
+  if (process.env.PIVOT_LAUNCH_DRY_RUN === "1") process.exit(0);
+} else {
+  loadEnv(path.join(root, ".env"));
+}
+
+// The project used to be called Stan Bag and kept its data in ~/.stan-bag (API token, cache, local database).
+// Move it once to the new default so the paired extension and local data carry over.
+const legacyDataDir = path.join(os.homedir(), ".stan-bag");
+const dataDir = path.join(os.homedir(), ".pivot");
+if (!process.env.PIVOT_DATA_DIR && !fs.existsSync(dataDir) && fs.existsSync(legacyDataDir)) {
+  fs.renameSync(legacyDataDir, dataDir);
+  console.log(`› Moved ${legacyDataDir} to ${dataDir}`);
+}
+
+// fail closed: never start an empty local library in place of one kept in Neon because .env is missing
+if (scratchAt < 0) {
+  const { missingConfig } = await import("./launch-guard.mjs");
+  const why = missingConfig({
+    dataDir: process.env.PIVOT_DATA_DIR ? path.resolve(process.env.PIVOT_DATA_DIR) : dataDir,
+    env: process.env,
+    envFile: path.join(root, ".env"),
+  });
+  if (why) {
+    console.error(`› ${why}`);
+    process.exit(1);
+  }
+}
+
+process.env.PIVOT_MIGRATIONS_DIR ??= path.join(root, "packages/core/src/db/migrations");
 const port = process.env.PORT || "4321";
 
 if (!fs.existsSync(path.join(web, "node_modules"))) {
@@ -67,13 +152,13 @@ if (!dev) {
     ...["next.config.ts", "package.json"].map((f) => fs.statSync(path.join(web, f)).mtimeMs),
   );
   if (changed > built || process.argv.includes("--rebuild")) {
-    console.log("› Building Stan Bag…");
+    console.log("› Building PIVOT…");
     run("pnpm", ["--filter", "web", "exec", "next", "build"]);
   }
 }
 
 const url = `http://127.0.0.1:${port}`;
-console.log(`› Stan Bag ${dev ? "(dev) " : ""}→ ${url}`);
+console.log(`› PIVOT ${dev ? "(dev) " : ""}→ ${url}`);
 const server = spawn("pnpm", ["exec", "next", dev ? "dev" : "start", "-H", "127.0.0.1", "-p", port], {
   cwd: web,
   stdio: "inherit",
@@ -81,7 +166,7 @@ const server = spawn("pnpm", ["exec", "next", dev ? "dev" : "start", "-H", "127.
 });
 
 // Open the browser once the server answers (macOS), unless disabled.
-if (process.platform === "darwin" && !process.env.STAN_BAG_NO_OPEN) {
+if (process.platform === "darwin" && !process.env.PIVOT_NO_OPEN) {
   const started = Date.now();
   const poll = setInterval(async () => {
     try {

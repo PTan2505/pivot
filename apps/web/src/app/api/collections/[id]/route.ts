@@ -1,4 +1,4 @@
-import { deleteCollection, getCollection, updateCollection } from "@stan-bag/core/resources";
+import { deleteCollection, getCollection, updateCollection } from "@pivot/core/resources";
 import { body, HttpError, json, route, type IdParams } from "@/lib/server/http";
 
 export const GET = route(async (_req: Request, { params }: IdParams) => {

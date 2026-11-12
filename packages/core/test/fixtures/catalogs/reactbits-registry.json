@@ -1,0 +1,280 @@
+{
+  "name": "@react-bits",
+  "homepage": "https://reactbits.dev",
+  "items": [
+    {
+      "name": "AnimatedContent-JS-CSS",
+      "title": "AnimatedContent",
+      "description": "Wrapper that reveals its content on scroll with slides, blur, 3D tilts, soft wipes and staggered children.",
+      "type": "registry:component",
+      "dependencies": ["gsap@^3.13.0"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:component",
+          "path": "AnimatedContent/AnimatedContent.jsx"
+        }
+      ]
+    },
+    {
+      "name": "AnimatedContent-JS-TW",
+      "title": "AnimatedContent",
+      "description": "Wrapper that reveals its content on scroll with slides, blur, 3D tilts, soft wipes and staggered children.",
+      "type": "registry:component",
+      "dependencies": ["gsap@^3.13.0"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:component",
+          "path": "AnimatedContent/AnimatedContent.jsx"
+        }
+      ]
+    },
+    {
+      "name": "AnimatedContent-TS-CSS",
+      "title": "AnimatedContent",
+      "description": "Wrapper that reveals its content on scroll with slides, blur, 3D tilts, soft wipes and staggered children.",
+      "type": "registry:component",
+      "dependencies": ["gsap@^3.13.0"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:component",
+          "path": "AnimatedContent/AnimatedContent.tsx"
+        }
+      ]
+    },
+    {
+      "name": "AnimatedContent-TS-TW",
+      "title": "AnimatedContent",
+      "description": "Wrapper that reveals its content on scroll with slides, blur, 3D tilts, soft wipes and staggered children.",
+      "type": "registry:component",
+      "dependencies": ["gsap@^3.13.0"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:component",
+          "path": "AnimatedContent/AnimatedContent.tsx"
+        }
+      ]
+    },
+    {
+      "name": "BlobCursor-JS-CSS",
+      "title": "BlobCursor",
+      "description": "Liquid metal blob cursor that stretches, sloshes and bursts into droplets, in chrome, jelly, pearl or ink.",
+      "type": "registry:component",
+      "dependencies": ["three@^0.180.0"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:file",
+          "path": "BlobCursor.css",
+          "target": "@components/BlobCursor.css"
+        },
+        {
+          "type": "registry:component",
+          "path": "BlobCursor.jsx"
+        }
+      ]
+    },
+    {
+      "name": "BlobCursor-JS-TW",
+      "title": "BlobCursor",
+      "description": "Liquid metal blob cursor that stretches, sloshes and bursts into droplets, in chrome, jelly, pearl or ink.",
+      "type": "registry:component",
+      "dependencies": ["three@^0.180.0"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:component",
+          "path": "BlobCursor/BlobCursor.jsx"
+        }
+      ]
+    },
+    {
+      "name": "BlobCursor-TS-CSS",
+      "title": "BlobCursor",
+      "description": "Liquid metal blob cursor that stretches, sloshes and bursts into droplets, in chrome, jelly, pearl or ink.",
+      "type": "registry:component",
+      "dependencies": ["three@^0.180.0"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:file",
+          "path": "BlobCursor.css",
+          "target": "@components/BlobCursor.css"
+        },
+        {
+          "type": "registry:component",
+          "path": "BlobCursor.tsx"
+        }
+      ]
+    },
+    {
+      "name": "BlobCursor-TS-TW",
+      "title": "BlobCursor",
+      "description": "Liquid metal blob cursor that stretches, sloshes and bursts into droplets, in chrome, jelly, pearl or ink.",
+      "type": "registry:component",
+      "dependencies": ["three@^0.180.0"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:component",
+          "path": "BlobCursor/BlobCursor.tsx"
+        }
+      ]
+    },
+    {
+      "name": "ASCIIText-JS-CSS",
+      "title": "ASCIIText",
+      "description": "Waving ASCII text that tilts toward the pointer, scrambles on hover and ripples on click.",
+      "type": "registry:component",
+      "dependencies": [],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:component",
+          "path": "ASCIIText/ASCIIText.jsx"
+        }
+      ]
+    },
+    {
+      "name": "ASCIIText-JS-TW",
+      "title": "ASCIIText",
+      "description": "Waving ASCII text that tilts toward the pointer, scrambles on hover and ripples on click.",
+      "type": "registry:component",
+      "dependencies": [],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:component",
+          "path": "ASCIIText/ASCIIText.jsx"
+        }
+      ]
+    },
+    {
+      "name": "ASCIIText-TS-CSS",
+      "title": "ASCIIText",
+      "description": "Waving ASCII text that tilts toward the pointer, scrambles on hover and ripples on click.",
+      "type": "registry:component",
+      "dependencies": [],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:component",
+          "path": "ASCIIText/ASCIIText.tsx"
+        }
+      ]
+    },
+    {
+      "name": "ASCIIText-TS-TW",
+      "title": "ASCIIText",
+      "description": "Waving ASCII text that tilts toward the pointer, scrambles on hover and ripples on click.",
+      "type": "registry:component",
+      "dependencies": [],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:component",
+          "path": "ASCIIText/ASCIIText.tsx"
+        }
+      ]
+    },
+    {
+      "name": "EvilEye-JS-CSS",
+      "title": "EvilEye",
+      "description": "Procedural evil eye shader with animated iris, slit pupil, and fiery outer glow.",
+      "type": "registry:component",
+      "dependencies": ["ogl@^1.0.11"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:file",
+          "path": "EvilEye.css",
+          "target": "@components/EvilEye.css"
+        },
+        {
+          "type": "registry:component",
+          "path": "EvilEye.jsx"
+        }
+      ]
+    },
+    {
+      "name": "EvilEye-JS-TW",
+      "title": "EvilEye",
+      "description": "Procedural evil eye shader with animated iris, slit pupil, and fiery outer glow.",
+      "type": "registry:component",
+      "dependencies": ["ogl@^1.0.11"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:component",
+          "path": "EvilEye/EvilEye.jsx"
+        }
+      ]
+    },
+    {
+      "name": "EvilEye-TS-CSS",
+      "title": "EvilEye",
+      "description": "Procedural evil eye shader with animated iris, slit pupil, and fiery outer glow.",
+      "type": "registry:component",
+      "dependencies": ["ogl@^1.0.11"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:file",
+          "path": "EvilEye.css",
+          "target": "@components/EvilEye.css"
+        },
+        {
+          "type": "registry:component",
+          "path": "EvilEye.tsx"
+        }
+      ]
+    },
+    {
+      "name": "EvilEye-TS-TW",
+      "title": "EvilEye",
+      "description": "Procedural evil eye shader with animated iris, slit pupil, and fiery outer glow.",
+      "type": "registry:component",
+      "dependencies": ["ogl@^1.0.11"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:component",
+          "path": "EvilEye/EvilEye.tsx"
+        }
+      ]
+    },
+    {
+      "name": "SoundEngine-JS",
+      "title": "SoundEngine",
+      "description": "The tiny Web Audio engine that renders and plays React Bits sounds, with a useSound hook.",
+      "type": "registry:component",
+      "dependencies": [],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:component",
+          "path": "react-bits-sound.js",
+          "target": "@components/sounds/react-bits-sound.js"
+        }
+      ]
+    },
+    {
+      "name": "SoundEngine-TS",
+      "title": "SoundEngine",
+      "description": "The tiny Web Audio engine that renders and plays React Bits sounds, with a useSound hook.",
+      "type": "registry:component",
+      "dependencies": [],
+      "registryDependencies": [],
+      "files": [
+        {
+          "type": "registry:component",
+          "path": "react-bits-sound.ts",
+          "target": "@components/sounds/react-bits-sound.ts"
+        }
+      ]
+    }
+  ]
+}

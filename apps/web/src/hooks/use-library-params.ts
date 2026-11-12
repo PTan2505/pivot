@@ -2,14 +2,47 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
-import { isResourceType, type ResourceType } from "@stan-bag/core/types";
+import {
+  isResourceType,
+  SEARCH_SCOPES,
+  isSectionId,
+  SECTIONS,
+  sectionOf,
+  SOURCE_CATEGORIES,
+  type ResourceType,
+  type SearchScope,
+  type Section,
+  type SourceCategory,
+} from "@pivot/core/types";
 
 export interface LibraryParams {
   q: string;
+  /** The navbar section. Follows `type` when one is chosen; Library by default. */
+  section: Section;
   type: ResourceType | undefined;
   tags: string[];
-  sort: "updated" | "created" | "title";
+  /** Source id: only resources saved from that source. */
+  via: string;
+  /** "needs": only the Inbox (quick saves waiting for review). */
+  review: string;
+  /** Collection id: only resources in that collection. */
+  collection: string;
+  /** Only resources saved from this exact page. */
+  url: string;
+  /** Sources only: one source category. */
+  category: SourceCategory | undefined;
+  sort: "updated" | "created" | "oldest" | "title";
   view: "grid" | "list";
+  /** Hybrid search: everything (default), only the library, or only outside it. Applies while there's a query. */
+  scope: SearchScope;
+}
+
+type ParamsPatch = Partial<Omit<LibraryParams, "section">> & { section?: Section["id"] };
+
+/** The link for a navbar section: single-type sections link to their type, so existing `?type=` links keep working. */
+export function sectionHref(section: Section) {
+  if (section.types.length === 1) return `/?type=${section.types[0]}`;
+  return section.id === "library" ? "/" : `/?section=${section.id}`;
 }
 
 /** Filters live in the URL so every view is linkable and survives back/forward. */
@@ -17,25 +50,48 @@ export function useLibraryParams() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const type = sp.get("type");
+  const rawType = sp.get("type");
+  const rawSection = sp.get("section");
   const sort = sp.get("sort");
+  let type = isResourceType(rawType) ? rawType : undefined;
+  const section: Section = type
+    ? sectionOf(type)
+    : (SECTIONS.find((s) => s.id === (isSectionId(rawSection) ? rawSection : "library")) ?? SECTIONS[0]);
+  // A one-type section (Sources, Skills) always means that type.
+  if (!type && section.types.length === 1) type = section.types[0];
   const params: LibraryParams = {
     q: sp.get("q") ?? "",
-    type: isResourceType(type) ? type : undefined,
+    section,
+    type,
     tags: sp.get("tags")?.split(",").filter(Boolean) ?? [],
-    sort: sort === "created" || sort === "title" ? sort : "updated",
+    via: sp.get("via") ?? "",
+    review: sp.get("review") === "needs" ? "needs" : "",
+    collection: sp.get("collection") ?? "",
+    url: sp.get("url") ?? "",
+    category: type === "source" ? SOURCE_CATEGORIES.find((c) => c.value === sp.get("category"))?.value : undefined,
+    sort: sort === "created" || sort === "oldest" || sort === "title" ? sort : "updated",
     view: sp.get("view") === "list" ? "list" : "grid",
+    scope: SEARCH_SCOPES.find((x) => x === sp.get("scope")) ?? "all",
   };
 
   const set = useCallback(
-    (patch: Partial<LibraryParams>) => {
+    (patch: ParamsPatch) => {
       const next = new URLSearchParams(sp.toString());
       for (const [k, v] of Object.entries(patch)) {
         const value = Array.isArray(v) ? v.join(",") : v;
-        const isDefault = !value || (k === "sort" && value === "updated") || (k === "view" && value === "grid");
+        const isDefault =
+          !value ||
+          (k === "sort" && value === "updated") ||
+          (k === "view" && value === "grid") ||
+          (k === "scope" && value === "all") ||
+          (k === "section" && value === "library");
         if (isDefault) next.delete(k);
         else next.set(k, String(value));
       }
+      // A type implies its section, so don't keep both in the URL.
+      if (next.get("type")) next.delete("section");
+      // A source category means nothing once you leave Sources.
+      if ("type" in patch && !("category" in patch)) next.delete("category");
       const qs = next.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { exportBundle } from "@stan-bag/core/context";
+import { exportBundle } from "@pivot/core/context";
 import { body, json, route } from "@/lib/server/http";
 import { rememberExport } from "@/lib/server/exports";
 

@@ -1,0 +1,27 @@
+# Git hooks, installed by `pnpm install` (prepare → lefthook install). Docs: HOOK.md
+pre-commit:
+  parallel: true
+  commands:
+    branch:
+      run: sh scripts/hooks/check-branch.sh
+    secrets:
+      run: sh scripts/hooks/check-secrets.sh
+    format:
+      glob: "*.{ts,tsx,js,jsx,mjs,cjs,json,css,md,html,yml,yaml}"
+      run: pnpm exec prettier --write --log-level warn --ignore-unknown {staged_files}
+      stage_fixed: true
+    lint:
+      root: "apps/web/"
+      glob: "*.{ts,tsx,js,jsx,mjs}"
+      run: pnpm exec eslint --fix --no-warn-ignored {staged_files}
+      stage_fixed: true
+
+pre-push:
+  parallel: true
+  commands:
+    typecheck:
+      run: pnpm typecheck
+    lint:
+      run: pnpm lint
+    test:
+      run: pnpm test

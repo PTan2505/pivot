@@ -6,7 +6,14 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUi } from "@/components/ui-store";
@@ -20,7 +27,7 @@ interface Tokens {
   imageCount: number;
 }
 
-const LAST_DIR_KEY = "stan-bag:last-export-dir";
+const LAST_DIR_KEY = "pivot:last-export-dir";
 
 function readLastDir() {
   try {
@@ -35,7 +42,14 @@ export function ExportDialog() {
   return (
     <Dialog open={!!exportTarget} onOpenChange={(o) => !o && closeExport()}>
       <DialogContent className="sm:max-w-lg">
-        {exportTarget && <ExportBody key={exportTarget.ids.join(",")} ids={exportTarget.ids} initialName={exportTarget.name} onClose={closeExport} />}
+        {exportTarget && (
+          <ExportBody
+            key={exportTarget.ids.join(",")}
+            ids={exportTarget.ids}
+            initialName={exportTarget.name}
+            onClose={closeExport}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -53,7 +67,8 @@ function ExportBody({ ids, initialName, onClose }: { ids: string[]; initialName:
 
   const estimate = useQuery({
     queryKey: ["estimate", ids, full],
-    queryFn: () => api<{ tokens: Tokens }>("/api/context", { method: "POST", json: { ids, includeFullScreenshots: full } }),
+    queryFn: () =>
+      api<{ tokens: Tokens }>("/api/context", { method: "POST", json: { ids, includeFullScreenshots: full } }),
   });
 
   const run = async () => {
@@ -78,91 +93,107 @@ function ExportBody({ ids, initialName, onClose }: { ids: string[]; initialName:
 
   return (
     <>
-        <DialogHeader>
-          <DialogTitle>{result ? "Bundle exported" : "Export for Claude Code"}</DialogTitle>
-          <DialogDescription>
-            {result
-              ? "Point Claude Code at context.md — it lists every resource and links the copied files."
-              : `Writes context.md, prompts, skills and copies of ${ids.length} resource${ids.length === 1 ? "" : "s"}' files into a new folder.`}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogHeader>
+        <DialogTitle>{result ? "Bundle exported" : "Export for Claude Code"}</DialogTitle>
+        <DialogDescription>
+          {result
+            ? "Point Claude Code at context.md — it lists every resource and links the copied files."
+            : `Writes context.md, prompts, skills and copies of ${ids.length} resource${ids.length === 1 ? "" : "s"}' files into a new folder.`}
+        </DialogDescription>
+      </DialogHeader>
 
-        {result ? (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 rounded-[14px] bg-surface px-4 py-3 font-mono text-xs break-all">
-              <Check className="size-3.5 shrink-0 text-success" aria-hidden /> {result.path}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {result.fileCount} files · ~{formatTokens(result.tokens.total)} tokens
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" onClick={() => copyText(`Read ${result.path}/context.md and use it as context for this task.`, "Prompt copied")}>
-                <ClipboardCopy /> Copy prompt for Claude
-              </Button>
-              <Button variant="secondary" onClick={() => copyText(result.path, "Path copied")}>
-                <ClipboardCopy /> Copy path
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => api("/api/reveal", { method: "POST", json: { path: result.path } }).catch((e) => toast.error(e.message))}
-              >
-                <FolderOpen /> Reveal in Finder
-              </Button>
-            </div>
+      {result ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 rounded-[14px] bg-surface px-4 py-3 font-mono text-xs break-all">
+            <Check className="size-3.5 shrink-0 text-success" aria-hidden /> {result.path}
           </div>
-        ) : (
-          <form
-            id="export-form"
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              run();
-            }}
-          >
-            <div className="space-y-1.5">
-              <Label htmlFor="export-name">Bundle name</Label>
-              <Input id="export-name" value={name} onChange={(e) => setName(e.target.value)} required />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="export-dir">Destination folder</Label>
-              <Input id="export-dir" value={dir} onChange={(e) => setDir(e.target.value)} className="font-mono text-xs" placeholder="~/Projects/my-app/.claude/context" required />
-              <p className="text-xs text-muted-foreground">A new sub-folder is created; nothing existing is overwritten.</p>
-            </div>
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox checked={resize} onCheckedChange={(v) => setResize(!!v)} /> Resize large images to 1568px (Claude’s limit)
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox checked={full} onCheckedChange={(v) => setFull(!!v)} /> Include full-page screenshots
-              </label>
-            </div>
-          </form>
-        )}
-
-        <div className="flex items-center justify-between gap-3 border-t border-divider pt-4 text-xs text-ink-muted">
-          <span>
-            {t ? (
-              <>
-                ~<span className="font-mono text-foreground">{formatTokens(t.total)}</span> tokens · text {formatTokens(t.text)} · {t.imageCount} image
-                {t.imageCount === 1 ? "" : "s"} {formatTokens(t.images)}
-              </>
-            ) : (
-              "Estimating…"
-            )}
-          </span>
-          <DialogFooter className="m-0 p-0">
-            {result ? (
-              <Button onClick={onClose}>
-                Done
-              </Button>
-            ) : (
-              <Button type="submit" form="export-form" disabled={busy || !dir.trim() || !name.trim()}>
-                {busy && <Loader2 className="animate-spin" />} Export
-              </Button>
-            )}
-          </DialogFooter>
+          <p className="text-xs text-muted-foreground">
+            {result.fileCount} files · ~{formatTokens(result.tokens.total)} tokens
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              onClick={() =>
+                copyText(`Read ${result.path}/context.md and use it as context for this task.`, "Prompt copied")
+              }
+            >
+              <ClipboardCopy /> Copy prompt for Claude
+            </Button>
+            <Button variant="secondary" onClick={() => copyText(result.path, "Path copied")}>
+              <ClipboardCopy /> Copy path
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                api("/api/reveal", { method: "POST", json: { path: result.path } }).catch((e) => toast.error(e.message))
+              }
+            >
+              <FolderOpen /> Reveal in Finder
+            </Button>
+          </div>
         </div>
+      ) : (
+        <form
+          id="export-form"
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run();
+          }}
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="export-name">Bundle name</Label>
+            <Input id="export-name" value={name} onChange={(e) => setName(e.target.value)} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="export-dir">Destination folder</Label>
+            <Input
+              id="export-dir"
+              value={dir}
+              onChange={(e) => setDir(e.target.value)}
+              className="font-mono text-xs"
+              placeholder="~/Projects/my-app/.claude/context"
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              A new sub-folder is created; nothing existing is overwritten.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={resize} onCheckedChange={(v) => setResize(!!v)} /> Resize large images to 1568px
+              (Claude’s limit)
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={full} onCheckedChange={(v) => setFull(!!v)} /> Include full-page screenshots
+            </label>
+          </div>
+        </form>
+      )}
+
+      <div className="flex items-center justify-between gap-3 border-t border-divider pt-4 text-xs text-ink-muted">
+        <span>
+          {t ? (
+            <>
+              ~<span className="font-mono text-foreground">{formatTokens(t.total)}</span> tokens · text{" "}
+              {formatTokens(t.text)} · {t.imageCount} image
+              {t.imageCount === 1 ? "" : "s"} {formatTokens(t.images)}
+            </>
+          ) : (
+            "Estimating…"
+          )}
+        </span>
+        <DialogFooter className="m-0 p-0">
+          {result ? (
+            <Button onClick={onClose}>Done</Button>
+          ) : (
+            <Button type="submit" form="export-form" disabled={busy || !dir.trim() || !name.trim()}>
+              {busy && <Loader2 className="animate-spin" />} Export
+            </Button>
+          )}
+        </DialogFooter>
+      </div>
     </>
   );
 }

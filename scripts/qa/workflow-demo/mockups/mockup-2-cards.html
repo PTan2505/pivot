@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Bold cards</title>
+    <link rel="stylesheet" href="shared.css" />
+    <style>
+      body {
+        background: var(--leaf);
+        color: var(--leaf-ink);
+      }
+      .hero {
+        padding: 72px 0;
+      }
+      .hero h1 {
+        font-size: clamp(40px, 6vw, 72px);
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 20px;
+        margin: 40px 0;
+      }
+      .card {
+        background: var(--paper);
+        color: var(--ink);
+        border-radius: var(--radius);
+        padding: 28px;
+      }
+      .price {
+        font: 700 40px system-ui;
+      }
+      .cta {
+        background: var(--paper);
+        color: var(--leaf);
+      }
+      .note {
+        font: 13px system-ui;
+        opacity: 0.8;
+        padding: 16px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <a class="brand" href="#"><img src="logo.svg" alt="" width="32" height="32" />Kettle &amp; Leaf</a
+        ><a class="cta" href="#">Start my box</a>
+      </header>
+      <main class="hero">
+        <h1>Your tea shelf, refilled monthly.</h1>
+        <div class="cards">
+          <div class="card">
+            <h2>Taster</h2>
+            <p class="price">$14</p>
+            <p>Two teas, 50 g each.</p>
+          </div>
+          <div class="card">
+            <h2>Daily</h2>
+            <p class="price">$24</p>
+            <p>Three teas, 100 g each.</p>
+          </div>
+        </div>
+      </main>
+      <p class="note">Direction 2 · Bold cards — after “Pricing cards with switch”. Static: no scripts.</p>
+    </div>
+  </body>
+</html>

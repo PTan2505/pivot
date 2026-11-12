@@ -1,4 +1,4 @@
-import { createCollection, listCollections } from "@stan-bag/core/resources";
+import { createCollection, listCollections } from "@pivot/core/resources";
 import { body, json, route } from "@/lib/server/http";
 
 export const GET = route(async () => json(await listCollections()));

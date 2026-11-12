@@ -1,116 +1,592 @@
-# Stan Bag — Design system
+---
+name: PIVOT
+description: A personal library of UI references, assets, prompts and skills; ember light and frosted glass on a warm black kiln.
+colors:
+  canvas: "#0c0806"
+  surface: "#18110d"
+  surface-raised: "#221812"
+  divider: "#33251c"
+  ink: "#fbf3ea"
+  ink-secondary: "#e0d3c7"
+  ink-muted: "#b8a596"
+  ink-subtle: "#94806f"
+  inverse: "#fbf3ea"
+  on-inverse: "#0c0806"
+  accent-fill: "#ff6a13"
+  on-accent: "#0c0806"
+  accent-text: "#ff8c42"
+  danger: "#ff6b81"
+  success: "#5ad19a"
+  warning: "#ffc24a"
+  ember-core: "#ffb347"
+  ember: "#ff6a13"
+  ember-deep: "#b8260b"
+  glass: "rgb(34 24 18 / 0.65)"
+  glass-strong: "rgb(34 24 18 / 0.86)"
+  glass-edge: "rgb(255 238 222 / 0.1)"
+typography:
+  display:
+    fontFamily: "Geist, sans-serif"
+    fontSize: "72px"
+    fontWeight: 500
+    lineHeight: 0.96
+    letterSpacing: "-0.045em"
+  title-lg:
+    fontFamily: "Geist, sans-serif"
+    fontSize: "22px"
+    fontWeight: 500
+    lineHeight: 1.2
+    letterSpacing: "-0.02em"
+  title:
+    fontFamily: "Geist, sans-serif"
+    fontSize: "16px"
+    fontWeight: 500
+    lineHeight: 1.4
+  body:
+    fontFamily: "Geist, sans-serif"
+    fontSize: "15px"
+    fontWeight: 400
+    lineHeight: 1.5
+  label:
+    fontFamily: "Geist, sans-serif"
+    fontSize: "14px"
+    fontWeight: 500
+    lineHeight: 1.2
+  meta:
+    fontFamily: "Geist, sans-serif"
+    fontSize: "14px"
+    fontWeight: 400
+    lineHeight: 1.4
+  mono:
+    fontFamily: "Geist Mono, monospace"
+    fontSize: "12px"
+    fontWeight: 400
+    lineHeight: 1.6
+rounded:
+  sm: "6px"
+  md: "10px"
+  card: "14px"
+  glass-card: "18px"
+  frame: "11px"
+  panel: "20px"
+  bar: "28px"
+  pill: "9999px"
+spacing:
+  space-1: "4px"
+  space-2: "8px"
+  space-3: "12px"
+  space-4: "16px"
+  space-6: "24px"
+  space-10: "40px"
+  space-16: "64px"
+components:
+  button-primary:
+    backgroundColor: "{colors.accent-fill}"
+    textColor: "{colors.on-accent}"
+    typography: "{typography.label}"
+    rounded: "{rounded.pill}"
+    padding: "0 16px"
+    height: "36px"
+  button-secondary:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink-secondary}"
+    typography: "{typography.label}"
+    rounded: "{rounded.pill}"
+    padding: "0 16px"
+    height: "36px"
+  button-secondary-hover:
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.ink}"
+  button-ghost:
+    textColor: "{colors.ink-secondary}"
+    rounded: "{rounded.pill}"
+    padding: "0 16px"
+    height: "36px"
+  button-ghost-hover:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+  button-destructive:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.danger}"
+    rounded: "{rounded.pill}"
+    height: "36px"
+  pill-idle:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink-secondary}"
+    typography: "{typography.label}"
+    rounded: "{rounded.pill}"
+    padding: "0 16px"
+    height: "36px"
+  pill-active:
+    backgroundColor: "{colors.inverse}"
+    textColor: "{colors.on-inverse}"
+    typography: "{typography.label}"
+    rounded: "{rounded.pill}"
+    padding: "0 16px"
+    height: "36px"
+  nav-pill-idle:
+    textColor: "{colors.ink}"
+    rounded: "{rounded.pill}"
+    padding: "0 16px"
+    height: "36px"
+  search-field:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.pill}"
+    padding: "0 18px"
+    height: "44px"
+    width: "560px"
+  input:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.pill}"
+    padding: "4px 16px"
+    height: "36px"
+  glass-card:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.glass-card}"
+    padding: "8px 8px 14px"
+  card-frame:
+    backgroundColor: "{colors.canvas}"
+    rounded: "{rounded.frame}"
+  overlay:
+    backgroundColor: "{colors.glass-strong}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.card}"
+    padding: "20px"
+  selection-bar:
+    backgroundColor: "{colors.glass-strong}"
+    rounded: "{rounded.bar}"
+    padding: "6px 6px 6px 16px"
+---
 
-Source of truth for the app (`apps/web`) and the extension (`apps/extension`). Tokens live as CSS variables in
-[`apps/web/src/app/globals.css`](apps/web/src/app/globals.css) and are exposed to Tailwind as `bg-surface`, `text-ink-subtle`, `outline-accent-text`…
-The browsable version with component previews: [Stan Bag Design System](https://claude.ai/artifact/6NEyzcYbPGtnjScMY33Lfd) (private).
+# Design System: PIVOT
 
-Direction: **Savee** (from [Refero Styles](https://styles.refero.design/style/c6d8490d-e3f2-45c8-aebf-fe5f11daf116)) — mockup option 3.
+Tokens are CSS variables in `apps/web/src/app/globals.css` (`:root`), exposed to Tailwind as `bg-surface`, `text-ink-subtle`, `outline-accent-text`…; the extension (`apps/extension/src/styles.css`) declares the same values. The shadcn/ui variables (`--background`, `--card`, `--primary`…) are mapped onto these tokens; prefer the design-system names in new code. Extended tokens (shadows, motion, breakpoints, component snippets) live in `.impeccable/design.json`.
 
-Stan Bag is a personal library of UI references, assets, prompts and Claude Code skills. The interface is a black canvas: saved screenshots carry the color, the chrome stays out of the way. One electric-indigo button per screen marks the action that matters.
+## Overview
 
-## Content fundamentals
+**Creative North Star: "The Kiln"**
 
-- Write in English, sentence case, from the user's side: "Add", "Copy context", "Export", "Move to trash". Never "Submit" or "OK".
-- Buttons name the action; toasts confirm it in past tense: "Copy context" → "Context copied · ~1.9k tokens".
-- Name things the way the user saved them. A resource's title is what the site calls itself ("Linear — Issues board"); the meta line is `host · tag` ("linear.app · Dashboard").
-- Errors say what happened and what to do: "Stan Bag isn't running. Start it with `npm start`."
-- Counts are plain numbers in `ink-subtle` ("References 24"), never badges.
-- No emoji anywhere in the UI.
+The saved work is the light source. The chrome is a dark kiln that screenshots glow out of: a warm black ground with oxblood-brown surface steps, warm white ink, and orange light pooled behind frosted glass at the top of the screen. It refuses the category default of a neutral grey gallery with one blue accent. Saved screenshots keep their true colour because nothing tinted or translucent ever sits on them; where glass meets the work (the record cards), it sits behind the picture, never over it.
 
-## Color
+The interface is dense and quiet. There is no sidebar; one top bar carries the sections, the search and the single primary action, and everything below it is the work. Hierarchy comes from surface steps, not lines or shadows. Two materials exist: solid surfaces for the work itself and the page around it, and frosted warm glass for the chrome, the things that float over the work (menus, dialogs, toasts, the selection bar), and, by the owner's call, the folders and the record cards that hold the work. The ember lives in the top bar; on a card it is a faint highlight and, on hover, an edge.
 
-- Paint the page `canvas`. Put thumbnails, note cards, the search field and inactive pills on `surface`. Use `surface-raised` for hover, for chips that sit on a surface, and for popovers.
-- Hierarchy comes from surface steps (`canvas` → `surface` → `surface-raised`), not borders or shadows. Use `divider` only inside dialogs and tables.
-- Text: `ink` for titles, `ink-secondary` for labels that recede, `ink-muted` for helper text and icons, `ink-subtle` for metadata. All four read on `canvas`, `surface` and `surface-raised` in both themes.
-- `accent` is for one filled primary button per screen, with `on-accent` text. Do not use it for links, icons, hover states, badges or decoration.
-- Links, the focus ring and the selected-card outline use `accent-text`.
-- The active pill is `inverse` with `on-inverse` text. Every other pill is `surface` with `ink-secondary` text.
-- `danger`, `success` and `warning` always come with a word or an icon. `success` and `danger` have the same lightness, so color alone never tells them apart.
-- Dark is the primary theme. Light keeps the same structure: `canvas` is white and `surface` a light grey, so pills and thumbnail frames stay visible against the page.
+PIVOT is dark only, in the app and the extension. There is no light theme and no theme toggle; `color-scheme: dark` is set on the root and the theme provider forces `dark`.
+
+**Key Characteristics:**
+
+- Warm black canvas, surfaces stepped in oxblood brown, warm white ink.
+- One ember-orange filled button per screen; everything else is a quiet surface pill.
+- Frosted glass on chrome and overlays, plus the folders and record cards (owner exceptions); the screenshot inside a card is never covered.
+- Ember light pooled in the top bar and a glowing seam along its lower edge; on cards only a faint highlight and a hover edge, measured so caption text keeps 4.5:1.
+- Binary radius: pills for controls, 14px for containers.
+- Geist at 400 and 500 only; one display title per view.
+
+## Colors
+
+A warm, near-monochrome brown-black ramp with a single orange voice and three status hues.
+
+### Primary
+
+- **Ember Orange** (accent-fill): the fill of the one primary action per screen (Add / New, Save, Create, Import N), always with **Kiln Black** text (on-accent, 6.95:1). White on this orange is 2.87:1 and is never used.
+- **Amber Signal** (accent-text): links, the focus ring, the selected-card outline, the text caret. Reads 7.52:1 or better on every solid surface and 4.92:1 on strong glass over a white screenshot.
+
+### Tertiary (ember light)
+
+- **Ember Core** (ember-core), **Ember** (ember), **Ember Deep** (ember-deep): the three stops of the light in the top bar (amber core, orange body, deep-red falloff). They are light, not paint: used in the top bar's pool and seam, the record card's highlight (ember at 16%) and hover edge, the text selection highlight (ember at 45%) and native controls (`accent-color`). Never as a fill, text or icon colour.
+
+### Neutral
+
+- **Kiln Black** (canvas): the page behind everything; sections are separated by empty canvas, never by lines. Also the label colour on ember and inverse fills.
+- **Oxblood Surface** (surface): thumbnail frames, note cards, the search field, inputs, inactive pills and buttons, option-tile backgrounds.
+- **Raised Oxblood** (surface-raised): hover state of surface, chips that sit on a surface, inputs inside cards; the tint the glass is made from.
+- **Scorched Seam** (divider): rare structural lines (dialog footers, table rows) and the scrollbar thumb. Not for cards or section breaks.
+- **Warm White** (ink): headings, card titles, primary text; the only text colour allowed directly on the top bar's light glass. 15.83:1 or better on every solid surface.
+- **Ash** (ink-secondary): inactive pill and button labels, the current breadcrumb, copy that recedes a step (11.85:1 or better).
+- **Smoke** (ink-muted): helper text, placeholders, icons, page notes beside the title, option blurbs (7.34:1 or better).
+- **Cinder** (ink-subtle): metadata (hosts, counts, timestamps, shortcut hints). 4.62:1 at worst, on surface-raised.
+- **Inverse / on-inverse**: the active pill (current section, chosen tag, current Trash or Settings page) is Warm White with Kiln Black text.
+
+### Status
+
+- **danger** (6.35:1 or better), **success** (9.13:1 or better), **warning** (10.82:1 or better): destructive labels and errors, saved / in-sync states, duplicate and unsaved notices. Always with a word or an icon; `success` and `danger` are never told apart by colour alone.
+
+### Glass
+
+- **Light glass** (glass, 65%): the top bar only.
+- **Strong glass** (glass-strong, 86%): menus, popovers, selects, the section panel, dialogs, the command palette, toasts, the selection bar.
+- **Glass edge** (glass-edge): the 1px rim of both.
+- **Card glass** (record cards, owner exception, 2026-10-30): the folder's recipe on a tile. See Resource card.
+
+Contrast on glass is measured against the worst backdrop, a white screenshot blurred behind it. On strong glass: ink 10.36:1, ink-secondary 7.76:1, ink-muted 4.80:1, accent-text 4.92:1; ink-subtle would fall to 3.02:1. On light glass only ink holds (4.92:1 over white, 17.20:1 over black).
+
+### Named Rules
+
+**The One Ember Rule.** Exactly one ember-orange filled button per screen, with dark text. Orange never appears as a link, icon, hover state, badge or decoration; links and focus use Amber Signal. The one exception is the brand mark's P (see Brand mark), which is part of the logo, not the interface.
+
+**The Glass Promotion Rule.** Glass raises its faint inks so nothing drops below 4.5:1 over a white screenshot: inside light glass, ink-secondary, ink-muted and ink-subtle all resolve to ink; inside strong glass, ink-subtle resolves to ink-muted. Text sitting directly on the top bar is ink.
+
+**The 4.5 Floor Rule.** Every text token reads at least 4.5:1 on canvas, surface and surface-raised, and on glass in the worst case. Check any new colour against all three surfaces and the glass composite before adding it.
 
 ## Typography
 
-- One family, Geist (`--font-sans`), for everything; Geist Mono (`--font-mono`) for prompt and code previews, keyboard hints and counts. Both load from Google Fonts.
-- One `display` title per library view (72px, weight 500, tracking -0.045em, line-height 0.96). It is the only large type on the screen.
-- Card titles are `title`, meta lines `meta` in `ink-subtle`, pills and buttons `label`.
-- The note card shows its content as a `title-lg` quote, not as a code block.
-- Keep weights at 400 and 500. No bold (600+) anywhere.
-- This is an app, so body text is 14px, smaller than Savee's marketing pages. Never go below 12px.
+**Display Font:** Geist (via `next/font`, `--font-sans`)
+**Body Font:** Geist
+**Label/Mono Font:** Geist Mono (`--font-mono`) for prompt and code previews, keyboard hints and counts
+
+**Character:** One neutral grotesque carries everything; scale and the single display title do the work, weight barely moves.
+
+### Hierarchy
+
+- **Display** (500, 72px clamping down to 44px via `clamp(44px, 6vw, 72px)`, 0.96, -0.045em): the page title of a library view. One per screen, the only large type.
+- **Title-lg** (500, 22px, 1.2, -0.02em): the quote inside a note card, skill-pack headings, dialog titles.
+- **Title** (500, 16px, 1.4): card titles, list row titles, empty-state headings.
+- **Body** (400, 15px, 1.5): set on `body`; notes, descriptions, form fields, Markdown previews, the search input.
+- **Label** (500, 14px): pills, buttons, tabs (13px in `sm` controls). Section-nav labels are 15px.
+- **Meta** (400, 14px, 1.4): the host line under a card title (ink-muted on the card's glass) and breadcrumbs (ink-subtle). The count beside the display title is a badge: a 32px surface pill with the number in 14px mono ink-secondary.
+- **Mono** (400, 12–13px, 1.6): code and prompt previews, keyboard hints, counts (`tabular-nums`).
+
+The extension popup runs at a 13px body with the same families.
+
+### Named Rules
+
+**The Two Weights Rule.** Weights are 400 and 500 only. No 600+ anywhere.
+
+**The 16px Root Rule.** The root stays at the browser's 16px. Never set `font-size` on `html`: every rem-based size (control heights, spacing, `text-xs`/`text-sm`) is measured from it; body text is raised to 15px on `body` instead. Never go below 12px.
 
 ## Layout
 
-- No sidebar. A top bar holds the logo, the search field (centered, up to 560px) and the account pills; the primary `Add` button sits at its right end.
-- Under it: the `display` page title with a `meta` count line, then a wrapping row of type pills (All, References, UI Libraries, … MCP).
-- The grid is `repeat(auto-fill, minmax(360px, 1fr))` with `space-10` between rows and `space-6` between columns. Thumbnails are 16:10.
-- Page side gutter is `space-10` on desktop and 16px on phones. Sections are separated by `space-16` of empty canvas.
-- Radius is binary: `radius-pill` for every control, `radius-card` for every container. `radius-sm` is only for keyboard hints and inline code.
+- **No sidebar.** A single top bar holds the logo, the section nav (Library · Knowledge · Sources · Skills), the search field (up to 560px, centred) and the action pills, with the primary `Add` at its right end. Between `md` and `lg` it wraps to two rows; below `lg` the search drops to its own row.
+- **Pinned bar.** From `md` (48rem) up the top bar is fixed to the top edge across the full width. The app shell measures its height live (a ResizeObserver writes `--topbar-h`, 76px until measured) and `main` is padded by it, so the page itself scrolls and the work passes under the glass. `html` has `overscroll-behavior-y: none` so the bar never rubber-bands. On phones the bar stays in the flow, because its several rows would take too much of the screen.
+- **Scroll targets** that jump to a section (skill packs, source categories) use `scroll-margin-top: calc(var(--topbar-h) + 1rem)` from `md`, 32px below it.
+- **Page head:** the display title with its count badge, then the tag pill row, then the source chip and, while a search, tag or source filter is on, a ghost **Clear filters** button (× icon) on the left, and Sort (Recently edited, Newest first, Oldest first, Title A–Z) / grid-list toggle on the right (a Type select on the left only in collections and the trash).
+- **Empty and no-match states** (centred, 96px of canvas above): an empty type page says "Nothing in <page> yet" with the paste hint; a search or filter with no results says "Nothing matches “<search>”" (or "these filters"), explains that search and filters apply together when both are on, and offers a secondary **Clear filters** pill.
+- **Grid:** `repeat(auto-fill, minmax(min(100%, 360px), 1fr))`, 40px between rows, 24px between columns. Thumbnails are 16:10.
+- **Gutters and rhythm:** page side gutter 40px on desktop, 16px on phones. Groups are separated by 64px of empty canvas; a group header sits 24px above its cards; the folder shelf sits 40px above the grid.
+- Rows of pills wrap onto new lines; a pill row never scrolls horizontally.
 
-## States
+## Elevation & Depth
 
-- Hover: a `surface` element becomes `surface-raised`. Thumbnails do not scale or lift.
-- Focus: a 2px `accent-text` outline with 3px offset, on every interactive element.
-- Selected (bulk selection): the thumbnail gets the same 2px `accent-text` outline; a floating selection bar on `surface-raised` with `shadow-overlay` shows the actions.
-- Loading: a `surface` block with a slow opacity pulse; capturing screenshots also shows "Capturing…" in `ink-muted`.
-- Disabled: 40% opacity and no pointer cursor.
+Solid surfaces are flat: depth on the page comes from tonal steps (canvas → surface → surface-raised), never shadows or borders. Depth above the page is glass. Both glass grades blur and saturate what is behind them (`blur(24px) saturate(1.5)`), carry a 1px glass-edge border and a faint inset top sheen; strong glass adds the overlay shadow. Glass lives in the Tailwind components layer so utilities can override it (the top bar's glass drops its side and top borders).
 
-## Motion
+The top bar's glass is a sibling layer behind its content, not the header itself: an element with `backdrop-filter` becomes the backdrop root of its children, and the section menu rendered inside the header would only blur the bar instead of the page.
 
-- 150ms ease-out for hover and pill changes; 200ms for dialogs (fade + 8px rise). Nothing loops except the loading pulse.
-- With `prefers-reduced-motion`, all transitions are instant.
+Modal scrims are black at 50% (dialogs) or 55% (alert dialogs) with a light blur.
 
-## Iconography
+### Shadow Vocabulary
 
-- Lucide stroke icons at 16px, stroke 2, colored `ink-muted` (or the label color inside a button). Icons sit beside a word; icon-only buttons carry an `aria-label`.
-- The Stan Bag mark is the archive glyph in `canvas` on an `ink` disc. There is no other logo; set the name in Geist 500.
+- **Overlay** (`0 24px 64px rgb(0 0 0 / 0.6), 0 2px 8px rgb(0 0 0 / 0.35)`): strong glass only (menus, popovers, the section panel, dialogs, the palette, toasts, the selection bar).
+- **Glass sheen** (`inset 0 1px 0 rgb(255 248 240 / 0.07)`): the inner top highlight on both glass grades.
 
-## Tokens
+### The ember light
 
-### Color
+The signature: ember light caught in the glass top bar, like orange light through the gaps between dark tiles.
 
-| Token | Dark | Light | Usage |
-|---|---|---|---|
-| `canvas` | `#050505` | `#ffffff` | Page background behind everything. Sections are separated by empty canvas, never by lines. |
-| `surface` | `#151515` | `#f2f2f2` | Thumbnail frames, note cards, search field, inactive pills and buttons. |
-| `surface-raised` | `#1e1e1e` | `#e6e6e6` | Hover state of surface, chips that sit on a surface, inputs inside cards, popovers. |
-| `divider` | `#2f2f2f` | `#dcdcdc` | Rare structural lines: dialog footers, table rows. Not for cards or section breaks. |
-| `ink` | `#fdfdfd` | `#0a0a0a` | Headings, card titles, primary text on canvas, surface and surface-raised. |
-| `ink-secondary` | `#d4d4d4` | `#2e2e2e` | Inactive pill labels, button labels on surface, body copy that should recede a step. |
-| `ink-muted` | `#a3a3a3` | `#545454` | Helper text, placeholders, icons on canvas, surface and surface-raised. |
-| `ink-subtle` | `#8a8a8a` | `#636363` | Metadata: hosts, counts, timestamps, shortcut hints. Reads 4.8:1 or better on canvas, surface and surface-raised. |
-| `inverse` | `#fdfdfd` | `#0a0a0a` | Fill of the active pill (current type tab or filter). |
-| `on-inverse` | `#050505` | `#ffffff` | Label on an inverse fill. |
-| `accent` | `#1500ff` | `#1500ff` | Electric indigo. Fill of the single primary action per screen (Add, Save, Export). Never text, icons or decoration. |
-| `on-accent` | `#ffffff` | `#ffffff` | Label on an accent fill (8.5:1). |
-| `accent-text` | `#8b84ff` | `#1500ff` | Links, the focus ring and the selected-card outline, on canvas, surface and surface-raised. |
-| `danger` | `#ff7a7a` | `#c21f1f` | Destructive labels and error text (Delete forever, failed capture). Always paired with a word or icon. |
-| `success` | `#4cc38a` | `#17703d` | Saved / in sync states. Same lightness as danger, so always pair with a word or icon. |
-| `warning` | `#f5b33f` | `#8a5600` | Duplicate URL and unsaved-skill notices, with an icon. |
+- **Pool:** a radial glow behind the solid search field, layered amber core → orange → deep red. On phones it is kept low and wide to the search row so it never sits under the nav; from `md` it is a tall, narrow pool centred under the field.
+- **Seam:** a 2px line of light along the bar's bottom edge (deep red at the ends, amber at the centre), blooming 12px upward into the bar's empty bottom padding, faded out at both ends by a horizontal mask.
 
-`shadow-overlay` is the only shadow (dialogs, popovers, selection bar).
+### Named Rules
 
-### Type
+**The Solid Work Rule.** Glass is for chrome and overlays. The saved work itself (screenshots, frames, rows, panels on the page) is solid, with no border and no shadow, so screenshots keep their true colour. Two owner exceptions wrap the work in glass without covering it: the folder shelf and the record card, whose glass sits behind the screenshot.
 
-Families: `--font-sans` Geist, `--font-mono` Geist Mono (loaded with `next/font`).
+**The Light Stays Home Rule.** Ember light never sits under page text. It lives in the top bar's pool and seam; any glow bright enough to see drops small grey text below 4.5:1. The record card's highlight is the measured exception: 16% ember on a tint that deepens toward the caption, and caption text stays ≥ 5.1:1 with a white screenshot behind and the highlight at full strength.
 
-| Style | Size / line-height · weight | Usage |
-|---|---|---|
-| `display` | 72px / 0.96 · 500 · -0.045em | The page title of a library view. One per screen. |
-| `title-lg` | 22px / 1.2 · 500 · -0.02em | The quote inside a note card; dialog titles. |
-| `title` | 15px / 1.4 · 500 | Card titles, list row titles. |
-| `body` | 14px / 1.5 · 400 | Notes, descriptions, form fields. |
-| `label` | 13px / 1.2 · 500 | Pills, buttons, tabs. |
-| `meta` | 13px / 1.4 · 400 | Host and tag line under a card title, in ink-subtle. |
-| `mono` | 12px / 1.6 · 400 | Prompt and code previews, keyboard hints, counts. |
+## Shapes
 
-### Spacing & radius
+The radius is binary: every control is a full pill, every container a gently rounded 14px card (cards, dialogs, popovers, menus, selects, textareas, toasts). Small steps exist only for parts inside those: 6px for keyboard hints and inline code, 8px for list-row thumbnails, 10px for option icon tiles, 12px for option rows. Two floating chrome pieces are rounder: the section panel (20px) and the selection bar (28px). Round (circular) buttons are the icon variants of the pill. Borders appear only as the glass edge and the rare divider.
 
-Spacing: `space-1` 4px · `space-2` 8px · `space-3` 12px · `space-4` 16px · `space-6` 24px · `space-10` 40px · `space-16` 64px
+## Components
 
-Radius: `radius-sm` 6px · `radius-card` 14px · `radius-pill` 9999px
+Paths are under `apps/web/src/` unless written out.
 
-## Implementation notes
+### Buttons — `components/ui/button.tsx`
 
-- shadcn/ui variables (`--background`, `--card`, `--primary`…) are mapped onto these tokens in `globals.css`; prefer the design-system names in new code.
-- Buttons (`components/ui/button.tsx`): `default` = the single indigo primary action, `secondary` = surface pill, `ghost`, `destructive`. All pills.
-- Inputs are filled `surface` pills; textareas use `radius-card`. Focus is a 2px `accent-text` outline with 3px offset everywhere.
-- Contrast: every text token is ≥ 4.5:1 on `canvas`, `surface` and `surface-raised` in both themes (checked when the palette was chosen).
+Pill-shaped, quiet by default.
+
+- **Primary (`default`):** ember fill, Kiln Black label; hover drops to 90% opacity. The one primary action on the screen.
+- **Secondary (`secondary`, `outline`):** surface fill, ink-secondary label; hover and open state surface-raised with ink. There are no outline-only buttons.
+- **Ghost:** transparent, ink-secondary; hover surface. For actions inside a glass container (selection bar, menus).
+- **Destructive:** surface fill, danger label, always with an explicit verb or icon ("Delete forever").
+- **Link:** accent-text, underline on hover.
+- **Sizes:** `lg` 40px (top bar), `default` 36px, `sm` 32px with a 13px label, `xs` 24px; `icon*` variants are round at the same heights.
+- **Focus:** 2px accent-text outline, 3px offset (on every interactive element). Disabled: 40% opacity, no pointer. Transitions 150ms ease-out.
+
+### Icons
+
+Lucide stroke icons at 16px, coloured ink-muted or the label colour inside a button. Icons sit beside a word; icon-only buttons carry an `aria-label`.
+
+### Brand mark — `components/brand.tsx` (`PivotMark`, `PivotWordmark`), `docs/brand/`
+
+PT is the core, PIVOT the expansion: the mark starts from the first and last letters, which turn about an axis and open out into the word.
+
+- **Letterforms:** 34-unit strokes on a 136-unit cap height, drawn as SVG paths (never set in Geist). The P is two halves turned 180° on each other: the top bar rounds off at its top-right corner, the hook below rounds off at its bottom-right corner and carries the stem. Its counter is as tall as a stroke and open to the left. Stems end in a rounded bottom-right corner.
+- **PT monogram** (`PivotMark`, 232 × 170): the T's bar sits in the P's counter and closes the bowl; the T's stem is set left of the bar's centre. It is the app icon, the favicon and the extension's mark.
+- **PIVOT wordmark** (`PivotWordmark`, 586 × 136): the same P with a bridge closing the bowl, then I, V, a ring O and the T.
+- **Colour:** the P is solid Ember (`--ember`, #ff6a13; 6.9:1 on canvas), everything else Warm White (`currentColor` on ink), in the monogram and the wordmark alike (owner's call, 2026-10-29). The ember O (amber core → ember → ember deep) and the ember seam belong to the app icon and splash or landing use only.
+- **In the top bar:** the monogram at 22px high, then the wordmark at 13px high, 10px apart, inside the home link (`aria-label="PIVOT — library"`).
+- **App icon** (`docs/brand/pivot-app-icon.svg`, copied to `apps/web/src/app/icon.svg`): the monogram (ember P, Warm White T) on a kiln tile (22% radius, a faint warm top light) with the ember seam along its bottom edge. The extension's toolbar PNGs are rendered from it (`pnpm --filter extension icons`).
+- **Repo hero** (`docs/brand/pivot-wordmark-ember.svg`, 1280 × 640, the GitHub social-preview ratio): the wordmark with its ember O, at 1.2×, straight on the kiln with no glass. Behind it the O becomes the light source: a 250px ember ring blurred 38px into a haze with a 1.5px amber hairline, two thin orbits (`#4a3527`) and one amber dot riding the outer orbit; fine grain and a dark vignette over all. A soft dark halo (the letters in Kiln Black, blurred 16px, 75%) lifts the wordmark off the ring.
+- **Tagline** (brand use, not the UI): "Your creative compass" in Geist Mono 500, upper case, 0.62em tracking, Smoke. No ® until the name is registered.
+
+### Top bar — `components/app-shell.tsx` (`TopBar`)
+
+- Logo (PT monogram + wordmark, see Brand mark), section nav, search field, then the Collections menu, round Trash and Settings buttons (inverse when on that page) and the split `Add` button (the screen's primary action). On phones (below `sm`) Collections shows only its icon; below 360px the `Add` half shows only its plus too (its name stays for screen readers), so the action row fits a 320px screen.
+- Light glass layer behind the content, ember pool and seam (see Elevation & Depth); 16px padding, 40px side padding from `md`.
+- On phones the Collections button is icon-only and the primary button reads just "New" (its full name stays in `aria-label`), so the action row fits at 375px; the search field takes its own row.
+
+### Section nav — `components/section-nav.tsx`
+
+- Idle labels are ink on the light glass with no fill (only ink holds 4.5:1 there); hover or open fills surface. The current section is an inverse pill. 36px tall, 15px labels, 16px side padding (12px on phones so all four fit at 375px); the row wraps on anything narrower.
+- Sections with a panel (Library, Knowledge, Sources) end in a 14px chevron at 60% opacity that turns over (200ms) while open; phones hide it.
+- **Panel:** opened by hovering Library, Knowledge or Sources, or pressing ↓ on them. Strong glass, 20px radius, 8px padding, two columns up to 600px wide (one column on phones). Each option is a 12px-radius row: a 40px surface icon tile, the plural name in 15px ink with its count in mono on the right, and a one-line blurb in 14px ink-muted. Hover or focus fills it with surface; the current option stays filled. Sources lists its seven categories (lightbulb, app-window, swatch-book, blocks, orbit, type, shapes icons). Clicking the section name goes to its landing page; there is no "All" option.
+- **Motion** (modelled on lovable.dev): opening scales from 0.96 with a 4px drop and fades in (180ms); closing reverses (140ms, ease-in). Moving to another section glides the panel under it and resizes it to the new content (270ms, `cubic-bezier(.45,0,.25,1)`); the new content slides 32px in from the side the pointer came from, unblurring from 2px, while the old one leaves the other way. The first open appears in place. Reduced motion makes all of it instant.
+
+### Pills and tag filter — `components/tag-pills.tsx`, `components/tags-editor.tsx`
+
+- Inactive: surface, ink-secondary; hover surface-raised. Active: inverse. Heights: 36px filter pills and chips, 28px editable tags, 24px tags inside a card.
+- The filter row: "All" first, then chosen tags (inverse, with a remove ×; a facet shows its kind first at 70% opacity, "Page type Pricing"), then up to 12 tags by frequency with counts at 70% opacity in `tabular-nums`; "+N more" opens a searchable popover grouped by kind. The row hides when nothing on screen has tags.
+- The visible tags are grouped by kind, each group led by its kind in 13px ink-subtle (Tags, Page type, Domain, Style, Pattern, Technology); groups sit 20px apart, pills 8px apart. With plain tags only, the labels are left out.
+- A "From <source>" chip (inverse pill, 13px, clear button) sits in the filter row while the list is narrowed to one source.
+
+### Search field — `components/app-shell.tsx` (`SearchField`)
+
+- 44px solid surface pill, no border, up to 560px, centred in the top bar; it is solid so the ember pool glows around it, not through it.
+- Leading search icon and placeholder in ink-muted, typed text ink at 15px, trailing `⌘K` hint in mono ink-subtle (hidden on phones) that opens the command palette.
+- Typing filters the library (debounced 200ms, kept in `?q=`); elsewhere Enter jumps to `/?q=…`. `/` focuses it from anywhere. Focus: the accent-text outline on the whole pill.
+
+### Breadcrumbs — `components/breadcrumbs.tsx`
+
+- 14px ink-subtle links separated by 14px chevrons at 70%; hover ink. The last crumb is ink-secondary and not a link; it truncates rather than wraps.
+- Shown only with two or more steps: above the title on a type page (Section › Type) and in a collection, and beside the back button on a resource page.
+
+### Resource card — `components/resource-card.tsx`
+
+"Option A in glass", picked by the owner on 2026-10-30. The card is a tile of the folder's frosted glass that holds the picture and its caption; styles live in `globals.css` (`.glass-card`).
+
+- **Tile:** 18px radius, 8px padding (14px at the bottom), base halfway between canvas and surface. Layers, back to front: a copy of the card's own thumbnail blurred 36px and saturated 1.5× at 50% (62% on hover), so each card takes a soft tint from its page; a dark tint that deepens toward the caption (25% → 62% at 46% → 92%); a 10% top sheen; a 16% ember highlight that follows the pointer; a 1px white rim, brightest at the top (42% → 12% → 5%).
+- **Frame:** a 16:10 canvas frame at 11px radius inside the tile, image `object-fit: cover; object-position: top`. Nothing translucent sits on it: the glass is behind it. No hover lift or scale.
+- **Caption** (inside the tile, 6px side inset): a 20px site icon tile (surface-raised, 6px radius; the host's favicon, its first letter when the site has none, the type icon when there is no URL), the title (title, ink, one line) and, at the end of that row, Open source and Copy as 28px round buttons (ink at 10%, ink icon) that appear on hover or focus. Then the host in meta (ink-muted), then up to three chips (24px, ink at 8%): facets first, each with its kind in ink-secondary regular before the name in ink medium ("Domain SaaS"), then plain tags, then a `+N` chip whose tooltip lists the rest. A linked card without tags shows its type as the chip.
+- **Hover:** a 1.5px ember edge (amber core → ember → ember deep) traces the rim around the pointer, the blurred art drifts a few pixels against it, and the actions appear. Reduced motion keeps the art still.
+- **Contrast:** inside the tile, ink-subtle resolves to ink-muted. Worst case (white screenshot behind, highlight at full strength): title ink ≥ 9.8:1, meta ink-muted ≥ 5.1:1, chip names ink ≥ 9.7:1 and kinds ink-secondary ≥ 7.3:1.
+- **Select checkbox:** top-left of the frame on hover or focus, solid surface-raised with an ink-muted ring.
+- **Selected and focus:** 2px accent-text outline with 3px offset around the tile.
+- Capturing: a pulsing frame (1.6s) with "Capturing…" in ink-muted. Failed capture: an image-off icon in ink-subtle.
+- **References scroll like a screen recording:** the frame shows the full-page shot resting at the top; on hover or keyboard focus it scrolls linearly to the bottom at about one frame-height per second (1.5–30s from the image's aspect ratio) and glides back in 500ms ease-out on leave. The frame is a size container, so the travel is `translateY(calc(-100% + 100cqh))`. Short pages don't move; reduced motion keeps it still.
+
+### Screenshot gallery — `components/asset-gallery.tsx`
+
+- The main preview, then **one row**: 56px thumbnails (10px radius, the cover marked with a star) and an add tile on the left; on the right, secondary pills **Annotate** (images), **Replace** (uploads one image that replaces the captured shots and becomes the cover) and **Retake** for types that are captured (reference, UI library, animation, source). Below `sm` those pills show only their icons; the words stay as accessible names. The compact gallery of text types keeps the longer labels ("Replace screenshot", "Retake screenshot").
+- **File details** (updated 2026-11-02): under that row, a collapsed `<details>` like the capture history. Its summary is "File details · Screenshot · file name · 1440×900 · 68 KB" (name and size in mono); opened, it holds **Set as cover**, Open original, Download, Remove and the file note. The compact gallery keeps these in an open row.
+- **Full-size viewer:** an image preview has a solid surface-raised round **View at full size** button (maximize icon) top-right, and clicking the image does the same. It opens a sheet 16px from the top, the full screen height and at most 1440px wide (the capture width) on a canvas background, so a full-page shot reads at its real size and scrolls top to bottom. A solid surface bar stays at its top: file name and size in mono ink-muted, an **Original file** ghost pill, and a round close button. Escape closes it.
+- While capturing, a surface status pill with a spinner reads "Capturing screenshots…" with a small **Cancel** pill. A failed capture turns it into a danger line "Screenshot failed: <reason>" with two small pills, **Upload one** and **Retry**. A partial or doubtful capture (or a retake that kept the previous shot) shows the same pill in ink-muted with an info icon, the note, and a **Retake** pill.
+- **Retake** is a split pill: the main half retakes with the saved defaults; a chevron half opens a menu ("Capture once with": Expand content, Light theme, Dark theme, Both themes).
+- Thumbnails are labelled with their role and colour scheme ("Original", "Screenshot · dark", "Other theme · light"). When a retake has replaced the first capture, the Original is the one shown first.
+- The Retake menu adds "Tablet and mobile too", "Record motion (video and keyframes)" and "Capture later…". Tablet and mobile shots, the motion video and keyframes appear as more thumbnails, labelled "Viewport · mobile · dark", "Motion", "Keyframe 3". When the last capture saw animation, a 12px ink-muted line above the history offers a small **Record motion** pill.
+- **Annotate** (the secondary pill in the gallery row, "Annotate (2)"; "Done" and pressed while on; in the compact gallery a ghost "Notes (2)" pill beside the image's label): swaps the preview for the full image with its notes as a layer. Regions are 2px ember outlines with a 10% ember fill and a numbered ember badge at the top-left; pins are 24px ember circles with the number. Drag on the picture for a box, click for a pin; under it a small "Add a box" pill and the numbered list of notes as 32px inputs with a remove button ("agent" in ink-subtle for an agent's). Markers are focusable buttons (accent-text ring) moved with the arrow keys.
+- **Compare Original and Latest** (collapsed `<details>`, only when an Original exists): the share of changed pixels in ink with the capture times in ink-muted, the difference image (Latest dimmed to grey, changed pixels in ember, 10px radius), and a pill to save the Latest as a new design version (secondary and preceded by "This looks like a redesign." above 25%, ghost below).
+- **Capture history** sits under the gallery as a collapsed `<details>` ("Capture history (n)"), each run a surface row: status in ink-secondary, the time in mono, the scheme and options, the error on its own line.
+
+### Resource detail page — `components/resource-detail.tsx` (updated 2026-11-02)
+
+**Header, all types:**
+
+- the back button, breadcrumbs and the save state;
+- the action pills (Open, Copy, Context, Export, Trash);
+- the title at the display size.
+
+**Below `sm`, visual types only** (reference, UI library, media, icon, animation, typography, source): the actions leave the breadcrumb row and become **one row under the title**. Open, Copy and Context are icon-only pills with their names kept for screen readers; they share the row's spare width and may shrink to fit 320px. Export keeps its label, and Trash stays round. The other types keep their header as it was.
+
+**Visual types: image left, grouped panel right** (340px at `xl`, sticky; stacked below it). Each group is a solid surface panel (14px radius, 16px padding, a 12px ink-subtle title, no border or shadow), and fields inside it step up to surface-raised:
+
+1. **Classification:** the facet rows and tags.
+2. **Notes & collections:** the notes field, then the collection chips with **Add**.
+3. **Source:** the source URL field (mono; its label is screen-reader only), then "Captured from", section and catalogue info when present.
+   - The description clamped to three ink-muted lines, with an accent-text ghost **Show all and edit** that opens the field. An empty description shows a ghost **+ Description**.
+   - Ghost **+ Published by** and **+ Original source** pills that reveal their field, focused. Filled fields always show.
+   - The type's own fields.
+   - Links.
+4. A source's "Saved from this source" panel follows on its own.
+
+Under the groups, a quiet footer above a divider: the Type select, then Added, Edited and Files in ink-subtle with mono values.
+
+**Non-visual types** keep the single flat side panel: Description, Source URL, the type's fields, Links, Classification, Notes, Collections, Type and dates.
+
+### Links — `components/resource-links.tsx`
+
+In the detail sidebar: for visual types at the end of the **Source** group, otherwise above Classification. "Links" in ink-subtle with a ghost "+ Link" button. Each link is a surface row (10px radius; surface-raised inside a group): a link icon, the relation in ink-muted ("Part of", "Has section", "Same page as"…), the other reference's title as a link, and for a suggestion "suggested" with a ✓ to accept; a × removes it. "+ Link" opens a surface panel with the relation select, a search field and the matching titles.
+
+### Design sessions — `app/design/page.tsx`, `components/design-session.tsx`
+
+A pen-tool icon button in the top bar (between Trash and Settings; inverse when on `/design`). The list page: display title "Design sessions", one ink-muted line, then surface rows (14px radius) with the title in 15px ink, a status chip, and a second line with project, surface and date. A session page: a ghost "Design sessions" back pill, the title at the detail-page size, a meta line, the **status stepper** (below), then the timeline: each brief is a collapsible surface card (the newest open) rendered as Markdown with reference chips; each decision is a surface card with its kind ("Approved", "Changed", "Deviation found in QA") in ink-secondary, the summary in ink and the direction under it.
+
+**Status stepper** (updated 2026-11-02):
+
+- **Steps:** an `<ol aria-label="Status">` of Exploring → Approved → Building → Done.
+  - Each step is a 32px pill in 13px label type, 10px side padding below `sm` and 12px above.
+  - The current step is surface-raised in ink, weight 500, with an 8px status dot: ink-muted for Exploring, success for Approved, warning for Building, ink for Done. It carries `aria-current="step"`.
+  - Past steps are ink-secondary with a check; future steps are ink-muted.
+  - Between steps runs a 2px connector (12px below `sm`, 28px above), success up to the current step and divider after it. Below 340px the steps wrap.
+  - **Abandoned:** the four steps drop to 50% and a fifth current pill "Abandoned" follows, with an ink-subtle dot.
+- **Note:** a 14px ink-muted live line saying what the state means. On Exploring and Approved it adds "Exploring and Approved follow the brief and your approval; you move the rest."
+- **Actions:**
+  - The next manual step is an inverse pill with an arrow ("Start building", "Mark done"). It is never ember: the top bar's Add stays the screen's only primary.
+  - Then ghost pills: "Back to building" (Done), Abandon or Restore, and Reopen, which opens the destructive confirm dialog. Restore returns to Approved only while an approval still counts (not after a Reopen or a major change); otherwise to Exploring.
+  - While saving, the current dot becomes a spinner and the pills are disabled. A success toast "Status: Building" has **Undo**; a failure reverts and shows the reason in an error toast.
+
+**Mockups** (added 2026-11-03, `components/design-mockups.tsx`): between the stepper and the timeline, only when the session has mockups. The session page widens to `max-w-6xl` for it; the header and timeline keep their `max-w-4xl` reading width.
+
+- **Header:** "Mockups" (20px, weight 500) and, on the right, an ink-muted line "Round 2 · 5 versions · 1–5 or ← → to switch" (the key hint hides on phones).
+- **Pills:** 32px, 13px label, weight 500; inactive surface in ink-secondary (hover surface-raised), active inverse.
+  - **Round** radiogroup, only with more than one round; the latest is marked "latest" at 70% opacity.
+  - **Version** tablist: the number in mono at 70% opacity, then the title; it scrolls sideways on narrow screens instead of wrapping. The approved version carries a small success chip "Approved" with a check, in on-inverse text.
+  - **Width** radiogroup: Desktop (1440), Tablet (834), Phone (390).
+- **Actions** on the right of the width row: a ghost **Replay** pill with a rotate icon (it reloads the version in a fresh frame, so its motion restarts with nothing left from the last run; added 2026-11-04), a ghost "Open alone" pill with an external-link icon, and, only while the session is Exploring, **Approve this version** as an inverse pill with a check. It is never ember: the top bar's Add stays the screen's only primary.
+- **Reduced-motion line** (added 2026-11-04): under the frame, an ink-muted 13px line, "Motion follows your browser, which has reduced motion **on** / **off**" (the state in ink, weight 500), with how to preview the other setting (the OS switch, or DevTools › Rendering, then Replay). It reads the browser's `prefers-reduced-motion` live and never overrides it. Announced politely when it changes.
+- **Frame:** a surface panel (14px radius), 80vh tall, holding the mockup in a sandboxed iframe at the chosen device width, scaled down to fit the column (never up) and scrolling inside.
+- **Interactive versions** (added 2026-11-10): the version tab carries a small chip "Interactive" (12px, `bg-surface-raised`, `text-ink-secondary`). Above the frame, an ink-muted 13px line starts with "Interactive version." in ink, weight 500: its scripts don't run on this page; ask Claude to open the interactive preview, a separate browser window that runs this exact version (same digest) with no network and no access to PIVOT.
+- **Interactive preview window** (`pivot-design/scripts/preview.mjs`, not part of the app): dark, the same ember accent for the selected tab and pills. A header with "Interactive preview", the session and round, and version tabs (number · title, chip static/interactive). Then a bar with Desktop/Tablet/Phone, Motion: full/reduced, Replay and Compare. The frames sit in the middle. A footer gives the version's id and digest in mono, and how to approve: in PIVOT, with a copyable link, or in the chat.
+- **Digest line** (added 2026-11-04): under the frame, an ink-muted 13px line, "Version 2 · digest `3f9a1c2b7e44`: an approval names this exact content", the digest in the mono font. The approve dialog's line names the same digest.
+- **Broken binding** (added 2026-11-04): when the latest approval's version changed or is gone, a 13px `text-danger` line above the frame (role alert) says it can't be built until a version is approved again.
+- **Owner passphrase** (added 2026-11-10): the approve dialog has a labelled password field "Owner passphrase" under the note; Approve stays disabled until it is filled, and Enter submits. With no passphrase set yet, an ink-muted 13px alert instead says how to set one (`pnpm owner:passphrase`, in mono, in ink). A refused attempt shows its reason as a toast and prepares a fresh form. The restore step in Settings › Backup & restore has the same kind of field before Restore. A skill's **Save to disk** and **Overwrite disk** open the same kind of dialog ("Save this skill to disk?" / "Overwrite SKILL.md on disk?"), with the first 12 characters of the content hash in mono, an "Owner passphrase" field, and Save (or Overwrite disk) as its primary button.
+- **Approve dialog:** title "Approve version 3, “Raised card”?", one line on what happens, a labelled optional textarea "Note for the build", then ghost Cancel and the default **Approve** button. A success toast says a waiting Claude Code session starts building.
+- **References** (added 2026-11-10): before the mockups, a section headed "References" (20px medium) with a one-line muted subtitle: either how to pick ("Tell Claude Code which numbers to use…") or the user's pick quoted. A responsive grid (1 / 2 / 3 columns) of solid `bg-surface` cards, radius 14px, no border or shadow: a 16:10 preview cropped from the top (`bg-surface-raised` placeholder with "Capturing a preview…" and a spinner, or the reason there is none, in 12px muted text), then a round mono number chip, the title, "Library" or "External · source" in muted 12px, the why line in `text-ink-secondary`, Take and Avoid in 12px, and text links "Open in library" / "Original page" (new tab, with a screen-reader note). Picked cards carry a "Picked" pill with a check; the others drop to 60% opacity once a pick exists.
+- The timeline labels an approval made here "Approved in PIVOT". The stepper's Exploring note reads "Waiting for you to approve a version below, with your owner passphrase." when there are mockups.
+
+### Suggestions — `components/suggestions.tsx`
+
+A surface panel (14px radius) on the Inbox page and at the top of a reference's detail page: a sparkles icon, "3 suggestions from an agent" and an ink-muted note that nothing changes until you accept. Each suggestion is a surface-raised row with a checkbox, what it suggests ("Style: Dark", "Collection: Pricing pages (new)", "Title: …"), the reference it is for (Inbox only), the reason in ink-muted, and ✓ / × icon buttons. With some checked, "Accept n" and "Reject n" appear at the right of the header.
+
+### Backup & restore — `components/backup-section.tsx`
+
+A Settings section: a secondary **Back up the library** pill with the result beside it (counts, then the folder path in mono as a link that shows it in Finder). Under a divider: "Restore from a backup folder", a mono path field and a secondary **Preview** pill. The preview states the counts in a sentence, lists the conflicts in 12px muted text, offers one select for them (Keep is the default), and has a primary **Restore** pill; the result is a status line that says restoring again adds nothing twice.
+
+### Hybrid search — `components/external-search.tsx` (`ScopeSwitch`, `ExternalResults`)
+
+- **Scope switch:** with a query in the library, the toolbar shows a small outline toggle group **All · Library · External** (the chosen one surface-raised with ink text), between the filter chips and Clear filters. The command palette shows the same switch in a row under its input, above a divider.
+- **Outside your library:** a 22px title "Outside your library for “…”" and one 13px ink-muted line saying direct results come from free public catalogs searched on this computer and nothing is saved until you save it. Under `All` it follows the library results after 40px of space; under `External` it replaces them.
+- **Provider group:** a 15px ink name, a raised "Direct" chip, the licence as an accent-text link, "Catalog from <date>" and "n of N" in 12px ink-subtle. A stale or failed provider adds one 13px ink-muted line with a warning triangle; a provider with no match says so in one line; a switched-off provider is not shown.
+- **Result card:** a solid surface container (14px radius, no border or glass, since there is no screenshot to frame): 15px ink title truncated to one line with category chips on the right, a two-line 13px ink-muted description, an 11px ink-subtle attribution line ("Magic UI (magicui.design) · MIT"), then a secondary **Open** pill and a ghost **Save to library** pill. A result already saved shows a ghost "In your library" link instead; a result without a confirmed page has no Save. No ember fills: Save is never the screen's primary action.
+- **Search on other sites:** a 15px heading, the line "These open each site’s own search page. They aren’t results.", and a wrapping row of 32px surface pills (external-link icon, the site's name, "saved source" in 11px ink-subtle).
+- **Command palette:** direct results are groups headed "<name> · Direct · <licence>" with an external-link icon, the title and the description (or "In your library") in muted text; selecting opens the item's page in a new tab.
+- **Settings rows:** a 160px ink-subtle label column beside the value from `sm` up; below `sm` the label sits above the value, so wide controls (the capture colour-scheme select) never push the page sideways.
+- **Settings › Search:** the intro says catalogs are kept in the R2 bucket under `external-catalogs/`, not on this computer, and may add small R2 charges; a storage problem shows under the provider as a 12px ink-muted line with a warning triangle. One row per provider: a checkbox "Search <host>", a ghost Refresh catalog pill (spinner while it runs), and a 12px line with the item count, the catalog date and the licence link ("titles, descriptions and links only; no code" for React Bits). After Refresh, a toast says "<name> updated: N components"; within a minute of the last download it says the catalog was updated less than a minute ago and when to try again. While a new query loads, the previous results stay dimmed under their own query with a "Searching for “…”…" line, so nothing flickers and nothing is shown under the wrong query.
+
+### Capture queue — `app/captures/page.tsx`
+
+Display title "Capture queue", a 14px ink-muted line, then a radiogroup of pills (All, Queued & capturing, Failed & partial; the chosen one inverse). Each run is a surface row (14px radius): a status chip (danger for Failed, warning for Partial, a spinner while running), the item's title as a link, the time in mono ink-subtle, a small **Cancel** or **Retry** pill, and a second line in 12px ink-muted with the scheme, options, retries, quality and error. It refreshes every 2 seconds while something runs. A "Requested for later" filter lists capture-later requests, each with **Capture now** and a ghost **Drop**. Above the filters, a surface "Worth a look" panel appears only when a site keeps failing (host in warning) or a newest capture looks worse than an earlier one.
+
+### Add from URL — `components/add-url-dialog.tsx`
+
+- Under the URL box, a warning line (12px, warning colour, triangle icon) says why Save is unavailable: "That doesn’t look like a link…", or how many entries will be skipped in a bulk paste. Already-saved URLs get the same line with a link to the saved resource.
+
+### Note card — `components/resource-card.tsx` (text types)
+
+- The same glass tile with no art behind it, and the same 16:10 canvas frame, padded 24px. Prompts, rules, checklists and skills show an excerpt as a title-lg quote in ink; snippets and MCP JSON show the first lines in mono ink-muted. A type chip bottom-left (surface-raised pill, 12px, ink-secondary).
+- Caption: the type icon in the icon tile, the title, then `Type · purpose` in ink-muted (skills show their invocation), then its tags as chips.
+
+### List row — `components/resource-card.tsx` (`ResourceRow`)
+
+64px row, 14px radius, transparent; hover and selected surface, selected adds the accent-text outline. 64×40 thumbnail at 8px radius, title + meta, date in mono, actions and a round checkbox on hover.
+
+### Inputs — `components/ui/input.tsx`, `textarea.tsx`
+
+Single-line inputs are 36px surface pills with no border, 15px ink text, ink-muted placeholder; hover and focus surface-raised, focus outline accent-text. Textareas and the content editor use the 14px card radius with the same fill. Labels above fields in 12px ink-subtle. The command palette input is a 40px surface pill.
+
+### Overlays — `components/ui/{dialog,alert-dialog,popover,select,dropdown-menu,command,sonner}.tsx`
+
+- Strong glass, 14px radius, overlay shadow. Dialogs pad 20px and open with a 100ms fade and zoom from 95%; their footer is separated by a divider line. Menus and popovers slide 8px in from their trigger side. Toasts (bottom-right) use strong glass with the glass edge; they are always dark (never follow the OS theme), the title is ink and the description ink-muted. A failed screenshot raises an error toast naming the page and the reason, with an Open action.
+- The command palette is a dialog up to 672px wide.
+
+### Selection bar — `components/selection-bar.tsx`
+
+Appears bottom-centre while resources are selected: strong glass, 28px radius, 6px padding (16px on the left), wraps on narrow screens, enters with a 200ms fade and 8px rise. Count in mono ink-subtle (promoted to ink-muted by the glass), then ghost actions (Copy context, Export, Share package, Collection, Remove, Trash; in Trash: Restore and Delete forever in danger, confirmed in a dialog).
+
+- **Add to collection** popover (strong glass, 256px): a "Find or create a collection…" field, the collections with their counts, and, when the typed name is new, a "Create “name”" row with a folder-plus icon that creates the collection and adds the selection to it.
+
+### Page header — `components/library-view.tsx`
+
+Display title (section name, the type's plural, or "Inbox"), a count badge beside it (the number of items listed now, `tabular-nums`, with "24 items matching “…”" as its accessible name), an optional note in 16px ink-muted (the trash: "Deleted for good after 30 days."), optional actions aligned right, then the filter rows. The library has no Type select: the navbar menus pick the type. A section's landing page shows the folder shelf above the grid. When quick saves are waiting, the library header shows a secondary **Inbox** pill with the count in mono; the Inbox page explains itself in one ink-muted line, and its filter, like a collection or "Saved from <host>", shows as a dark inverse chip with a × to remove it. A reference that is in the Inbox has a surface status pill at the top of its detail page with **Mark reviewed**; the selection bar offers **Mark reviewed** in the Inbox.
+
+### Skill pack group — `components/skill-pack-groups.tsx`
+
+Header: a chevron toggle and the pack name in title-lg ink, then `author · kind · N skills` in 14px ink-subtle; Website and Repository as 32px surface pills (13px) on the right; description in ink-muted at a 3xl measure. Groups are 64px apart; collapsing hides the cards (`aria-expanded`/`aria-controls`).
+
+### Sources page — `components/source-groups.tsx`
+
+- Filter field: a 40px surface pill up to 560px wide with a leading search icon, sitting straight on the canvas (no panel). It filters the saved sources and shares `?q=` with the top bar search; Escape clears it.
+- One section per category in a fixed order, each with a title-lg heading plus hint and count in ink-subtle, then a grid of resource cards (300px minimum column).
+- Source info aside: a surface panel linking "Saved from this source · N →" and a small search form when the search URL has `{q}`.
+
+### Skill guide — `components/skill-guide.tsx`
+
+A surface panel at card radius: title, the invocation as a mono chip that copies on click, Source and Edit guide as ghost pills. Usage renders as Markdown; examples are mono rows on surface-raised that copy their prompt. Plugin skills show a "Plugin skill · read-only" note.
+
+### Folder shelf — `components/folder-shelf.tsx`, `components/ui/glass-folder-cards.tsx`
+
+A row of glass folders as a visual index on section landing pages, Skills (one per pack) and Sources (one per category).
+
+- Each folder is 300px wide in a `minmax(300px, 1fr)` grid (32px × 48px gaps). Its back panel carries generated liquid art picked from the folder id (so it always keeps its look); at most four sheets show; a frosted front panel carries the name and `N sources` / `N skills` in mono.
+- Tone is always dark (smoked glass).
+- Folders open on hover or keyboard focus, fanning their sheets; leaving closes. Choosing a sheet opens that resource. Clicking the folder goes to its page (a skill pack scrolls to its section); on touch a tap goes straight there. The `···` key appears only when a folder has extra actions.
+- Folders assemble on first view, staggered 90ms each (capped at the sixth); they follow their list in place and never replay the entrance. Reduced motion turns every transition off.
+- **Owner exception:** the folder is drawn as an object, so it keeps its own soft shadow, glass rim and the component's system font, and its art uses the component's multi-colour presets (aurora, ember, dusk, glacier, verdant), a spot of colour in the ember world kept by the owner's call. The exception is scoped to this component; the solid-card, no-shadow and ember-palette rules still apply everywhere else.
+
+### Extension popup — `apps/extension/src/popup/popup.tsx`
+
+400px wide, 13px body, the same tokens; saving a page takes two steps.
+
+- **Type step:** "What are you saving?" in 13px ink, then a two-column grid of option rows (12px radius, 8px padding): a 32px surface icon tile, the type name in 13px ink and its blurb in 12px ink-muted. Hover and focus fill the row with surface; the type used last time starts filled and focused, with the accent-text focus ring. On a known site's home page Source starts filled instead, with a 12px ink-muted line under the question: "This is Dribbble’s home page, so Source is picked." Six common types, the rest behind a "More types" text button. The footer says "Pick a type to continue" in place of Save.
+- **Details step:** a back pill (surface, arrow and the type name) to change type, the tab preview at the captured tab's own aspect ratio, up to the full width and 256px high, centred on surface (never cropped or stretched) with a solid surface-raised "Attach this view" toggle, the title field, then only that type's quick facets, each a combobox (see below). "More details" (12px ink-muted, chevron, with a hint of what's inside in ink-subtle) opens description, tags, notes, collection and the server-capture option ("Also capture a full-page screenshot"; for a Source "Take a screenshot in PIVOT", shown only when the view isn't attached, since the view already is a Source's first-screen shot). Save stays the one ember button in the footer.
+- **Errors:** a failed save shows a danger line above the footer (× icon, 12px) and keeps everything typed. A rejected token adds an underlined ink "Open extension settings" button to that line, so the token can be fixed in the settings tab and Save pressed again. A token that is already wrong when the popup opens shows the Connect screen straight away, before anything is typed.
+- **Already saved:** when the page is already saved as the chosen type, the warning line stays and the primary button reads **Save again**. On a PIVOT page the popup shows only "This is PIVOT itself. Open the page you want to save, then try again."
+- **View tabs:** two small pills in the header (Capture, Library; the current one inverse), ← → switch them. **Library** shows a search field, "Saved from this page", "Saved from <host>", "Recently saved" (rows with a 56×36 thumbnail, the title in 12px ink, the type in 11px ink-muted) and "Waiting to sync"; managing items happens in PIVOT.
+- **Already saved (type step):** a surface panel with a warning line ("Already saved 2 times. Open it, or carry on to save a new one.") and up to three rows (thumbnail, title, type and date, "Open existing"); "View all n" opens the library filtered to that page.
+- **Collections** are pills, several or none: the three used most recently first, "All n" shows the rest. Picked ones are inverse with `aria-pressed`.
+- **Saved:** the check, "Saved", the background-capture line, and Close, **Edit** and Open (focused). Edit swaps in a compact form (title, notes, the type's facets, collections) with Cancel and Save changes; "Changes saved" in success green confirms it.
+- **Offline:** a surface note "PIVOT isn’t running. You can still save…" above the form. Saving shows "Saved locally" (a warning-coloured check) with the reason. Waiting saves are a collapsible surface panel ("2 saves waiting to sync", **Sync now**) whose rows show why they wait, with Retry and a two-step Discard for refused ones. The toolbar icon shows the waiting count on an ember badge.
+- **Add a state:** under the "Already saved" rows, an underlined 11px link "Add this view as a state of “…”" opens a surface-raised row: "Which state is on screen?", a pill select of states (and a name field for Other…), and a small **Add state** button.
+- **Pick assets:** a fourth outline pill next to the section ones. It opens a surface panel of fieldsets (Images with 48×32 thumbnails and sizes, Icons (SVG) on a white 24px tile, Fonts (names only), Gradients with a 48×20 swatch and the CSS in mono), each row a checkbox. Files stop at 20 (the rest disable). "Save to “…”" with the file count is the action; the result shows as a status line.
+- **Save a part of the page:** under the type grid, a 12px ink-muted line and three small outline pills (Select a section, Crop, Pick from a list). The list shows the page's sections as surface rows: the name in ink and the size in mono ink-subtle. While one is being captured: a spinner line, "Capturing the section…".
+- **Section picker (on the page):** a full-window transparent layer with a crosshair, a 2px ember outline over the element or the box being dragged (12% ember fill, 4px radius), and a dark pill centred at the top with the keys ("↑ bigger · ↓ smaller · Enter to save · Esc to cancel").
+- **Private page review:** a surface panel (14px radius) with "This page looks private" in warning, the reasons as a short list in ink-muted, one ink-muted paragraph, then the mask editor: the screenshot with solid black boxes (focusable; accent-text focus ring), "Add a box" (outline pill) with "or drag on the picture", and a checkbox list of the masks. Two checkboxes close it: "Attach this view" and "I checked it: upload this screenshot with these masks". Save stays disabled until the second is ticked.
+- **Approval view:** opened from **Review** on a held save in the waiting panel (which opens by itself when something needs you): the title, the reasons, the same mask editor, then **Upload with these masks** (the one ember button), "Upload without the screenshot" and a two-step Discard.
+- **Capture session:** a link-style line under the collection pills ("Keep saving into this collection until I end it (capture session)"); while on, a surface status bar at the top of the popup ("Capture session: saves go into Heroes.") with an underlined **End**.
+- **Library › Elsewhere:** with a query typed, a two-option radiogroup (Library, Elsewhere; the chosen one inverse). Elsewhere lists inspiration sites as rows (external-link icon, name in ink, "saved source" in ink-subtle) that open their search in a new tab, and an 11px note that nothing is saved.
+- **Options › Waiting saves:** a line saying how many saves wait on this computer, an outline **Export waiting saves** pill (downloads a file) and an "Import a file" pill; importing shows the count in a surface box first, with the primary **Import n** button.
+- **Facet combobox:** a rounded surface field (18px radius, min 36px) holding the chosen values as 24px inverse chips with a remove ×, then a borderless input ("Add page type…"). The accent-text focus ring sits on the field, not the input. Focusing it opens a list right under it (surface-raised, 14px radius, soft drop shadow, up to 176px): the values already used, most used first, with their count in mono ink-subtle; typing filters them (names starting with the text first) and adds a "+ Create “text”" row. ↑↓ move the highlight (surface), Enter picks it, Backspace in an empty field removes the last chip. Nothing is highlighted until you type or press ↓, so Enter in an empty field still saves.
+
+### Browser surfaces — `globals.css` base layer
+
+Text selection is ember at 45% with ink text; the caret is accent-text; the scrollbar is a divider thumb on a transparent track; native controls take ember as `accent-color`.
+
+## Do's and Don'ts
+
+### Do:
+
+- **Do** keep one ember-orange filled button per screen, with dark (on-accent) text.
+- **Do** use accent-text for links, focus (2px outline, 3px offset) and the selected outline.
+- **Do** build hierarchy with canvas → surface → surface-raised; use divider only in dialog footers and tables.
+- **Do** put strong glass on every floating overlay (menus, popovers, selects, dialogs, palette, toasts, selection bar) and light glass on the top bar only.
+- **Do** use ink for any text placed directly on the top bar's glass.
+- **Do** keep every control a pill and every container at the 14px card radius.
+- **Do** check new text colours at 4.5:1 on canvas, surface, surface-raised and the white-backdrop glass composite.
+- **Do** keep motion at 150ms ease-out for hover and pill changes and make every transition instant under reduced motion.
+
+### Don't:
+
+- **Don't** add a light theme, a theme toggle, or any `prefers-color-scheme` branch, in the app or the extension.
+- **Don't** put white text on the ember fill (2.87:1).
+- **Don't** use orange for icons, hover states, badges or decoration, or ember light outside the top bar and the record card's highlight and edge.
+- **Don't** put glass, borders or shadows over saved work, or on rows and panels that show it; the folder and the record card are the only glass that holds work, and their glass sits behind it.
+- **Don't** use weights above 500, sizes below 12px, or `font-size` on `html`.
+- **Don't** scale or lift thumbnails on hover.
+- **Don't** signal state by colour alone; danger, success and warning always carry a word or an icon.
+
+### Copy in the UI
+
+- **Do** write in English, sentence case, from the user's side: buttons name the action ("Add", "Copy context", "Move to trash"), toasts confirm it in the past tense ("Context copied · ~1.9k tokens"), errors say what happened and what to do.
+- **Do** show counts as plain numbers in ink-subtle or mono.
+- **Don't** use "Submit", "OK", or emoji anywhere in the UI.

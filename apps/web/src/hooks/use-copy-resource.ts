@@ -1,7 +1,7 @@
 "use client";
 
-import { extractVariables } from "@stan-bag/core/prompt-vars";
-import { TYPE_DEFS, type ResourceDTO } from "@stan-bag/core/types";
+import { extractVariables } from "@pivot/core/prompt-vars";
+import { TYPE_DEFS, type ResourceDTO } from "@pivot/core/types";
 import { toast } from "sonner";
 import { useUi } from "@/components/ui-store";
 import { api } from "@/lib/api";

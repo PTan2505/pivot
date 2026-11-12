@@ -1,4 +1,4 @@
-import { deleteTag, renameTag } from "@stan-bag/core/resources";
+import { deleteTag, renameTag } from "@pivot/core/resources";
 import { body, json, route, type IdParams } from "@/lib/server/http";
 
 export const PATCH = route(async (req: Request, { params }: IdParams) => {

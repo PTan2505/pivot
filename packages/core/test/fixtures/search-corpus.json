@@ -1,0 +1,1007 @@
+{
+  "note": "Titles, descriptions, URLs and facets of the owner's real references and sources (2026-10-31), for search evaluation. URLs are stripped of query strings.",
+  "items": [
+    {
+      "type": "reference",
+      "title": "Cricket Sports Landing Page Design by Nixtio on Dribbble",
+      "description": "Find Top Designers & Creative Professionals on Dribbble. We are where designers gain inspiration, feedback, community, and jobs. Your best resource to discover and connect with designers worldwide.",
+      "sourceUrl": "https://dribbble.com/",
+      "tags": []
+    },
+    {
+      "type": "reference",
+      "title": "R2 Object Storage | Cloudflare",
+      "description": "Log in to the Cloudflare dashboard. Make your websites, apps, and networks fast and secure. Build modern apps on our developer platform.",
+      "sourceUrl": "https://dash.cloudflare.com/",
+      "tags": []
+    },
+    {
+      "type": "reference",
+      "title": "Attio: The CRM for agentic revenue",
+      "description": "The system for revenue teams to build pipeline, accelerate deals, and grow accounts around the clock.",
+      "sourceUrl": "https://attio.com/",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "SaaS"
+        },
+        {
+          "kind": "pageType",
+          "name": "Landing page"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Linear – The system for product development",
+      "description": "Purpose-built for planning and building products with AI agents.",
+      "sourceUrl": "https://linear.app/",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "SaaS"
+        },
+        {
+          "kind": "pageType",
+          "name": "Landing page"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Hero"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Dark"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Minimal"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Agentic Infrastructure - Vercel",
+      "description": "The autonomous stack for every app and agent.",
+      "sourceUrl": "https://vercel.com/",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "Developer tool"
+        },
+        {
+          "kind": "pageType",
+          "name": "Landing page"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Bento"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Hero"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Dark"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Raycast - Your shortcut to everything",
+      "description": "A collection of powerful productivity tools all within an extendable launcher.",
+      "sourceUrl": "https://www.raycast.com/",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "Productivity"
+        },
+        {
+          "kind": "pageType",
+          "name": "Landing page"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Command palette"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Dark"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Futuristic"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "PostHog – Your product’s context layer",
+      "description": "PostHog automatically diagnoses problems, fixes bugs, and generates pull requests – all without you having to prompt it.",
+      "sourceUrl": "https://posthog.com/",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "Developer tool"
+        },
+        {
+          "kind": "pageType",
+          "name": "Landing page"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Navigation"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Playful"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Resend · Email for developers",
+      "description": "The best way to reach humans instead of spam folders. Deliver transactional and marketing emails at scale.",
+      "sourceUrl": "https://resend.com/",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "Developer tool"
+        },
+        {
+          "kind": "pageType",
+          "name": "Landing page"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Hero"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Dark"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Minimal"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Cal.com | Scheduling Software for Online Bookings",
+      "description": "A fully customizable scheduling software for individuals, businesses taking calls and developers building scheduling platforms where users meet users.",
+      "sourceUrl": "https://cal.com/",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "Productivity"
+        },
+        {
+          "kind": "pageType",
+          "name": "Landing page"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Hero"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Minimal"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Stripe — Pricing & Fees",
+      "description": "Find Stripe fees and pricing information. Find our processing fees for credit cards, pricing models and pay-as-you-go fees for businesses.",
+      "sourceUrl": "https://stripe.com/pricing",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "Fintech"
+        },
+        {
+          "kind": "pageType",
+          "name": "Pricing"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Pricing table"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Corporate"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Pricing – Linear",
+      "description": "Use Linear for free with your whole team. Upgrade to enable unlimited issues, enhanced security controls, and additional features.",
+      "sourceUrl": "https://linear.app/pricing",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "SaaS"
+        },
+        {
+          "kind": "pageType",
+          "name": "Pricing"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Pricing table"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Dark"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Minimal"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Notion Pricing Plans: Free, Plus, Business, & Enterprise.",
+      "description": "Learn more about our different pricing plans. We support everyone, from free personal accounts to enterprise businesses.",
+      "sourceUrl": "https://www.notion.com/pricing",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "Productivity"
+        },
+        {
+          "kind": "pageType",
+          "name": "Pricing"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Pricing table"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Minimal"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Framer: Pricing",
+      "description": "Compare Framer plans for websites, teams, and enterprises. Start free, then choose the right plan for AI credits, CMS, bandwidth, add-ons, and hosting.",
+      "sourceUrl": "https://www.framer.com/pricing",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "SaaS"
+        },
+        {
+          "kind": "pageType",
+          "name": "Pricing"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Pricing table"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Dark"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Pricing & Fees | Supabase",
+      "description": "Explore Supabase fees and pricing information. Find our competitive pricing Plans, with no hidden pricing. We have a generous Free Plan for those getting started, and Pay As You Go for those scaling up. Projects on paid plans aren't paused for inactivity.",
+      "sourceUrl": "https://supabase.com/pricing",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "Developer tool"
+        },
+        {
+          "kind": "pageType",
+          "name": "Pricing"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Data table"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Pricing table"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Dark"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Stripe Docs",
+      "description": "Explore our guides and examples to integrate Stripe.",
+      "sourceUrl": "https://docs.stripe.com/",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "Fintech"
+        },
+        {
+          "kind": "pageType",
+          "name": "Docs"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Sidebar"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Corporate"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Tailwind CSS — Installation docs",
+      "description": "Integrate Tailwind CSS with frameworks like Laravel, SvelteKit, React Router, and SolidJS.",
+      "sourceUrl": "https://tailwindcss.com/docs/installation",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "Developer tool"
+        },
+        {
+          "kind": "pageType",
+          "name": "Docs"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Sidebar"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Minimal"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Next.js Docs",
+      "description": "Welcome to the Next.js Documentation.",
+      "sourceUrl": "https://nextjs.org/docs",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "Developer tool"
+        },
+        {
+          "kind": "pageType",
+          "name": "Docs"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Sidebar"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Minimal"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Changelog – Linear",
+      "description": "New updates and improvements to Linear.",
+      "sourceUrl": "https://linear.app/changelog",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "SaaS"
+        },
+        {
+          "kind": "pageType",
+          "name": "Blog"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Cards"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Dark"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Editorial"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Blog - Vercel",
+      "description": "Blog posts from the Vercel team and community. Discover the latest in web development.",
+      "sourceUrl": "https://vercel.com/blog",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "Developer tool"
+        },
+        {
+          "kind": "pageType",
+          "name": "Blog"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Cards"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Minimal"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "AirPods Pro 3",
+      "description": "AirPods Pro 3 — The world’s best in-ear Active Noise Cancellation, heart rate sensing during workouts, and an improved hearing health experience.",
+      "sourceUrl": "https://www.apple.com/airpods-pro/",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "E-commerce"
+        },
+        {
+          "kind": "pageType",
+          "name": "Landing page"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Hero"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Editorial"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "GitHub — Sign in",
+      "description": "GitHub is where people build software. More than 225 million people use GitHub to discover, fork, and contribute to over 800 million projects.",
+      "sourceUrl": "https://github.com/login",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "Developer tool"
+        },
+        {
+          "kind": "pageType",
+          "name": "Auth"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Form"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Minimal"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Supabase — Sign in",
+      "description": "",
+      "sourceUrl": "https://supabase.com/dashboard/sign-in",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "Developer tool"
+        },
+        {
+          "kind": "pageType",
+          "name": "Auth"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Form"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Dark"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Rauno Freiberg",
+      "description": "",
+      "sourceUrl": "https://rauno.me/",
+      "tags": [
+        {
+          "kind": "domain",
+          "name": "Design"
+        },
+        {
+          "kind": "pageType",
+          "name": "Portfolio"
+        },
+        {
+          "kind": "uiPattern",
+          "name": "Navigation"
+        },
+        {
+          "kind": "visualStyle",
+          "name": "Minimal"
+        }
+      ]
+    },
+    {
+      "type": "reference",
+      "title": "Plans & Pricing | Figma",
+      "description": "Learn about Figma pricing plans. Explore Figma products, compare key features, and read through FAQs to choose the right plan and seats for your team.",
+      "sourceUrl": "https://www.figma.com/pricing/",
+      "tags": []
+    },
+    {
+      "type": "reference",
+      "title": "NobleFinance - Financial Dashboard UI & Management Platform by Orbix Studio – SaaS Dashboard Design for Orbix Studio LLC on Dribbble",
+      "description": "",
+      "sourceUrl": "https://dribbble.com/shots/27019826-NobleFinance-Financial-Dashboard-UI-Management-Platform",
+      "tags": []
+    },
+    {
+      "type": "source",
+      "title": "Dribbble",
+      "description": "Shots of UI, illustration, branding and app concepts posted by designers.",
+      "sourceUrl": "https://dribbble.com/",
+      "tags": [],
+      "meta": {
+        "category": "inspiration"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Behance",
+      "description": "Full case-study projects from designers and studios, including UI/UX, branding and illustration.",
+      "sourceUrl": "https://www.behance.net/",
+      "tags": [],
+      "meta": {
+        "category": "inspiration"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Awwwards",
+      "description": "Award-nominated websites and saved inspiration elements, rated for design and development.",
+      "sourceUrl": "https://www.awwwards.com/",
+      "tags": [],
+      "meta": {
+        "category": "inspiration"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Recent (formerly Godly)",
+      "description": "Curated feed of websites, interfaces, launch videos, OG images and app screenshots.",
+      "sourceUrl": "https://recent.design/",
+      "tags": [],
+      "meta": {
+        "category": "inspiration"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Landbook",
+      "description": "Gallery of landing pages, website sections and templates with full-page screenshots.",
+      "sourceUrl": "https://land-book.com/",
+      "tags": [],
+      "meta": {
+        "category": "inspiration"
+      }
+    },
+    {
+      "type": "source",
+      "title": "One Page Love",
+      "description": "One-page websites, page sections and templates with full screenshots.",
+      "sourceUrl": "https://onepagelove.com/",
+      "tags": [],
+      "meta": {
+        "category": "inspiration"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Siteinspire",
+      "description": "Hand-picked website designs, filterable by style, type and subject.",
+      "sourceUrl": "https://www.siteinspire.com/",
+      "tags": [],
+      "meta": {
+        "category": "inspiration"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Pinterest",
+      "description": "User-saved image pins, including many UI shots, moodboards and visual references.",
+      "sourceUrl": "https://www.pinterest.com/",
+      "tags": [],
+      "meta": {
+        "category": "inspiration"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Cosmos",
+      "description": "Visual moodboard platform where users collect images, videos and web clips into clusters.",
+      "sourceUrl": "https://www.cosmos.so/",
+      "tags": [],
+      "meta": {
+        "category": "inspiration"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Savee",
+      "description": "Bookmarked images and design references saved by designers into boards.",
+      "sourceUrl": "https://savee.com/",
+      "tags": [],
+      "meta": {
+        "category": "inspiration"
+      }
+    },
+    {
+      "type": "source",
+      "title": "SaaS Landing Page",
+      "description": "Landing pages from SaaS companies, browsable by page section such as pricing or features.",
+      "sourceUrl": "https://saaslandingpage.com/",
+      "tags": [],
+      "meta": {
+        "category": "inspiration"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Mobbin",
+      "description": "Screens, flows and UI patterns captured from shipped iOS, Android and web apps.",
+      "sourceUrl": "https://mobbin.com/",
+      "tags": [],
+      "meta": {
+        "category": "product-ui"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Refero",
+      "description": "Screens and user flows from real web and iOS apps, searchable by page type and element.",
+      "sourceUrl": "https://refero.design/",
+      "tags": [],
+      "meta": {
+        "category": "product-ui"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Page Flows",
+      "description": "Recorded user flows and screens from real web and mobile products, such as onboarding and checkout.",
+      "sourceUrl": "https://pageflows.com/",
+      "tags": [],
+      "meta": {
+        "category": "product-ui"
+      }
+    },
+    {
+      "type": "source",
+      "title": "SaaSFrame",
+      "description": "Screens, flows and emails from SaaS products, grouped by page type.",
+      "sourceUrl": "https://www.saasframe.io/",
+      "tags": [],
+      "meta": {
+        "category": "product-ui"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Nicelydone",
+      "description": "Screens, UI components and user flows from web apps like Linear, Notion and Stripe.",
+      "sourceUrl": "https://nicelydone.club/",
+      "tags": [],
+      "meta": {
+        "category": "product-ui"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Refero Styles",
+      "description": "Design systems extracted from product websites: colors, type, spacing, components and a DESIGN.md file.",
+      "sourceUrl": "https://styles.refero.design/",
+      "tags": [],
+      "meta": {
+        "category": "styles-systems"
+      }
+    },
+    {
+      "type": "source",
+      "title": "The Component Gallery",
+      "description": "Common UI components, each shown with examples from many public design systems.",
+      "sourceUrl": "https://component.gallery/",
+      "tags": [],
+      "meta": {
+        "category": "styles-systems"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Design Systems Repo",
+      "description": "List of public design systems plus articles, tools, books and talks about them.",
+      "sourceUrl": "https://designsystemsrepo.com/",
+      "tags": [],
+      "meta": {
+        "category": "styles-systems"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Design Systems Surf",
+      "description": "Directory of design system libraries, resources and tools, plus paid products.",
+      "sourceUrl": "https://designsystems.surf/",
+      "tags": [],
+      "meta": {
+        "category": "styles-systems"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Adele",
+      "description": "Table of public design systems compared by tech stack, tokens, icons and documentation.",
+      "sourceUrl": "https://adele.uxpin.com/",
+      "tags": [],
+      "meta": {
+        "category": "styles-systems"
+      }
+    },
+    {
+      "type": "source",
+      "title": "21st.dev",
+      "description": "Community-made React and Tailwind components and blocks you can copy or install.",
+      "sourceUrl": "https://21st.dev/",
+      "tags": [],
+      "meta": {
+        "category": "components"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Uiverse",
+      "description": "Open-source UI elements in HTML/CSS and Tailwind, such as buttons, loaders and toggles.",
+      "sourceUrl": "https://uiverse.io/",
+      "tags": [],
+      "meta": {
+        "category": "components"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Magic UI",
+      "description": "Animated React and Tailwind components and templates, built to pair with shadcn/ui.",
+      "sourceUrl": "https://magicui.design/",
+      "tags": [],
+      "meta": {
+        "category": "components"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Aceternity UI",
+      "description": "Animated React, Tailwind and Framer Motion components and blocks to copy and paste.",
+      "sourceUrl": "https://ui.aceternity.com/",
+      "tags": [],
+      "meta": {
+        "category": "components"
+      }
+    },
+    {
+      "type": "source",
+      "title": "React Bits",
+      "description": "Animated React components for text, backgrounds and UI effects, with copy-paste code.",
+      "sourceUrl": "https://reactbits.dev/",
+      "tags": [],
+      "meta": {
+        "category": "components"
+      }
+    },
+    {
+      "type": "source",
+      "title": "coss ui (formerly Origin UI)",
+      "description": "Base UI component library and 'particles' (ready-made component examples) to copy.",
+      "sourceUrl": "https://coss.com/ui",
+      "tags": [],
+      "meta": {
+        "category": "components"
+      }
+    },
+    {
+      "type": "source",
+      "title": "shadcn/ui",
+      "description": "Copy-paste React components and page blocks built on Radix and Tailwind.",
+      "sourceUrl": "https://ui.shadcn.com/",
+      "tags": [],
+      "meta": {
+        "category": "components"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Codrops",
+      "description": "Web animation and interaction tutorials, demos and articles, often using WebGL and GSAP.",
+      "sourceUrl": "https://tympanus.net/codrops/",
+      "tags": [],
+      "meta": {
+        "category": "motion"
+      }
+    },
+    {
+      "type": "source",
+      "title": "LottieFiles",
+      "description": "Lottie vector animations such as loaders, icons and illustrations, many free to download.",
+      "sourceUrl": "https://lottiefiles.com/",
+      "tags": [],
+      "meta": {
+        "category": "motion"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Rive Marketplace",
+      "description": "Community-made interactive Rive animations and state machines you can remix.",
+      "sourceUrl": "https://rive.app/marketplace/",
+      "tags": [],
+      "meta": {
+        "category": "motion"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Motion Examples",
+      "description": "Animation code snippets for React, JavaScript and Vue made with the Motion library.",
+      "sourceUrl": "https://motion.dev/examples",
+      "tags": [],
+      "meta": {
+        "category": "motion"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Fonts In Use",
+      "description": "Real-world examples of typefaces in use, indexed by font, format and industry.",
+      "sourceUrl": "https://fontsinuse.com/",
+      "tags": [],
+      "meta": {
+        "category": "type-color"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Typewolf",
+      "description": "Font recommendations, pairings and lists of typefaces seen on live websites.",
+      "sourceUrl": "https://www.typewolf.com/",
+      "tags": [],
+      "meta": {
+        "category": "type-color"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Google Fonts",
+      "description": "Free open-source web fonts with previews and pairings.",
+      "sourceUrl": "https://fonts.google.com/",
+      "tags": [],
+      "meta": {
+        "category": "type-color"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Fontshare",
+      "description": "Free quality typefaces from Indian Type Foundry, for personal and commercial use.",
+      "sourceUrl": "https://www.fontshare.com/",
+      "tags": [],
+      "meta": {
+        "category": "type-color"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Coolors",
+      "description": "Color palette generator plus a browsable library of user-made palettes.",
+      "sourceUrl": "https://coolors.co/",
+      "tags": [],
+      "meta": {
+        "category": "type-color"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Realtime Colors",
+      "description": "Tool that previews a color and font combination on a sample website layout.",
+      "sourceUrl": "https://www.realtimecolors.com/",
+      "tags": [],
+      "meta": {
+        "category": "type-color"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Iconify",
+      "description": "Browser for 200+ open-source icon sets with copyable SVG and component code.",
+      "sourceUrl": "https://icon-sets.iconify.design/",
+      "tags": [],
+      "meta": {
+        "category": "assets"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Icônes",
+      "description": "Fast search across all Iconify icon sets, with SVG and component code to copy.",
+      "sourceUrl": "https://icones.js.org/",
+      "tags": [],
+      "meta": {
+        "category": "assets"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Lucide",
+      "description": "Open-source stroke icon set with packages for React, Vue, Svelte and more.",
+      "sourceUrl": "https://lucide.dev/",
+      "tags": [],
+      "meta": {
+        "category": "assets"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Phosphor Icons",
+      "description": "Open-source icon family in six weights, with SVG and framework packages.",
+      "sourceUrl": "https://phosphoricons.com/",
+      "tags": [],
+      "meta": {
+        "category": "assets"
+      }
+    },
+    {
+      "type": "source",
+      "title": "unDraw",
+      "description": "Open-source flat illustrations with a color you can change, as SVG or PNG.",
+      "sourceUrl": "https://undraw.co/",
+      "tags": [],
+      "meta": {
+        "category": "assets"
+      }
+    },
+    {
+      "type": "source",
+      "title": "Landing Page Design Examples: 7,300+ Best Landing Pages | Lapa Ninja",
+      "description": "Browse 7,300+ landing page designs from portfolios, agencies & startups. Find high-converting examples with screenshots & videos. SaaS, e-commerce & more.",
+      "sourceUrl": "https://www.lapa.ninja/",
+      "tags": [],
+      "meta": {
+        "category": "product-ui"
+      }
+    },
+    {
+      "type": "source",
+      "title": "SaaS Search Screens Examples · UI & UX Inspiration | SaaSFrame",
+      "description": "Explore real SaaS search screens from live products — search bars, filters, results layout & UX patterns. Browse inspiration for your SaaS UI at SaaSFrame.",
+      "sourceUrl": "https://www.saasframe.io/search-screens",
+      "tags": [],
+      "meta": {
+        "category": "product-ui"
+      }
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+<!doctype html><title>Mobile drawer menu</title><meta name="viewport" content="width=device-width" /><style>
+  body {
+    margin: 0;
+    font: 16px system-ui;
+    background: #fff;
+    color: #111;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    padding: 16px;
+  }
+  .drawer {
+    position: fixed;
+    inset: 0 0 0 30%;
+    background: #111;
+    color: #fff;
+    padding: 32px;
+    box-shadow: -20px 0 40px #0004;
+  }
+  .drawer a {
+    display: block;
+    color: #fff;
+    font-size: 24px;
+    margin: 12px 0;
+    text-decoration: none;
+  }
+  .scrim {
+    position: fixed;
+    inset: 0;
+    background: #0006;
+  }
+</style>
+<header><b>Northwind</b><span>☰</span></header>
+<p style="padding: 16px">A right-side drawer over a dimmed page; Escape or the scrim closes it.</p>
+<div class="scrim"></div>
+<nav class="drawer"><a href="#">Shop</a><a href="#">Journal</a><a href="#">Account</a></nav>

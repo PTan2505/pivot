@@ -1,15 +1,19 @@
 "use client";
 
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CollectionDTO,
+  DirectProviderInfo,
+  ExternalResult,
+  ExternalSearchPage,
   ResourceDetailDTO,
+  SkillPackDTO,
   ResourceDTO,
   ResourceType,
   SkillStatusDTO,
   TagDTO,
   TagKind,
-} from "@stan-bag/core/types";
+} from "@pivot/core/types";
 
 export class ApiError extends Error {
   constructor(
@@ -41,27 +45,49 @@ export const keys = {
   counts: ["counts"] as const,
   settings: ["settings"] as const,
   skills: ["skills-status"] as const,
+  skillPacks: ["skill-packs"] as const,
+  sourceStats: ["source-stats"] as const,
+  external: (q: string, limit: number) => ["external-search", q, limit] as const,
+  providers: ["search-providers"] as const,
 };
 
 export interface ResourceQuery {
   q?: string;
   type?: ResourceType;
+  /** Any of these types (a navbar section); ignored when `type` is set. */
+  types?: readonly ResourceType[];
+  /** Only resources saved from this source. */
+  via?: string;
   tags?: string[];
   collection?: string;
+  /** "needs": the Inbox. */
+  review?: string;
+  url?: string;
+  host?: string;
   trash?: boolean;
   sort?: string;
+  limit?: number;
 }
 
 function toParams(q: ResourceQuery): Record<string, string | undefined> {
   return {
     q: q.q || undefined,
     type: q.type,
+    types: q.types?.length ? q.types.join(",") : undefined,
+    via: q.via,
     tags: q.tags?.length ? q.tags.join(",") : undefined,
     collection: q.collection,
+    review: q.review || undefined,
+    url: q.url || undefined,
+    host: q.host || undefined,
     trash: q.trash ? "1" : undefined,
     sort: q.sort,
+    limit: q.limit ? String(q.limit) : undefined,
   };
 }
+
+/** What makes a list a different list: another type, section, collection or the trash. */
+const LIST_SCOPE = ["type", "types", "collection", "trash"] as const;
 
 export function useResources(query: ResourceQuery, { enabled = true } = {}) {
   const params = toParams(query);
@@ -71,7 +97,13 @@ export function useResources(query: ResourceQuery, { enabled = true } = {}) {
       const sp = new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]);
       return api<ResourceDTO[]>(`/api/resources?${sp}`);
     },
-    placeholderData: keepPreviousData,
+    // While a search, tag or sort change loads, keep showing the current list so it doesn't flash empty. A new scope
+    // waits for its own data instead: the old list would be drawn in the new page's layout (Library references
+    // grouped as one "Uncategorized" source folder, Knowledge folders counting references).
+    placeholderData: (previous, previousQuery) => {
+      const before = previousQuery?.queryKey[1] as Record<string, string | undefined> | undefined;
+      return before && LIST_SCOPE.every((k) => before[k] === params[k]) ? previous : undefined;
+    },
     enabled,
     // Keep polling while screenshots are being captured.
     refetchInterval: (q) => (q.state.data?.some((r) => r.captureStatus === "pending") ? 2000 : false),
@@ -82,6 +114,7 @@ export function useResource(id: string) {
   return useQuery({
     queryKey: keys.resource(id),
     queryFn: () => api<ResourceDetailDTO>(`/api/resources/${id}`),
+    enabled: !!id,
     refetchInterval: (q) => (q.state.data?.captureStatus === "pending" ? 2000 : false),
   });
 }
@@ -106,6 +139,11 @@ export interface Settings {
   skillsDir: string;
   exportsDir: string;
   playwright: { installed: boolean; path?: string };
+  storage: {
+    mode: "local" | "r2";
+    target: string;
+    files: Partial<Record<"local" | "r2", { count: number; bytes: number }>>;
+  };
 }
 
 export function useSettings() {
@@ -114,6 +152,19 @@ export function useSettings() {
 
 export function useSkillStatuses(enabled = true) {
   return useQuery({ queryKey: keys.skills, queryFn: () => api<SkillStatusDTO[]>("/api/skills/status"), enabled });
+}
+
+export function useSkillPacks(enabled = true) {
+  return useQuery({ queryKey: keys.skillPacks, queryFn: () => api<SkillPackDTO[]>("/api/skill-packs"), enabled });
+}
+
+/** Saved resources per source id. */
+export function useSourceStats(enabled = true) {
+  return useQuery({
+    queryKey: keys.sourceStats,
+    queryFn: () => api<Record<string, number>>("/api/sources/stats"),
+    enabled,
+  });
 }
 
 /** Invalidate everything list-shaped after a write. */
@@ -125,6 +176,8 @@ export function useInvalidate() {
     qc.invalidateQueries({ queryKey: keys.collections });
     qc.invalidateQueries({ queryKey: keys.counts });
     qc.invalidateQueries({ queryKey: keys.skills });
+    qc.invalidateQueries({ queryKey: keys.skillPacks });
+    qc.invalidateQueries({ queryKey: keys.sourceStats });
     if (resourceId) qc.invalidateQueries({ queryKey: keys.resource(resourceId) });
   };
 }
@@ -147,7 +200,8 @@ export function useUpdateResource(id: string) {
   const qc = useQueryClient();
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (patch: ResourcePatch) => api<ResourceDetailDTO>(`/api/resources/${id}`, { method: "PATCH", json: patch }),
+    mutationFn: (patch: ResourcePatch) =>
+      api<ResourceDetailDTO>(`/api/resources/${id}`, { method: "PATCH", json: patch }),
     onSuccess: (data) => {
       qc.setQueryData(keys.resource(id), data);
       invalidate();
@@ -159,7 +213,7 @@ export function useBulk() {
   const invalidate = useInvalidate();
   return useMutation({
     mutationFn: (input: {
-      action: "trash" | "restore" | "purge" | "addToCollection" | "removeFromCollection";
+      action: "trash" | "restore" | "purge" | "addToCollection" | "removeFromCollection" | "reviewed" | "needsReview";
       ids: string[];
       collectionId?: string;
     }) => api<{ ok: true }>("/api/resources/bulk", { method: "POST", json: input }),
@@ -181,16 +235,83 @@ export async function uploadFiles(files: File[], extra: Record<string, string> =
   return api<{ created: string[] }>("/api/upload", { method: "POST", body: form });
 }
 
-export async function uploadToResource(resourceId: string, files: File[]) {
+export async function uploadToResource(resourceId: string, files: File[], { as }: { as?: "screenshot" } = {}) {
   const form = new FormData();
   files.forEach((f) => form.append("file", f));
+  if (as) form.append("as", as);
   return api<{ assetIds: string[] }>(`/api/resources/${resourceId}/assets`, { method: "POST", body: form });
 }
 
-export function assetUrl(id: string, opts: { thumb?: boolean; download?: boolean } = {}) {
+/** A site's icon by host; the server keeps one per host (404 when the site has none). */
+export function faviconUrl(host: string) {
+  return `/api/favicon?host=${encodeURIComponent(host)}`;
+}
+
+export function assetUrl(id: string, opts: { thumb?: boolean; preview?: boolean; download?: boolean } = {}) {
   const sp = new URLSearchParams();
   if (opts.thumb) sp.set("thumb", "1");
+  if (opts.preview) sp.set("preview", "1");
   if (opts.download) sp.set("download", "1");
   const qs = sp.toString();
   return `/api/assets/${id}${qs ? `?${qs}` : ""}`;
+}
+
+// ---- Hybrid search: external side ----
+
+/** Real results from the free catalogs PIVOT searches directly, plus search links for other sites. */
+export function useExternalSearch(q: string, { enabled = true, limit = 6 } = {}) {
+  const query = q.trim();
+  return useQuery({
+    queryKey: keys.external(query, limit),
+    queryFn: () =>
+      api<ExternalSearchPage>(`/api/search/external?${new URLSearchParams({ q: query, limit: String(limit) })}`),
+    enabled: enabled && query.length > 0 && query.length <= 120,
+    // the catalogs change at most daily; the library part ("in your library") is refreshed on save
+    staleTime: 5 * 60_000,
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useSearchProviders() {
+  return useQuery({ queryKey: keys.providers, queryFn: () => api<DirectProviderInfo[]>("/api/search/providers") });
+}
+
+/** Saves one external result to the library through the same path as every other save (duplicates are skipped). */
+export function useSaveExternal() {
+  const qc = useQueryClient();
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (r: ExternalResult) => {
+      const form = new FormData();
+      form.set(
+        "data",
+        JSON.stringify({
+          kind: "page",
+          url: r.url,
+          type: "reference",
+          title: r.title,
+          // the catalog's description is kept only where the licence covers the whole catalog; otherwise the page's
+          description: r.licenceMode === "full" ? r.description : undefined,
+          serverCapture: true,
+          needsReview: true,
+          ifExists: "skip",
+          origin: {
+            provider: r.provider,
+            providerName: r.providerName,
+            externalId: r.externalId,
+            licence: r.licence.name,
+            retrievedAt: r.retrievedAt,
+          },
+        }),
+      );
+      return api<{ id: string; path: string; existing?: boolean; title?: string }>("/api/clip", {
+        method: "POST",
+        body: form,
+      });
+    },
+    onSuccess: () => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["external-search"] });
+    },
+  });
 }

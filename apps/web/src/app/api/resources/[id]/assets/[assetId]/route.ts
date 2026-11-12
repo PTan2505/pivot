@@ -1,4 +1,4 @@
-import { detachAsset } from "@stan-bag/core/assets";
+import { detachAsset } from "@pivot/core/assets";
 import { json, route } from "@/lib/server/http";
 
 type Params = { params: Promise<{ id: string; assetId: string }> };

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ResourceType } from "@stan-bag/core/types";
+import type { ResourceType } from "@pivot/core/types";
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
 interface ExportTarget {
@@ -37,7 +37,10 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const [exportTarget, setExportTarget] = useState<ExportTarget | null>(null);
   const [promptResourceId, setPromptResourceId] = useState<string | null>(null);
 
-  const openAddUrl = useCallback((urls: string[] = [], type?: ResourceType) => setAddUrl({ open: true, urls, type }), []);
+  const openAddUrl = useCallback(
+    (urls: string[] = [], type?: ResourceType) => setAddUrl({ open: true, urls, type }),
+    [],
+  );
   const closeAddUrl = useCallback(() => setAddUrl({ open: false, urls: [] }), []);
 
   const value = useMemo<UiStore>(

@@ -6,3 +6,4 @@ allowBuilds:
   sharp: true
   esbuild: true
   unrs-resolver: false
+  lefthook: false

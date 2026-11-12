@@ -14,10 +14,12 @@ let core: {
 };
 
 beforeAll(async () => {
-  tmp = await fs.mkdtemp(path.join(os.tmpdir(), "stan-bag-test-"));
-  process.env.STAN_BAG_DATA_DIR = path.join(tmp, "data");
+  tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pivot-test-"));
+  process.env.PIVOT_DATA_DIR = path.join(tmp, "data");
   process.env.CLAUDE_SKILLS_DIR = path.join(tmp, "skills");
-  process.env.STAN_BAG_MIGRATIONS_DIR = path.resolve(__dirname, "../src/db/migrations");
+  process.env.CLAUDE_PLUGINS_DIR = path.join(tmp, "plugins");
+  process.env.AGENTS_SKILL_LOCK = path.join(tmp, "skill-lock.json");
+  process.env.PIVOT_MIGRATIONS_DIR = path.resolve(__dirname, "../src/db/migrations");
   delete process.env.DATABASE_URL;
   core = {
     resources: await import("../src/resources"),
@@ -49,7 +51,10 @@ describe("resources", () => {
       type: "reference",
       title: "Stripe pricing",
       sourceUrl: "https://stripe.com/pricing",
-      tags: [{ kind: "pageType", name: "Pricing" }, { kind: "technology", name: "react" }],
+      tags: [
+        { kind: "pageType", name: "Pricing" },
+        { kind: "technology", name: "react" },
+      ],
     });
     await createResource({ type: "prompt", title: "Dashboard brief", content: "Build a {{thing}} dashboard" });
 
@@ -58,7 +63,9 @@ describe("resources", () => {
     const react = a.tags.find((t) => t.kind === "technology")!;
     const dashboard = a.tags.find((t) => t.kind === "pageType")!;
     expect((await listResources({ tagIds: [react.id] })).length).toBe(2);
-    expect((await listResources({ tagIds: [react.id, dashboard.id] })).map((r) => r.title)).toEqual(["Linear dashboard"]);
+    expect((await listResources({ tagIds: [react.id, dashboard.id] })).map((r) => r.title)).toEqual([
+      "Linear dashboard",
+    ]);
     expect((await listResources({ q: "dashboard" })).length).toBe(2);
     expect((await listResources({ q: "dashboard", type: "prompt" })).length).toBe(1);
     // Title matches rank above newer content-only matches.
@@ -68,16 +75,81 @@ describe("resources", () => {
     expect((await listResources({ q: "pricing", type: "reference" })).map((r) => r.title)).toEqual(["Stripe pricing"]);
   });
 
+  it("lists a section's types, and a single type within it", async () => {
+    const { sectionOf } = await import("../src/types");
+    const { createResource, listResources } = core.resources;
+    await createResource({ type: "skill", title: "dashboard-skill", content: "---\nname: dashboard-skill\n---\nBody" });
+    const knowledge = await listResources({ q: "dashboard", types: sectionOf("prompt").types });
+    expect(knowledge.map((r) => r.type)).toEqual(["prompt"]);
+    expect((await listResources({ q: "dashboard" })).map((r) => r.type)).toContain("skill");
+    // An explicit type wins over the section.
+    expect((await listResources({ type: "skill", types: sectionOf("prompt").types })).length).toBe(1);
+    expect(sectionOf("source").id).toBe("sources");
+  });
+
+  it("sorts by creation date both ways, and combines search, tags, type and source", async () => {
+    const { createResource, listResources } = core.resources;
+    const source = await createResource({ type: "source", title: "Mobbin", sourceUrl: "https://mobbin.com/" });
+    const first = await createResource({
+      type: "reference",
+      title: "Sortcheck onboarding one",
+      sourceUrl: "https://mobbin.com/screens/1",
+      tags: [{ kind: "pageType", name: "Onboarding" }],
+    });
+    await createResource({
+      type: "reference",
+      title: "Sortcheck onboarding two",
+      sourceUrl: "https://mobbin.com/screens/2",
+      tags: [{ kind: "pageType", name: "Onboarding" }],
+    });
+    await createResource({
+      type: "reference",
+      title: "Sortcheck onboarding elsewhere",
+      sourceUrl: "https://dribbble.com/shots/3",
+      tags: [{ kind: "pageType", name: "Onboarding" }],
+    });
+    await createResource({ type: "prompt", title: "Sortcheck onboarding prompt", content: "" });
+
+    const titles = (r: { title: string }[]) => r.map((x) => x.title);
+    expect(titles(await listResources({ q: "Sortcheck", type: "reference", sort: "oldest" }))).toEqual([
+      "Sortcheck onboarding one",
+      "Sortcheck onboarding two",
+      "Sortcheck onboarding elsewhere",
+    ]);
+    expect(titles(await listResources({ q: "Sortcheck", type: "reference", sort: "created" }))).toEqual([
+      "Sortcheck onboarding elsewhere",
+      "Sortcheck onboarding two",
+      "Sortcheck onboarding one",
+    ]);
+    // every filter narrows: search + facet + type + saved from this source
+    const onboarding = first.tags[0].id;
+    expect(
+      titles(
+        await listResources({
+          q: "sortcheck",
+          tagIds: [onboarding],
+          type: "reference",
+          via: source.id,
+          sort: "oldest",
+        }),
+      ),
+    ).toEqual(["Sortcheck onboarding one", "Sortcheck onboarding two"]);
+    expect(await listResources({ q: "sortcheck nothing", tagIds: [onboarding], via: source.id })).toEqual([]);
+  });
+
   it("detects duplicate URLs", async () => {
     const dupes = await core.resources.findByUrl("http://www.linear.app");
     expect(dupes.map((d) => d.title)).toEqual(["Linear dashboard"]);
   });
 
   it("moves to trash, restores and purges with asset cleanup", async () => {
-    const { createResource, trashResources, restoreResources, purgeResources, listResources, getResource } = core.resources;
+    const { createResource, trashResources, restoreResources, purgeResources, listResources, getResource } =
+      core.resources;
     const { saveAsset, attachAsset, absoluteAssetPath } = core.assets;
     const r = await createResource({ type: "media", title: "Hero shot" });
-    const png = await sharp({ create: { width: 64, height: 40, channels: 3, background: "#ff6363" } }).png().toBuffer();
+    const png = await sharp({ create: { width: 64, height: 40, channels: 3, background: "#ff6363" } })
+      .png()
+      .toBuffer();
     const asset = await saveAsset({ data: png, fileName: "hero.png" });
     expect(asset.width).toBe(64);
     await attachAsset(r.id, asset.id);
@@ -105,10 +177,44 @@ describe("resources", () => {
     const { createCollection, addToCollection, collectionResourceIds, listResources, listCollections } = core.resources;
     const all = await listResources();
     const c = await createCollection({ name: "SaaS Dashboard" });
-    await addToCollection(c.id, all.map((r) => r.id));
+    await addToCollection(
+      c.id,
+      all.map((r) => r.id),
+    );
     await addToCollection(c.id, [all[0].id]); // idempotent
     expect(await collectionResourceIds(c.id)).toEqual(all.map((r) => r.id));
     expect((await listCollections()).find((x) => x.id === c.id)!.count).toBe(all.length);
+  });
+
+  it("renames collections, filters inside them, and keeps resources when one is removed or deleted", async () => {
+    const r = core.resources;
+    const pricing = await r.createResource({
+      type: "reference",
+      title: "Pricing page",
+      sourceUrl: "https://a.example/pricing",
+      tags: [{ kind: "pageType", name: "Pricing" }],
+    });
+    const hero = await r.createResource({
+      type: "reference",
+      title: "Hero",
+      sourceUrl: "https://b.example/",
+      tags: [{ kind: "pageType", name: "Landing" }],
+    });
+    const c = await r.createCollection({ name: "Landing pages" });
+    await r.addToCollection(c.id, [pricing.id, hero.id]);
+    await r.updateCollection(c.id, { name: "Landing pages · 2026" });
+    expect((await r.getCollection(c.id))!.name).toBe("Landing pages · 2026");
+
+    // A collection combines with the other filters.
+    const inside = await r.listResources({ collectionId: c.id, tagIds: [pricing.tags[0].id] });
+    expect(inside.map((x) => x.id)).toEqual([pricing.id]);
+
+    await r.removeFromCollection(c.id, [hero.id]);
+    expect(await r.collectionResourceIds(c.id)).toEqual([pricing.id]);
+    await r.deleteCollection(c.id);
+    expect(await r.getCollection(c.id)).toBeFalsy();
+    expect(await r.getResource(pricing.id)).not.toBeNull();
+    expect(await r.getResource(hero.id)).not.toBeNull();
   });
 });
 
@@ -123,7 +229,9 @@ describe("context & export", () => {
       notes: "Look at the hero grid.",
       tags: [{ kind: "uiPattern", name: "Hero" }],
     });
-    const big = await sharp({ create: { width: 3200, height: 2000, channels: 3, background: "#111" } }).png().toBuffer();
+    const big = await sharp({ create: { width: 3200, height: 2000, channels: 3, background: "#111" } })
+      .png()
+      .toBuffer();
     const shot = await saveAsset({ data: big, fileName: "vercel.png" });
     await attachAsset(ref.id, shot.id, "screenshot");
     const prompt = await createResource({ type: "prompt", title: "Hero brief", content: "Make a hero." });
@@ -150,10 +258,28 @@ describe("context & export", () => {
     expect(Math.max(meta.width!, meta.height!)).toBe(1568);
 
     // Exporting again never overwrites: a new folder is created.
-    const again = await core.context.exportBundle({ resourceIds: [prompt.id], targetDir: path.join(tmp, "out"), bundleName: "Hero bundle" });
+    const again = await core.context.exportBundle({
+      resourceIds: [prompt.id],
+      targetDir: path.join(tmp, "out"),
+      bundleName: "Hero bundle",
+    });
     expect(path.basename(again.path)).toBe("hero-bundle-2");
   });
 });
+
+/** Writes a skill to disk the way the owner's page does: owner passphrase, a fresh challenge and the content hash. */
+async function asOwner(write: (typeof import("../src/skills"))["writeSkillToDisk"], id: string, force = false) {
+  const owner = await import("../src/owner-approval");
+  if (!owner.ownerPassphraseStatus().set) owner.setOwnerPassphrase("a test-only owner passphrase");
+  const r = (await core.resources.getResource(id))!;
+  const contentHash = core.skills.skillContentHash(r.content ?? "");
+  const binding = core.skills.skillWriteBinding(force, core.skills.skillFolderName(r), contentHash);
+  const { challenge } = owner.issueSkillWriteChallenge({ resourceId: id, binding });
+  return write(id, {
+    force,
+    owner: { bearer: null, passphrase: "a test-only owner passphrase", challenge, contentHash },
+  });
+}
 
 describe("skills", () => {
   const skillMd = (desc: string) => `---\nname: demo-skill\ndescription: ${desc}\n---\n\n# Demo\n`;
@@ -182,7 +308,7 @@ describe("skills", () => {
     // App edit is written back on request.
     await core.resources.updateResource(id, { content: skillMd("v3") });
     expect((await skillStatuses())[0].state).toBe("app-changed");
-    await writeSkillToDisk(id);
+    await asOwner(writeSkillToDisk, id);
     expect(await fs.readFile(path.join(dir, "SKILL.md"), "utf8")).toContain("v3");
     expect((await skillStatuses())[0].state).toBe("synced");
 
@@ -191,7 +317,7 @@ describe("skills", () => {
     await fs.writeFile(path.join(dir, "SKILL.md"), skillMd("disk"));
     [status] = await skillStatuses();
     expect(status.state).toBe("conflict");
-    await expect(writeSkillToDisk(id)).rejects.toThrow(/changed on disk/);
+    await expect(asOwner(writeSkillToDisk, id)).rejects.toThrow(/changed on disk/);
     await pullSkillFromDisk(id);
     expect((await core.resources.getResource(id))!.description).toBe("disk");
   });

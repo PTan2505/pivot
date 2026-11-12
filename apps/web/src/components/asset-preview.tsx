@@ -3,7 +3,7 @@
 import { Download, FileText, ImageOff } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import type { AssetDTO } from "@stan-bag/core/types";
+import type { AssetDTO } from "@pivot/core/types";
 import { Button } from "@/components/ui/button";
 import { assetUrl } from "@/lib/api";
 
