@@ -2,6 +2,10 @@ import { z } from "zod";
 import {
   DESIGN_DECISION_KINDS,
   DESIGN_MILESTONES,
+  DESIGN_QA_DETECTOR,
+  DESIGN_QA_LEVELS,
+  SPECIALIST_PHASES,
+  SPECIALIST_RUN_LABELS,
   RESOURCE_TYPES,
   SUGGESTION_KINDS,
   TAG_KINDS,
@@ -250,6 +254,11 @@ const setDesignStatus: PivotTool<typeof statusInput> = {
       return { content: [text(`The session is already ${status}.`)], structuredContent: { sessionId, status } };
     }
     const rule = FROM[status];
+    if (status === "done" && s.status === "building" && !s.currentQaId)
+      throw new ToolError(
+        "conflict",
+        "Record the QA first with record_design_qa (the slop check, the specialist ledger, what stayed unverified), then mark the session done.",
+      );
     if (s.status !== rule.from) {
       const hint =
         s.status === "abandoned"
@@ -263,6 +272,83 @@ const setDesignStatus: PivotTool<typeof statusInput> = {
     return {
       content: [text(`The session is now ${updated.status}.`)],
       structuredContent: { sessionId, status: updated.status },
+    };
+  },
+};
+
+// ---- record_design_qa --------------------------------------------------------------------------------------------
+
+const qaInput = {
+  sessionId: z.string().regex(UUID).describe("The design session (building)."),
+  level: z
+    .enum(DESIGN_QA_LEVELS)
+    .describe("new: a new design (pivot-design). minor or major: a redesign at that risk level (pivot-redesign)."),
+  summary: z.string().min(1).max(300).describe("One line: what QA found, and whether anything is left."),
+  slopCheck: z
+    .object({
+      detector: z.object({
+        status: z
+          .enum(DESIGN_QA_DETECTOR)
+          .describe("ran, not_installed (impeccable isn't installed), or failed (it was there but didn't run)."),
+        result: z
+          .string()
+          .min(1)
+          .max(4000)
+          .describe("What the detector reported (findings and what you did), or why it didn't run."),
+      }),
+      checklist: z
+        .string()
+        .min(1)
+        .max(4000)
+        .describe("What the checklist against DESIGN.md found on the after screenshots, or that it found nothing."),
+      critique: z
+        .string()
+        .max(4000)
+        .optional()
+        .describe("The text critique against impeccable's critique.md. Required for level new and major."),
+    })
+    .describe("pivot-design §10's slop check."),
+  specialists: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(80).describe('The specialist, e.g. "ui-ux-pro-max", or "none".'),
+        phase: z.enum(SPECIALIST_PHASES),
+        run: z.enum(SPECIALIST_RUN_LABELS).describe("The run label of what really happened (specialists.md §1)."),
+        outcome: z
+          .string()
+          .min(1)
+          .max(300)
+          .describe("adopted / partially adopted / rejected / not applicable, and why; for none, the user's words."),
+      }),
+    )
+    .min(1)
+    .max(12)
+    .describe(
+      "The specialist ledger: at least the design-stage specialist (brief or mockups); for new and major also the QA audit (phase qa).",
+    ),
+  unverified: z
+    .array(z.string().min(1).max(300))
+    .max(30)
+    .optional()
+    .describe(
+      "Checks that were blocked or not run (widths, states, axe, keyboard, motion…): unverified, never passed.",
+    ),
+};
+
+const recordDesignQa: PivotTool<typeof qaInput> = {
+  name: "record_design_qa",
+  title: "Record a design session's QA",
+  description:
+    "Records the QA report of a session that is building, before you mark it done: the slop check (detector, checklist, and the critique for a new design or a Major redesign), the specialist ledger with run labels, and what stayed unverified. set_design_status done is refused without one recorded after the current approval. Record what you really did: a check you didn't run is unverified.",
+  inputSchema: qaInput,
+  async run(source, { sessionId, ...input }) {
+    const w = writer(source);
+    if (!w.recordDesignQa)
+      throw new ToolError("not_supported", "This PIVOT app can't store QA reports yet: update PIVOT and restart it.");
+    const res = await w.recordDesignQa(sessionId, { ...input, unverified: input.unverified ?? [] });
+    return {
+      content: [text(`Recorded the QA report (${res.id}). You can now mark the session done if nothing is left.`)],
+      structuredContent: { sessionId, id: res.id },
     };
   },
 };
@@ -423,6 +509,12 @@ function sessionText(s: DesignSessionDetailDTO) {
   if (!s.currentApprovalId && s.decisions.some((d) => d.kind === "approval"))
     lines.push(
       "No approval counts now (the session went back to exploring after it, or approvals conflict): the direction needs approving again before building.",
+    );
+  if (s.status === "building")
+    lines.push(
+      s.currentQaId
+        ? `QA: recorded (${s.currentQaId}); mark the session done when nothing is left for the user to decide.`
+        : "QA: not recorded yet. Record it with record_design_qa before marking the session done.",
     );
   const rounds = [...new Set((s.mockups ?? []).map((m) => m.round))];
   if (rounds.length) {
@@ -591,6 +683,7 @@ const saveReference: PivotTool<typeof saveInput> = {
 export const WRITE_TOOLS = [
   saveDesignBrief,
   recordDesignDecision,
+  recordDesignQa,
   saveDesignMockups,
   setDesignStatus,
   getDesignSession,

@@ -87,7 +87,8 @@ Two pieces let Claude Code design and redesign screens in any project from **you
 | `save_design_brief`      | write | Store the brief at a milestone: `initial` (opens a design session), `approved`, `major_change`              |
 | `record_design_decision` | write | Record a `change` after approval or a QA `deviation` (approvals are yours, in PIVOT)                        |
 | `save_design_mockups`    | write | Put a round of mockups on the session's page in PIVOT, where you compare them and approve one               |
-| `set_design_status`      | write | Mark an approved session `building` when Claude starts coding, and `done` after the build and QA            |
+| `record_design_qa`       | write | Record the QA report (slop check, specialists, what stayed unverified) before the session is marked done    |
+| `set_design_status`      | write | Mark an approved session `building` when Claude starts coding, and `done` after the build and recorded QA   |
 | `get_design_session`     | read  | Read a session to continue earlier work, or the approval you made in PIVOT                                  |
 | `suggest_metadata`       | write | Suggest facets or a title for a reference; it waits in your Inbox                                           |
 | `annotate_reference`     | write | Add a dated agent note to a reference; your notes stay as they are                                          |

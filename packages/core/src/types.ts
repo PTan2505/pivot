@@ -716,8 +716,43 @@ export interface ResourceLinkDTO {
 
 export const DESIGN_MILESTONES = ["initial", "approved", "major_change"] as const;
 export type DesignMilestone = (typeof DESIGN_MILESTONES)[number];
+/** The decisions recorded through record_design_decision (an approval is the owner's alone). */
 export const DESIGN_DECISION_KINDS = ["approval", "change", "deviation"] as const;
 export type DesignDecisionKind = (typeof DESIGN_DECISION_KINDS)[number];
+/** What a session's history holds: those decisions, and the QA reports recorded through record_design_qa. */
+export type DesignRecordKind = DesignDecisionKind | "qa";
+
+/** How big the work QA checked was: a new design (pivot-design), or a Minor or Major redesign (pivot-redesign). */
+export const DESIGN_QA_LEVELS = ["new", "minor", "major"] as const;
+export type DesignQaLevel = (typeof DESIGN_QA_LEVELS)[number];
+/** Whether impeccable's detector ran in the slop check. */
+export const DESIGN_QA_DETECTOR = ["ran", "not_installed", "failed"] as const;
+/** A specialist's run label (specialists.md §1), or none with the user's words. */
+export const SPECIALIST_RUN_LABELS = ["ran (skill)", "ran (script)", "consulted", "unavailable", "none"] as const;
+export const SPECIALIST_PHASES = ["brief", "mockups", "build", "qa"] as const;
+
+/** The QA report an agent records before marking a session done (record_design_qa). */
+export interface DesignQaInput {
+  level: DesignQaLevel;
+  /** One line: the outcome of QA. */
+  summary: string;
+  slopCheck: {
+    detector: { status: (typeof DESIGN_QA_DETECTOR)[number]; result: string };
+    /** What the checklist against DESIGN.md found, or that it found nothing. */
+    checklist: string;
+    /** The text critique: required for a new design and a Major redesign. */
+    critique?: string;
+  };
+  /** The specialist ledger: who ran at which phase, with its run label and outcome. */
+  specialists: {
+    name: string;
+    phase: (typeof SPECIALIST_PHASES)[number];
+    run: (typeof SPECIALIST_RUN_LABELS)[number];
+    outcome: string;
+  }[];
+  /** Checks that were blocked or not run: unverified, never passed. */
+  unverified: string[];
+}
 export const DESIGN_STATUSES = ["exploring", "approved", "building", "done", "abandoned"] as const;
 export type DesignStatus = (typeof DESIGN_STATUSES)[number];
 
@@ -760,7 +795,7 @@ export interface DesignApprovalBindingDTO {
 export interface DesignDecisionDTO {
   id: string;
   sessionId: string;
-  kind: DesignDecisionKind;
+  kind: DesignRecordKind;
   summary: string;
   direction: string;
   details: string;
@@ -810,6 +845,8 @@ export interface DesignCandidateDTO {
 export interface DesignSessionDetailDTO extends DesignSessionDTO {
   /** The approval that counts now (newest after the last return to exploring, unambiguous), or null: build only from it. */
   currentApprovalId: string | null;
+  /** The QA report recorded after that approval (the newest), or null: an agent marks the session done only with one. */
+  currentQaId: string | null;
   snapshots: DesignSnapshotDTO[];
   decisions: DesignDecisionDTO[];
   /** Every saved version, oldest round first. */

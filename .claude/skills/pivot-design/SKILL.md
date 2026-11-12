@@ -19,6 +19,7 @@ PIVOT is the user's library of saved UI references: screenshots of real websites
 | `save_design_brief`      | Save the brief in PIVOT at a milestone (`initial` opens the session, `approved`, `major_change`).                                                          |
 | `record_design_decision` | Record a change after approval, or a deviation found in QA. Never an approval: only the owner approves, in PIVOT.                                          |
 | `save_design_mockups`    | Put a round of mockups on the session's page in PIVOT, where the user compares them and can approve one.                                                   |
+| `record_design_qa`       | Record the QA report (slop check, specialist ledger, what stayed unverified) while building; `done` is refused without one.                                |
 | `set_design_status`      | Mark an approved session `building` when you start, and `done` when the build and QA are finished.                                                         |
 | `get_design_session`     | Read a session (briefs, decisions, mockup rounds), to continue it or to read the user's approval made in PIVOT.                                            |
 | `suggest_metadata`       | Suggest facets, a collection, a title or a visual description for a reference you looked at.                                                               |
@@ -278,7 +279,8 @@ Mockups are **temporary design prototypes**, not the implementation.
   - Say which results come from your own checks and which from a tool's or someone else's report.
   - A check that was blocked or not run is **unverified**, never a pass.
   - Don't present a width or a state you didn't look at.
-- **Close the session:** when the build and its QA are finished and nothing is left for the user to decide, call `set_design_status` with `status: "done"`. Leave it `building`, and say why, in either case:
+- **Record the QA** with `record_design_qa` once the checks above are done: `level` (`new` for this skill), the slop check as it really went (the detector's result or why it didn't run, the checklist's findings, the critique), the specialist ledger with run labels (the design-stage specialist and, for new designs and Major redesigns, the `impeccable` audit; `none` only with the user's words), and every check left **unverified**. PIVOT refuses a report with a part missing; record what you did, never what you meant to do.
+- **Close the session:** when the build and its QA are finished, the QA is recorded and nothing is left for the user to decide, call `set_design_status` with `status: "done"`. It refuses `done` until a QA report is recorded after the current approval. Leave it `building`, and say why, in either case:
   - a departure waits for the user's decision;
   - you stopped for a new approval (§8).
 

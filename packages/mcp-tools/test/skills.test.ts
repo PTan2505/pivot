@@ -35,8 +35,8 @@ const ordered = (text: string, words: string[]) => {
 describe("skills name real MCP tools and values", () => {
   const tools = all(/name: "([a-z_]+)"/g, src);
 
-  it("packages/mcp-tools defines 15 tools", () => {
-    expect(tools.size).toBe(15);
+  it("packages/mcp-tools defines 16 tools", () => {
+    expect(tools.size).toBe(16);
   });
 
   // get_reference_images' `which` values, from the tool's own schema
@@ -291,6 +291,21 @@ describe("shortlist, mockups and slop check", () => {
   it("SPEC describes the shortlist, mockups, viewer and slop check", () => {
     for (const s of ["shortlist", "**2–3 mockup**", "make-viewer.mjs", "Kiểm tra AI slop"])
       expect(spec.includes(s), s).toBe(true);
+  });
+});
+
+describe("QA is recorded before a session is done", () => {
+  it("pivot-design and pivot-redesign record the QA, then mark done", () => {
+    expect(d).toContain("**Record the QA** with `record_design_qa`");
+    expect(d).toContain("It refuses `done` until a QA report is recorded after the current approval.");
+    expect(d).toContain("record what you did, never what you meant to do");
+    expect(r).toContain("record the QA with `record_design_qa`");
+    expect(r).toContain("`done` is refused until the QA is recorded");
+  });
+  it("SPEC and the READMEs describe the QA report and the done gate", () => {
+    for (const t of [spec, read("README.md"), read("apps/mcp/README.md")]) expect(t).toContain("record_design_qa");
+    expect(spec).toContain("**Bản ghi QA**");
+    expect(spec).toContain("không phải ranh giới bảo mật");
   });
 });
 
