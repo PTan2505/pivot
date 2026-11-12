@@ -203,18 +203,36 @@ describe("QA differences are classified in one place", () => {
   });
 });
 
-describe("specialists stay optional", () => {
+describe("specialists run by risk", () => {
   for (const [f, t] of [
     ["pivot-design", d],
     ["pivot-redesign", r],
   ] as const) {
-    it(`${f}: checkpoint line, "none" is valid, no preloading`, () => {
+    it(`${f}: checkpoint line shown to the user, "none" only for a small fix or the user's words, no preloading`, () => {
       expect(t).toContain("`Specialists: none — <reason>`");
       expect(t).toContain("`Specialists: <name> — <stage> — <purpose>`");
-      expect(t).toContain('"None" is a valid answer');
+      expect(t).toMatch(/show the user one line in the chat/i);
+      expect(t).toContain("the user said not to use specialists");
+      expect(t).toMatch(/(design system|tokens)[^.]*never (the|a) reason/);
+      expect(t).not.toContain('"None" is a valid answer');
+      expect(t).not.toContain("**Specialists are optional.**");
       expect(t).toContain("Don't preload every specialist's instructions");
     });
   }
+  it("new designs and Major redesigns always get ui-ux-pro-max on the brief and an impeccable audit at QA", () => {
+    expect(d).toContain("**New design** (this skill's full flow), or a Major redesign");
+    expect(d).toContain("plus an `impeccable` audit through `pivot-specialist`");
+    expect(d).toContain("run the `impeccable` audit through `pivot-specialist` after the slop check");
+    expect(r).toContain("**Major:** `ui-ux-pro-max` on the brief, always");
+    expect(specialists).toContain("`ui-ux-pro-max` on the brief, always");
+    expect(specialists).toContain("**`impeccable` audit through `pivot-specialist`**");
+    expect(specialists).toContain("required defaults");
+    expect(specialists).not.toContain("Most tasks need none");
+  });
+  it("a required specialist that can't run is labelled, never faked, and doesn't block", () => {
+    for (const t of [d, r, specialists]) expect(t).toMatch(/required specialist that can't run/i);
+    expect(d).toContain("Never claim it ran.");
+  });
   it("small fixes stay light", () => {
     expect(r).toContain("**Small fix:** none, unless the user asks.");
     expect(r).toContain("No screenshot matrix, no session.");

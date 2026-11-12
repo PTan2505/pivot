@@ -1,8 +1,8 @@
-# Optional specialists
+# Specialists
 
 Shared by `pivot-design` and `pivot-redesign`. Their **specialist checkpoint** line is `Specialists: none — <reason>`, or `<name> — <stage> — <purpose>`. After a specialist runs, its result is reported with one of the run labels in §1.
 
-- A "none" line needs nothing from this file.
+- A "none" line (a small fix, or the user said not to use specialists) needs nothing from this file.
 - Read this file before naming or using a specialist.
 
 PIVOT runs the workflow. A specialist is another installed skill that can give advice:
@@ -11,7 +11,7 @@ PIVOT runs the workflow. A specialist is another installed skill that can give a
 - it never stores design documents;
 - it never changes code on its own.
 
-Most tasks need none. Choose one only when it adds something clear, considering the design problem, what the specialist can actually do, and what it costs to run.
+Which ones run is set by the work's risk (§2, "By risk"): a new design or a Major redesign always gets `ui-ux-pro-max` on the brief and an `impeccable` audit at QA, plus Taste for a public page and `animate` for motion; a Minor redesign gets the one that owns its problem; a small fix gets none. Being installed is never the reason to run one, and a project's design system or tokens are never the reason to skip one.
 
 ## Authority
 
@@ -135,22 +135,31 @@ If a contract is long, you may summarise it, but keep every recommendation, cons
   4. If confirmed, apply only the compatible guidance, keeping the project's tokens, the approved direction and PIVOT's gates.
 - Never substitute another Taste variant.
 
-**By risk** (soft defaults; being installed is never a reason to use a specialist):
+**By risk** (required defaults; being installed is never a reason to add a specialist, and a design system is never a reason to skip one):
 
 - **Small fix:** none by default. Use one only if the user asks.
-- **Minor:** at most one design-stage specialist by default, and only when it clearly helps:
+- **Minor:** one design-stage specialist, the one that owns the problem:
   - Taste for visual refinement of a public page;
-  - `ui-ux-pro-max` when the problem is UX.
+  - `ui-ux-pro-max` when the problem is UX, or on any app screen.
 
   A second is allowed only for a distinct, justified problem the first can't cover (e.g. Taste for the type, plus `ui-ux-pro-max` for a form's error pattern). Say why in one line.
 
-- **Major, or a new design:** several when their jobs complement each other (e.g. `ui-ux-pro-max` for structure and Taste for the visual direction of a public page). No two may do the same job.
+- **Major, or a new design:**
+  - `ui-ux-pro-max` on the brief, always (structure, hierarchy, patterns, states);
+  - plus Taste for the visual direction of a public web page;
+  - plus `animate` when the motion level is standard or advanced.
+
+  No two may do the same job.
+
+- **"None"** at Minor, Major or for a new design only when the user said not to use specialists: quote their words on the checkpoint line.
 - **QA:** every new design and Minor or Major redesign gets the **slop check** (`pivot-design` §10). It runs whatever was chosen above:
   - `impeccable detect` when installed;
   - a checklist against `DESIGN.md`;
-  - for Major work, a text critique against `impeccable`'s `reference/critique.md`.
+  - for new designs and Major work, a text critique against `impeccable`'s `reference/critique.md`.
 
-  A further audit specialist (Taste's `lint.mjs`/`inspect.mjs` on a public page, or a fuller `impeccable` audit) may be added at the Minor and Major levels whatever was used at the design stage. Neither counts toward the design-stage limit.
+  New designs and Major redesigns also get an **`impeccable` audit through `pivot-specialist`** (its `reference/audit.md` criteria, on the changed files, the after screenshots and the detector's output). A further audit (Taste's `lint.mjs`/`inspect.mjs` on a public page) may be added at the Minor and Major levels. QA audits don't count toward the design-stage defaults.
+
+- **A required specialist that can't run** (not installed, refused by the Skill tool, or `pivot-specialist` isn't in the session) is reported as `unavailable` (or `consulted` when you read its files instead). It doesn't block the work, and nothing stands in for it.
 
 **By cost:** prefer reading a reference file, then a single read-only command, then a `pivot-specialist` run, and only then a script that renders pages. A motion specialist counts toward the same limits as the others.
 

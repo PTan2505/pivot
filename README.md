@@ -124,9 +124,10 @@ Claude usually picks the right skill. Start with "Use pivot-design…" or "Use p
 
    Both also state a **motion level**: `none` (the default), `standard` (micro-interactions, transitions) or `advanced` (scroll storytelling, pinning, morphing…). Your words decide it when you say anything about motion. Changing how something moves is always Major. The rules live in `.claude/skills/pivot-design/motion.md`.
 
-2. **Specialist checkpoint.** One line: `Specialists: none — <reason>`, or `<name> — <stage> — <purpose>`.
-   - The installed specialists are `ui-ux-pro-max`, `design-taste-frontend` (public pages only) and `impeccable` (QA audit).
-   - "None" is a valid answer. Ask for one by name if you want it.
+2. **Specialist checkpoint.** One line shown to you: `Specialists: <name> — <stage> — <purpose>`, or `none — <reason>`.
+   - The specialists are `ui-ux-pro-max`, `design-taste-frontend` (public pages only), `impeccable` (QA audit) and `animate` (motion). Claude runs them through the read-only `pivot-specialist` agent.
+   - Required by risk: a new design or Major redesign always gets `ui-ux-pro-max` on the brief and an `impeccable` audit at QA (plus Taste on a public page, `animate` for motion); a Minor redesign gets the one that owns its problem; a small fix gets none.
+   - "None" otherwise only when you say not to use specialists. Your design system is never the reason to skip them.
 3. **Impact and baseline** (redesign):
    - the files, shared components and pages the change touches;
    - a keep list;
