@@ -1,0 +1,98 @@
+<!doctype html>
+<!--
+  Multi-page mockup skeleton (pivot-design §7). One file = one version = one direction, holding EVERY page the user
+  asked for. Copy it to mockup-<n>-<slug>.html and replace the pages; keep the same pages, in the same order and with
+  the same ids, in every version of the round.
+
+  The page bar works without scripts (PIVOT and the local viewer don't run them): each page has a radio input and a
+  label, and CSS shows the page whose input is checked. No links or #fragments, so it works in PIVOT's sandboxed frame,
+  in the local viewer (srcdoc) and opened alone. To add a page: one <input>, one <label>, one <section>, and one line in
+  each of the two `:has()` rules below, all with the same number.
+
+  The bar is mockup chrome, not part of the design: keep it small and neutral, and don't restyle it per direction.
+  It sits above the pages and scrolls away with them; give the design's own top bar `position: sticky` (not `fixed`)
+  so it never covers the page bar.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Direction name</title>
+    <style>
+      /* ---- mockup chrome: page bar (leave as is) ---- */
+      .pv-bar {
+        position: relative;
+        z-index: 2147483000;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px;
+        padding: 6px 8px;
+        background: #111;
+        color: #eee;
+        font:
+          500 12px/1.2 system-ui,
+          sans-serif;
+      }
+      .pv-bar .pv-name {
+        margin-right: 8px;
+        opacity: 0.7;
+      }
+      .pv-bar input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .pv-bar label {
+        padding: 5px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+      }
+      .pv-bar label:hover {
+        background: #2a2a2a;
+      }
+      .pv-page {
+        display: none;
+      }
+      /* One line per page: the checked input shows its page and highlights its label. */
+      body:has(#pv-p1:checked) .pv-page[data-page="1"],
+      body:has(#pv-p2:checked) .pv-page[data-page="2"],
+      body:has(#pv-p3:checked) .pv-page[data-page="3"] {
+        display: block;
+      }
+      body:has(#pv-p1:checked) label[for="pv-p1"],
+      body:has(#pv-p2:checked) label[for="pv-p2"],
+      body:has(#pv-p3:checked) label[for="pv-p3"] {
+        background: #eee;
+        color: #111;
+      }
+      .pv-bar input:focus-visible + label {
+        outline: 2px solid #8ab4ff;
+        outline-offset: 1px;
+      }
+
+      /* ---- the design (this version's direction) ---- */
+      body {
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="pv-bar" aria-label="Mockup pages">
+      <span class="pv-name">Direction name</span>
+      <input type="radio" name="pv-page" id="pv-p1" checked /><label for="pv-p1">Page one</label>
+      <input type="radio" name="pv-page" id="pv-p2" /><label for="pv-p2">Page two</label>
+      <input type="radio" name="pv-page" id="pv-p3" /><label for="pv-p3">Page three</label>
+    </nav>
+
+    <section class="pv-page" data-page="1" aria-label="Page one">
+      <!-- page one, in this direction -->
+    </section>
+    <section class="pv-page" data-page="2" aria-label="Page two">
+      <!-- page two, in this direction -->
+    </section>
+    <section class="pv-page" data-page="3" aria-label="Page three">
+      <!-- page three, in this direction -->
+    </section>
+  </body>
+</html>
