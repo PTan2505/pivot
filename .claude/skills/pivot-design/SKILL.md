@@ -88,6 +88,7 @@ How to run them:
 Pin down, from the request and the codebase (ask only for what you can't infer):
 
 - the surface (a page type, or a component and the page or container it lives in) and its single job: what the visitor must do or understand;
+- **the pages or screens in scope**, when the request names more than one ("a merchant portal: dashboard, orders, settings"). They are one surface designed together, not separate tasks: every direction covers all of them (§7);
 - the product's domain and audience;
 - hard constraints: platform, breakpoints, the existing layout it lives in, content that must appear;
 - **the motion level:** write `Motion: none | standard | advanced — <reason> (auto | set by you)` as [motion.md](motion.md) §2 says. The user's words override; none is the default and needs nothing more. For standard or advanced, follow motion.md through the brief, mockups, approval, build and QA.
@@ -156,6 +157,7 @@ Write this before any mockup and show it to the user in this shape, table includ
 
 **Goal:** <the surface's single job, for whom>
 **Constraints:** <design system, stack, breakpoints, required content>
+**Pages:** <several pages or screens only: each one, in order; every direction shows all of them>
 **Component API:** <a component only: props, variants and states; which existing component or primitive it extends, or why it is new>
 
 | Reference          | Source                                   | Inspected                         | Why it fits | Take                     | Leave                    |
@@ -166,7 +168,7 @@ Write this before any mockup and show it to the user in this shape, table includ
 **Open questions:** <only what blocks the mockups>
 ```
 
-Leave out the **Component API** line for a page. When the motion level isn't none, add the **Motion** block from motion.md §4 (each item tagged essential or detail) and mark each reference's motion evidence in its Inspected cell (motion.md §3).
+Leave out the **Component API** line for a page, and the **Pages** line when the surface is a single page or component. When the motion level isn't none, add the **Motion** block from motion.md §4 (each item tagged essential or detail) and mark each reference's motion evidence in its Inspected cell (motion.md §3).
 
 ## 6. Design session
 
@@ -184,6 +186,10 @@ A design session starts at §1, with the requirements. It groups the proposed an
 
 Mockups are **temporary design prototypes**, not the implementation.
 
+- **A version is a direction, never a page.** When the surface has several pages or screens (the brief's **Pages** line), every version holds all of them, in the same order, and the versions differ in style and direction. Never make one version per page: the user compares directions, and approves one with all its pages.
+  - Build each version from [viewer/multi-page.html](viewer/multi-page.html): one file per direction, a page bar on top, a `<section>` per page. The bar switches pages with CSS alone (radio inputs and labels, no scripts or `#` links), so it works in PIVOT, in the local viewer and opened alone. Keep its markup and styles, and the same page names and ids in every version.
+  - Give the design's own top bar `position: sticky`, not `fixed`, so it never covers the page bar.
+  - Each version stays under the 2 MB limit with all its pages. If the pages times the directions get too heavy to do well, make fewer directions (say why) rather than drop pages; ask before leaving a page out.
 - **How many:** **2–3 genuinely different** directions by default, or the number the user asked for. "Different" means a different structure or emphasis, not colourways.
   - Go to 4–5 only when the task gains from broader exploration (a new public page whose look is wide open, or the user wants many options), and say why.
   - Make fewer rather than padding the count; say why.
@@ -198,7 +204,7 @@ Mockups are **temporary design prototypes**, not the implementation.
   - **How many:** versions differ in structure or behaviour, not colour. A small component often has only 2–3 that really differ: make those and say so rather than padding the count.
   - **Reuse first:** check whether the project already has this component, or a primitive to extend (its UI kit), before designing a new one. The brief's **Component API** line says which.
 - **Motion** (level standard or advanced): show each essential item as motion.md §5 says: CSS motion in the PIVOT mockups, and for Advanced (or interactions CSS can't show) the top 1–2 directions as interactive versions (`interactive: true`) opened in the interactive preview (`scripts/preview.mjs`); the local viewer (`--interactive`) is the fallback. Never fake reduced motion; the user previews it with their real browser setting or the preview's emulation.
-- **Look at every version** at the desktop and phone widths before you present them. When you didn't look at one, say so.
+- **Look at every version** at the desktop and phone widths before you present them, every page of it (click through the page bar). When you didn't look at one, say so.
 - **Show them in PIVOT:** call `save_design_mockups` with the session id and the files (`{ path, title }` each, in order; absolute paths). It inlines local CSS, images and fonts from the mockup's own folder, by relative path, up to 2 MB in all. Each `path` must be a plain `.html` file (not a symlink or a hard link). A reference outside that folder (an absolute path, `..` out of it, a symlink out, a hard link, a `file:` URL) fails the whole call and nothing is saved: copy the file into the folder instead. Scripts and remote files don't load there, and the result lists any it removed or skipped: fix a mockup that depended on them. Each call is a new round; earlier rounds stay on the page.
   - Give the user the link it returns. On the session page they switch versions (tabs, keys 1–9, ←/→) at desktop, tablet and phone width, and can press **Approve this version** with a note, or answer in the chat.
   - **Then wait for the decision without the user having to come back to the chat.** Start `node <skill>/scripts/wait-for-decision.mjs <sessionId>` with the Bash tool's `run_in_background` (add `--url` when PIVOT isn't at `http://127.0.0.1:4321`), where `<skill>` is this skill's folder. It only reads PIVOT and exits when the session leaves `exploring`, which wakes you up (§8). Keep its task id, end your turn with the link and one line saying you start building once they approve a version there or reply here.
@@ -242,7 +248,7 @@ Mockups are **temporary design prototypes**, not the implementation.
 
 - Check the result in the browser against the approved direction, at desktop and phone widths, in the states that matter (empty, error, long content, keyboard focus).
 - **Against the approved version itself, layout and accessibility:**
-  - Open the approved version's stored HTML (`<PIVOT_URL>/api/design/mockups/<mockupId>`, the digest you built from) and the build at the same widths with reduced motion, and compare them side by side. Classify each difference as below.
+  - Open the approved version's stored HTML (`<PIVOT_URL>/api/design/mockups/<mockupId>`, the digest you built from) and the build at the same widths with reduced motion, and compare them side by side, page by page when the version has several (its page bar). Classify each difference as below.
   - No sideways scroll at 390, 768 and 1440 px.
   - Go through every control with the keyboard, and run axe-core when it's available. `scripts/qa/workflow-demo/workflow.e2e.ts` in the PIVOT repo shows one way to do each. Serious or critical findings are bugs.
 - **Motion** (standard or advanced): run motion QA as motion.md §9 says: a plan from the approved Motion block (its M-numbers), `scripts/motion-qa.mjs` against the build, then by hand what the script doesn't cover. Report each essential item as Pass, Fail or Not Verified with the report's path; the overall status is Pass only when every essential item passed. What you couldn't trigger or measure is Not Verified, never a pass; reduced motion checked by the script is browser emulation, and a real device is unverified unless the user checked it.

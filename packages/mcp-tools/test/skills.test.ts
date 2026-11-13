@@ -596,3 +596,30 @@ describe("pivot-design: discovery and gate 1 (L1, text only)", () => {
     expect(d).toMatch(/Nothing external is saved to the library/);
   });
 });
+
+describe("pivot-design: several pages are one direction per version (L1, text only)", () => {
+  const tpl = read(".claude/skills/pivot-design/viewer/multi-page.html");
+  it("makes every version a direction holding all the requested pages, never one version per page", () => {
+    expect(d).toMatch(/\*\*the pages or screens in scope\*\*/);
+    expect(d).toMatch(/\*\*Pages:\*\* <several pages or screens only/);
+    expect(d).toMatch(/\*\*A version is a direction, never a page\.\*\*/);
+    expect(d).toMatch(/Never make one version per page/);
+    expect(d).toMatch(/ask before leaving a page out/);
+    expect(d).toContain("viewer/multi-page.html");
+    expect(r).toMatch(/never one version per page/);
+    expect(spec).toMatch(/một version là một hướng/i);
+  });
+  it("ships a page-bar template that needs no scripts or #links, with every page wired", () => {
+    expect(tpl).not.toMatch(/<script/i);
+    expect(tpl).not.toMatch(/href\s*=\s*["']#/i);
+    const inputs = all(/<input type="radio" name="pv-page" id="pv-p(\d+)"/g, tpl);
+    expect(inputs.size).toBeGreaterThan(1);
+    for (const n of inputs) {
+      expect(tpl, `label ${n}`).toContain(`<label for="pv-p${n}">`);
+      expect(tpl, `section ${n}`).toContain(`class="pv-page" data-page="${n}"`);
+      expect(tpl, `page rule ${n}`).toContain(`body:has(#pv-p${n}:checked) .pv-page[data-page="${n}"]`);
+      expect(tpl, `label rule ${n}`).toContain(`body:has(#pv-p${n}:checked) label[for="pv-p${n}"]`);
+    }
+    expect(tpl).toMatch(/id="pv-p1" checked/);
+  });
+});
