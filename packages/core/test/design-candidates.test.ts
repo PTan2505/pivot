@@ -70,11 +70,16 @@ describe("references proposed for a design session", () => {
     expect((await cands.candidatePreview(ext.id))!.toString()).toBe("webp:https://93.184.215.14/saas");
     expect(blocked).toMatchObject({ previewStatus: "failed", previewUrl: null });
     expect(blocked.previewError).toMatch(/HTTP 403/);
-    // numbering continues; the same page isn't proposed twice
-    const more = await cands.addCandidates(id, [
-      { url: "https://93.184.215.14/saas", why: "again" },
-      { url: "https://93.184.215.14/other", why: "new" },
-    ]);
+    // numbering continues; the same page isn't proposed twice. wait: a background capture could outlive afterAll's
+    // closeDb and fail the run with "PGlite is closed"
+    const more = await cands.addCandidates(
+      id,
+      [
+        { url: "https://93.184.215.14/saas", why: "again" },
+        { url: "https://93.184.215.14/other", why: "new" },
+      ],
+      { wait: true },
+    );
     expect(more.map((c) => c.n)).toEqual([4]);
   });
 
