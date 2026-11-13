@@ -95,7 +95,7 @@ These steps differ from `pivot-design`:
 - **Brief:** `pivot-design`'s shape, titled "Redesign brief", plus:
   - **Keep** and **Impact** lines (the consumers from §1);
   - a reference row for the current state ("this project, screenshot/code"), and one for the consistency target.
-- **Mockups:** as `pivot-design` §7 says (2–3 directions for a Major change, 4–5 only when broad exploration helps, saved to the session in PIVOT with `save_design_mockups`, the local viewer only as its fallback), each showing before and after side by side. For a component, follow §7's component rules too: in its page, with its states.
+- **Mockups:** as `pivot-design` §7 says (2–3 directions for a Major change, 4–5 only when broad exploration helps, saved to the session in PIVOT with `save_design_mockups`, the local viewer only as its fallback), each showing before and after side by side. For a component, follow §7's component rules too: in its page, with its states. When the redesign covers several pages or screens, each version is one direction holding all of them (§7's multi-page rule), never one version per page.
 - **Session and approval** follow §4, which replaces `pivot-design` §6 and §8 where they differ.
 
 ## 3. Path B: direct
