@@ -4,9 +4,16 @@ import { designCandidates, designSessions } from "./db/schema";
 import { screenshotUrl } from "./capture";
 import { DesignError } from "./design";
 import { assertPublicUrl, UnsafeUrlError } from "./net-guard";
+import { KNOWN_SOURCES } from "./known-sources";
 import { getResource } from "./resources";
+import { hostOf } from "./source-match";
 import { storeFor, writeStore, type StorageKind } from "./storage";
-import type { DesignCandidateDTO } from "./types";
+import {
+  DESIGN_REFERENCE_CATEGORIES,
+  type DesignCandidateDTO,
+  type DesignReferenceCategory,
+  type ResourceType,
+} from "./types";
 
 /*
  * Gate 1 of a design session: the references proposed for the user to pick from, by number. Library references are
@@ -26,10 +33,35 @@ export interface CandidateInput {
   title?: string;
   /** Where it was found, e.g. "web search", "land-book.com", "React Bits". */
   source?: string;
+  /** A whole page or design ("layout"), or a single component ("component"); inferred when left out. */
+  category?: DesignReferenceCategory;
   why: string;
   take?: string;
   avoid?: string;
 }
+
+/** Library types that hold a single component rather than a page or design. */
+const COMPONENT_TYPES = new Set<ResourceType>(["library", "animation", "snippet"]);
+/** Sites that publish components (the known sources in the "components" category: React Bits, shadcn/ui, Magic UI…). */
+const COMPONENT_HOSTS = KNOWN_SOURCES.filter((s) => s.category === "components").flatMap((s) => [
+  s.host,
+  ...(s.aliases ?? []),
+]);
+
+const onHost = (host: string, site: string) => host === site || host.endsWith(`.${site}`);
+
+/**
+ * What a candidate shows when the agent didn't say: a library resource by its type, an external page by its site (a
+ * component catalog, or anything else, which is taken as a page).
+ */
+export function inferCategory(c: { resourceType?: ResourceType | null; url?: string | null }): DesignReferenceCategory {
+  if (c.resourceType) return COMPONENT_TYPES.has(c.resourceType) ? "component" : "layout";
+  const host = hostOf(c.url);
+  return host && COMPONENT_HOSTS.some((site) => onHost(host, site)) ? "component" : "layout";
+}
+
+const asCategory = (v: unknown): DesignReferenceCategory | null =>
+  DESIGN_REFERENCE_CATEGORIES.includes(v as DesignReferenceCategory) ? (v as DesignReferenceCategory) : null;
 
 /** Testing seam: the capture used for external previews. */
 export const candidateDeps = {
@@ -45,13 +77,18 @@ const clip = (s: unknown, max: number = CANDIDATE_LIMITS.text) =>
     .trim()
     .slice(0, max);
 
-function toDTO(r: typeof designCandidates.$inferSelect, cover: Map<string, string | null>): DesignCandidateDTO {
+function toDTO(
+  r: typeof designCandidates.$inferSelect,
+  library: Map<string, { cover: string | null; type: ResourceType | null }>,
+): DesignCandidateDTO {
   const external = !r.resourceId;
-  const coverId = r.resourceId ? cover.get(r.resourceId) : null;
+  const res = r.resourceId ? library.get(r.resourceId) : undefined;
+  const coverId = res?.cover ?? null;
   return {
     id: r.id,
     n: r.n,
     kind: external ? "external" : "library",
+    category: asCategory(r.category) ?? inferCategory({ resourceType: res?.type, url: r.url }),
     resourceId: r.resourceId,
     title: r.title,
     url: webUrl(r.url),
@@ -89,10 +126,12 @@ export async function listCandidates(sessionId: string): Promise<DesignCandidate
     .from(designCandidates)
     .where(eq(designCandidates.sessionId, sessionId))
     .orderBy(asc(designCandidates.n));
-  const cover = new Map<string, string | null>();
-  for (const id of new Set(rows.flatMap((r) => (r.resourceId ? [r.resourceId] : []))))
-    cover.set(id, (await getResource(id))?.coverAssetId ?? null);
-  return rows.map((r) => toDTO(r, cover));
+  const library = new Map<string, { cover: string | null; type: ResourceType | null }>();
+  for (const id of new Set(rows.flatMap((r) => (r.resourceId ? [r.resourceId] : [])))) {
+    const res = await getResource(id);
+    library.set(id, { cover: res?.coverAssetId ?? null, type: res?.type ?? null });
+  }
+  return rows.map((r) => toDTO(r, library));
 }
 
 async function exploringSession(sessionId: string) {
@@ -135,6 +174,8 @@ export async function addCandidates(
       throw new DesignError("Each reference needs either resourceId (library) or url (external), not both.");
     const why = clip(item.why);
     if (!why) throw new DesignError("Say why each reference fits (why).");
+    if (item.category !== undefined && !asCategory(item.category))
+      throw new DesignError(`category is "layout" or "component", not "${item.category}".`);
     let row: typeof designCandidates.$inferInsert;
     if (item.resourceId) {
       const r = await getResource(item.resourceId);
@@ -148,6 +189,7 @@ export async function addCandidates(
         title: clip(item.title || r.title, CANDIDATE_LIMITS.title),
         url: webUrl(r.sourceUrl),
         source: "library",
+        category: item.category ?? inferCategory({ resourceType: r.type }),
         why,
         take: clip(item.take),
         avoid: clip(item.avoid),
@@ -170,6 +212,7 @@ export async function addCandidates(
         title: clip(item.title || url.hostname, CANDIDATE_LIMITS.title),
         url: url.href,
         source: clip(item.source || url.hostname, 120),
+        category: item.category ?? inferCategory({ url: url.href }),
         why,
         take: clip(item.take),
         avoid: clip(item.avoid),

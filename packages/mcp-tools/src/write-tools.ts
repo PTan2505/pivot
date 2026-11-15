@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   DESIGN_DECISION_KINDS,
   DESIGN_MILESTONES,
+  DESIGN_REFERENCE_CATEGORIES,
   DESIGN_QA_DETECTOR,
   DESIGN_QA_LEVELS,
   SPECIALIST_PHASES,
@@ -356,7 +357,7 @@ const recordDesignQa: PivotTool<typeof qaInput> = {
 // ---- propose_references / select_references (gate 1) --------------------------------------------------------------
 
 const candidateText = (c: DesignCandidateDTO) =>
-  `${c.n}. ${c.title} — ${c.kind === "library" ? `library reference (id ${c.resourceId})` : `external, ${c.source}`}${
+  `${c.n}. [${c.category === "component" ? "component" : "UI layout"}] ${c.title} — ${c.kind === "library" ? `library reference (id ${c.resourceId})` : `external, ${c.source}`}${
     c.url ? ` — ${c.url}` : ""
   }${c.selected ? " — PICKED by the user" : ""}\n   Why: ${c.why}${c.take ? `\n   Take: ${c.take}` : ""}${
     c.avoid ? `\n   Avoid: ${c.avoid}` : ""
@@ -369,6 +370,19 @@ const candidateText = (c: DesignCandidateDTO) =>
           : "\n   Preview: still capturing"
       : ""
   }`;
+
+/** The candidates as two groups, UI layouts then components, each in number order (a group header only when both exist). */
+const groupedCandidates = (cs: DesignCandidateDTO[]) => {
+  const layouts = cs.filter((c) => c.category !== "component");
+  const components = cs.filter((c) => c.category === "component");
+  if (!layouts.length || !components.length) return cs.map(candidateText);
+  return [
+    `UI layouts (${layouts.length}):`,
+    ...layouts.map(candidateText),
+    `Components (${components.length}):`,
+    ...components.map(candidateText),
+  ];
+};
 
 const proposeInput = {
   sessionId: z.string().regex(UUID).describe("The design session (exploring)."),
@@ -389,6 +403,12 @@ const proposeInput = {
           .max(120)
           .optional()
           .describe('Where an external page was found, e.g. "web search", "land-book.com", "React Bits".'),
+        category: z
+          .enum(DESIGN_REFERENCE_CATEGORIES)
+          .optional()
+          .describe(
+            'What it shows: "layout" for a whole page, site or design (a gallery site, a Dribbble shot, a saved page), "component" for a single component (React Bits, shadcn/ui, Magic UI, a saved snippet or UI library). PIVOT infers it when left out, from the library type or the catalog site; the session page and the list show the two groups apart.',
+          ),
         why: z.string().min(1).max(1000).describe("Why it fits this brief, from what you saw."),
         take: z.string().max(1000).optional().describe("What to take from it."),
         avoid: z.string().max(1000).optional().describe("What to leave or avoid."),
@@ -433,10 +453,10 @@ const proposeReferences: PivotTool<typeof proposeInput> = {
     const skipped = candidates.length - added.length;
     const lines = [
       `Proposed ${current.length} reference${current.length === 1 ? "" : "s"}${skipped ? ` (${skipped} already proposed, skipped)` : ""}:`,
-      ...current.map(candidateText),
+      ...groupedCandidates(current),
       url ? `The user sees them, with previews, at ${url}` : "",
       "Previews of the external pages follow, in order. Check each matches what you wrote; if not, say so to the user.",
-      "Now show the user the numbered list and the link, and wait for their pick (gate 1). Record it with select_references, quoting their words.",
+      "Now show the user the numbered list in two groups, UI layouts then components, with the link, and wait for their pick (gate 1). Record it with select_references, quoting their words.",
     ];
     return {
       content: [text(lines.filter(Boolean).join("\n")), ...images],
@@ -535,7 +555,7 @@ function sessionText(s: DesignSessionDetailDTO) {
     lines.push(
       "",
       `Proposed references (gate 1): ${picked.length ? `the user picked ${picked.map((c) => c.n).join(", ")} ("${picked[0].selectedWords}")` : "not picked yet"}`,
-      ...s.candidates.map(candidateText),
+      ...groupedCandidates(s.candidates),
     );
   }
   const last = s.snapshots.at(-1);

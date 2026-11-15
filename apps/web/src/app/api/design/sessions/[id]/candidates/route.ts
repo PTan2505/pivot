@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { DesignError, getDesignSession } from "@pivot/core/design";
 import { addCandidates, CANDIDATE_LIMITS, listCandidates } from "@pivot/core/design-candidates";
+import { DESIGN_REFERENCE_CATEGORIES } from "@pivot/core/types";
 import { body, HttpError, json, route, type IdParams } from "@/lib/server/http";
 
 const text = z.string().max(CANDIDATE_LIMITS.text);
@@ -12,6 +13,7 @@ const input = z.object({
         url: z.string().url().max(2000).optional(),
         title: z.string().max(CANDIDATE_LIMITS.title).optional(),
         source: z.string().max(120).optional(),
+        category: z.enum(DESIGN_REFERENCE_CATEGORIES).optional(),
         why: text.min(1),
         take: text.optional(),
         avoid: text.optional(),

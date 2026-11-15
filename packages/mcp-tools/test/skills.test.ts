@@ -490,10 +490,10 @@ describe("motion is part of the design", () => {
     expect(motion).toContain("don't call `set_design_status` with `building`");
   });
   it("technology order and QA honesty", () => {
-    expect(
-      ordered(motion, ["already uses for motion", "CSS transitions", "The Web Animations API", "Add a library"]),
-    ).toBe(true);
-    expect(motion).toContain("Never add a dependency without that reason in the approved brief.");
+    expect(ordered(motion, ["already uses for motion", "**Standard:** CSS transitions", "**Advanced: GSAP**"])).toBe(
+      true,
+    );
+    expect(motion).toMatch(/Never add a dependency without that reason in the\s+approved brief/);
     expect(motion).toContain("measure is unverified, never a pass");
   });
   it("the local viewer is hardened and motion specialists follow the level", () => {
@@ -621,5 +621,64 @@ describe("pivot-design: several pages are one direction per version (L1, text on
       expect(tpl, `label rule ${n}`).toContain(`body:has(#pv-p${n}:checked) label[for="pv-p${n}"]`);
     }
     expect(tpl).toMatch(/id="pv-p1" checked/);
+  });
+});
+
+describe("pivot-design: options checkpoint after step 1 (L1, text only)", () => {
+  it("asks the open options after understanding the request, before the session opens", () => {
+    expect(d).toMatch(/### Options checkpoint/);
+    expect(ordered(d, ["### Options checkpoint", "Then **open the design session**", "## 2. Search"])).toBe(true);
+    expect(d).toMatch(/`AskUserQuestion` tool/);
+    expect(d).toMatch(/end your turn/);
+    for (const o of ["Motion level", "Directions", "Screen priority", "Reference sources", "Pages", "Specialists"])
+      expect(d, o).toMatch(new RegExp(`\\| ${o}\\s+\\|`));
+  });
+  it("skips what the request already says, records the answers and doesn't ask again on resume", () => {
+    expect(d).toMatch(/\*\*Skip what is already settled:\*\*/);
+    expect(d).toMatch(/`Already set: <option> <value> \(your words\), …`/);
+    expect(d).toMatch(/`## Options` list/);
+    expect(d).toMatch(/don't ask them again/);
+    expect(d).toMatch(/Small fixes skip this/);
+  });
+  it("wires each answer into the steps that use it", () => {
+    expect(d).toMatch(/"My library only" means no catalog or web search/);
+    expect(d).toMatch(/including their answer at the §1 options checkpoint/);
+    expect(d).toMatch(/One still needs the approval/);
+    expect(motionMd).toMatch(/§1 options checkpoint: mark it `set by you`/);
+    expect(motionMd).toMatch(/A level the user set is raised only with their yes/);
+    expect(r).toMatch(/\*\*Options\.\*\* For a Minor or Major redesign/);
+    expect(spec).toMatch(/Hỏi lựa chọn sau bước 1/);
+  });
+});
+
+describe("pivot-design: UI layouts and components kept apart (L1, text only)", () => {
+  it("defines the two kinds, proposes layouts first, and shows two tables in the chat and the brief", () => {
+    expect(d).toMatch(/\*\*Two kinds of reference, kept apart from here to the brief:\*\*/);
+    expect(d).toMatch(/\*\*UI layouts first, then the components\*\*/);
+    expect(d).toMatch(/`category` \(`layout` or `component`/);
+    expect(ordered(d, ["**UI layouts**\n\n| Reference", "**Components**\n\n| Reference", "| Used for"])).toBe(true);
+    expect(src).toMatch(/category: z\s*\.enum\(DESIGN_REFERENCE_CATEGORIES\)/);
+    expect(spec).toMatch(/Reference: UI layout và component/);
+  });
+});
+
+describe("pivot-design: GSAP for advanced motion (L1, text only)", () => {
+  const motion = read(".claude/skills/pivot-design/motion.md");
+  it("defaults advanced motion to GSAP, standard to CSS, after what the project already uses", () => {
+    expect(motion).toMatch(/\*\*Advanced: GSAP\*\* \(the `gsap` package\)/);
+    expect(motion).toMatch(/`@gsap\/react` in a React\s+or Next\.js project/);
+    expect(motion).toMatch(/Don't add a second library beside one it has/);
+    expect(motion).toMatch(/in the build step only, never before\s+approval/);
+    expect(motion).toMatch(/never install GSAP into the target before approval/);
+  });
+  it("consults the gsap skills at build and QA, and asks the technology at the options checkpoint", () => {
+    expect(motion).toMatch(/`gsap-core` always; `gsap-react` in React or Next\.js/);
+    expect(motion).toMatch(/`gsap-performance`/);
+    expect(specialists).toMatch(/\| `gsap-\*`\s+\| Advanced motion built with GSAP/);
+    expect(specialists).toMatch(/they don't count toward the specialist limits/);
+    expect(d).toMatch(/\| Motion technology\s+\|/);
+    expect(d).toMatch(/\*\*Motion technology:\*\* the brief's \*\*Technology\*\* line/);
+    expect(r).toMatch(/motion technology when the redesign changes motion/);
+    expect(spec).toMatch(/GSAP cho motion advanced/);
   });
 });
