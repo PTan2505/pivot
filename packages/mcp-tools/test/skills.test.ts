@@ -650,3 +650,14 @@ describe("pivot-design: options checkpoint after step 1 (L1, text only)", () => 
     expect(spec).toMatch(/Hỏi lựa chọn sau bước 1/);
   });
 });
+
+describe("pivot-design: UI layouts and components kept apart (L1, text only)", () => {
+  it("defines the two kinds, proposes layouts first, and shows two tables in the chat and the brief", () => {
+    expect(d).toMatch(/\*\*Two kinds of reference, kept apart from here to the brief:\*\*/);
+    expect(d).toMatch(/\*\*UI layouts first, then the components\*\*/);
+    expect(d).toMatch(/`category` \(`layout` or `component`/);
+    expect(ordered(d, ["**UI layouts**\n\n| Reference", "**Components**\n\n| Reference", "| Used for"])).toBe(true);
+    expect(src).toMatch(/category: z\s*\.enum\(DESIGN_REFERENCE_CATEGORIES\)/);
+    expect(spec).toMatch(/Reference: UI layout và component/);
+  });
+});

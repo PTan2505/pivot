@@ -1,0 +1,1 @@
+ALTER TABLE "design_candidates" ADD COLUMN "category" text;

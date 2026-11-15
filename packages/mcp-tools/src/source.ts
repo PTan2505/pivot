@@ -92,6 +92,7 @@ export interface PivotWriter {
       url?: string;
       title?: string;
       source?: string;
+      category?: DesignCandidateDTO["category"];
       why: string;
       take?: string;
       avoid?: string;

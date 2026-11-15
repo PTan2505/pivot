@@ -342,6 +342,11 @@ export const designCandidates = pgTable(
     url: text("url"),
     /** Where it came from: "library", or the site or search it was found through. */
     source: text("source").notNull(),
+    /**
+     * "layout" (a whole page or design) or "component" (a single component, e.g. React Bits, shadcn). Null for rows
+     * proposed before it existed: those are inferred when read.
+     */
+    category: text("category"),
     why: text("why").notNull().default(""),
     take: text("take").notNull().default(""),
     avoid: text("avoid").notNull().default(""),

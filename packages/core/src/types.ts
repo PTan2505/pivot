@@ -821,10 +821,16 @@ export interface DesignMockupDTO {
 }
 
 /** A reference proposed for a design session; see `design_candidates`. */
+/** What a proposed reference shows: a whole page or design (a layout), or a single component (React Bits, shadcn…). */
+export const DESIGN_REFERENCE_CATEGORIES = ["layout", "component"] as const;
+export type DesignReferenceCategory = (typeof DESIGN_REFERENCE_CATEGORIES)[number];
+
 export interface DesignCandidateDTO {
   id: string;
   n: number;
   kind: "library" | "external";
+  /** A whole page or design (layout), or a single component; the agent's, or inferred from the resource type or host. */
+  category: DesignReferenceCategory;
   resourceId: string | null;
   title: string;
   url: string | null;

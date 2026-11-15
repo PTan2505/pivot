@@ -7,24 +7,24 @@ description: Design or redesign an interface from the user's own PIVOT reference
 
 PIVOT is the user's library of saved UI references: screenshots of real websites (cover + full page) tagged with **page type**, **domain**, **style** and **pattern** facets, plus design **sources** (sites to browse) and **collections**. The `pivot` MCP server reads it, and stores the work of a design session:
 
-| Tool                     | Use it to                                                                                                                                                  |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_facets`            | Learn the vocabulary once per task: which page types, domains, styles, patterns and collections exist.                                                     |
-| `search_references`      | Find candidates by words and facets (by name), inside a collection or from a source.                                                                       |
-| `get_reference`          | Read one candidate: link, description, the user's notes, facets, which screenshots exist.                                                                  |
-| `get_reference_images`   | Look at it: the cover, and the full page in ~2,000-token slices (`fromSlice` to page on).                                                                  |
-| `search_external`        | Outside the library: free component catalogs (Magic UI, React Bits, shadcn/ui) plus links to other sites' search.                                          |
-| `propose_references`     | Put the 6–10 references you recommend (library ids and real external pages) on the session's page, numbered; PIVOT captures previews of the external ones. |
-| `select_references`      | Record the user's pick of those numbers, in their own words (gate 1).                                                                                      |
-| `save_design_brief`      | Save the brief in PIVOT at a milestone (`initial` opens the session, `approved`, `major_change`).                                                          |
-| `record_design_decision` | Record a change after approval, or a deviation found in QA. Never an approval: only the owner approves, in PIVOT.                                          |
-| `save_design_mockups`    | Put a round of mockups on the session's page in PIVOT, where the user compares them and can approve one.                                                   |
-| `record_design_qa`       | Record the QA report (slop check, specialist ledger, what stayed unverified) while building; `done` is refused without one.                                |
-| `set_design_status`      | Mark an approved session `building` when you start, and `done` when the build and QA are finished.                                                         |
-| `get_design_session`     | Read a session (briefs, decisions, mockup rounds), to continue it or to read the user's approval made in PIVOT.                                            |
-| `suggest_metadata`       | Suggest facets, a collection, a title or a visual description for a reference you looked at.                                                               |
-| `annotate_reference`     | Add a short, dated agent note to a reference (the user's notes stay as they are).                                                                          |
-| `save_reference`         | Save a page to the library, only when the user asks for it.                                                                                                |
+| Tool                     | Use it to                                                                                                                                                                                          |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_facets`            | Learn the vocabulary once per task: which page types, domains, styles, patterns and collections exist.                                                                                             |
+| `search_references`      | Find candidates by words and facets (by name), inside a collection or from a source.                                                                                                               |
+| `get_reference`          | Read one candidate: link, description, the user's notes, facets, which screenshots exist.                                                                                                          |
+| `get_reference_images`   | Look at it: the cover, and the full page in ~2,000-token slices (`fromSlice` to page on).                                                                                                          |
+| `search_external`        | Outside the library: free component catalogs (Magic UI, React Bits, shadcn/ui) plus links to other sites' search.                                                                                  |
+| `propose_references`     | Put the 6–10 references you recommend (library ids and real external pages) on the session's page, numbered and grouped as UI layouts or components; PIVOT captures previews of the external ones. |
+| `select_references`      | Record the user's pick of those numbers, in their own words (gate 1).                                                                                                                              |
+| `save_design_brief`      | Save the brief in PIVOT at a milestone (`initial` opens the session, `approved`, `major_change`).                                                                                                  |
+| `record_design_decision` | Record a change after approval, or a deviation found in QA. Never an approval: only the owner approves, in PIVOT.                                                                                  |
+| `save_design_mockups`    | Put a round of mockups on the session's page in PIVOT, where the user compares them and can approve one.                                                                                           |
+| `record_design_qa`       | Record the QA report (slop check, specialist ledger, what stayed unverified) while building; `done` is refused without one.                                                                        |
+| `set_design_status`      | Mark an approved session `building` when you start, and `done` when the build and QA are finished.                                                                                                 |
+| `get_design_session`     | Read a session (briefs, decisions, mockup rounds), to continue it or to read the user's approval made in PIVOT.                                                                                    |
+| `suggest_metadata`       | Suggest facets, a collection, a title or a visual description for a reference you looked at.                                                                                                       |
+| `annotate_reference`     | Add a short, dated agent note to a reference (the user's notes stay as they are).                                                                                                                  |
+| `save_reference`         | Save a page to the library, only when the user asks for it.                                                                                                                                        |
 
 The flow is **understand (the user answers the options) → search → inspect → shortlist (the user picks) → brief → design session → mockups → approval → build → QA**, in that order:
 
@@ -139,6 +139,13 @@ Then **open the design session** (full flow only): `save_design_brief` with `mil
 - **Never use paid sources' MCP tools or APIs** (Mobbin, Refero, Nicely Done, Savee…), even if they are installed: PIVOT is free-first. Name them as places to browse instead.
 - Nothing external is saved to the library: `propose_references` keeps external pages with the session only. `save_reference` only when the user asks.
 
+**Two kinds of reference, kept apart from here to the brief:**
+
+- **UI layouts:** whole pages, sites and designs: the library's page references, gallery sites (land-book, godly…), real product pages, Dribbble or Behance shots. They answer structure, hierarchy and rhythm.
+- **Components:** single components: catalog items from `search_external` (React Bits, shadcn/ui, Magic UI…), and the library's UI libraries, animations and snippets. They answer how one piece looks and behaves.
+
+Look for components only when the brief needs a specific piece (an animated list, a pricing toggle, a command menu), not to pad the list.
+
 ## 3. Inspect
 
 - `get_reference` on the 4–8 most promising hits. The user's **notes** often say what they liked; weigh them.
@@ -152,7 +159,7 @@ Then **open the design session** (full flow only): `save_design_brief` with `mil
 
 **Show what you found, then stop for the user's pick.** This is a choice, not an approval: nothing is recorded, and no brief or mockup is made before the answer.
 
-1. **Propose 6–10 candidates with `propose_references`**, the best first, library and external together (fewer only when there aren't that many real ones; never pad). Include those the user named, with "named by you" in `why`. For each: `why` (one line on why it matches this request), `take` and `avoid`. Then **show the same numbered table** in the chat with the session's link (`<PIVOT_URL>/design/<sessionId>#references`), where the user sees every preview:
+1. **Propose 6–10 candidates with `propose_references`**, library and external together (fewer only when there aren't that many real ones; never pad): the **UI layouts first, then the components**, each group best first, so their numbers run in order. Include those the user named, with "named by you" in `why`. For each: `category` (`layout` or `component`; PIVOT infers it when left out, so set it when the page is ambiguous), `why` (one line on why it matches this request), `take` and `avoid`. Then **show the same numbers in two tables** in the chat, **UI layouts** then **Components** (leave out an empty one), with the session's link (`<PIVOT_URL>/design/<sessionId>#references`), where the user sees every preview in the same two groups:
    - `#` (the number PIVOT gave it);
    - the title, linked to its PIVOT page (`/r/<id>`) for a library reference, or to the page itself for an external one;
    - the source (library, or where you found it);
@@ -185,15 +192,23 @@ Write this before any mockup and show it to the user in this shape, table includ
 **Pages:** <several pages or screens only: each one, in order; every direction shows all of them>
 **Component API:** <a component only: props, variants and states; which existing component or primitive it extends, or why it is new>
 
+**UI layouts**
+
 | Reference          | Source                                   | Inspected                         | Why it fits | Take                     | Leave                    |
 | ------------------ | ---------------------------------------- | --------------------------------- | ----------- | ------------------------ | ------------------------ |
 | [Title](sourceUrl) | PIVOT / <provider> (external, not saved) | screenshot / page / metadata only | <one line>  | <structure/pattern idea> | <brand, art, copy, etc.> |
+
+**Components**
+
+| Reference          | Source                                   | Inspected                         | Used for                  | Take                     | Leave                    |
+| ------------------ | ---------------------------------------- | --------------------------------- | ------------------------- | ------------------------ | ------------------------ |
+| [Title](sourceUrl) | PIVOT / <provider> (external, not saved) | screenshot / page / metadata only | <which part of the brief> | <behaviour, states, API> | <brand, art, code, etc.> |
 
 **Directions:** 1. <name: one line> 2. <…> 3. <…>
 **Open questions:** <only what blocks the mockups>
 ```
 
-Leave out the **Component API** line for a page, and the **Pages** line when the surface is a single page or component. When the motion level isn't none, add the **Motion** block from motion.md §4 (each item tagged essential or detail) and mark each reference's motion evidence in its Inspected cell (motion.md §3).
+Leave out the **Component API** line for a page, the **Pages** line when the surface is a single page or component, and a references table with nothing in it. When the motion level isn't none, add the **Motion** block from motion.md §4 (each item tagged essential or detail) and mark each reference's motion evidence in its Inspected cell (motion.md §3).
 
 ## 6. Design session
 

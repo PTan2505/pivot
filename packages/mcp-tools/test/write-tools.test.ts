@@ -456,11 +456,17 @@ describe("save_design_mockups", () => {
   });
 });
 
+const ordered = (text: string, words: string[]) => {
+  const pos = words.map((w) => text.indexOf(w));
+  return pos.every((p) => p >= 0) && pos.every((p, i) => i === 0 || p > pos[i - 1]);
+};
+
 describe("gate 1: propose_references and select_references", () => {
   const cand = (n: number, extra: Record<string, unknown> = {}) => ({
     id: `c${n}`,
     n,
     kind: "external" as const,
+    category: "layout" as "layout" | "component",
     resourceId: null,
     title: `Site ${n}`,
     url: `https://example.com/${n}`,
@@ -475,6 +481,44 @@ describe("gate 1: propose_references and select_references", () => {
     selectedWords: null,
     createdAt: "",
     ...extra,
+  });
+
+  it("passes the category through and lists UI layouts and components apart", async () => {
+    const { source, calls } = writerSource();
+    const all = [
+      cand(1, { previewStatus: "ready" }),
+      cand(2, { category: "component", previewStatus: "ready", source: "React Bits" }),
+      cand(3, { previewStatus: "ready" }),
+    ];
+    const s = {
+      ...source,
+      proposeReferences: async (...args: unknown[]) => {
+        calls.push({ method: "proposeReferences", args });
+        return { candidates: all };
+      },
+      listCandidates: async () => all,
+    };
+    const r = await tool("propose_references").run(s, {
+      sessionId: ID,
+      candidates: [
+        { url: "https://example.com/1", why: "a" },
+        { url: "https://reactbits.dev/x", category: "component", why: "b" },
+        { url: "https://example.com/3", why: "c" },
+      ],
+    });
+    const sent = (calls[0].args[1] as { category?: string }[]).map((c) => c.category);
+    expect(sent).toEqual([undefined, "component", undefined]);
+    const out = r.content[0].type === "text" ? r.content[0].text : "";
+    expect(
+      ordered(out, [
+        "UI layouts (2):",
+        "1. [UI layout] Site 1",
+        "3. [UI layout] Site 3",
+        "Components (1):",
+        "2. [component] Site 2",
+      ]),
+    ).toBe(true);
+    expect(out).toMatch(/two groups, UI layouts then components/);
   });
 
   it("waits for PIVOT's previews, returns them as images, and points the user at the session page", async () => {
@@ -504,7 +548,7 @@ describe("gate 1: propose_references and select_references", () => {
     });
     expect(listed).toBeGreaterThan(0);
     const out = r.content[0].type === "text" ? r.content[0].text : "";
-    expect(out).toMatch(/1\. Site 1 — external, web search — https:\/\/example.com\/1/);
+    expect(out).toMatch(/1\. \[UI layout\] Site 1 — external, web search — https:\/\/example.com\/1/);
     expect(out).toMatch(/Preview: none \(HTTP 403\)/);
     expect(out).toContain(`http://127.0.0.1:4321/design/${ID}#references`);
     expect(out).toMatch(/wait for their pick \(gate 1\)/);
