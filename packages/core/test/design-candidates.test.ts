@@ -134,3 +134,67 @@ describe("candidate edge cases", () => {
     expect(c.url).toBeNull();
   });
 });
+
+describe("UI layouts and components", () => {
+  it("infers the category from the library type or the catalog site", () => {
+    expect(cands.inferCategory({ resourceType: "reference" })).toBe("layout");
+    expect(cands.inferCategory({ resourceType: "library" })).toBe("component");
+    expect(cands.inferCategory({ resourceType: "animation" })).toBe("component");
+    expect(cands.inferCategory({ resourceType: "snippet" })).toBe("component");
+    expect(cands.inferCategory({ url: "https://reactbits.dev/components/animated-list" })).toBe("component");
+    expect(cands.inferCategory({ url: "https://www.ui.shadcn.com/docs/components/table" })).toBe("component");
+    expect(cands.inferCategory({ url: "https://magicui.design/docs/components/marquee" })).toBe("component");
+    expect(cands.inferCategory({ url: "https://land-book.com/websites/1" })).toBe("layout");
+    expect(cands.inferCategory({ url: "https://notreactbits.dev/x" })).toBe("layout");
+    expect(cands.inferCategory({ url: null })).toBe("layout");
+  });
+
+  it("stores the agent's category, infers it when left out, and refuses an unknown one", async () => {
+    const id = await session();
+    const page = await resources.createResource({
+      type: "reference",
+      title: "Stripe",
+      sourceUrl: "https://stripe.com/",
+    });
+    const lib = await resources.createResource({ type: "library", title: "Radix", sourceUrl: "https://radix-ui.com/" });
+    const added = await cands.addCandidates(
+      id,
+      [
+        { resourceId: page.id, why: "page" },
+        { resourceId: lib.id, why: "primitives" },
+        { url: "https://93.184.215.14/list", title: "Animated list", category: "component", why: "list" },
+        { url: "https://93.184.215.14/site", title: "Gallery site", why: "layout" },
+      ],
+      { wait: true },
+    );
+    expect(added.map((c) => [c.n, c.category])).toEqual([
+      [1, "layout"],
+      [2, "component"],
+      [3, "component"],
+      [4, "layout"],
+    ]);
+    expect((await cands.listCandidates(id)).map((c) => c.category)).toEqual([
+      "layout",
+      "component",
+      "component",
+      "layout",
+    ]);
+    await expect(
+      cands.addCandidates(id, [{ url: "https://93.184.215.14/x", why: "x", category: "page" as never }]),
+    ).rejects.toThrow(/category is "layout" or "component"/);
+  });
+
+  it("infers a category for references proposed before it existed (null in the database)", async () => {
+    const id = await session();
+    const lib = await resources.createResource({
+      type: "snippet",
+      title: "Toggle",
+      sourceUrl: "https://example.com/t",
+    });
+    const [c] = await cands.addCandidates(id, [{ resourceId: lib.id, why: "toggle" }], { wait: true });
+    const { designCandidates } = await import("../src/db/schema");
+    const { eq } = await import("drizzle-orm");
+    await (await db.getDb()).update(designCandidates).set({ category: null }).where(eq(designCandidates.id, c.id));
+    expect((await cands.listCandidates(id))[0].category).toBe("component");
+  });
+});

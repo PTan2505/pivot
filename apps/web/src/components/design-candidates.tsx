@@ -34,67 +34,82 @@ export function DesignCandidates({ candidates }: { candidates: DesignCandidateDT
           )}
         </p>
       </div>
-      <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {candidates.map((c) => (
-          <li
-            key={c.id}
-            className={cn(
-              "flex flex-col overflow-hidden rounded-[14px] bg-surface",
-              picked.length > 0 && !c.selected && "opacity-60",
-            )}
-          >
-            <Preview c={c} />
-            <div className="flex flex-1 flex-col gap-2 px-4 py-3 text-sm">
-              <div className="flex items-start gap-2">
-                <span className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-raised font-mono text-xs text-ink">
-                  {c.n}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium [overflow-wrap:anywhere] text-ink">{c.title}</p>
-                  <p className="text-xs text-ink-muted">
-                    {c.kind === "library" ? "Library" : `External · ${c.source}`}
-                  </p>
-                </div>
-                {c.selected && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-surface-raised px-2 py-0.5 text-xs text-ink">
-                    <Check className="size-3" aria-hidden /> Picked
-                  </span>
-                )}
-              </div>
-              <p className="text-ink-secondary">{c.why}</p>
-              {c.take && (
-                <p className="text-xs text-ink-muted">
-                  <span className="text-ink-secondary">Take:</span> {c.take}
-                </p>
-              )}
-              {c.avoid && (
-                <p className="text-xs text-ink-muted">
-                  <span className="text-ink-secondary">Avoid:</span> {c.avoid}
-                </p>
-              )}
-              <div className="mt-auto flex flex-wrap gap-3 pt-1 text-xs">
-                {c.resourceId && (
-                  <Link href={`/r/${c.resourceId}`} className="text-ink underline-offset-2 hover:underline">
-                    Open in library
-                  </Link>
-                )}
-                {c.url && (
-                  <a
-                    href={c.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-ink underline-offset-2 hover:underline"
-                  >
-                    Original page <ExternalLink className="size-3" aria-hidden />
-                    <span className="sr-only">(opens in a new tab)</span>
-                  </a>
-                )}
-              </div>
-            </div>
-          </li>
-        ))}
-      </ol>
+      {GROUPS.map(({ category, label, hint }) => {
+        const group = candidates.filter((c) => c.category === category);
+        if (!group.length) return null;
+        return (
+          <div key={category} className="space-y-3">
+            <h3 className="text-sm font-medium text-ink-secondary">
+              {label} <span className="font-normal text-ink-muted">· {group.length}</span>
+              <span className="ml-2 font-normal text-ink-muted">{hint}</span>
+            </h3>
+            <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {group.map((c) => (
+                <Candidate key={c.id} c={c} dimmed={picked.length > 0 && !c.selected} />
+              ))}
+            </ol>
+          </div>
+        );
+      })}
     </section>
+  );
+}
+
+const GROUPS = [
+  { category: "layout", label: "UI layouts", hint: "Whole pages and designs" },
+  { category: "component", label: "Components", hint: "Single components from catalogs or your library" },
+] as const;
+
+function Candidate({ c, dimmed }: { c: DesignCandidateDTO; dimmed: boolean }) {
+  return (
+    <li className={cn("flex flex-col overflow-hidden rounded-[14px] bg-surface", dimmed && "opacity-60")}>
+      <Preview c={c} />
+      <div className="flex flex-1 flex-col gap-2 px-4 py-3 text-sm">
+        <div className="flex items-start gap-2">
+          <span className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-raised font-mono text-xs text-ink">
+            {c.n}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium [overflow-wrap:anywhere] text-ink">{c.title}</p>
+            <p className="text-xs text-ink-muted">{c.kind === "library" ? "Library" : `External · ${c.source}`}</p>
+          </div>
+          {c.selected && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-surface-raised px-2 py-0.5 text-xs text-ink">
+              <Check className="size-3" aria-hidden /> Picked
+            </span>
+          )}
+        </div>
+        <p className="text-ink-secondary">{c.why}</p>
+        {c.take && (
+          <p className="text-xs text-ink-muted">
+            <span className="text-ink-secondary">Take:</span> {c.take}
+          </p>
+        )}
+        {c.avoid && (
+          <p className="text-xs text-ink-muted">
+            <span className="text-ink-secondary">Avoid:</span> {c.avoid}
+          </p>
+        )}
+        <div className="mt-auto flex flex-wrap gap-3 pt-1 text-xs">
+          {c.resourceId && (
+            <Link href={`/r/${c.resourceId}`} className="text-ink underline-offset-2 hover:underline">
+              Open in library
+            </Link>
+          )}
+          {c.url && (
+            <a
+              href={c.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-ink underline-offset-2 hover:underline"
+            >
+              Original page <ExternalLink className="size-3" aria-hidden />
+              <span className="sr-only">(opens in a new tab)</span>
+            </a>
+          )}
+        </div>
+      </div>
+    </li>
   );
 }
 
