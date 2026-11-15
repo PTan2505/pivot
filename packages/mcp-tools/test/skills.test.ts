@@ -623,3 +623,30 @@ describe("pivot-design: several pages are one direction per version (L1, text on
     expect(tpl).toMatch(/id="pv-p1" checked/);
   });
 });
+
+describe("pivot-design: options checkpoint after step 1 (L1, text only)", () => {
+  it("asks the open options after understanding the request, before the session opens", () => {
+    expect(d).toMatch(/### Options checkpoint/);
+    expect(ordered(d, ["### Options checkpoint", "Then **open the design session**", "## 2. Search"])).toBe(true);
+    expect(d).toMatch(/`AskUserQuestion` tool/);
+    expect(d).toMatch(/end your turn/);
+    for (const o of ["Motion level", "Directions", "Screen priority", "Reference sources", "Pages", "Specialists"])
+      expect(d, o).toMatch(new RegExp(`\\| ${o}\\s+\\|`));
+  });
+  it("skips what the request already says, records the answers and doesn't ask again on resume", () => {
+    expect(d).toMatch(/\*\*Skip what is already settled:\*\*/);
+    expect(d).toMatch(/`Already set: <option> <value> \(your words\), …`/);
+    expect(d).toMatch(/`## Options` list/);
+    expect(d).toMatch(/don't ask them again/);
+    expect(d).toMatch(/Small fixes skip this/);
+  });
+  it("wires each answer into the steps that use it", () => {
+    expect(d).toMatch(/"My library only" means no catalog or web search/);
+    expect(d).toMatch(/including their answer at the §1 options checkpoint/);
+    expect(d).toMatch(/One still needs the approval/);
+    expect(motionMd).toMatch(/§1 options checkpoint: mark it `set by you`/);
+    expect(motionMd).toMatch(/A level the user set is raised only with their yes/);
+    expect(r).toMatch(/\*\*Options\.\*\* For a Minor or Major redesign/);
+    expect(spec).toMatch(/Hỏi lựa chọn sau bước 1/);
+  });
+});

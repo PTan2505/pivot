@@ -26,11 +26,11 @@ PIVOT is the user's library of saved UI references: screenshots of real websites
 | `annotate_reference`     | Add a short, dated agent note to a reference (the user's notes stay as they are).                                                                          |
 | `save_reference`         | Save a page to the library, only when the user asks for it.                                                                                                |
 
-The flow is **understand → search → inspect → shortlist (the user picks) → brief → design session → mockups → approval → build → QA**, in that order:
+The flow is **understand (the user answers the options) → search → inspect → shortlist (the user picks) → brief → design session → mockups → approval → build → QA**, in that order:
 
 - The brief is written and shown before any mockup, and the mockups illustrate its directions.
 - Saving it (§6) comes right after you show it, before the mockups.
-- The shortlist (§4) is the one pause before the brief (**gate 1**): the user picks the references, unless they told you to choose. The session is opened first (§1), so the proposed references, with previews, are on its page in PIVOT.
+- Two pauses come before the brief: the **options checkpoint** (§1), where the user answers the choices their request left open, and the shortlist (§4, **gate 1**), where the user picks the references, unless they told you to choose. The session is opened first (§1), so the proposed references, with previews, are on its page in PIVOT.
 - Showing the brief is not an approval gate: unless an open question blocks the mockups, carry on to them in the same turn. The approval gate is §8.
 
 **Nothing is built before the user approves a direction.** "Just build it" or "skip mockups" doesn't remove the approval: it means one mockup, or a one-paragraph direction, instead of several, and you still stop and wait for a yes.
@@ -56,7 +56,7 @@ You don't ask the user to invoke them: you run them for real through the `pivot-
 | Minor redesign                                               | one: the specialist that owns the problem (`ui-ux-pro-max` for UX, Taste for a public page's look)                                | the slop check                                                        |
 | Small fix                                                    | none, unless the user asks                                                                                                        | verify the fix                                                        |
 
-- **"None" is only for a small fix, or when the user said not to use specialists** (quote their words). A project that has a design system or brand tokens is never a reason: tokens decide how it looks, not whether the structure works.
+- **"None" is only for a small fix, or when the user said not to use specialists** (quote their words, including their answer at the §1 options checkpoint). A project that has a design system or brand tokens is never a reason: tokens decide how it looks, not whether the structure works.
 - **A required specialist that can't run** (not installed, refused by the Skill tool, or `pivot-specialist` isn't in this session) is reported with its label (`unavailable`, or `consulted` when you read its files instead) and doesn't block the work. Never claim it ran.
 - Add one beyond the defaults only for a distinct problem they don't cover, and say why in one line.
 
@@ -85,15 +85,40 @@ How to run them:
 
 ## 1. Understand the request
 
-Pin down, from the request and the codebase (ask only for what you can't infer):
+Pin down, from the request and the codebase (the options below are asked at the checkpoint; for anything else, ask only what you can't infer):
 
 - the surface (a page type, or a component and the page or container it lives in) and its single job: what the visitor must do or understand;
 - **the pages or screens in scope**, when the request names more than one ("a merchant portal: dashboard, orders, settings"). They are one surface designed together, not separate tasks: every direction covers all of them (§7);
 - the product's domain and audience;
 - hard constraints: platform, breakpoints, the existing layout it lives in, content that must appear;
-- **the motion level:** write `Motion: none | standard | advanced — <reason> (auto | set by you)` as [motion.md](motion.md) §2 says. The user's words override; none is the default and needs nothing more. For standard or advanced, follow motion.md through the brief, mockups, approval, build and QA.
+- **the motion level:** write `Motion: none | standard | advanced — <reason> (auto | set by you)` as [motion.md](motion.md) §2 says. The user's words, or their answer at the options checkpoint, override; none is the default and needs nothing more. For standard or advanced, follow motion.md through the brief, mockups, approval, build and QA.
 
-Then **open the design session** (full flow only): `save_design_brief` with `milestone: "initial"`, no `sessionId`, `targetProject`, `surface`, and a short `## Requirements` markdown (goal, audience, constraints, motion level, what you will search for). Keep its `sessionId`: the proposed references (§4) go on its page. The complete brief (§5) is saved later to the same session.
+### Options checkpoint
+
+Right after pinning down the request, and before opening the session, ask the user the options below that their request doesn't already settle, so they never have to remember them in the prompt. Small fixes skip this.
+
+- **Ask with the `AskUserQuestion` tool:** up to 4 questions in one dialog, and a second dialog for the rest. Each question names the surface so it reads on its own, each option says what it changes, and your recommendation comes first, marked "(Recommended)", with the reason in its description. Without that tool (another agent or client), ask the same questions as a numbered list in the chat with your recommendations, say that "ok" takes them all, and end your turn.
+- **Skip what is already settled:** an option the request states in its own words ("motion advanced", "mobile first", "only my library"), or one answered earlier in this session. Show those in one line, `Already set: <option> <value> (your words), …`, so the user can still correct them. When nothing is left to ask, show only that line and carry on.
+
+| Option            | Choices, your recommendation first                                                                                                                                            | Ask                                                                                                               |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Motion level      | none / standard / advanced, recommended as motion.md §2 classifies                                                                                                            | always                                                                                                            |
+| Directions        | 2–3 / 1 / 4–5 (§7)                                                                                                                                                            | always                                                                                                            |
+| Screen priority   | desktop first / mobile first / both equal, recommended from the surface (an admin dashboard: desktop; a consumer app, sign-up or checkout: mobile)                            | always                                                                                                            |
+| Reference sources | the library, then catalogs and the web when it is thin (§2, the default) / my library only / the library and free catalogs / the library, catalogs and the web from the start | always                                                                                                            |
+| Pages             | the pages you understood, in order (the user adds or removes with Other)                                                                                                      | when the request names several pages or screens, or a surface that usually has several (a portal, an app, a flow) |
+| Specialists       | the defaults by risk (above), named / add one (Other: which and why) / none                                                                                                   | new designs and Major work                                                                                        |
+
+**Apply the answers:**
+
+- **Motion:** the level, marked `set by you` (motion.md §2).
+- **Directions:** the count in §7. One still needs the approval (§8).
+- **Screen priority:** the width you design and look at first in §7; write it in the brief's **Constraints**. QA still checks every width (§10).
+- **Reference sources:** §2 follows it. "My library only" means no catalog or web search even when the library is thin: say it is thin instead.
+- **Pages:** the brief's **Pages** line, and every direction holds them all (§7).
+- **Specialists:** "none" counts as the user's words: quote their answer in the specialist checkpoint and in the QA report. The slop check still runs (§10).
+
+Then **open the design session** (full flow only): `save_design_brief` with `milestone: "initial"`, no `sessionId`, `targetProject`, `surface`, and a short `## Requirements` markdown (goal, audience, constraints, motion level, what you will search for) with an `## Options` list: each option and its value, marked `(your answer)` or `(from your prompt)`. When you resume a session, read the options there and don't ask them again. Keep its `sessionId`: the proposed references (§4) go on its page. The complete brief (§5) is saved later to the same session.
 
 ## 2. Search
 
@@ -106,7 +131,7 @@ Then **open the design session** (full flow only): `save_design_brief` with `mil
    - if fewer than 3 good hits, drop the style, then the domain. If the user named a collection ("my Pricing pages"), search inside it.
 3. If the library is thin for this surface, say so. Don't pretend a thin library is a survey of the field.
 
-**Library first, not library only.** Search outside the library when, after the searches above, there are fewer than 3 relevant references, or the user asks for fresh inspiration, or the brief needs a kind of reference the library doesn't have (a component, an animation, app screens):
+**Library first, not library only**, unless the user chose otherwise at the §1 options checkpoint ("my library only": no search outside it; "from the start": catalogs and the web alongside the library). Otherwise search outside the library when, after the searches above, there are fewer than 3 relevant references, or the user asks for fresh inspiration, or the brief needs a kind of reference the library doesn't have (a component, an animation, app screens):
 
 - `search_external` with **generic UI words only** ("animated list", "pricing table"): never a client or product name, private copy, or text from the brief. Its direct results are real catalog items (component pages with licence and attribution); its "search pages on other sites" are **not references**: never cite one, offer it to the user to browse.
 - If the user has the official **21st.dev MCP** installed, you may use its search and inspiration tools. Never call its `generate` tool (it spends paid credits) and never fetch or install a component's code unless the user asks.
