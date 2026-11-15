@@ -19,7 +19,7 @@ At `pivot-design` §1 (or `pivot-redesign` §0), write one line:
 `Motion: none | standard | advanced — <reason> (auto | set by you)`
 
 - **The user's words decide** when they say anything about motion ("no animation", "subtle transitions", "scroll
-  storytelling like X"): mark it `set by you`.
+  storytelling like X"), and so does their answer at `pivot-design`'s §1 options checkpoint: mark it `set by you`.
 - **Otherwise classify from the surface and the request** (`auto`):
   - **none** by default, and for forms, settings, data-dense app screens, docs and fixes that don't mention motion;
   - **standard** when the request or the brief's directions involve interaction feedback or transitions (a toggle,
@@ -28,7 +28,7 @@ At `pivot-design` §1 (or `pivot-redesign` §0), write one line:
   - **advanced** only when the request asks for one of the Advanced effects, or a chosen reference's evidence (§3)
     shows it as the point of the page.
 - **Re-check once, after the user picks references** (`pivot-design` §4): the picks can raise the level; the user can
-  lower it. Don't change it again after the brief unless the user asks.
+  lower it. A level the user set is raised only with their yes. Don't change it again after the brief unless the user asks.
 - Write the level in the brief header. Level **none** adds nothing else to the workflow.
 
 ## 3. Motion references
