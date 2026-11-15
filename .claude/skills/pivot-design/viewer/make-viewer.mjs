@@ -355,7 +355,9 @@ export function buildViewer(dir, { title = null, interactive = [] } = {}) {
   };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+// realpath: when run through a symlink (~/.claude/skills/pivot-design links to the repo), argv[1] is the linked path
+// while import.meta.url is the real one.
+if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(path.resolve(process.argv[1]))).href) {
   const args = process.argv.slice(2);
   const opt = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
   const dir = args.find((a, i) => !a.startsWith("--") && !/^--(title|interactive)$/.test(args[i - 1] ?? ""));
