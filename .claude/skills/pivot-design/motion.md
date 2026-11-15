@@ -86,7 +86,7 @@ one takes the next), because QA (§9) traces every result to it.
 - **Responsive:** <what changes on phone>
 - **Performance:** <transform and opacity only; budget, e.g. no layout shift, 60 fps on a mid-range phone>
 - **Fallback:** <what shows without scripts or support> (Advanced)
-- **Technology:** <CSS | WAAPI | the project's existing library>, because <reason> (§7)
+- **Technology:** <CSS | WAAPI | GSAP (+ the plugins used) | the project's existing library>, because <reason> (§7)
 ```
 
 ## 5. Previewing motion
@@ -124,7 +124,9 @@ The user must be able to see each **essential** item before gate 2 (§6).
   `pnpm setup:browser` in the PIVOT repo), run the local viewer with the prototypes marked interactive:
   `node <skill>/viewer/make-viewer.mjs <folder> --title "<surface>" --interactive <n,…>`.
   - Scripts must be inline or local files inside the folder (a library copied from the target's own
-    `node_modules`, when its licence allows). Nothing is fetched: the viewer runs each version in a sandbox with no
+    `node_modules`, when its licence allows). For a GSAP prototype, copy `gsap.min.js` and the plugin files it uses
+    from the target's `node_modules/gsap/dist/` when it has them, otherwise from `npm pack gsap` unpacked in the
+    scratch folder; never install GSAP into the target before approval (§7). Nothing is fetched: the viewer runs each version in a sandbox with no
     network, no access to other files, no navigation of the page and no popups, and lists anything it removed. Each
     version shows a content **digest**; a choice copied from the viewer names it.
   - **What is tested and what isn't** (`scripts/qa/preview-checks.mjs viewer`, Chromium): fetch, images, styles,
@@ -181,17 +183,23 @@ There is no separate motion approval: the user approves the direction **and** it
 
 ## 7. Technology
 
-Choose in this order, and write the choice and its reason on the brief's **Technology** line:
+Choose by level, and write the choice and its reason on the brief's **Technology** line. The user's answer at
+`pivot-design`'s §1 options checkpoint (motion technology) wins over these defaults.
 
-1. What the target project already uses for motion (its CSS conventions, or a library already installed, such as
-   Motion, GSAP or Rive).
-2. CSS transitions, `@keyframes` and scroll-driven animations.
-3. The Web Animations API, for sequences a script must control.
-4. Add a library (Motion, GSAP and its ScrollTrigger) only for what the above can't do well (complex timelines,
-   cross-browser pinning, SVG morphing, Flip layouts), and say why. Rive or Lottie only when the asset exists.
+1. What the target project already uses for motion comes first, at any level: its CSS conventions, or a motion library
+   already installed (GSAP, Motion, Rive). Don't add a second library beside one it has; if the user picked GSAP and
+   the project uses another, say so and ask.
+2. **Standard:** CSS transitions, `@keyframes` and scroll-driven animations. The Web Animations API for a sequence a
+   script must control. No library.
+3. **Advanced: GSAP** (the `gsap` package): ScrollTrigger for scroll-linked and pinned sections, timelines for
+   sequences, its plugins (SplitText, Flip, MorphSVG, Draggable…) for what they cover; plus `@gsap/react` in a React
+   or Next.js project. GSAP and all its plugins are free, also for commercial use, under GSAP's own licence (not MIT):
+   name it in the brief. Rive or Lottie only when the asset exists.
+4. CSS stays the choice for Advanced only when every essential item is plain CSS work: say why.
 
-Never add a dependency without that reason in the approved brief. The `gsap-*` skills are consulted only when GSAP is
-the chosen technology.
+Never add a dependency without that reason in the approved brief: the approved **Technology** line is what allows
+installing GSAP (or any library), with the project's own package manager, in the build step only, never before
+approval. The `gsap-*` skills are consulted only when GSAP is the chosen technology (§8, §9).
 
 ## 8. Build
 
@@ -200,8 +208,16 @@ the chosen technology.
 - Interruptible: a second input retargets, doesn't queue or jump.
 - Clean up on unmount: listeners, observers, timelines, `requestAnimationFrame` loops.
 - Keep the approved timing and easing; a different feel is a deviation (`pivot-design` §10).
+- **With GSAP** (§7), consult the `gsap-*` skills for the API, reading only the ones the build uses (`specialists.md`
+  §2): `gsap-core` always; `gsap-react` in React or Next.js, `gsap-frameworks` in Vue or Svelte; `gsap-scrolltrigger`,
+  `gsap-timeline`, `gsap-plugins` or `gsap-utils` for the features used. Register every plugin, scope and revert
+  animations on unmount (`useGSAP` or `gsap.context()`), and give each item its briefed reduced-motion path with
+  `gsap.matchMedia()` and `prefers-reduced-motion`.
 
 ## 9. QA
+
+With GSAP, also check the build against `gsap-performance` (transforms and opacity, no layout thrashing, batched
+ScrollTriggers, `will-change` only where needed), consulted with `animation-performance`.
 
 Motion QA checks the build against the **approved** Motion block, and keeps four things apart: what the brief
 intended, what was observed running, what is inferred or unverified, and what deviates.

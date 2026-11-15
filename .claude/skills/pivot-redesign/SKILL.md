@@ -55,7 +55,7 @@ Pick a **path** and a **risk level**, and say both in one line before doing anyt
 
 If it's unclear which component or page to match ("make it look like the rest of the app"), ask, then take path A.
 
-**Options.** For a Minor or Major redesign, ask the user the `pivot-design` §1 options checkpoint right after this classification, with the same tool, skip and record rules: motion level, screen priority, pages, and specialists always; directions only for a Major redesign; reference sources only on path A. Small fixes skip it.
+**Options.** For a Minor or Major redesign, ask the user the `pivot-design` §1 options checkpoint right after this classification, with the same tool, skip and record rules: motion level, screen priority, pages, and specialists always; motion technology when the redesign changes motion; directions only for a Major redesign; reference sources only on path A. Small fixes skip it.
 
 **Motion.** Add the motion level to the classification line, from `pivot-design`'s [motion.md](../pivot-design/motion.md) §2 (`Motion: none | standard | advanced — <reason>`). Changing how anything moves (adding, removing or retiming motion) is an **interaction** change, so it is **Major**, with motion.md's brief block, preview and approval rules. A Minor redesign keeps the existing motion exactly as it is, and its checks confirm that.
 

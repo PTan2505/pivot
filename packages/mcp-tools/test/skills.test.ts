@@ -490,10 +490,10 @@ describe("motion is part of the design", () => {
     expect(motion).toContain("don't call `set_design_status` with `building`");
   });
   it("technology order and QA honesty", () => {
-    expect(
-      ordered(motion, ["already uses for motion", "CSS transitions", "The Web Animations API", "Add a library"]),
-    ).toBe(true);
-    expect(motion).toContain("Never add a dependency without that reason in the approved brief.");
+    expect(ordered(motion, ["already uses for motion", "**Standard:** CSS transitions", "**Advanced: GSAP**"])).toBe(
+      true,
+    );
+    expect(motion).toMatch(/Never add a dependency without that reason in the\s+approved brief/);
     expect(motion).toContain("measure is unverified, never a pass");
   });
   it("the local viewer is hardened and motion specialists follow the level", () => {
@@ -659,5 +659,26 @@ describe("pivot-design: UI layouts and components kept apart (L1, text only)", (
     expect(ordered(d, ["**UI layouts**\n\n| Reference", "**Components**\n\n| Reference", "| Used for"])).toBe(true);
     expect(src).toMatch(/category: z\s*\.enum\(DESIGN_REFERENCE_CATEGORIES\)/);
     expect(spec).toMatch(/Reference: UI layout và component/);
+  });
+});
+
+describe("pivot-design: GSAP for advanced motion (L1, text only)", () => {
+  const motion = read(".claude/skills/pivot-design/motion.md");
+  it("defaults advanced motion to GSAP, standard to CSS, after what the project already uses", () => {
+    expect(motion).toMatch(/\*\*Advanced: GSAP\*\* \(the `gsap` package\)/);
+    expect(motion).toMatch(/`@gsap\/react` in a React\s+or Next\.js project/);
+    expect(motion).toMatch(/Don't add a second library beside one it has/);
+    expect(motion).toMatch(/in the build step only, never before\s+approval/);
+    expect(motion).toMatch(/never install GSAP into the target before approval/);
+  });
+  it("consults the gsap skills at build and QA, and asks the technology at the options checkpoint", () => {
+    expect(motion).toMatch(/`gsap-core` always; `gsap-react` in React or Next\.js/);
+    expect(motion).toMatch(/`gsap-performance`/);
+    expect(specialists).toMatch(/\| `gsap-\*`\s+\| Advanced motion built with GSAP/);
+    expect(specialists).toMatch(/they don't count toward the specialist limits/);
+    expect(d).toMatch(/\| Motion technology\s+\|/);
+    expect(d).toMatch(/\*\*Motion technology:\*\* the brief's \*\*Technology\*\* line/);
+    expect(r).toMatch(/motion technology when the redesign changes motion/);
+    expect(spec).toMatch(/GSAP cho motion advanced/);
   });
 });
