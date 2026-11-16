@@ -290,7 +290,26 @@ function releasePointer(e: PointerEvent<HTMLElement>) {
   e.currentTarget.style.setProperty("--py", "0");
 }
 
-export function ResourceCard({ resource, selected, selecting, onToggle, meta }: CardProps) {
+/** The first facet (or tag) of a card, on a solid chip at the frame's top-right (the select box has the top-left) while hovered or focused. */
+function HoverChip({ resource }: { resource: ResourceDTO }) {
+  const t = [...resource.tags].sort((a, b) => Number(a.kind === "tag") - Number(b.kind === "tag"))[0];
+  if (!t) return null;
+  return (
+    <span className="pointer-events-none absolute top-2 right-2 inline-flex h-6 items-center gap-1 rounded-full bg-canvas px-2.5 text-xs font-medium text-ink opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">
+      {t.kind !== "tag" && <span className="font-normal text-ink-secondary">{TAG_KIND_LABELS[t.kind]}</span>}
+      {t.name}
+    </span>
+  );
+}
+
+export function ResourceCard({
+  resource,
+  selected,
+  selecting,
+  onToggle,
+  meta,
+  compact,
+}: CardProps & { compact?: boolean }) {
   const def = TYPE_DEFS[resource.type];
   const onClick = (e: MouseEvent) => {
     if (selecting || e.shiftKey || e.metaKey) {
@@ -317,6 +336,7 @@ export function ResourceCard({ resource, selected, selecting, onToggle, meta }: 
       {art && <span aria-hidden className="glass-card-art" />}
       <span aria-hidden className="glass-card-tint" />
       <div
+        data-frame
         className={cn(
           "relative aspect-[16/10] max-w-full overflow-hidden rounded-[11px] bg-canvas",
           // the scroll distance is measured against the frame's own height (cqh)
@@ -343,19 +363,38 @@ export function ResourceCard({ resource, selected, selecting, onToggle, meta }: 
             </span>
           </div>
         )}
+        {compact && <HoverChip resource={resource} />}
         <SelectBox selected={selected} onToggle={onToggle} visible={selecting} />
       </div>
-      <div className="flex min-w-0 flex-col gap-1.5 px-1.5">
-        <div className="flex min-w-0 items-center gap-2">
+      {compact ? (
+        // media first: one caption line (site icon, title, host); the first facet shows on the frame while hovered
+        <div data-caption className="relative flex min-w-0 items-center gap-2 px-1.5">
           <SiteIcon resource={resource} />
           <h3 className="min-w-0 flex-1 truncate text-[16px] leading-[1.4] font-medium text-ink" title={resource.title}>
             {resource.title}
           </h3>
-          <CardActions resource={resource} glass />
+          {/* the host gives way to Open source / Copy, which sit over it while the card is hovered or focused */}
+          <span className="shrink-0 text-[14px] leading-[1.4] text-ink-muted transition-opacity duration-150 group-focus-within:opacity-0 group-hover:opacity-0">
+            {meta ?? hostOf(resource.sourceUrl) ?? TYPE_DEFS[resource.type].label}
+          </span>
+          <CardActions resource={resource} glass className="absolute right-1.5" />
         </div>
-        <p className="truncate text-[14px] leading-[1.4] text-ink-muted">{meta ?? metaLine(resource)}</p>
-        <Chips resource={resource} />
-      </div>
+      ) : (
+        <div data-caption className="flex min-w-0 flex-col gap-1.5 px-1.5">
+          <div className="flex min-w-0 items-center gap-2">
+            <SiteIcon resource={resource} />
+            <h3
+              className="min-w-0 flex-1 truncate text-[16px] leading-[1.4] font-medium text-ink"
+              title={resource.title}
+            >
+              {resource.title}
+            </h3>
+            <CardActions resource={resource} glass />
+          </div>
+          <p className="truncate text-[14px] leading-[1.4] text-ink-muted">{meta ?? metaLine(resource)}</p>
+          <Chips resource={resource} />
+        </div>
+      )}
     </Link>
   );
 }
@@ -375,7 +414,7 @@ export function ResourceRow({ resource, selected, selecting, onToggle, meta }: C
         selected && "bg-surface outline-2 outline-offset-0 outline-accent-text",
       )}
     >
-      <div className="relative h-10 w-16 shrink-0 overflow-hidden rounded-[8px] bg-surface">
+      <div data-frame className="relative h-10 w-16 shrink-0 overflow-hidden rounded-[8px] bg-surface">
         {resource.coverAssetId ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -391,11 +430,12 @@ export function ResourceRow({ resource, selected, selecting, onToggle, meta }: C
           </div>
         )}
       </div>
-      <div className="min-w-0 flex-1">
+      <div data-caption className="min-w-0 flex-1">
         <div className="truncate text-[16px] font-medium text-ink">{resource.title}</div>
         <div className="truncate text-[14px] text-ink-subtle">{meta ?? metaLine(resource)}</div>
       </div>
       <time
+        data-caption
         className="hidden w-20 shrink-0 text-right font-mono text-xs text-ink-subtle tabular-nums sm:block"
         dateTime={resource.updatedAt}
       >
