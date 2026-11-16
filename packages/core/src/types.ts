@@ -716,7 +716,7 @@ export interface ResourceLinkDTO {
 
 export const DESIGN_MILESTONES = ["initial", "approved", "major_change"] as const;
 export type DesignMilestone = (typeof DESIGN_MILESTONES)[number];
-/** The decisions recorded through record_design_decision (an approval is the owner's alone). */
+/** The decisions recorded through record_design_decision (approvals are the user's: in PIVOT, or in the chat via record_chat_approval). */
 export const DESIGN_DECISION_KINDS = ["approval", "change", "deviation"] as const;
 export type DesignDecisionKind = (typeof DESIGN_DECISION_KINDS)[number];
 /** What a session's history holds: those decisions, and the QA reports recorded through record_design_qa. */
@@ -779,7 +779,11 @@ export interface DesignSnapshotDTO {
 }
 
 /** Who recorded a decision: the agent through MCP, or the owner by pressing Approve on a mockup in PIVOT. */
-export const DESIGN_DECISION_SOURCES = ["agent", "owner"] as const;
+/**
+ * agent: recorded by the agent; owner: the user approved in PIVOT with the owner passphrase; chat: the user approved in
+ * the chat and the agent recorded it with their words (owner's choice, 2026-11-15: PIVOT can't check those words).
+ */
+export const DESIGN_DECISION_SOURCES = ["agent", "owner", "chat"] as const;
 export type DesignDecisionSource = (typeof DESIGN_DECISION_SOURCES)[number];
 
 /**

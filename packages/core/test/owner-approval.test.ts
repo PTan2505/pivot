@@ -1,5 +1,6 @@
-// The approval gate is the owner's: an agent holding only PIVOT's API token (or forging browser headers) can't create,
-// change or replay an owner approval, and building needs a current owner approval of the exact version.
+// The approval gate is the user's: an agent holding only PIVOT's API token (or forging browser headers) can't create,
+// change or replay an owner approval, and building needs a current approval of the exact version: the owner's, made in
+// PIVOT, or one the user gave in the chat (recorded with their words, source "chat"; the owner's choice, 2026-11-15).
 import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -101,7 +102,7 @@ describe("an agent can't approve", () => {
           mockupDigest: s.mockups[0].digest,
           source,
         }),
-      ).rejects.toThrow(/Approvals are the owner's/);
+      ).rejects.toThrow(/Approvals are the user's/);
     // an approval an agent recorded before this rule existed (as stored rows look) doesn't unlock anything
     const { designDecisions } = await import("../src/db/schema");
     await (await db.getDb()).insert(designDecisions).values({
@@ -253,5 +254,71 @@ describe("the owner sets the passphrase from a terminal", () => {
     expect(() =>
       execFileSync(process.execPath, [cli, "--stdin", "--replace"], { input: "short\n", env, stdio: "pipe" }),
     ).toThrow(/at least 12/);
+  });
+});
+
+describe("an approval given in the chat (source chat, the owner's choice)", () => {
+  it("is recorded with the user's words, bound to the version's digest, and allows building", async () => {
+    const s = await exploring();
+    const m = s.mockups[1];
+    const r = await design.approveInChat({
+      sessionId: s.sessionId,
+      userWords: "tôi duyệt version 2 rồi, build đi",
+      mockupId: m.id,
+      mockupDigest: m.digest.slice(0, 12),
+      note: "keep the rail",
+    });
+    const after = (await design.getDesignSession(s.sessionId))!;
+    expect(after.status).toBe("approved");
+    expect(after.currentApprovalId).toBe(r.id);
+    const d = after.decisions.find((x) => x.id === r.id)!;
+    expect(d).toMatchObject({ kind: "approval", source: "chat", direction: "Version 2: V2 (round 1)" });
+    expect(d.details).toContain('The user\'s words: "tôi duyệt version 2 rồi, build đi"');
+    expect(d.details).toContain("keep the rail");
+    await design.setDesignSessionStatus(s.sessionId, "building");
+    expect(await status(s.sessionId)).toBe("building");
+  });
+  it("needs the user's words, the digest of the named version, and an exploring session", async () => {
+    const s = await exploring();
+    const m = s.mockups[0];
+    await expect(
+      design.approveInChat({ sessionId: s.sessionId, userWords: "  ", mockupId: m.id, mockupDigest: m.digest }),
+    ).rejects.toThrow(/user's own words/);
+    await expect(
+      design.approveInChat({ sessionId: s.sessionId, userWords: "approve v1", mockupId: m.id }),
+    ).rejects.toThrow(/digest/);
+    await expect(
+      design.approveInChat({
+        sessionId: s.sessionId,
+        userWords: "approve v1",
+        mockupId: m.id,
+        mockupDigest: "0".repeat(12),
+      }),
+    ).rejects.toThrow(/isn't the stored one/);
+    // a session with mockups needs the version
+    await expect(design.approveInChat({ sessionId: s.sessionId, userWords: "approve" })).rejects.toThrow(/mockupId/);
+    const other = await exploring();
+    await expect(
+      design.approveInChat({
+        sessionId: s.sessionId,
+        userWords: "approve",
+        mockupId: other.mockups[0].id,
+        mockupDigest: other.mockups[0].digest,
+      }),
+    ).rejects.toThrow(/isn't one of this session's mockups/);
+    await design.approveInChat({
+      sessionId: s.sessionId,
+      userWords: "approve v1",
+      mockupId: m.id,
+      mockupDigest: m.digest,
+    });
+    await expect(
+      design.approveInChat({
+        sessionId: s.sessionId,
+        userWords: "approve v1 again",
+        mockupId: m.id,
+        mockupDigest: m.digest,
+      }),
+    ).rejects.toThrow(/approved\. A version can be approved while the session is exploring/);
   });
 });
