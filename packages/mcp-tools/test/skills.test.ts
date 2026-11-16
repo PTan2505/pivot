@@ -165,6 +165,14 @@ describe("steps stay in order", () => {
   });
 });
 
+describe("a pick from the interactive preview", () => {
+  it("pivot-design treats Choose this version as a pick, then asks before recording a chat approval", () => {
+    expect(d).toContain("**Choose this version** in the preview sends the user's pick to you");
+    expect(d).toContain("That is the user's pick, not an approval");
+    expect(spec).toContain("Nút **Choose this version** gửi lựa chọn của người dùng");
+  });
+});
+
 describe("approval provenance", () => {
   for (const [f, t] of [
     ["pivot-design", d],

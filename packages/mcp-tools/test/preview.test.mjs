@@ -157,6 +157,7 @@ b.onclick = () => { o.textContent = "open"; w.textContent = innerWidth; m.textCo
 // a hostile mockup: reach the preview's page, its privileged control and the API, all of which must fail
 try { parent.document.body.innerHTML = "HIJACKED"; p.textContent = "parent reachable"; } catch { p.textContent = "parent blocked"; }
 try { window.pivotPreview && window.pivotPreview({ reducedMotion: true }); } catch {}
+try { window.pivotPreview && window.pivotPreview({ choose: 2, note: "chosen by the mockup" }); } catch {}
 try { window.open("about:blank"); } catch {}
 </script>`,
   );
@@ -228,6 +229,8 @@ try { window.open("about:blank"); } catch {}
     expect(await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(false);
     // and its window.open didn't open anything
     expect(preview.context.pages()).toHaveLength(1);
+    // nor could it pick a version for the user
+    expect(events.some((e) => e.event === "chosen")).toBe(false);
   });
 
   it("compares versions side by side and replays", async () => {
@@ -293,6 +296,44 @@ try { window.open("about:blank"); } catch {}
     } finally {
       await p2.close();
     }
+  }, 30_000);
+
+  it("sends the user's pick, with the checked id and digest and their note, then closes", async () => {
+    const seen = [];
+    const p4 = await startPreview({
+      session,
+      versions: [stat, toggle],
+      pivotPage: `http://127.0.0.1:4321/design/${SID}`,
+      headless: true,
+      onEvent: (e) => seen.push(e),
+    });
+    const pg = p4.page();
+    await pg.waitForSelector("body[data-ready=true]");
+    // nothing to pick while comparing
+    await pg.click("#compare");
+    expect(await pg.isDisabled("#choose")).toBe(true);
+    await pg.click("#compare");
+    await pg.click("[data-tab='1']");
+    await pg.click("#choose");
+    expect(await pg.textContent("#chosen")).toBe(`version 2 · Toggle (digest ${toggle.digest.slice(0, 12)})`);
+    // Cancel sends nothing
+    await pg.click("#cancel");
+    expect(await pg.isHidden("#confirm")).toBe(true);
+    await pg.click("#choose");
+    await pg.fill("#note", "  keep the hover lift  ");
+    await pg.click("#send");
+    await p4.closed;
+    expect(seen.filter((e) => e.event === "chosen")).toEqual([
+      {
+        event: "chosen",
+        round: toggle.round,
+        n: 2,
+        title: "Toggle",
+        id: toggle.id,
+        digest: toggle.digest,
+        note: "keep the hover lift",
+      },
+    ]);
   }, 30_000);
 
   it("stops after three crashes in a minute instead of crashing forever", async () => {
