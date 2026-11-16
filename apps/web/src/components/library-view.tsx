@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useLibraryParams } from "@/hooks/use-library-params";
-import { assetUrl, useCollections, useCounts, useResource, useResources } from "@/lib/api";
+import { assetUrl, useCollections, useResource, useResources } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { hostOf } from "@/components/resource-card";
 
@@ -171,7 +171,6 @@ export function LibraryView({
     collection: collectionId ?? (params.collection || undefined),
     trash: mode === "trash",
   });
-  const { data: counts } = useCounts();
   const { data: allCollections = [] } = useCollections();
   const collectionName = allCollections.find((c) => c.id === params.collection)?.name;
 
@@ -256,16 +255,6 @@ export function LibraryView({
             <p className="pb-2.5 text-base text-ink-muted">
               Quick saves waiting to be organised. They are searchable already; select some and mark them reviewed.
             </p>
-          )}
-          {library && !params.review && (counts?.inbox ?? 0) + (counts?.suggestions ?? 0) > 0 && !actions && (
-            <div className="ml-auto pb-1">
-              <Button variant="secondary" onClick={() => set({ review: "needs", type: undefined, section: "library" })}>
-                Inbox
-                <span className="font-mono text-xs text-ink-secondary tabular-nums">
-                  {(counts?.inbox ?? 0) + (counts?.suggestions ?? 0)}
-                </span>
-              </Button>
-            </div>
           )}
           {actions && <div className="ml-auto flex flex-wrap items-center gap-2 pb-1">{actions}</div>}
         </div>
