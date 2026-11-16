@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Link2, Plus, Upload } from "lucide-react";
+import { ChevronDown, FolderPlus, Link2, Plus, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef } from "react";
 import { toast } from "sonner";
@@ -51,7 +51,19 @@ function starterContent(type: ResourceType) {
   return "";
 }
 
-export function AddMenu({ preferType }: { preferType?: ResourceType }) {
+/**
+ * Add, the one ember action. In the top bar: a split button (the main action, then a menu of every way to add). In the
+ * phone dock (`fab`): a round button that opens the same menu upward.
+ */
+export function AddMenu({
+  preferType,
+  fab,
+  onNewCollection,
+}: {
+  preferType?: ResourceType;
+  fab?: boolean;
+  onNewCollection?: () => void;
+}) {
   const fileRef = useRef<HTMLInputElement>(null);
   const forcedType = useRef<ResourceType | null>(null);
   const router = useRouter();
@@ -80,59 +92,80 @@ export function AddMenu({ preferType }: { preferType?: ResourceType }) {
     }
   };
 
+  const menu = (
+    <DropdownMenuContent side={fab ? "top" : "bottom"} align="end" sideOffset={8} className="w-56">
+      <DropdownMenuItem onSelect={() => openAddUrl()}>
+        <Link2 /> Add from URL…
+        <DropdownMenuShortcut>⌘V</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => pickFile()}>
+        <Upload /> Upload files…
+      </DropdownMenuItem>
+      {onNewCollection && (
+        <DropdownMenuItem onSelect={() => setTimeout(onNewCollection, 0)}>
+          <FolderPlus /> New collection…
+        </DropdownMenuItem>
+      )}
+      <DropdownMenuSeparator />
+      <DropdownMenuLabel className="text-xs text-muted-foreground">New</DropdownMenuLabel>
+      {RESOURCE_TYPES.map((t) => (
+        <DropdownMenuItem key={t} onSelect={() => createOfType(t, pickFile)}>
+          <TypeIcon type={t} /> {TYPE_DEFS[t].label}
+        </DropdownMenuItem>
+      ))}
+    </DropdownMenuContent>
+  );
+  const input = (
+    <input
+      ref={fileRef}
+      type="file"
+      multiple
+      accept={ACCEPT}
+      className="hidden"
+      onChange={(e) => onFiles(e.target.files)}
+    />
+  );
+
+  if (fab)
+    return (
+      <DropdownMenu>
+        {input}
+        <DropdownMenuTrigger asChild>
+          <Button
+            aria-label="Add"
+            className="size-[52px] rounded-full p-0 shadow-[0_12px_32px_rgb(0_0_0/0.5)] [&_svg]:size-[22px]"
+          >
+            <Plus />
+          </Button>
+        </DropdownMenuTrigger>
+        {menu}
+      </DropdownMenu>
+    );
+
   return (
     <div className="flex">
-      <input
-        ref={fileRef}
-        type="file"
-        multiple
-        accept={ACCEPT}
-        className="hidden"
-        onChange={(e) => onFiles(e.target.files)}
-      />
+      {input}
       <Button
-        size="lg"
-        // below 360px the label goes (the name stays for screen readers), like Collections, so the top-bar row fits
-        className="rounded-r-none pr-4 max-[359px]:px-3"
+        className="rounded-r-none pr-3.5 pl-3"
         aria-label={preferType ? `New ${TYPE_DEFS[preferType].label.toLowerCase()}` : undefined}
         onClick={() => (preferType ? createOfType(preferType, pickFile) : openAddUrl())}
       >
         <Plus />
         {preferType ? (
-          // "New source" doesn't fit next to the other top-bar buttons on a phone; "New" does
-          <span className="max-[359px]:sr-only">
-            New<span className="max-sm:hidden"> {TYPE_DEFS[preferType].label.toLowerCase()}</span>
+          <span>
+            New<span className="max-xl:hidden"> {TYPE_DEFS[preferType].label.toLowerCase()}</span>
           </span>
         ) : (
-          <span className="max-[359px]:sr-only">Add</span>
+          <span>Add</span>
         )}
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            size="lg"
-            className="border-on-accent/25 rounded-l-none border-l pr-3 pl-2.5"
-            aria-label="More ways to add"
-          >
+          <Button className="border-on-accent/25 w-8 rounded-l-none border-l p-0" aria-label="More ways to add">
             <ChevronDown />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuItem onSelect={() => openAddUrl()}>
-            <Link2 /> Add from URL…
-            <DropdownMenuShortcut>⌘V</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => pickFile()}>
-            <Upload /> Upload files…
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel className="text-xs text-muted-foreground">New</DropdownMenuLabel>
-          {RESOURCE_TYPES.map((t) => (
-            <DropdownMenuItem key={t} onSelect={() => createOfType(t, pickFile)}>
-              <TypeIcon type={t} /> {TYPE_DEFS[t].label}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
+        {menu}
       </DropdownMenu>
     </div>
   );

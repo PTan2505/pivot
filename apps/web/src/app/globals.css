@@ -85,8 +85,13 @@
   --glass-strong: rgb(34 24 18 / 0.86);
   --glass-edge: rgb(255 238 222 / 0.1);
   --glass-sheen: inset 0 1px 0 rgb(255 248 240 / 0.07);
-  /* the fixed top bar's height; measured by the app shell, this is its one-row desktop height until then */
-  --topbar-h: 76px;
+  /* the fixed top bar's height; measured by the top bar, these are its heights until then */
+  --topbar-h: 64px;
+}
+@media (min-width: 64rem) {
+  :root {
+    --topbar-h: 72px;
+  }
 }
 
 /* shadcn/ui variables, mapped onto the design-system tokens. */
@@ -237,106 +242,16 @@
   border-color: var(--border);
 }
 
-/* Navbar type panel (components/section-nav.tsx): opens with a small scale-in like a popover; moving between
-   sections glides the panel under the new one, resizes it to the new content, and slides the content in from the
-   side the pointer came from, with a touch of blur. Timing follows lovable.dev's menu (270ms, ease-in-out). */
-.section-panel-position {
-  transform: translateX(var(--section-panel-x, 0px));
-  transition: transform 270ms cubic-bezier(0.45, 0, 0.25, 1);
+/* Top bar (components/top-bar.tsx, section-nav.tsx; direction "1 · Floating capsule", 2026-11-16). Before the
+   section indicator has measured itself (or without scripts) the current section carries the inverse pill itself;
+   then an inverse copy of the list, clipped to it, takes over and slides (M1). */
+[data-nav-list]:not([data-ready]) [data-active] {
+  background: var(--inverse);
+  color: var(--on-inverse);
 }
-.section-panel-position[data-instant] {
-  transition: none;
-}
-.section-panel-viewport {
-  position: relative;
-  /* Radix measures the active content into these; until it has, the panel just fits its content.
-     content-box: the sizes are the content's, and the glass border goes around them. With border-box the
-     content was 2px narrower than the measured size, Radix measured again, and the panel shrank forever. */
-  box-sizing: content-box;
-  width: var(--radix-navigation-menu-viewport-width, auto);
-  height: var(--radix-navigation-menu-viewport-height, auto);
-  transform-origin: top left;
-  transition:
-    width 270ms cubic-bezier(0.45, 0, 0.25, 1),
-    height 270ms cubic-bezier(0.45, 0, 0.25, 1);
-}
-.section-panel-viewport[data-state="open"] {
-  animation: section-panel-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.section-panel-viewport[data-state="closed"] {
-  animation: section-panel-out 140ms ease-in forwards;
-}
-/* Sized by its own options, never by the panel around it, so measuring it can't feed back into the panel. */
-.section-panel-content {
-  width: max-content;
-}
-/* the incoming content sizes the panel; the outgoing one floats over it while it leaves */
-.section-panel-content[data-motion^="to-"] {
-  position: absolute;
-  top: 0;
-  left: 0;
-}
-.section-panel-content[data-motion="from-start"] {
-  animation: section-content-from-start 270ms cubic-bezier(0.45, 0, 0.25, 1);
-}
-.section-panel-content[data-motion="from-end"] {
-  animation: section-content-from-end 270ms cubic-bezier(0.45, 0, 0.25, 1);
-}
-.section-panel-content[data-motion="to-start"] {
-  animation: section-content-to-start 270ms cubic-bezier(0.45, 0, 0.25, 1) forwards;
-}
-.section-panel-content[data-motion="to-end"] {
-  animation: section-content-to-end 270ms cubic-bezier(0.45, 0, 0.25, 1) forwards;
-}
-@keyframes section-panel-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.96);
-  }
-}
-@keyframes section-panel-out {
-  to {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.96);
-  }
-}
-@keyframes section-content-from-start {
-  from {
-    opacity: 0;
-    transform: translateX(-32px);
-    filter: blur(2px);
-  }
-}
-@keyframes section-content-from-end {
-  from {
-    opacity: 0;
-    transform: translateX(32px);
-    filter: blur(2px);
-  }
-}
-@keyframes section-content-to-start {
-  to {
-    opacity: 0;
-    transform: translateX(-32px);
-    filter: blur(2px);
-  }
-}
-@keyframes section-content-to-end {
-  to {
-    opacity: 0;
-    transform: translateX(32px);
-    filter: blur(2px);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .section-panel-position,
-  .section-panel-viewport {
-    transition: none;
-  }
-  .section-panel-viewport[data-state],
-  .section-panel-content[data-motion] {
-    animation: none;
-  }
+/* While cards are selected, the selection bar takes the phone dock's place. */
+body:has([data-selection-bar]) [data-dock] {
+  visibility: hidden;
 }
 
 /* Glass (chrome and overlays, plus two owner exceptions: the glass folders and the record cards below).
@@ -363,55 +278,40 @@
     --ink-subtle: var(--ink-muted);
   }
 
-  /* The signature move, ember light caught in the glass: a pool of light inside the top bar behind the (solid)
-     search field, and a glowing seam along the bar's lower edge, like light through the gaps between tiles.
-     It never sits under page text: any glow bright enough to see drops small grey text below 4.5:1. */
-  .ember-bar::after {
+  /* The signature move, ember light caught in the glass: the top bar (on desktop and phones) is light glass
+     with a pool of ember low in its middle and a glowing seam along its lower edge, like light through the gaps
+     between tiles. It is a sibling layer behind the bar's content, so nothing inside is a child of its backdrop
+     filter, and it never sits under page text. */
+  .nav-shell {
+    background: radial-gradient(300px 46px at 50% 130%, rgb(255 106 19 / 0.26), transparent 70%), var(--glass);
+    -webkit-backdrop-filter: blur(24px) saturate(1.5);
+    backdrop-filter: blur(24px) saturate(1.5);
+    /* across the page: a hairline along the bottom edge; as the capsule: a ring (see top-bar.tsx, M2') */
+    box-shadow:
+      inset 0 -1px 0 var(--glass-edge),
+      var(--glass-sheen);
+  }
+  [data-condensed] .nav-shell {
+    box-shadow:
+      inset 0 0 0 1px var(--glass-edge),
+      var(--glass-sheen);
+  }
+  .nav-shell::after {
     content: "";
     position: absolute;
-    inset: auto 0 -1px;
-    /* a 2px seam of light that blooms up into the bar's bottom padding (no text lives there) */
-    height: 12px;
+    left: 18%;
+    right: 18%;
+    bottom: 0;
+    height: 1px;
     pointer-events: none;
-    background:
-      linear-gradient(
-          90deg,
-          transparent,
-          var(--ember-deep) 18%,
-          var(--ember) 38%,
-          var(--ember-core) 50%,
-          var(--ember) 62%,
-          var(--ember-deep) 82%,
-          transparent
-        )
-        bottom / 100% 2px no-repeat,
-      linear-gradient(to top, color-mix(in oklch, var(--ember) 34%, transparent), transparent);
-    mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);
-  }
-
-  .ember-bar::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    /* phones: the search field is the bar's last row; keep the pool to that row so it never sits under the nav */
-    background:
-      radial-gradient(55% 30% at 50% 100%, color-mix(in oklch, var(--ember-core) 40%, transparent), transparent 72%),
-      radial-gradient(80% 42% at 50% 100%, color-mix(in oklch, var(--ember) 28%, transparent), transparent 76%);
-  }
-  @media (min-width: 48rem) {
-    .ember-bar::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      z-index: -1;
-      pointer-events: none;
-      background:
-        radial-gradient(22% 130% at 50% 100%, color-mix(in oklch, var(--ember-core) 45%, transparent), transparent 72%),
-        radial-gradient(34% 190% at 50% 100%, color-mix(in oklch, var(--ember) 32%, transparent), transparent 74%),
-        radial-gradient(48% 260% at 50% 100%, color-mix(in oklch, var(--ember-deep) 26%, transparent), transparent 78%);
-    }
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--ember-deep) 20%,
+      var(--ember-core) 50%,
+      var(--ember-deep) 80%,
+      transparent
+    );
   }
 }
 
