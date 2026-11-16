@@ -65,6 +65,11 @@ export interface PivotWriter {
     referenceIds?: string[];
     note?: string;
   }): Promise<{ sessionId: string; snapshotId: string; created: boolean; duplicate: boolean }>;
+  /** The user's approval given in the chat, recorded with their words (source "chat"). Optional: an older app says so. */
+  approveInChat?(
+    sessionId: string,
+    input: { userWords: string; mockupId?: string; mockupDigest?: string; note?: string },
+  ): Promise<{ id: string; sessionId: string }>;
   recordDesignDecision(
     sessionId: string,
     input: {

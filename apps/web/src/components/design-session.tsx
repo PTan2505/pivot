@@ -55,7 +55,7 @@ function StatusStepper({
     exploring: approvals.length
       ? "Changed since the last approval: approve the new direction to go on."
       : s.mockups.length
-        ? "Waiting for you to approve a version below, with your owner passphrase."
+        ? "Waiting for you to approve a version: below with your owner passphrase, or in the chat with Claude."
         : "Waiting for a version to approve: Claude saves the direction here as a mockup.",
     approved: `Direction approved on ${approvedOn}. Ready to build.`,
     building: "The approved direction is being built.",
@@ -257,6 +257,7 @@ export function DesignSessionView({ id }: { id: string }) {
                 <span className="text-ink-secondary">
                   {DECISION_LABEL[item.d.kind]}
                   {item.d.source === "owner" && " in PIVOT"}
+                  {item.d.source === "chat" && " in the chat"}
                 </span>{" "}
                 · {new Date(item.at).toLocaleString()}
               </p>

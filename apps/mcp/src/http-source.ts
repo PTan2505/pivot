@@ -142,6 +142,13 @@ export class HttpSource implements PivotSource, PivotWriter {
     return this.post<Awaited<ReturnType<PivotWriter["saveDesignBrief"]>>>("/api/design/briefs", input);
   }
 
+  approveInChat(sessionId: string, input: Parameters<NonNullable<PivotWriter["approveInChat"]>>[1]) {
+    return this.post<{ id: string; sessionId: string }>(
+      `/api/design/sessions/${encodeURIComponent(sessionId)}/chat-approval`,
+      input,
+    );
+  }
+
   recordDesignDecision(sessionId: string, input: Parameters<PivotWriter["recordDesignDecision"]>[1]) {
     return this.post<{ id: string }>(`/api/design/sessions/${encodeURIComponent(sessionId)}/decisions`, input);
   }
