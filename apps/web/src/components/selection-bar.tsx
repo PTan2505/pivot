@@ -140,6 +140,7 @@ export function SelectionBar({
 
   return (
     <div
+      data-selection-bar
       role="toolbar"
       aria-label="Selection actions"
       className="glass-strong fixed bottom-6 left-1/2 z-40 flex max-w-[calc(100%-2rem)] -translate-x-1/2 animate-in flex-wrap items-center gap-1 rounded-[28px] p-1.5 pl-4 duration-200 fade-in slide-in-from-bottom-2"

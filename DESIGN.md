@@ -216,8 +216,8 @@ A warm, near-monochrome brown-black ramp with a single orange voice and three st
 
 ### Glass
 
-- **Light glass** (glass, 65%): the top bar only.
-- **Strong glass** (glass-strong, 86%): menus, popovers, selects, the section panel, dialogs, the command palette, toasts, the selection bar.
+- **Light glass** (glass, 65%): the top bar only (desktop and phone), drawn by `.nav-shell` with its ember.
+- **Strong glass** (glass-strong, 86%): menus, popovers, selects, the section panel, the phone section dock, dialogs, the command palette, toasts, the selection bar.
 - **Glass edge** (glass-edge): the 1px rim of both.
 - **Card glass** (record cards, owner exception, 2026-10-30): the folder's recipe on a tile. See Resource card.
 
@@ -259,8 +259,8 @@ The extension popup runs at a 13px body with the same families.
 
 ## Layout
 
-- **No app sidebar.** A single top bar holds the logo, the section nav (Library · Knowledge · Sources · Skills), the search field (up to 560px, centred) and the action pills, with the primary `Add` at its right end. Between `md` and `lg` it wraps to two rows; below `lg` the search drops to its own row. The Library landing and References list add a **page-level filter rail** (see Index rail): it filters and orders that page only, never navigates elsewhere in the app, so the top bar stays the only navigation.
-- **Pinned bar.** From `md` (48rem) up the top bar is fixed to the top edge across the full width. The app shell measures its height live (a ResizeObserver writes `--topbar-h`, 76px until measured) and `main` is padded by it, so the page itself scrolls and the work passes under the glass. `html` has `overscroll-behavior-y: none` so the bar never rubber-bands. On phones the bar stays in the flow, because its several rows would take too much of the screen.
+- **No app sidebar.** A single floating top bar holds the logo, the section nav (Library · Knowledge · Sources · Skills), the search pill and the actions (Inbox while something waits, More, `Add` at its right end). Below `lg` (1024px) it is one row (logo, search, Inbox) and the sections move to a dock at the bottom of the screen. The Library landing and References list add a **page-level filter rail** (see Index rail): it filters and orders that page only, never navigates elsewhere in the app, so the top bar stays the only navigation.
+- **Pinned bar.** The top bar is fixed at every width. At the top of the page its glass runs the full width, flush with the top edge (72px from `lg`, 64px below); scrolled, it shrinks into a floating capsule, so the page itself scrolls and the work passes around and under the glass. The bar measures its height live (a ResizeObserver writes `--topbar-h`: 72px from `lg`, 64px below, also the defaults until measured) and `main` is padded by it; below `lg` `main` also ends 84px plus the safe area above the dock. Shrinking never changes the height. `html` has `overscroll-behavior-y: none` so the bar never rubber-bands.
 - **Scroll targets** that jump to a section (skill packs, source categories) use `scroll-margin-top: calc(var(--topbar-h) + 1rem)` from `md`, 32px below it.
 - **Page head:** the display title with its count badge, then the tag pill row, then the source chip and, while a search, tag or source filter is on, a ghost **Clear filters** button (× icon) on the left, and Sort (Recently edited, Newest first, Oldest first, Title A–Z) / grid-list toggle on the right (a Type select on the left only in collections and the trash).
 - **Empty and no-match states** (centred, 96px of canvas above): an empty type page says "Nothing in <page> yet" with the paste hint; a search or filter with no results says "Nothing matches “<search>”" (or "these filters"), explains that search and filters apply together when both are on, and offers a secondary **Clear filters** pill.
@@ -285,8 +285,8 @@ Modal scrims are black at 50% (dialogs) or 55% (alert dialogs) with a light blur
 
 The signature: ember light caught in the glass top bar, like orange light through the gaps between dark tiles.
 
-- **Pool:** a radial glow behind the solid search field, layered amber core → orange → deep red. On phones it is kept low and wide to the search row so it never sits under the nav; from `md` it is a tall, narrow pool centred under the field.
-- **Seam:** a 2px line of light along the bar's bottom edge (deep red at the ends, amber at the centre), blooming 12px upward into the bar's empty bottom padding, faded out at both ends by a horizontal mask.
+- **Pool:** a low radial glow in the capsule's middle (`radial-gradient(300px 46px at 50% 130%)`, ember at 26%), so it rises from under the bar's lower edge between the sections and the search pill.
+- **Seam:** a 1px line of light along the capsule's bottom edge, from 18% to 82% of its width (deep red at the ends, amber at the centre). The phone row carries the same pool and seam.
 
 ### Named Rules
 
@@ -296,7 +296,7 @@ The signature: ember light caught in the glass top bar, like orange light throug
 
 ## Shapes
 
-The radius is binary: every control is a full pill, every container a gently rounded 14px card (cards, dialogs, popovers, menus, selects, textareas, toasts). Small steps exist only for parts inside those: 6px for keyboard hints and inline code, 8px for list-row thumbnails, 10px for option icon tiles, 12px for option rows. Two floating chrome pieces are rounder: the section panel (20px) and the selection bar (28px). Round (circular) buttons are the icon variants of the pill. Borders appear only as the glass edge and the rare divider.
+The radius is binary: every control is a full pill, every container a gently rounded 14px card (cards, dialogs, popovers, menus, selects, textareas, toasts). Small steps exist only for parts inside those: 6px for keyboard hints and inline code, 8px for list-row thumbnails, 10px for option icon tiles, 12px for option rows. Three floating chrome pieces are rounder: the section panel (20px), the phone section dock (24px; its cells 16px) and the selection bar (28px). The top bar is square across the page at the top and a full pill once it shrinks into the capsule. Round (circular) buttons are the icon variants of the pill. Borders appear only as the glass edge and the rare divider.
 
 ## Components
 
@@ -311,7 +311,7 @@ Pill-shaped, quiet by default.
 - **Ghost:** transparent, ink-secondary; hover surface. For actions inside a glass container (selection bar, menus).
 - **Destructive:** surface fill, danger label, always with an explicit verb or icon ("Delete forever").
 - **Link:** accent-text, underline on hover.
-- **Sizes:** `lg` 40px (top bar), `default` 36px, `sm` 32px with a 13px label, `xs` 24px; `icon*` variants are round at the same heights.
+- **Sizes:** `lg` 40px, `default` 36px (top bar), `sm` 32px with a 13px label, `xs` 24px; `icon*` variants are round at the same heights.
 - **Focus:** 2px accent-text outline, 3px offset (on every interactive element). Disabled: 40% opacity, no pointer. Transitions 150ms ease-out.
 
 ### Icons
@@ -326,23 +326,41 @@ PT is the core, PIVOT the expansion: the mark starts from the first and last let
 - **PT monogram** (`PivotMark`, 232 × 170): the T's bar sits in the P's counter and closes the bowl; the T's stem is set left of the bar's centre. It is the app icon, the favicon and the extension's mark.
 - **PIVOT wordmark** (`PivotWordmark`, 586 × 136): the same P with a bridge closing the bowl, then I, V, a ring O and the T.
 - **Colour:** the P is solid Ember (`--ember`, #ff6a13; 6.9:1 on canvas), everything else Warm White (`currentColor` on ink), in the monogram and the wordmark alike (owner's call, 2026-10-29). The ember O (amber core → ember → ember deep) and the ember seam belong to the app icon and splash or landing use only.
-- **In the top bar:** the monogram at 22px high, then the wordmark at 13px high, 10px apart, inside the home link (`aria-label="PIVOT — library"`).
+- **In the top bar:** the monogram at 24px high, then the wordmark at 14px high, 8px apart, inside the home link (`aria-label="PIVOT home"`).
 - **App icon** (`docs/brand/pivot-app-icon.svg`, copied to `apps/web/src/app/icon.svg`): the monogram (ember P, Warm White T) on a kiln tile (22% radius, a faint warm top light) with the ember seam along its bottom edge. The extension's toolbar PNGs are rendered from it (`pnpm --filter extension icons`).
 - **Repo hero** (`docs/brand/pivot-wordmark-ember.svg`, 1280 × 640, the GitHub social-preview ratio): the wordmark with its ember O, at 1.2×, straight on the kiln with no glass. Behind it the O becomes the light source: a 250px ember ring blurred 38px into a haze with a 1.5px amber hairline, two thin orbits (`#4a3527`) and one amber dot riding the outer orbit; fine grain and a dark vignette over all. A soft dark halo (the letters in Kiln Black, blurred 16px, 75%) lifts the wordmark off the ring.
 - **Tagline** (brand use, not the UI): "Your creative compass" in Geist Mono 500, upper case, 0.62em tracking, Smoke. No ® until the name is registered.
 
-### Top bar — `components/app-shell.tsx` (`TopBar`)
+### Top bar — `components/top-bar.tsx` (`TopBar`)
 
-- Logo (PT monogram + wordmark, see Brand mark), section nav, search field, then the Collections menu, round Trash and Settings buttons (inverse when on that page) and the split `Add` button (the screen's primary action). On phones (below `sm`) Collections shows only its icon; below 360px the `Add` half shows only its plus too (its name stays for screen readers), so the action row fits a 320px screen.
-- Light glass layer behind the content, ember pool and seam (see Elevation & Depth); 16px padding, 40px side padding from `md`.
-- On phones the Collections button is icon-only and the primary button reads just "New" (its full name stays in `aria-label`), so the action row fits at 375px; the search field takes its own row.
+Direction "1 · Floating capsule" with the owner's change "6 · Full width, then capsule · A content stays" (design session "PIVOT navbar redesign", both approved by the owner in PIVOT, 2026-11-16).
+
+- **From `lg`, at the top of the page:** the glass runs the full width, 72px tall, square, with a 1px glass-edge hairline along its bottom. The content sits in a frame 1240px wide (at least 24px in from each side) and 60px tall, 6px below the top edge: left, the logo, 22px gap, the section nav; right, 8px apart, the search pill, Inbox, More, `Add`. 22px padding on the left, 12px on the right.
+- **Bar glass** (`.nav-shell`): light glass with the ember pool and seam and the sheen; a bottom hairline across the page, an inset glass-edge ring once it is a capsule. It is a sibling layer behind the content (see Elevation & Depth), and its clip-path also clips where it takes clicks.
+- **Search pill:** 40px solid surface pill, 320px (208px below `xl`), a search icon, "Search PIVOT" in ink-muted and a `⌘K` key hint (mono, ink-subtle, 6px-radius divider border).
+- **Inbox:** a 36px round surface button with the inbox icon and an 18px inverse count badge (12px mono) at its top right, only while quick saves or suggestions wait; it opens `/?review=needs`.
+- **More:** a 36px round surface button (ellipsis). Its strong-glass menu (232px) reads "Go to" in 12px ink-muted, then Collections (count; a submenu lists them and "New collection…") and Design sessions, a divider, then Settings and Trash (count).
+- **Add:** the split ember button at 36px: "Add" (or "New source"… on a type page; the type name hides below `xl`), then a 32px chevron half that opens every way to add, "New collection…" included.
+- **Scrolled** (past 120px): the glass shrinks into a full-pill capsule exactly around the content frame: 1240×60px, 12px below the top (100px in from each side at 1440). The content keeps its place across and drops 6px; the search pill keeps its width. Outside the capsule, clicks reach the page.
+- **Below `lg`:** a full-width 64px row of the same glass at the top of the page (the logo 28px in on the left, then a 44px search icon button and Inbox, 44px, transparent, 20px in on the right); scrolled, it shrinks into a 56px full-pill capsule 8px below the top and 12px in from the sides, the content dropping 4px. The sections live in the dock (below).
+- **Phone dock:** centred 12px above the bottom edge plus the safe area: a strong-glass bar (24px radius, 6px padding) of cells at least 48px square with a 20px icon over a 12px label (below 360px the labels go and only screen readers keep them) (Library: layers, Knowledge: book-open, Sources: globe, Skills: sparkles, More: ellipsis); the current section is an inverse 16px-radius tile. The ember `Add` is a separate 52px circle to its right with a 22px plus. While cards are selected the selection bar takes the dock's place.
+- **Skip link:** "Skip to content", an inverse pill that drops into view at the top left on focus.
 
 ### Section nav — `components/section-nav.tsx`
 
-- Idle labels are ink on the light glass with no fill (only ink holds 4.5:1 there); hover or open fills surface. The current section is an inverse pill. 36px tall, 15px labels, 16px side padding (12px on phones so all four fit at 375px); the row wraps on anything narrower.
-- Sections with a panel (Library, Knowledge, Sources) end in a 14px chevron at 60% opacity that turns over (200ms) while open; phones hide it.
-- **Panel:** opened by hovering Library, Knowledge or Sources, or pressing ↓ on them. Strong glass, 20px radius, 8px padding, two columns up to 600px wide (one column on phones). Each option is a 12px-radius row: a 40px surface icon tile, the plural name in 15px ink with its count in mono on the right, and a one-line blurb in 14px ink-muted. Hover or focus fills it with surface; the current option stays filled. Sources lists its seven categories (lightbulb, app-window, swatch-book, blocks, orbit, type, shapes icons). Clicking the section name goes to its landing page; there is no "All" option.
-- **Motion** (modelled on lovable.dev): opening scales from 0.96 with a 4px drop and fades in (180ms); closing reverses (140ms, ease-in). Moving to another section glides the panel under it and resizes it to the new content (270ms, `cubic-bezier(.45,0,.25,1)`); the new content slides 32px in from the side the pointer came from, unblurring from 2px, while the old one leaves the other way. The first open appears in place. Reduced motion makes all of it instant.
+- Labels are ink on the light glass with no fill; hover (fine pointers) tints the pill with ink at 7%. 36px tall, 15px labels, 14px side padding. The current section is an inverse pill: an inverse copy of the list clipped to it, so it can slide.
+- Sections with a panel (Library, Knowledge, Sources) are two targets in one pill: the name (a link to the section) and a 24px chevron button at 70% opacity that turns over (200ms) while its panel is open.
+- **Panel:** opened by the chevron, or ↓ on the name or the chevron; once open, pointing at another section for 120ms moves it there (a quick diagonal toward the panel doesn't). Strong glass, 20px radius, 8px padding, hanging 14px below the section list and lined up with the section's left edge. Two columns 600px wide when the section has more than five options (Library, Sources), one column 340px wide otherwise (Knowledge). Each option is a 12px-radius row: a 40px surface icon tile, the plural name in 15px ink with its count in mono on the right, and a one-line blurb in 14px ink-muted. Hover or focus fills it with surface; the current option stays filled. Sources lists its seven categories (lightbulb, app-window, swatch-book, blocks, orbit, type, shapes icons). ↑/↓ move through the options, Escape closes and returns focus to the chevron.
+
+### Top bar motion — `components/nav-motion.ts` (GSAP, CustomEase)
+
+Eases: `pivot-panel` (.45,0,.25,1), `pivot-out` (.23,1,.32,1), `pivot-glide` (.32,.72,0,1). Only transform, opacity and clip-path move. Reduced motion swaps every state at once; menus only fade.
+
+- **M1 current section:** the inverse copy's clip slides to the new section in 270ms `pivot-panel`, on click, before the route resolves. First load, resizes and coming from a page with no section set it in place. The dock's tile does the same.
+- **M2′ shrink:** a paused timeline, 270ms `pivot-panel`, played after 10px of downward scroll past 120px and reversed after 8px upward or within 64px of the top: the glass's clip-path goes from `inset(0 round 0)` to the capsule (`inset(12px X 0 X round 30px)`, X = max(24px, (width − 1240px) / 2); on phones `inset(8px 12px 0 12px round 28px)`), and the content moves down 6px (4px on phones). A width change resets it to rest.
+- **M3 search:** the 400px field (nearly the full row on phones) grows out of the pill or the search icon by clip-path, 200ms `pivot-out`, over its neighbours, which fade in 120ms and stop taking clicks; it folds back in 150ms `pivot-panel`. `/` and a query in the URL open it instantly.
+- **M4 panel:** opens with opacity and scale from .97 (180ms `pivot-out`), closes in 140ms. Between sections the glass's clip morphs to the new options' size and place (270ms `pivot-panel`) while the old options leave 8px toward the side and fade (100ms) and the new ones come 8px from the other side (150ms, after 100ms).
+- **M5 phone dock:** slides out below the screen edge on downward scroll and back on upward scroll, at the page end, or when focused (240ms `pivot-glide`).
 
 ### Pills and tag filter — `components/tag-pills.tsx`, `components/tags-editor.tsx`
 
@@ -351,11 +369,10 @@ PT is the core, PIVOT the expansion: the mark starts from the first and last let
 - The visible tags are grouped by kind, each group led by its kind in 13px ink-subtle (Tags, Page type, Domain, Style, Pattern, Technology); groups sit 20px apart, pills 8px apart. With plain tags only, the labels are left out.
 - A "From <source>" chip (inverse pill, 13px, clear button) sits in the filter row while the list is narrowed to one source.
 
-### Search field — `components/app-shell.tsx` (`SearchField`)
+### Search field — `components/top-bar.tsx` (`SearchField`)
 
-- 44px solid surface pill, no border, up to 560px, centred in the top bar; it is solid so the ember pool glows around it, not through it.
-- Leading search icon and placeholder in ink-muted, typed text ink at 15px, trailing `⌘K` hint in mono ink-subtle (hidden on phones) that opens the command palette.
-- Typing filters the library (debounced 200ms, kept in `?q=`); elsewhere Enter jumps to `/?q=…`. `/` focuses it from anywhere. Focus: the accent-text outline on the whole pill.
+- Folded, it is the top bar's search pill (see Top bar). Open, it is a 40px solid surface pill, 400px wide (nearly the full row on phones), with a glass-edge ring, a leading search icon, the placeholder "Search PIVOT" in ink-muted, typed text ink at 15px and an `Esc` key hint.
+- Typing filters the library (debounced 200ms, kept in `?q=`); elsewhere Enter jumps to `/?q=…`. `/` opens it from anywhere; `⌘K` stays the command palette. Escape clears and folds it, returning focus to the pill; leaving it empty folds it.
 
 ### Breadcrumbs — `components/breadcrumbs.tsx`
 
@@ -420,7 +437,7 @@ In the detail sidebar: for visual types at the end of the **Source** group, othe
 
 ### Design sessions — `app/design/page.tsx`, `components/design-session.tsx`
 
-A pen-tool icon button in the top bar (between Trash and Settings; inverse when on `/design`). The list page: display title "Design sessions", one ink-muted line, then surface rows (14px radius) with the title in 15px ink, a status chip, and a second line with project, surface and date. A session page: a ghost "Design sessions" back pill, the title at the detail-page size, a meta line, the **status stepper** (below), then the timeline: each brief is a collapsible surface card (the newest open) rendered as Markdown with reference chips; each decision is a surface card with its kind ("Approved", "Changed", "Deviation found in QA") in ink-secondary, the summary in ink and the direction under it.
+"Design sessions" (pen-tool icon) in the top bar's More menu. The list page: display title "Design sessions", one ink-muted line, then surface rows (14px radius) with the title in 15px ink, a status chip, and a second line with project, surface and date. A session page: a ghost "Design sessions" back pill, the title at the detail-page size, a meta line, the **status stepper** (below), then the timeline: each brief is a collapsible surface card (the newest open) rendered as Markdown with reference chips; each decision is a surface card with its kind ("Approved", "Changed", "Deviation found in QA") in ink-secondary, the summary in ink and the direction under it.
 
 **Status stepper** (updated 2026-11-02):
 
@@ -510,18 +527,18 @@ Appears bottom-centre while resources are selected: strong glass, 28px radius, 6
 
 The Library landing (`/`) and References (`/?type=reference`), approved as "Index rail" in design session `06f166a3`. Other sections, collections and the trash keep the page header below.
 
-- **Head band:** breadcrumbs (References), then one row: the display title and its count badge on the left; Filters (below `lg`), Inbox, Sort and the grid/list toggle on the right. While a filter is on, a second row of inverse chips (facet kind at 70% before its name) with ×, the via/collection/page chips and a ghost **Clear filters**. The result count is also read out through a polite live region.
+- **Head band:** breadcrumbs (References), then one row: the display title and its count badge on the left; Filters (below `lg`), Sort and the grid/list toggle on the right. While a filter is on, a second row of inverse chips (facet kind at 70% before its name) with ×, the via/collection/page chips and a ghost **Clear filters**. The result count is also read out through a polite live region.
 - **Rail:** from `lg`, a 232px column left of the grid (40px gap), sticky at `top: calc(var(--topbar-h) + 72px)` and scrolling on its own when taller than the screen; below `lg` the same content sits in a popover (strong glass, 288px, max 70vh) behind a secondary **Filters (n)** pill. Groups are 24px apart, each headed in 13px ink-subtle; options are 34px rows at 12px radius, 14px ink-secondary, count in 12px mono ink-subtle on the right; hover fills surface; the current or picked option fills surface-raised with ink text and, for facets, an accent-text check. Library: View (All / Folders / Items), Sort, Types (links, empty ones included), Collections (links). References: one group per facet kind with the five most used values and an accent-text "Show N more" / "Show fewer". The values and their order come from the unfiltered list, so the rail never rearranges while narrowing: a value with nothing left shows 0 in ink-subtle instead of disappearing. Group names are labels, not headings (the page keeps h1, then h2).
 - **Shelf:** a glass folder per type that holds something and per collection that holds something; empty types live only in the rail.
 - **Grid:** `minmax(min(100%, 300px), 1fr)` beside the rail (instead of 360px), same 40px / 24px gaps. Cards use the **compact caption**: one row of site icon, title and host (the host fades out under Open source / Copy on hover or focus); the first facet shows on a solid canvas chip at the frame's top-right while hovered or focused (the select box keeps the top-left), nothing translucent on the screenshot.
-- **Compact head:** a 56px light-glass strip sticky under the top bar (top 0 on phones) with the title in title-lg ink, the count in 13px mono ink, and Filters, Sort (from `sm`) and the toggle. It sits in the page's flow with a -56px margin and stays transparent, inert and click-through until the display title leaves (not `visibility`, which its buttons would transition along with it).
+- **Compact head:** a 56px light-glass strip sticky under the top bar (at every width) with the title in title-lg ink, the count in 13px mono ink, and Filters, Sort (from `sm`) and the toggle. It sits in the page's flow with a -56px margin and stays transparent, inert and click-through until the display title leaves (not `visibility`, which its buttons would transition along with it).
 - **Motion (GSAP 3: ScrollTrigger, Flip, CustomEase, `@gsap/react`; round 2, approved 2026-11-15):** every move takes an object from where it was to where it lands, in 220–420ms, and never blocks a click. Eases: `out` `cubic-bezier(.23,1,.32,1)` for arrivals, `glide` `cubic-bezier(.32,.72,0,1)` for moves, `panel` `cubic-bezier(.45,0,.25,1)` for the rail highlight.
   - M1 title collapse: as the page scrolls, the 72px title shrinks and slides into the compact head's 22px title (scrubbed with 0.3s smoothing, from the title's top reaching the top bar to its bottom + 24px), then crossfades into it over the last quarter while the compact head's glass (a layer of its own) and its count and controls fade in; the big head's controls fade out first, between 30% and 65%, so nothing shows through the glass. The folders recede one by one (scale 0.94, rise 16px, fade, staggered). The compact head is inert and click-through until 80%. Reduced motion: nothing scrubs or scales; the compact head switches on with a 150ms fade where the title leaves.
   - M2 folder → References: clicking the References folder grows its name into the page title and flies its visible sheets into the first cards' screenshot frames (420ms `glide`); the other folders fade and shrink to 0.97 (150ms); the remaining cards rise 12px in (300ms `out`, 35ms stagger, from 120ms), the landed cards' captions fade in at 200ms, the crumbs, count, controls and rail fade in. A click or a key finishes it at once, and the page title takes focus. The list opens from rows already loaded (the real fetch still runs); if it isn't drawn within 300ms the page rises in instead. Back (the title at rest, scrolled less than 40px) shrinks the title into the folder's name (380ms) while the folders make their own entrance, and focus returns to the folder. The References folder shows its four most recent items, newest at the front. Other folders fade the page out (140ms). Reduced motion: 200ms fade in.
   - M3 filter reflow: a facet toggle fades and shrinks the cards that won't match (160ms, 20ms stagger); the staying cards glide to their new places from 80ms after the toggle (340ms `glide`) and new ones arrive from 180ms, from 0.96 and 8px below (260ms `out`, 40ms stagger, at most six animated); a list that arrives later starts them at once. Only cards in the viewport animate; a toggle mid-move starts from where they are; typing in search never animates. Reduced motion: a 150ms fade of the grid.
   - M4 grid ↔ list: each screenshot frame morphs into its row's 64×40 thumbnail and back (380ms `glide`); the words fade in from 260ms (160ms); the first visible item keeps its place. Reduced motion: a 150ms fade.
   - D1: in the rail's View and Sort lists the surface-raised highlight slides to the picked row (270ms `panel`); until it is placed the picked row keeps its own fill. D2: the counts roll up or down to the new number (220ms; the live region and the pill's label carry the words). D3: on pointer devices a card lifts 2px on hover (200ms), not while cards move and not with reduced motion. D4: on first load the head rises 8px (180ms) and the cards on screen rise 12px (300ms, 35ms stagger).
-  - While the rail pages are open, `scroll-padding-top` is the top bar plus 72px (72px on phones), so keyboard focus never lands under the sticky chrome; focus inside the compact head as it hides moves to the page title.
+  - While the rail pages are open, `scroll-padding-top` is the top bar plus 72px, so keyboard focus never lands under the sticky chrome; focus inside the compact head as it hides moves to the page title.
   - GSAP moves wrappers only: the title, the folder wrappers, the card cells and the screenshot frames. It reads the folder's sheets but never animates them, and never touches the screenshot inside a frame. The folder's own fan and the card's screenshot scroll stay CSS; the grid ignores the pointer while a Flip runs.
 
 ### Page header — `components/library-view.tsx`

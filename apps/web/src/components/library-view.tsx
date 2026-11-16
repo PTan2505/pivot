@@ -44,7 +44,6 @@ import {
   assetUrl,
   useCollectionCovers,
   useCollections,
-  useCounts,
   useResource,
   usePrimeResources,
   useResources,
@@ -266,7 +265,6 @@ export function LibraryView({
     collection: collectionId ?? (params.collection || undefined),
     trash: mode === "trash",
   });
-  const { data: counts } = useCounts();
   const { data: allCollections = [] } = useCollections();
   const collectionName = allCollections.find((c) => c.id === params.collection)?.name;
 
@@ -451,18 +449,6 @@ export function LibraryView({
       </PopoverContent>
     </Popover>
   );
-  const inboxButton = library &&
-    !params.review &&
-    (counts?.inbox ?? 0) + (counts?.suggestions ?? 0) > 0 &&
-    !actions && (
-      <Button variant="secondary" onClick={() => set({ review: "needs", type: undefined, section: "library" })}>
-        Inbox
-        <span className="font-mono text-xs text-ink-secondary tabular-nums">
-          {(counts?.inbox ?? 0) + (counts?.suggestions ?? 0)}
-        </span>
-      </Button>
-    );
-
   return (
     <div ref={pageRef} className="flex min-h-full flex-col">
       {rail && (
@@ -472,7 +458,7 @@ export function LibraryView({
           ref={compactRef}
           data-condensing-head
           inert
-          className="pointer-events-none sticky top-0 isolate z-30 -mb-14 flex h-14 items-center gap-3 px-4 opacity-0 [--ink-muted:var(--ink)] [--ink-secondary:var(--ink)] [--ink-subtle:var(--ink)] md:top-(--topbar-h) md:px-10 [&_*]:scroll-mt-[calc(-1*var(--rail-pad,0px))]"
+          className="pointer-events-none sticky top-(--topbar-h) isolate z-30 -mb-14 flex h-14 items-center gap-3 px-4 opacity-0 [--ink-muted:var(--ink)] [--ink-secondary:var(--ink)] [--ink-subtle:var(--ink)] md:px-10 [&_*]:scroll-mt-[calc(-1*var(--rail-pad,0px))]"
         >
           <div ref={glassRef} aria-hidden className="glass absolute inset-0 -z-10" />
           <span
@@ -526,7 +512,6 @@ export function LibraryView({
             )}
             <div ref={controlsRef} data-arrive className="ml-auto flex flex-wrap items-center gap-2 pb-1">
               {filtersButton}
-              {inboxButton}
               {sortSelect}
               {viewToggle}
             </div>
@@ -598,19 +583,6 @@ export function LibraryView({
               <p className="pb-2.5 text-base text-ink-muted">
                 Quick saves waiting to be organised. They are searchable already; select some and mark them reviewed.
               </p>
-            )}
-            {library && !params.review && (counts?.inbox ?? 0) + (counts?.suggestions ?? 0) > 0 && !actions && (
-              <div className="ml-auto pb-1">
-                <Button
-                  variant="secondary"
-                  onClick={() => set({ review: "needs", type: undefined, section: "library" })}
-                >
-                  Inbox
-                  <span className="font-mono text-xs text-ink-secondary tabular-nums">
-                    {(counts?.inbox ?? 0) + (counts?.suggestions ?? 0)}
-                  </span>
-                </Button>
-              </div>
             )}
             {actions && <div className="ml-auto flex flex-wrap items-center gap-2 pb-1">{actions}</div>}
           </div>

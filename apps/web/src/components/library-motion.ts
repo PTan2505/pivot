@@ -35,10 +35,9 @@ function eases() {
 
 export const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-/** The pinned top bar's height from md up (the app shell measures it into --topbar-h); on phones it isn't pinned. */
+/** The top bar's height: it is pinned at every width, and the top bar measures it into --topbar-h. */
 function topbar() {
-  if (!window.matchMedia("(min-width: 48rem)").matches) return 0;
-  return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--topbar-h")) || 76;
+  return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--topbar-h")) || 72;
 }
 
 function inView(el: Element) {
