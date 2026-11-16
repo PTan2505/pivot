@@ -167,8 +167,9 @@ There is no separate motion approval: the user approves the direction **and** it
 
 - **Exception.** If an essential item can't be previewed, say which one, why, and what the user would approve
   instead, in the gate-2 message itself (not as an extra step), and ask once. Only an explicit yes counts: the user
-  adds `Exception (owner): "<their words>" — essentials not previewed: <list>` to their approval note in PIVOT. You
-  can't record an approval. Without a preview or that yes, don't build:
+  adds `Exception (owner): "<their words>" — essentials not previewed: <list>` to their approval note in PIVOT, or
+  you quote it in the `note` of `record_chat_approval` when they approve in the chat. Without a preview or that yes,
+  don't build:
   don't call `set_design_status` with `building`.
 - An approval made in PIVOT counts for motion only when the user could see the preview (the version itself, or the
   local preview of the version they approved) and the note doesn't reject the motion. A static version or its

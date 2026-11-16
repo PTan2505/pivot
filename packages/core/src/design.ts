@@ -166,12 +166,12 @@ async function approvalState(sessionId: string) {
         mockupDigest: designDecisions.mockupDigest,
       })
       .from(designDecisions)
-      // only the owner's approvals count: an approval is the owner's decision, made in PIVOT with the owner passphrase
+      // the user's approvals count: made in PIVOT with the owner passphrase, or in the chat (recorded with their words)
       .where(
         and(
           eq(designDecisions.sessionId, sessionId),
           eq(designDecisions.kind, "approval"),
-          eq(designDecisions.source, "owner"),
+          inArray(designDecisions.source, ["owner", "chat"]),
         ),
       )
   ).map((a) => ({ ...a, at: big(a.at)! }));
@@ -339,7 +339,7 @@ export async function recordDesignDecision(input: {
   summary: string;
   direction?: string;
   details?: string;
-  /** "owner" when the user approved in PIVOT; the agent's records are "agent". */
+  /** "owner" when the user approved in PIVOT, "chat" when they approved in the chat; the agent's other records "agent". */
   source?: DesignDecisionSource;
   mockupId?: string;
   mockupDigest?: string;
@@ -348,10 +348,11 @@ export async function recordDesignDecision(input: {
   const [s] = await db.select().from(designSessions).where(eq(designSessions.id, input.sessionId)).limit(1);
   if (!s) throw new DesignError(`No design session ${input.sessionId}.`);
   if (input.mockupDigest && !input.mockupId) throw new DesignError("mockupDigest needs the mockupId it belongs to.");
-  // An approval is the owner's alone (approveDesignMockup, after the owner passphrase): an agent can't record one.
-  if (input.kind === "approval" && input.source !== "owner")
+  // An approval is the user's: in PIVOT (approveDesignMockup, after the owner passphrase) or in the chat (approveInChat,
+  // with their words). An agent's own record is never one.
+  if (input.kind === "approval" && input.source !== "owner" && input.source !== "chat")
     throw new DesignError(
-      "Approvals are the owner's: ask the user to approve the version in PIVOT (Approve this version, with the owner passphrase). An agent can't record one.",
+      "Approvals are the user's: they approve in PIVOT (Approve this version) or in the chat (record_chat_approval, with their words).",
     );
   if (input.kind === "approval" && !input.mockupId) {
     // Once a session has mockups in PIVOT, an approval names the version approved (a mix names the version it starts
@@ -708,4 +709,56 @@ export async function approveAsOwner(input: {
     },
   });
   return approveDesignMockup(input.mockupId, input.note ?? "", input.digest, { sessionId: input.sessionId });
+}
+
+export const CHAT_APPROVAL_LIMITS = { words: 2000, note: 10_000 } as const;
+
+/**
+ * The user approved a version in the chat, and the agent records it: an `approval` with source "chat", the user's words
+ * quoted as given, bound to the version's digest when the session has mockups. It counts like an approval made in
+ * PIVOT. PIVOT can't check that the words are the user's: the owner chose this (2026-11-15) knowing the gate then rests
+ * on the agent's honesty. Only while the session is exploring.
+ */
+export async function approveInChat(input: {
+  sessionId: string;
+  userWords: string;
+  mockupId?: string;
+  mockupDigest?: string;
+  note?: string;
+}) {
+  const words = String(input.userWords ?? "").trim();
+  if (!words) throw new DesignError("Quote the user's own words that approve the version (userWords).");
+  if (words.length > CHAT_APPROVAL_LIMITS.words)
+    throw new DesignError(`Quote at most ${CHAT_APPROVAL_LIMITS.words} characters of the user's words.`);
+  const note = String(input.note ?? "")
+    .trim()
+    .slice(0, CHAT_APPROVAL_LIMITS.note);
+  const db = await getDb();
+  const [s] = await db.select().from(designSessions).where(eq(designSessions.id, input.sessionId)).limit(1);
+  if (!s) throw new DesignError(`No design session ${input.sessionId}.`);
+  if (s.status !== "exploring")
+    throw new DesignError(`The session is ${s.status}. A version can be approved while the session is exploring.`);
+  let direction = "the direction in the latest brief";
+  if (input.mockupId) {
+    const [m] = await db
+      .select(MOCKUP_COLUMNS)
+      .from(designMockups)
+      .where(eq(designMockups.id, input.mockupId))
+      .limit(1);
+    if (!m || m.sessionId !== input.sessionId)
+      throw new DesignError("That version isn't one of this session's mockups.");
+    if (!input.mockupDigest) throw new DesignError("Pass the version's digest (mockupDigest) the user approved.");
+    direction = `Version ${m.n}: ${m.title} (round ${m.round})`;
+  }
+  const id = await recordDesignDecision({
+    sessionId: input.sessionId,
+    kind: "approval",
+    summary: `The user approved ${input.mockupId ? direction.replace(/^Version/, "version") : direction} in the chat (recorded by the agent with their words).`,
+    direction,
+    details: `The user's words: "${words}"${note ? `\n\n${note}` : ""}`,
+    source: "chat",
+    mockupId: input.mockupId,
+    mockupDigest: input.mockupDigest,
+  });
+  return { id, sessionId: input.sessionId };
 }

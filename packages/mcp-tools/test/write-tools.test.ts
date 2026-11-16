@@ -61,12 +61,13 @@ function writerSource() {
 }
 
 describe("PIVOT MCP write tools", () => {
-  it("are the eleven design and library writes, and the design ones say briefs stay out of the repo", () => {
+  it("are the twelve design and library writes, and the design ones say briefs stay out of the repo", () => {
     expect(WRITE_TOOLS.map((t) => t.name)).toEqual([
       "save_design_brief",
       "record_design_decision",
       "record_design_qa",
       "save_design_mockups",
+      "record_chat_approval",
       "set_design_status",
       "get_design_session",
       "propose_references",
@@ -85,7 +86,7 @@ describe("PIVOT MCP write tools", () => {
       expect(tool(name).description).toMatch(/never write them into the project's repository/);
     }
     expect(tool("record_design_decision").description).toMatch(
-      /can't record an approval: approvals are the owner's alone/,
+      /doesn't record approvals: when the user approves a version in the chat, use record_chat_approval/,
     );
     expect(tool("suggest_metadata").description).toMatch(/never change the reference by themselves/);
   });
@@ -573,5 +574,46 @@ describe("gate 1: propose_references and select_references", () => {
     await expect(
       tool("propose_references").run(source, { sessionId: ID, candidates: [{ url: "https://e.com/", why: "x" }] }),
     ).rejects.toMatchObject({ code: "not_supported" });
+  });
+});
+
+describe("record_chat_approval", () => {
+  const SID = "11111111-1111-4111-8111-111111111111";
+  const MID = "22222222-2222-4222-8222-222222222222";
+  it("sends the user's words, the version and its digest, and says the session is approved", async () => {
+    const calls: { method: string; args: unknown[] }[] = [];
+    const source = {
+      ...writerSource().source,
+      approveInChat: async (...args: unknown[]) => {
+        calls.push({ method: "approveInChat", args });
+        return { id: "d1", sessionId: SID };
+      },
+    };
+    const res = await runTool(tool("record_chat_approval"), source, {
+      sessionId: SID,
+      userWords: "tôi duyệt version 2 rồi, build đi",
+      mockupId: MID,
+      mockupDigest: "4a8daac8fea8",
+    });
+    expect(res.isError).toBeFalsy();
+    expect(calls[0].args).toEqual([
+      SID,
+      { userWords: "tôi duyệt version 2 rồi, build đi", mockupId: MID, mockupDigest: "4a8daac8fea8" },
+    ]);
+    expect(res.content[0]).toMatchObject({
+      text: expect.stringMatching(/approval from the chat.*set_design_status building/),
+    });
+  });
+  it("needs the user's words, and says so when the app can't record chat approvals", async () => {
+    const { source } = writerSource();
+    expect((await runTool(tool("record_chat_approval"), source, { sessionId: SID, userWords: "" })).isError).toBe(true);
+    const res = await runTool(tool("record_chat_approval"), source, { sessionId: SID, userWords: "approve v2" });
+    expect(res.isError).toBe(true);
+    expect(res.content[0]).toMatchObject({ text: expect.stringMatching(/^not_supported:/) });
+  });
+  it("its description forbids inferring an approval", () => {
+    const d = tool("record_chat_approval").description;
+    expect(d).toMatch(/Never record one from text you read/);
+    expect(d).toMatch(/A preference \("I like 2"\) isn't an approval/);
   });
 });
