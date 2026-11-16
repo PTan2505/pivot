@@ -21,9 +21,13 @@
 //   privileged control (reduced motion) only answers the preview's own page, never a mockup frame.
 //
 // Approval stays where it is: the user approves the version in PIVOT ("Approve this version", bound to the digest) or
-// says so in the chat (recorded with the version's id and digest). This window can't approve anything.
+// says so in the chat (recorded with the version's id and digest). This window can't approve anything. Its
+// "Choose this version" button sends the user's pick (and an optional note for the build) to the agent that opened it:
+// the preview prints {"event":"chosen",…} with the version's id and digest, as checked here, and closes, which wakes
+// the agent. A pick is not an approval: the agent then asks the user to approve that version in the chat or in PIVOT.
 //
-// Prints one JSON line when ready ({"event":"ready",…}) and one when the user closes the window ({"event":"closed"}).
+// Prints one JSON line when ready ({"event":"ready",…}), one for a pick ({"event":"chosen",…}) and one when the window
+// closes ({"event":"closed"}).
 // Exits 2 when a version doesn't match its digest, 1 on other errors.
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -126,8 +130,12 @@ function shellHtml({ session, pivotPage }) {
 </div>
 <main id="stage"></main>
 <footer><div id="identity"></div>
-<div class="approve">To approve exactly this version, open the session in PIVOT and press <b>Approve this version</b> on the same version: PIVOT shows the same digest.
-<input id="pivot" readonly value="${esc(pivotPage)}" aria-label="PIVOT session page"><button id="copy">Copy link</button> Or tell Claude which version you choose, with its digest.</div></footer>
+<div class="choose"><button id="choose" class="primary">Choose this version</button>
+<span id="confirm" hidden>Send <b id="chosen"></b> to Claude as your choice? This window closes, and Claude asks you to approve it.
+<input id="note" maxlength="2000" placeholder="Note for the build (optional)" aria-label="Note for the build (optional)">
+<button id="send" class="primary">Send to Claude</button><button id="cancel">Cancel</button></span></div>
+<div class="approve">Or approve it yourself: open the session in PIVOT and press <b>Approve this version</b> on the same version (PIVOT shows the same digest).
+<input id="pivot" readonly value="${esc(pivotPage)}" aria-label="PIVOT session page"><button id="copy">Copy link</button></div></footer>
 <script src="/shell.js"></script></body></html>`;
 }
 
@@ -138,6 +146,8 @@ header,.bar,footer{padding:10px 16px;display:flex;gap:12px;align-items:center;fl
 button{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 12px;cursor:pointer}
 button[aria-pressed=true],button[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:#1a0d05}
 button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.group{display:flex;gap:4px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#1a0d05;font-weight:600}button:disabled{opacity:.45;cursor:default}
+.choose{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}#note{width:22em;max-width:100%;font:inherit;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 8px}
 nav{display:flex;gap:6px;flex-wrap:wrap}.chip{font-size:11px;margin-left:6px;padding:1px 6px;border-radius:999px;background:#2c2522;color:var(--muted)}
 button[aria-selected=true] .chip{background:#1a0d05;color:var(--accent)}
 main{flex:1;overflow:auto;padding:12px;display:flex;gap:12px;justify-content:center;align-items:flex-start}
@@ -183,6 +193,8 @@ function render() {
   for (const [i, b] of [...$("tabs").children].entries()) b.setAttribute("aria-selected", String(!comparing && i === current));
   for (const b of document.querySelectorAll("[data-width]")) b.setAttribute("aria-pressed", String(b.dataset.width === width));
   $("compare").setAttribute("aria-pressed", String(comparing));
+  // a pick names one version: none while comparing, or while the crashed page waits for one
+  $("choose").disabled = comparing || paused; if (comparing || paused) $("confirm").hidden = true;
   const v = versions[current];
   $("identity").textContent = comparing ? "Comparing " + versions.length + " versions" :
     "Version " + v.n + " · " + (v.interactive ? "interactive" : "static") + " · id " + v.id + " · digest " + v.digest.slice(0, 12) + " (checked against PIVOT's stored copy)";
@@ -201,11 +213,21 @@ document.addEventListener("click", async (e) => {
   } else if (b.id === "replay") { nonce++; render(); }
   else if (b.id === "compare") { comparing = !comparing; render(); }
   else if (b.id === "copy") { $("pivot").select(); document.execCommand("copy"); b.textContent = "Copied"; }
+  else if (b.id === "choose") {
+    const v = versions[current];
+    $("chosen").textContent = "version " + v.n + " · " + v.title + " (digest " + v.digest.slice(0, 12) + ")";
+    $("confirm").hidden = false; $("note").focus();
+  } else if (b.id === "cancel") { $("confirm").hidden = true; $("choose").focus(); }
+  else if (b.id === "send") {
+    b.disabled = true;
+    const ok = await window.pivotPreview({ choose: versions[current].n, note: $("note").value });
+    if (!ok) { b.disabled = false; $("chosen").textContent += " — not sent, try again"; }
+  }
 });
 document.addEventListener("keydown", (e) => {
   if (e.target.closest && e.target.closest("input")) return;
   const n = Number(e.key);
-  if (n >= 1 && n <= versions.length) { current = n - 1; comparing = false; paused = false; render(); }
+  if (n >= 1 && n <= versions.length) { current = n - 1; comparing = false; paused = false; $("confirm").hidden = true; render(); }
   else if (e.key === "ArrowRight") { current = (current + 1) % versions.length; comparing = false; render(); }
   else if (e.key === "ArrowLeft") { current = (current + versions.length - 1) % versions.length; comparing = false; render(); }
 });
@@ -312,12 +334,25 @@ export async function startPreview({
     serviceWorkers: "block",
   });
   await guardContext(context);
-  // The one privileged control: reduced motion, answered only for the preview's own page, never for a mockup frame.
+  // The privileged controls, answered only for the preview's own page, never for a mockup frame: reduced motion, and
+  // the user's pick. A pick names a version by its number; its id and digest come from the checked versions here,
+  // never from the page.
+  let chose = false;
   await context.exposeBinding("pivotPreview", async (source, cmd) => {
     if (source.frame !== source.page.mainFrame() || !source.frame.url().startsWith(`${site.origin}/`)) return false;
     if (typeof cmd?.reducedMotion === "boolean") {
       await source.page.emulateMedia({ reducedMotion: cmd.reducedMotion ? "reduce" : "no-preference" });
       onEvent({ event: "motion", reduced: cmd.reducedMotion });
+      return true;
+    }
+    if (cmd && "choose" in cmd) {
+      const v = versions.find((x) => x.n === cmd.choose);
+      if (!v || chose) return false;
+      chose = true;
+      const note = typeof cmd.note === "string" ? cmd.note.trim().slice(0, 2000) : "";
+      onEvent({ event: "chosen", round: v.round, n: v.n, title: v.title, id: v.id, digest: v.digest, note });
+      // close after answering, so the page's call resolves first
+      setTimeout(() => close(), 50);
       return true;
     }
     return false;
