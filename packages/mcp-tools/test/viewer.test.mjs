@@ -1,5 +1,6 @@
 // The local mockup viewer (.claude/skills/pivot-design/viewer/make-viewer.mjs): what it inlines, removes and allows.
 // Browser behaviour (sandbox, policy, navigation) is checked by scripts/qa/preview-checks.mjs viewer.
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -7,8 +8,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const skillDir = path.resolve(here, "../../../.claude/skills/pivot-design");
 const { buildViewer, inlineMockup, versionPolicy, versionSandbox } = await import(
-  pathToFileURL(path.resolve(here, "../../../.claude/skills/pivot-design/viewer/make-viewer.mjs")).href
+  pathToFileURL(path.join(skillDir, "viewer/make-viewer.mjs")).href
 );
 
 const dirs = [];
@@ -147,5 +149,24 @@ describe("buildViewer", () => {
 
   it("refuses a folder without mockups", () => {
     expect(() => buildViewer(folder({ "x.html": "" }))).toThrow(/No mockup-\*\.html/);
+  });
+});
+
+describe("make-viewer.mjs as a command", () => {
+  // `pnpm skill:install` links ~/.claude/skills/pivot-design to the repo folder, and agents run the documented
+  // `node ~/.claude/skills/pivot-design/viewer/make-viewer.mjs <folder>`: argv[1] is then the linked path while
+  // import.meta.url is the real one. The script must still run, not exit 0 having done nothing.
+  it("writes index.html when run through a symlink to the skill folder", () => {
+    const dir = folder({
+      "mockup-1-a.html": "<title>A</title><p>a</p>",
+      "mockup-2-b.html": "<title>B</title><p>b</p>",
+    });
+    const skills = folder({});
+    fs.symlinkSync(skillDir, path.join(skills, "pivot-design"), "dir");
+    const linked = path.join(skills, "pivot-design", "viewer", "make-viewer.mjs");
+    const out = execFileSync(process.execPath, [linked, dir, "--title", "Symlinked"], { encoding: "utf8" });
+    expect(out).toContain("(2 versions)");
+    const page = fs.readFileSync(path.join(dir, "index.html"), "utf8");
+    expect(page).toContain("Symlinked");
   });
 });
