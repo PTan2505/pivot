@@ -165,6 +165,24 @@ describe("steps stay in order", () => {
   });
 });
 
+describe("mockups are described as they look", () => {
+  it("pivot-design describes each version from its rest state, with measures and triggers", () => {
+    expect(d).toContain("Describe each version by what it shows, state by state");
+    expect(d).toContain("**Start from the rest state:**");
+    expect(d).toContain("A verb alone");
+    expect(d).toContain("PIVOT's session page shows the rest state only");
+  });
+});
+
+describe("the watcher belongs to the session the user talks to", () => {
+  it("pivot-design starts the watcher itself when another agent made the mockups", () => {
+    expect(d).toContain("**The session the user talks to owns the watcher.**");
+    expect(d).toContain("its watcher ends with it and can't wake you");
+    expect(d).toContain("Never end the turn that asks for the approval without a running watcher");
+    expect(spec).toContain("Watcher thuộc về phiên đang nói chuyện với người dùng");
+  });
+});
+
 describe("a pick from the interactive preview", () => {
   it("pivot-design treats Choose this version as a pick, then asks before recording a chat approval", () => {
     expect(d).toContain("**Choose this version** in the preview sends the user's pick to you");
