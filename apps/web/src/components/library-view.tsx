@@ -1,11 +1,29 @@
 "use client";
 
-import { LayoutGrid, List, X } from "lucide-react";
+import { LayoutGrid, List, SlidersHorizontal, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { RESOURCE_TYPES, SOURCE_CATEGORIES, TYPE_DEFS, type ResourceDTO, type ResourceType } from "@pivot/core/types";
+import {
+  RESOURCE_TYPES,
+  SOURCE_CATEGORIES,
+  TAG_KIND_LABELS,
+  TYPE_DEFS,
+  type CollectionDTO,
+  type ResourceDTO,
+  type ResourceType,
+} from "@pivot/core/types";
 import { Breadcrumbs, typeCrumbs, type Crumb } from "@/components/breadcrumbs";
 import { FolderShelf } from "@/components/folder-shelf";
+import { FacetRail, LandingRail, type LandingShow } from "@/components/library-rail";
+import {
+  openFolder as openFolderMotion,
+  refreshScroll,
+  useCondensingHead,
+  useEntrance,
+  useFilterFlip,
+  useRoll,
+  useViewMorph,
+} from "@/components/library-motion";
 import { ResourceCard, ResourceRow } from "@/components/resource-card";
 import { SelectionBar } from "@/components/selection-bar";
 import { ExternalResults, ScopeSwitch } from "@/components/external-search";
@@ -17,11 +35,20 @@ import { TagPills } from "@/components/tag-pills";
 import { TypeIcon } from "@/components/type-icon";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useLibraryParams } from "@/hooks/use-library-params";
-import { assetUrl, useCollections, useResource, useResources } from "@/lib/api";
+import {
+  assetUrl,
+  useCollectionCovers,
+  useCollections,
+  useResource,
+  usePrimeResources,
+  useResources,
+  useTags,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { hostOf } from "@/components/resource-card";
 
@@ -87,6 +114,73 @@ function TypeShelf({ types, items }: { types: readonly ResourceType[]; items: Re
         };
       })}
     />
+  );
+}
+
+/**
+ * The Library landing's shelf in the "Index rail" layout: a glass folder for each type that holds something and for each
+ * collection, holding what's listed below. Empty types stay in the rail. Opening one fades the page out first (M3).
+ */
+function RailShelf({
+  types,
+  items,
+  collections,
+  onOpen,
+}: {
+  types: readonly ResourceType[];
+  items: ResourceDTO[];
+  collections: CollectionDTO[];
+  onOpen: (href: string, folderId: string, ids: string[]) => void;
+}) {
+  const covers = useCollectionCovers(collections.map((c) => c.id));
+  const sheet = (r: ResourceDTO) => ({
+    id: r.id,
+    name: r.title,
+    meta: hostOf(r.sourceUrl) ?? undefined,
+    image: r.coverAssetId ? assetUrl(r.coverAssetId, { thumb: true }) : undefined,
+  });
+  const folders = [
+    ...types
+      .map((t) => ({ t, list: items.filter((r) => r.type === t) }))
+      .filter(({ list }) => list.length)
+      .map(({ t, list }) => ({
+        id: `type-${t}`,
+        label: TYPE_DEFS[t].plural,
+        meta: `${list.length} item${list.length === 1 ? "" : "s"}`,
+        // the folder shows its last four files, newest at the front: the four most recent, so opening References
+        // lands them on its first cards
+        items: list.slice(0, 4).reverse().map(sheet),
+        activate: () =>
+          onOpen(
+            `/?type=${t}`,
+            `type-${t}`,
+            list
+              .slice(0, 4)
+              .reverse()
+              .map((r) => r.id),
+          ),
+      })),
+    ...collections
+      .filter((c) => c.count > 0)
+      .map((c) => ({
+        id: `collection-${c.id}`,
+        label: c.name,
+        meta: `${c.count} item${c.count === 1 ? "" : "s"}`,
+        items: (covers[collections.indexOf(c)]?.data ?? []).map(sheet),
+        activate: () => onOpen(`/collections/${c.id}`, `collection-${c.id}`, []),
+      })),
+  ];
+  return <FolderShelf label="Folders" folders={folders} />;
+}
+
+/** D2: a count that rolls to its new value (the live region and the pill's label carry the words). */
+function Rolling({ n }: { n: number }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useRoll(ref, n);
+  return (
+    <span ref={ref} className="inline-grid overflow-hidden align-bottom">
+      <span className="[grid-area:1/1]">{n}</span>
+    </span>
   );
 }
 
@@ -232,204 +326,504 @@ export function LibraryView({
     ? `${items.length} ${mode === "trash" ? "in trash" : items.length === 1 ? "item" : "items"}${params.q ? ` matching “${params.q}”` : ""}`
     : undefined;
 
+  // "Index rail" (approved 2026-11-15): the Library landing and the References list get a page-level filter rail, one
+  // head band, a compact head while scrolling and GSAP motion. Other sections, collections and the trash keep theirs.
+  const rail =
+    library && params.section.id === "library" && (!params.type || params.type === "reference") && !params.review;
+  const landing = rail && !params.type && !params.via && !params.url && !searching;
+  const [show, setShow] = useState<LandingShow>("all");
+  const router = useRouter();
+  const { data: allTags = [] } = useTags();
+  const pageRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const shelfRef = useRef<HTMLDivElement>(null);
+  const compactRef = useRef<HTMLDivElement>(null);
+  const compactTitleRef = useRef<HTMLSpanElement>(null);
+  const glassRef = useRef<HTMLDivElement>(null);
+  const chromeRef = useRef<HTMLDivElement>(null);
+  const controlsRef = useRef<HTMLDivElement>(null);
+  useCondensingHead(
+    {
+      title: titleRef,
+      compact: compactRef,
+      compactTitle: compactTitleRef,
+      glass: glassRef,
+      chrome: chromeRef,
+      controls: controlsRef,
+      shelf: shelfRef,
+    },
+    // rebuilt only when the page changes; other layout changes just re-measure (a rebuild would hide the head)
+    [rail, landing, !!items],
+  );
+  useEffect(() => {
+    if (rail) refreshScroll();
+  }, [rail, show, params.view, items?.length]);
+  useEntrance(pageRef, titleRef, `${params.section.id}:${params.type ?? ""}`, !!items, rail);
+  const { grid: gridRef, capture: captureFlip } = useFilterFlip(items);
+  const { list: listRef, morph: morphView } = useViewMorph(params.view);
+  const prime = usePrimeResources();
+  const openFolder = (href: string, folderId: string, ids: string[]) => {
+    // References opens from what is already loaded (sorted the same way); the real fetch still runs
+    if (folderId === "type-reference" && params.sort === "updated" && items)
+      prime(
+        { type: "reference", sort: "updated" },
+        items.filter((r) => r.type === "reference"),
+      );
+    openFolderMotion(pageRef, shelfRef.current, folderId, ids, () => router.push(href));
+  };
+  // M2: a facet toggle animates the cards that stay; the test below says which ones will
+  const toggleTag = (id: string) => {
+    const next = params.tags.includes(id) ? params.tags.filter((x) => x !== id) : [...params.tags, id];
+    const byId = new Map(items?.map((r) => [r.id, r]));
+    captureFlip((rid) => {
+      const r = byId.get(rid);
+      return !!r && next.every((t) => r.tags.some((x) => x.id === t));
+    });
+    set({ tags: next });
+  };
+  const changeView = (v: string) => {
+    if (v !== "grid" && v !== "list") return;
+    if (rail) morphView(() => set({ view: v }));
+    else set({ view: v });
+  };
+  const folderCount = landing
+    ? params.section.types.filter((t) => items?.some((r) => r.type === t)).length +
+      allCollections.filter((c) => c.count > 0).length
+    : 0;
+
+  const sortSelect = (
+    <Select value={params.sort} onValueChange={(v) => set({ sort: v as typeof params.sort })}>
+      <SelectTrigger size="sm" className="w-[176px]" aria-label="Sort">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="updated">Recently edited</SelectItem>
+        <SelectItem value="created">Newest first</SelectItem>
+        <SelectItem value="oldest">Oldest first</SelectItem>
+        <SelectItem value="title">Title A–Z</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+  const viewToggle = (
+    <ToggleGroup
+      type="single"
+      variant="outline"
+      size="sm"
+      spacing={1}
+      value={params.view}
+      onValueChange={changeView}
+      aria-label="Layout"
+    >
+      <ToggleGroupItem value="grid" aria-label="Grid view">
+        <LayoutGrid />
+      </ToggleGroupItem>
+      <ToggleGroupItem value="list" aria-label="List view">
+        <List />
+      </ToggleGroupItem>
+    </ToggleGroup>
+  );
+  const railContent = landing ? (
+    <LandingRail
+      types={params.section.types}
+      items={items}
+      collections={allCollections}
+      folderCount={folderCount}
+      show={show}
+      onShow={setShow}
+      sort={params.sort}
+      onSort={(sort) => set({ sort })}
+    />
+  ) : (
+    <FacetRail items={items} selected={params.tags} onToggle={toggleTag} />
+  );
+  // Below lg the rail moves into a popover behind a "Filters (n)" pill.
+  const filtersButton = (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="secondary" size="sm" className="lg:hidden">
+          <SlidersHorizontal aria-hidden /> {params.tags.length ? `Filters (${params.tags.length})` : "Filters"}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="max-h-[70vh] w-72 overflow-y-auto p-3">
+        {railContent}
+      </PopoverContent>
+    </Popover>
+  );
   return (
-    <div className="flex min-h-full flex-col">
-      <section className="flex flex-col gap-6 px-4 pt-8 pb-2 md:px-10 md:pt-10">
-        {trail.length > 1 && <Breadcrumbs items={trail} />}
-        <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
-          <h1 className="text-[clamp(44px,6vw,72px)] leading-[0.96] font-medium tracking-[-0.045em] text-balance text-ink">
+    <div ref={pageRef} className="flex min-h-full flex-col">
+      {rail && (
+        // M1: the compact head; the display title collapses into it while the page scrolls (transparent and inert
+        // until then). Its glass is a layer of its own so it can fade in under the title; the text keeps the glass inks.
+        <div
+          ref={compactRef}
+          data-condensing-head
+          inert
+          className="pointer-events-none sticky top-(--topbar-h) isolate z-30 -mb-14 flex h-14 items-center gap-3 px-4 opacity-0 [--ink-muted:var(--ink)] [--ink-secondary:var(--ink)] [--ink-subtle:var(--ink)] md:px-10 [&_*]:scroll-mt-[calc(-1*var(--rail-pad,0px))]"
+        >
+          <div ref={glassRef} aria-hidden className="glass absolute inset-0 -z-10" />
+          <span
+            ref={compactTitleRef}
+            className="min-w-0 truncate text-[22px] leading-[1.2] font-medium tracking-[-0.02em] text-ink"
+          >
             {heading}
-          </h1>
-          {/* Just the number: what's listed right now (it follows search and filters); none when only searching outside. */}
-          {items && scope !== "external" && (
-            <span
-              aria-label={countLabel}
-              title={countLabel}
-              className="mb-2 inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-surface px-3 font-mono text-[14px] text-ink-secondary tabular-nums"
-            >
-              {items.length}
-            </span>
-          )}
-          {subtitle && <p className="pb-2.5 text-base text-ink-muted">{subtitle}</p>}
-          {params.review && (
-            <p className="pb-2.5 text-base text-ink-muted">
-              Quick saves waiting to be organised. They are searchable already; select some and mark them reviewed.
-            </p>
-          )}
-          {actions && <div className="ml-auto flex flex-wrap items-center gap-2 pb-1">{actions}</div>}
-        </div>
-        <TagPills items={items} selected={params.tags} onChange={(tags) => set({ tags })} />
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          {/* In the library the navbar menus pick the type; collections and the trash keep the select. */}
-          {!library && typeChoices.length > 1 && (
-            <TypeSelect types={typeChoices} value={params.type} onChange={(type) => set({ type })} />
-          )}
-          {params.via && <ViaChip sourceId={params.via} onClear={() => set({ via: "" })} />}
-          {params.review && (
-            <FilterChip label="Needs review" clearLabel="Leave the Inbox" onClear={() => set({ review: "" })} />
-          )}
-          {params.collection && !collectionId && (
-            <FilterChip
-              label={`In ${collectionName ?? "collection"}`}
-              clearLabel="Show every collection"
-              onClear={() => set({ collection: "" })}
-            />
-          )}
-          {params.url && (
-            <FilterChip
-              label={`Saved from ${hostOf(params.url) ?? "this page"}`}
-              clearLabel="Show every page"
-              onClear={() => set({ url: "" })}
-            />
-          )}
-          {searching && <ScopeSwitch value={params.scope} onChange={(next) => set({ scope: next })} />}
-          {filtered && (
-            <Button variant="ghost" size="sm" onClick={clearFilters}>
-              <X aria-hidden /> Clear filters
-            </Button>
-          )}
-          <div className="ml-auto flex items-center gap-2">
-            <Select value={params.sort} onValueChange={(v) => set({ sort: v as typeof params.sort })}>
-              <SelectTrigger size="sm" className="w-[176px]" aria-label="Sort">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="updated">Recently edited</SelectItem>
-                <SelectItem value="created">Newest first</SelectItem>
-                <SelectItem value="oldest">Oldest first</SelectItem>
-                <SelectItem value="title">Title A–Z</SelectItem>
-              </SelectContent>
-            </Select>
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              size="sm"
-              spacing={1}
-              value={params.view}
-              onValueChange={(v) => v && set({ view: v as "grid" | "list" })}
-              aria-label="Layout"
-            >
-              <ToggleGroupItem value="grid" aria-label="Grid view">
-                <LayoutGrid />
-              </ToggleGroupItem>
-              <ToggleGroupItem value="list" aria-label="List view">
-                <List />
-              </ToggleGroupItem>
-            </ToggleGroup>
+          </span>
+          <div ref={chromeRef} className="flex min-w-0 flex-1 items-center gap-3">
+            {items && (
+              <span className="font-mono text-[13px] text-ink tabular-nums">
+                <Rolling n={items.length} />
+              </span>
+            )}
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              {filtersButton}
+              {/* phones keep the compact head to one row: Sort stays in the head band above */}
+              <div className="hidden sm:block">{sortSelect}</div>
+              {viewToggle}
+            </div>
           </div>
         </div>
-      </section>
+      )}
+      {rail ? (
+        <section className="flex flex-col gap-4 px-4 pt-8 pb-2 md:px-10 md:pt-10">
+          {trail.length > 1 && (
+            <div data-enter>
+              <Breadcrumbs items={trail} />
+            </div>
+          )}
+          <div data-enter className="flex flex-wrap items-end gap-x-4 gap-y-3">
+            <h1
+              ref={titleRef}
+              tabIndex={-1}
+              className="text-[clamp(44px,6vw,72px)] leading-[0.96] font-medium tracking-[-0.045em] text-balance text-ink"
+            >
+              {/* M2 moves the words, M1 the heading itself */}
+              <span data-morph className="inline-block">
+                {heading}
+              </span>
+            </h1>
+            {items && scope !== "external" && (
+              <span
+                data-arrive
+                aria-label={countLabel}
+                title={countLabel}
+                className="mb-2 inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-surface px-3 font-mono text-[14px] text-ink-secondary tabular-nums"
+              >
+                <Rolling n={items.length} />
+              </span>
+            )}
+            <div ref={controlsRef} data-arrive className="ml-auto flex flex-wrap items-center gap-2 pb-1">
+              {filtersButton}
+              {sortSelect}
+              {viewToggle}
+            </div>
+          </div>
+          {filtered && (
+            <div data-enter role="group" aria-label="Active filters" className="flex flex-wrap items-center gap-2">
+              {params.tags.map((id) => {
+                const t = allTags.find((x) => x.id === id);
+                return (
+                  <FilterChip
+                    key={id}
+                    label={
+                      <>
+                        {t && t.kind !== "tag" && (
+                          <span className="font-normal opacity-70">{TAG_KIND_LABELS[t.kind]}&nbsp;</span>
+                        )}
+                        {t?.name ?? "Tag"}
+                      </>
+                    }
+                    clearLabel={`Remove filter ${t?.name ?? ""}`}
+                    onClear={() => toggleTag(id)}
+                  />
+                );
+              })}
+              {params.via && <ViaChip sourceId={params.via} onClear={() => set({ via: "" })} />}
+              {params.collection && (
+                <FilterChip
+                  label={`In ${collectionName ?? "collection"}`}
+                  clearLabel="Show every collection"
+                  onClear={() => set({ collection: "" })}
+                />
+              )}
+              {params.url && (
+                <FilterChip
+                  label={`Saved from ${hostOf(params.url) ?? "this page"}`}
+                  clearLabel="Show every page"
+                  onClear={() => set({ url: "" })}
+                />
+              )}
+              {searching && <ScopeSwitch value={params.scope} onChange={(next) => set({ scope: next })} />}
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                <X aria-hidden /> Clear filters
+              </Button>
+            </div>
+          )}
+          <p className="sr-only" aria-live="polite">
+            {countLabel}
+          </p>
+        </section>
+      ) : (
+        <section className="flex flex-col gap-6 px-4 pt-8 pb-2 md:px-10 md:pt-10">
+          {trail.length > 1 && <Breadcrumbs items={trail} />}
+          <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+            <h1 className="text-[clamp(44px,6vw,72px)] leading-[0.96] font-medium tracking-[-0.045em] text-balance text-ink">
+              {heading}
+            </h1>
+            {/* Just the number: what's listed right now (it follows search and filters); none when only searching outside. */}
+            {items && scope !== "external" && (
+              <span
+                aria-label={countLabel}
+                title={countLabel}
+                className="mb-2 inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-surface px-3 font-mono text-[14px] text-ink-secondary tabular-nums"
+              >
+                {items.length}
+              </span>
+            )}
+            {subtitle && <p className="pb-2.5 text-base text-ink-muted">{subtitle}</p>}
+            {params.review && (
+              <p className="pb-2.5 text-base text-ink-muted">
+                Quick saves waiting to be organised. They are searchable already; select some and mark them reviewed.
+              </p>
+            )}
+            {actions && <div className="ml-auto flex flex-wrap items-center gap-2 pb-1">{actions}</div>}
+          </div>
+          <TagPills items={items} selected={params.tags} onChange={(tags) => set({ tags })} />
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {/* In the library the navbar menus pick the type; collections and the trash keep the select. */}
+            {!library && typeChoices.length > 1 && (
+              <TypeSelect types={typeChoices} value={params.type} onChange={(type) => set({ type })} />
+            )}
+            {params.via && <ViaChip sourceId={params.via} onClear={() => set({ via: "" })} />}
+            {params.review && (
+              <FilterChip label="Needs review" clearLabel="Leave the Inbox" onClear={() => set({ review: "" })} />
+            )}
+            {params.collection && !collectionId && (
+              <FilterChip
+                label={`In ${collectionName ?? "collection"}`}
+                clearLabel="Show every collection"
+                onClear={() => set({ collection: "" })}
+              />
+            )}
+            {params.url && (
+              <FilterChip
+                label={`Saved from ${hostOf(params.url) ?? "this page"}`}
+                clearLabel="Show every page"
+                onClear={() => set({ url: "" })}
+              />
+            )}
+            {searching && <ScopeSwitch value={params.scope} onChange={(next) => set({ scope: next })} />}
+            {filtered && (
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                <X aria-hidden /> Clear filters
+              </Button>
+            )}
+            <div className="ml-auto flex items-center gap-2">
+              <Select value={params.sort} onValueChange={(v) => set({ sort: v as typeof params.sort })}>
+                <SelectTrigger size="sm" className="w-[176px]" aria-label="Sort">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="updated">Recently edited</SelectItem>
+                  <SelectItem value="created">Newest first</SelectItem>
+                  <SelectItem value="oldest">Oldest first</SelectItem>
+                  <SelectItem value="title">Title A–Z</SelectItem>
+                </SelectContent>
+              </Select>
+              <ToggleGroup
+                type="single"
+                variant="outline"
+                size="sm"
+                spacing={1}
+                value={params.view}
+                onValueChange={(v) => v && set({ view: v as "grid" | "list" })}
+                aria-label="Layout"
+              >
+                <ToggleGroupItem value="grid" aria-label="Grid view">
+                  <LayoutGrid />
+                </ToggleGroupItem>
+                <ToggleGroupItem value="list" aria-label="List view">
+                  <List />
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+          </div>
+        </section>
+      )}
 
-      <div className="flex-1 space-y-6 px-4 pt-6 pb-16 md:px-10">
-        {scope === "external" ? (
-          <ExternalResults query={params.q} />
-        ) : (
-          <>
-            {params.review && <Suggestions />}
-            {params.type === "skill" && library && <SkillSyncPanel />}
-            {params.type === "source" && library && <SourceToolbar />}
-            {library &&
-              !searching &&
-              !params.type &&
-              !params.via &&
-              !params.review &&
-              !params.url &&
-              params.section.types.length > 1 &&
-              items && (
-                <div className="pb-10">
-                  <TypeShelf types={params.section.types} items={items} />
+      <div
+        className={cn(
+          "flex-1 px-4 pt-6 pb-16 md:px-10",
+          rail && "lg:grid lg:grid-cols-[232px_minmax(0,1fr)] lg:items-start lg:gap-10",
+        )}
+      >
+        {rail && (
+          <aside
+            data-arrive
+            className="hidden lg:sticky lg:top-[calc(var(--topbar-h)+72px)] lg:block lg:max-h-[calc(100dvh-var(--topbar-h)-88px)] lg:overflow-y-auto lg:pb-6"
+          >
+            {railContent}
+          </aside>
+        )}
+        <div className="min-w-0 space-y-6">
+          {scope === "external" ? (
+            <ExternalResults query={params.q} />
+          ) : (
+            <>
+              {params.review && <Suggestions />}
+              {params.type === "skill" && library && <SkillSyncPanel />}
+              {params.type === "source" && library && <SourceToolbar />}
+              {landing
+                ? items && (
+                    // hidden rather than removed under View: Items, so the folders don't assemble again on the way back
+                    <div ref={shelfRef} data-enter className="pb-10" hidden={show === "items"}>
+                      <RailShelf
+                        types={params.section.types}
+                        items={items}
+                        collections={allCollections}
+                        onOpen={openFolder}
+                      />
+                    </div>
+                  )
+                : library &&
+                  !searching &&
+                  !params.type &&
+                  !params.via &&
+                  !params.review &&
+                  !params.url &&
+                  params.section.types.length > 1 &&
+                  items && (
+                    <div className="pb-10">
+                      <TypeShelf types={params.section.types} items={items} />
+                    </div>
+                  )}
+              {landing && show !== "folders" && items && items.length > 0 && (
+                <h2 data-enter className="text-[22px] leading-[1.2] font-medium tracking-[-0.02em] text-ink">
+                  All items{" "}
+                  <span className="ml-1 font-mono text-[14px] font-normal text-ink-subtle">{items.length}</span>
+                </h2>
+              )}
+
+              {error && (
+                <div role="alert" className="rounded-[14px] bg-surface p-4 text-sm text-danger">
+                  Could not load the library: {error.message}
                 </div>
               )}
 
-            {error && (
-              <div role="alert" className="rounded-[14px] bg-surface p-4 text-sm text-danger">
-                Could not load the library: {error.message}
-              </div>
-            )}
-
-            {isLoading ? (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] gap-x-6 gap-y-10">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="flex flex-col gap-3">
-                    <Skeleton className="aspect-[16/10] rounded-[14px] bg-surface" />
-                    <Skeleton className="h-4 w-2/3 rounded-full bg-surface" />
+              <div ref={listRef} hidden={landing && show === "folders"}>
+                {isLoading ? (
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] gap-x-6 gap-y-10">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="flex flex-col gap-3">
+                        <Skeleton className="aspect-[16/10] rounded-[14px] bg-surface" />
+                        <Skeleton className="h-4 w-2/3 rounded-full bg-surface" />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : items?.length === 0 ? (
-              <div
-                className={cn("grid place-items-center text-center", scope === "all" && searching ? "py-10" : "py-24")}
-              >
-                {filtered ? (
-                  <div className="flex max-w-sm flex-col items-center gap-3">
-                    <div className="space-y-1">
-                      <p className="text-[16px] font-medium">
-                        {params.q ? `Nothing matches “${params.q}”` : "Nothing matches these filters"}
-                      </p>
-                      <p className="text-sm text-ink-muted">
-                        {params.q && (params.tags.length || params.via)
-                          ? "The search and the filters apply together. Try fewer filters or a different search."
-                          : "Try fewer filters or a different search."}
-                      </p>
-                    </div>
-                    <Button variant="secondary" onClick={clearFilters}>
-                      <X aria-hidden /> Clear filters
-                    </Button>
-                    {searching && scope === "library" && (
-                      <Button variant="ghost" onClick={() => set({ scope: "external" })}>
-                        Search outside your library
-                      </Button>
+                ) : items?.length === 0 ? (
+                  <div
+                    className={cn(
+                      "grid place-items-center text-center",
+                      scope === "all" && searching ? "py-10" : "py-24",
+                    )}
+                  >
+                    {filtered ? (
+                      <div className="flex max-w-sm flex-col items-center gap-3">
+                        <div className="space-y-1">
+                          <p className="text-[16px] font-medium">
+                            {params.q ? `Nothing matches “${params.q}”` : "Nothing matches these filters"}
+                          </p>
+                          <p className="text-sm text-ink-muted">
+                            {params.q && (params.tags.length || params.via)
+                              ? "The search and the filters apply together. Try fewer filters or a different search."
+                              : "Try fewer filters or a different search."}
+                          </p>
+                        </div>
+                        <Button variant="secondary" onClick={clearFilters}>
+                          <X aria-hidden /> Clear filters
+                        </Button>
+                        {searching && scope === "library" && (
+                          <Button variant="ghost" onClick={() => set({ scope: "external" })}>
+                            Search outside your library
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      (emptyState ?? (
+                        <div className="max-w-sm space-y-2">
+                          <p className="text-[16px] font-medium">
+                            {typeof heading === "string" && library ? `Nothing in ${heading} yet` : "Nothing here yet"}
+                          </p>
+                          <p className="text-sm text-ink-muted">
+                            Paste a URL or an image anywhere with <Kbd>⌘V</Kbd>, drop files on the window, or press Add.
+                          </p>
+                        </div>
+                      ))
                     )}
                   </div>
+                ) : params.type === "source" && library && items ? (
+                  <SourceGroups
+                    items={items}
+                    view={params.view}
+                    selection={selection}
+                    toggle={toggle}
+                    shelf={!category}
+                  />
+                ) : params.type === "skill" && library && items ? (
+                  <SkillPackGroups items={items} view={params.view} selection={selection} toggle={toggle} />
+                ) : params.view === "grid" ? (
+                  <div
+                    ref={gridRef}
+                    className={cn(
+                      "grid gap-x-6 gap-y-10 data-flipping:pointer-events-none",
+                      rail
+                        ? "grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))]"
+                        : "grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))]",
+                    )}
+                  >
+                    {items?.map((r) => (
+                      // the cell is what Flip moves; the card and its screenshot inside are never transformed
+                      <div
+                        key={r.id}
+                        data-flip-id={r.id}
+                        className={cn(
+                          "min-w-0",
+                          // D3: pointer devices lift a card 2px; off while cards move and with reduced motion
+                          rail &&
+                            "transition-[translate] duration-200 ease-out in-data-flipping:translate-none motion-safe:pointer-fine:hover:-translate-y-0.5",
+                        )}
+                      >
+                        <ResourceCard
+                          resource={r}
+                          selected={selection.includes(r.id)}
+                          selecting={selection.length > 0}
+                          onToggle={toggle(r.id)}
+                          compact={rail}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 ) : (
-                  (emptyState ?? (
-                    <div className="max-w-sm space-y-2">
-                      <p className="text-[16px] font-medium">
-                        {typeof heading === "string" && library ? `Nothing in ${heading} yet` : "Nothing here yet"}
-                      </p>
-                      <p className="text-sm text-ink-muted">
-                        Paste a URL or an image anywhere with <Kbd>⌘V</Kbd>, drop files on the window, or press Add.
-                      </p>
-                    </div>
-                  ))
+                  <div ref={gridRef} className="flex flex-col gap-1 data-flipping:pointer-events-none">
+                    {items?.map((r) => (
+                      <div key={r.id} data-flip-id={r.id}>
+                        <ResourceRow
+                          resource={r}
+                          selected={selection.includes(r.id)}
+                          selecting={selection.length > 0}
+                          onToggle={toggle(r.id)}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
-            ) : params.type === "source" && library && items ? (
-              <SourceGroups items={items} view={params.view} selection={selection} toggle={toggle} shelf={!category} />
-            ) : params.type === "skill" && library && items ? (
-              <SkillPackGroups items={items} view={params.view} selection={selection} toggle={toggle} />
-            ) : params.view === "grid" ? (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] gap-x-6 gap-y-10">
-                {items?.map((r) => (
-                  <ResourceCard
-                    key={r.id}
-                    resource={r}
-                    selected={selection.includes(r.id)}
-                    selecting={selection.length > 0}
-                    onToggle={toggle(r.id)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-1">
-                {items?.map((r) => (
-                  <ResourceRow
-                    key={r.id}
-                    resource={r}
-                    selected={selection.includes(r.id)}
-                    selecting={selection.length > 0}
-                    onToggle={toggle(r.id)}
-                  />
-                ))}
-              </div>
-            )}
-            {scope === "all" && searching && (
-              <div className="pt-10">
-                <ExternalResults query={params.q} compact />
-              </div>
-            )}
-          </>
-        )}
+              {scope === "all" && searching && (
+                <div className="pt-10">
+                  <ExternalResults query={params.q} compact />
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       <SelectionBar

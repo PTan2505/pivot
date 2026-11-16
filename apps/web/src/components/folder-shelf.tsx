@@ -34,7 +34,7 @@ export function FolderShelf({ label, folders }: { label: string; folders: ShelfF
         // the art is picked from the id, so a folder keeps its look
         const hash = hashString(f.id);
         return (
-          <div role="listitem" key={f.id}>
+          <div role="listitem" key={f.id} data-folder-id={f.id}>
             <GlassFolder
               width={300}
               tone="dark"
