@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CollectionDTO,
   DirectProviderInfo,
@@ -110,6 +110,18 @@ export function useResources(query: ResourceQuery, { enabled = true } = {}) {
   });
 }
 
+/**
+ * Seeds a list the user is about to open with rows already loaded elsewhere, so it renders at once; the real fetch
+ * still runs and replaces them. A list that is already cached is left alone.
+ */
+export function usePrimeResources() {
+  const qc = useQueryClient();
+  return (query: ResourceQuery, rows: ResourceDTO[]) => {
+    const key = keys.resources(toParams(query));
+    if (!qc.getQueryData(key)) qc.setQueryData(key, rows);
+  };
+}
+
 export function useResource(id: string) {
   return useQuery({
     queryKey: keys.resource(id),
@@ -121,6 +133,22 @@ export function useResource(id: string) {
 
 export function useTags() {
   return useQuery({ queryKey: keys.tags, queryFn: () => api<TagDTO[]>("/api/tags") });
+}
+
+/** The first resources of each collection (its folder's sheets on the Library landing): one small request each. */
+export function useCollectionCovers(ids: string[]) {
+  return useQueries({
+    queries: ids.map((id) => {
+      const params = toParams({ collection: id, sort: "updated" });
+      return {
+        queryKey: keys.resources(params),
+        queryFn: () => {
+          const sp = new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]);
+          return api<ResourceDTO[]>(`/api/resources?${sp}`);
+        },
+      };
+    }),
+  });
 }
 
 export function useCollections() {

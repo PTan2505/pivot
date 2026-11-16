@@ -19,7 +19,12 @@ export function Markdown({ children, interactiveChecks = false }: { children: st
           input: (props) =>
             props.type === "checkbox" ? (
               // Checklist runs are ephemeral: ticking doesn't change the saved template.
-              <input type="checkbox" defaultChecked={props.checked} disabled={!interactiveChecks} className="mr-2 size-3.5 translate-y-0.5 accent-[var(--primary)]" />
+              <input
+                type="checkbox"
+                defaultChecked={props.checked}
+                disabled={!interactiveChecks}
+                className="mr-2 size-3.5 translate-y-0.5 accent-[var(--primary)]"
+              />
             ) : (
               <input {...props} />
             ),
