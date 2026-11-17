@@ -82,7 +82,37 @@ const SORTS: { value: SortKey; label: string }[] = [
   { value: "title", label: "Title A–Z" },
 ];
 
-/** The Library landing's rail: what to show, the order, and every type and collection with its count. */
+export type LayoutKey = "grid" | "list";
+
+/** How the page orders and lays out its items (direction D: these moved from the head into the rail). */
+export interface RailOrder {
+  sort: SortKey;
+  onSort: (sort: SortKey) => void;
+  layout: LayoutKey;
+  onLayout: (layout: LayoutKey) => void;
+}
+
+function OrderGroups({ sort, onSort, layout, onLayout }: RailOrder) {
+  return (
+    <>
+      <Group title="Sort">
+        <Choices value={sort}>
+          {SORTS.map((s) => (
+            <Choice key={s.value} label={s.label} on={sort === s.value} onClick={() => onSort(s.value)} />
+          ))}
+        </Choices>
+      </Group>
+      <Group title="Layout">
+        <Choices value={layout}>
+          <Choice label="Grid" on={layout === "grid"} onClick={() => onLayout("grid")} />
+          <Choice label="List" on={layout === "list"} onClick={() => onLayout("list")} />
+        </Choices>
+      </Group>
+    </>
+  );
+}
+
+/** The Library landing's rail: what to show, the order and layout, and every type and collection with its count. */
 export function LandingRail({
   types,
   items,
@@ -90,8 +120,7 @@ export function LandingRail({
   folderCount,
   show,
   onShow,
-  sort,
-  onSort,
+  order,
 }: {
   types: readonly ResourceType[];
   items: ResourceDTO[] | undefined;
@@ -99,8 +128,7 @@ export function LandingRail({
   folderCount: number;
   show: LandingShow;
   onShow: (show: LandingShow) => void;
-  sort: SortKey;
-  onSort: (sort: SortKey) => void;
+  order: RailOrder;
 }) {
   const total = items?.length ?? 0;
   return (
@@ -112,13 +140,7 @@ export function LandingRail({
           <Choice label="Items" on={show === "items"} count={total} onClick={() => onShow("items")} />
         </Choices>
       </Group>
-      <Group title="Sort">
-        <Choices value={sort}>
-          {SORTS.map((s) => (
-            <Choice key={s.value} label={s.label} on={sort === s.value} onClick={() => onSort(s.value)} />
-          ))}
-        </Choices>
-      </Group>
+      <OrderGroups {...order} />
       <Group title="Types">
         {types.map((t) => (
           <Link key={t} href={`/?type=${t}`} className={cn(row, idle)}>
@@ -157,10 +179,12 @@ export function FacetRail({
   items,
   selected,
   onToggle,
+  order,
 }: {
   items: ResourceDTO[] | undefined;
   selected: string[];
   onToggle: (id: string) => void;
+  order: RailOrder;
 }) {
   const { data: allTags = [] } = useTags();
   const [open, setOpen] = useState<Partial<Record<TagKind, boolean>>>({});
@@ -188,10 +212,17 @@ export function FacetRail({
     );
   }, [items, selected, allTags, baseline]);
 
-  if (!groups.length) return <p className="pl-3 text-[13px] text-ink-subtle">Nothing listed has tags yet.</p>;
+  if (!groups.length)
+    return (
+      <div className="flex flex-col gap-6">
+        <OrderGroups {...order} />
+        <p className="pl-3 text-[13px] text-ink-subtle">Nothing listed has tags yet.</p>
+      </div>
+    );
 
   return (
     <div role="group" aria-label="Filter by facet" className="flex flex-col gap-6">
+      <OrderGroups {...order} />
       {groups.map(({ kind, list }) => {
         const expanded = !!open[kind];
         // picked values always show, even past the first five

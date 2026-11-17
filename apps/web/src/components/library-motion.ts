@@ -100,80 +100,123 @@ function morphFrom(
   );
 }
 
-/** M1: the display title collapses into the compact head while the page scrolls; the folders recede. */
+/**
+ * M1 (direction D, "Rail header, no strip", approved 2026-11-17): from lg, the display title collapses into the
+ * header of the sticky rail while the page scrolls (scrubbed), the header fades in over the last quarter, and the
+ * folders recede. Below lg there is no rail: once the title has scrolled past the bar, the page docks its title into
+ * the top bar's row (`onDocked`). Reduced motion: the rail header fades in where the title leaves (150ms).
+ */
 export function useCondensingHead(
   refs: {
     title: RefObject<HTMLElement | null>;
-    compact: RefObject<HTMLElement | null>;
-    compactTitle: RefObject<HTMLElement | null>;
-    glass: RefObject<HTMLElement | null>;
-    chrome: RefObject<HTMLElement | null>;
+    rail: RefObject<HTMLElement | null>;
+    railHead: RefObject<HTMLElement | null>;
+    railTitle: RefObject<HTMLElement | null>;
     controls: RefObject<HTMLElement | null>;
     shelf: RefObject<HTMLElement | null>;
   },
+  onDocked: (docked: boolean) => void,
   deps: unknown[],
 ) {
+  const docked = useRef(onDocked);
+  useLayoutEffect(() => {
+    docked.current = onDocked;
+  });
   useGSAP(
     () => {
       const title = refs.title.current;
-      const compact = refs.compact.current;
-      const ct = refs.compactTitle.current;
-      if (!title || !compact || !ct) return;
+      if (!title) return;
       eases();
-      const glass = refs.glass.current;
-      const chrome = refs.chrome.current;
+      const rail = refs.rail.current;
+      const head = refs.railHead.current;
+      const rt = refs.railTitle.current;
       const controls = refs.controls.current;
       const shelf = refs.shelf.current;
-      // hidden = inert and click-through; it becomes usable once it is mostly drawn. Building it (on load, or when
-      // the page changes) starts it hidden without touching focus.
-      let live = false;
-      compact.toggleAttribute("inert", true);
-      gsap.set(compact, { pointerEvents: "none" });
-      const setLive = (on: boolean) => {
-        if (on === live) return;
-        live = on;
-        // focus inside the head as it hides moves to the page title instead of falling back to <body>
-        if (!on && compact.contains(document.activeElement)) title.focus({ preventScroll: true });
-        compact.toggleAttribute("inert", !on);
-        gsap.set(compact, { pointerEvents: on ? "auto" : "none" });
-      };
+      // the rail sticks this far below the bar
+      const GAP = 16;
       const mm = gsap.matchMedia();
-      mm.add({ full: "(prefers-reduced-motion: no-preference)", reduce: "(prefers-reduced-motion: reduce)" }, (ctx) => {
-        if (ctx.conditions?.full) {
-          gsap.set(compact, { opacity: 1 });
-          // measured from where things rest (the title's own transform is taken out), again on every refresh
-          const restingLeft = () => title.getBoundingClientRect().left - Number(gsap.getProperty(title, "x"));
-          // a refresh rewinds the timeline for a moment to measure: the head ignores that, or it would turn inert and
-          // drop the focus of a control inside it
-          let measuring = false;
-          const update = () => !measuring && setLive(tl.progress() > 0.8);
-          const onRefreshInit = () => (measuring = true);
-          const onRefresh = () => {
-            measuring = false;
-            update();
+      mm.add(
+        {
+          desk: "(min-width: 64rem)",
+          full: "(prefers-reduced-motion: no-preference)",
+        },
+        (ctx) => {
+          const desk = !!ctx.conditions?.desk;
+          const full = !!ctx.conditions?.full;
+          if (!desk || !rail || !head || !rt) {
+            // phones and tablets: dock the title into the top bar once it has gone under it
+            ScrollTrigger.create({
+              trigger: title,
+              start: () => `bottom top+=${topbar()}`,
+              invalidateOnRefresh: true,
+              onEnter: () => docked.current(true),
+              onLeaveBack: () => docked.current(false),
+            });
+            return () => docked.current(false);
+          }
+          if (!full) {
+            gsap.set(head, { opacity: 0 });
+            ScrollTrigger.create({
+              trigger: title,
+              start: () => `bottom top+=${topbar()}`,
+              invalidateOnRefresh: true,
+              onEnter: () => gsap.to(head, { opacity: 1, duration: 0.15 }),
+              onLeaveBack: () => gsap.to(head, { opacity: 0, duration: 0.15 }),
+            });
+            return;
+          }
+          // Where the title rests, measured without its transform; refreshed with ScrollTrigger.
+          let rest: { left: number; text: number; bottom: number } | null = null;
+          const restOf = () => {
+            if (!rest) {
+              const keep = {
+                x: gsap.getProperty(title, "x"),
+                y: gsap.getProperty(title, "y"),
+                scale: gsap.getProperty(title, "scale"),
+              };
+              gsap.set(title, { x: 0, y: 0, scale: 1 });
+              const t = textBox(title);
+              const e = title.getBoundingClientRect();
+              rest = { left: t.left, text: t.top + t.height + window.scrollY, bottom: e.bottom + window.scrollY };
+              gsap.set(title, keep);
+            }
+            return rest;
           };
-          ScrollTrigger.addEventListener("refreshInit", onRefreshInit);
-          ScrollTrigger.addEventListener("refresh", onRefresh);
+          const scale = () => parseFloat(getComputedStyle(rt).fontSize) / parseFloat(getComputedStyle(title).fontSize);
           const tl = gsap.timeline({
             defaults: { ease: "none" },
-            onUpdate: update,
             scrollTrigger: {
               trigger: title,
               start: () => `top top+=${topbar()}`,
-              // ends with the title's bottom 24px above the bar
               end: () => `bottom+=24 top+=${topbar()}`,
               scrub: 0.3,
               invalidateOnRefresh: true,
+              onRefreshInit: () => {
+                rest = null;
+              },
             },
           });
+          // Where the rail header's words are when the scrub ends: the rail is stuck GAP below the bar by then, or
+          // still on its way up; its header's place inside it never changes.
+          const target = () => {
+            const end = tl.scrollTrigger?.end ?? 0;
+            const t = textBox(rt);
+            const r = rail.getBoundingClientRect();
+            const railTop = Math.max(topbar() + GAP, r.top + window.scrollY - end);
+            return { left: t.left, bottom: railTop + (t.top + t.height - r.top), end };
+          };
           tl.fromTo(
             title,
             { x: 0, y: 0, scale: 1 },
             {
-              x: () => textBox(ct).left - restingLeft(),
-              // the compact title's bottom sits this far below the bar once the head is stuck
-              y: () => ct.getBoundingClientRect().bottom - compact.getBoundingClientRect().top + 24,
-              scale: () => parseFloat(getComputedStyle(ct).fontSize) / parseFloat(getComputedStyle(title).fontSize),
+              x: () => target().left - restOf().left,
+              // the scale's origin is the title's bottom-left; its words hang a little below that edge
+              y: () => {
+                const g = target();
+                const r = restOf();
+                return g.bottom - (r.bottom - g.end) - (r.text - r.bottom) * scale();
+              },
+              scale,
               transformOrigin: "0% 100%",
               force3D: false,
               duration: 1,
@@ -181,10 +224,7 @@ export function useCondensingHead(
             0,
           )
             .fromTo(title, { opacity: 1 }, { opacity: 0, duration: 0.25 }, 0.75)
-            .fromTo(ct, { opacity: 0 }, { opacity: 1, duration: 0.25 }, 0.75);
-          if (glass) tl.fromTo(glass, { opacity: 0 }, { opacity: 1, duration: 0.25 }, 0.75);
-          if (chrome) tl.fromTo(chrome, { opacity: 0 }, { opacity: 1, duration: 0.25 }, 0.75);
-          // the big head's controls leave before they pass under the compact head's glass
+            .fromTo(head, { opacity: 0 }, { opacity: 1, duration: 0.25 }, 0.75);
           if (controls) tl.fromTo(controls, { opacity: 1 }, { opacity: 0, duration: 0.35 }, 0.3);
           const folders = shelf?.querySelectorAll('[role="listitem"]');
           if (shelf && folders?.length)
@@ -203,38 +243,12 @@ export function useCondensingHead(
                 invalidateOnRefresh: true,
               },
             });
-          return () => {
-            ScrollTrigger.removeEventListener("refreshInit", onRefreshInit);
-            ScrollTrigger.removeEventListener("refresh", onRefresh);
-          };
-        } else {
-          // reduced motion: nothing scrubs or scales; the compact head switches on where the title leaves
-          gsap.set(compact, { opacity: 0 });
-          ScrollTrigger.create({
-            trigger: title,
-            start: () => `bottom top+=${topbar()}`,
-            invalidateOnRefresh: true,
-            onEnter: () => {
-              setLive(true);
-              gsap.to(compact, { opacity: 1, duration: 0.15 });
-            },
-            onLeaveBack: () => {
-              setLive(false);
-              gsap.to(compact, { opacity: 0, duration: 0.15 });
-            },
-          });
-        }
-      });
-      // focus moved by the keyboard never lands under the top bar and the 56px compact head (WCAG 2.4.11)
-      // (--rail-pad lets the compact head's own controls cancel it: they are already on screen, and scrolling to "reveal"
-      // them would scroll the page up and switch the head off)
-      const pad = () => {
-        document.documentElement.style.setProperty("scroll-padding-top", `${topbar() + 72}px`);
-        document.documentElement.style.setProperty("--rail-pad", `${topbar() + 72}px`);
-      };
+        },
+      );
+      // focus moved by the keyboard never lands under the bar (WCAG 2.4.11): nothing else is pinned at the top now
+      const pad = () => document.documentElement.style.setProperty("scroll-padding-top", `${topbar() + GAP}px`);
       pad();
       ScrollTrigger.addEventListener("refresh", pad);
-      // images and fonts change the page's height after the first layout
       const refresh = () => ScrollTrigger.refresh();
       window.addEventListener("load", refresh);
       const t = window.setTimeout(refresh, 400);
@@ -244,7 +258,6 @@ export function useCondensingHead(
         mm.revert();
         ScrollTrigger.removeEventListener("refresh", pad);
         document.documentElement.style.removeProperty("scroll-padding-top");
-        document.documentElement.style.removeProperty("--rail-pad");
       };
     },
     { dependencies: deps, revertOnUpdate: true },

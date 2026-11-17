@@ -1,6 +1,6 @@
 "use client";
 
-import { AppWindow, Check, ExternalLink, Loader2, RotateCcw, X } from "lucide-react";
+import { AppWindow, Check, ExternalLink, Info, Loader2, RotateCcw, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -246,8 +246,17 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
   const rounds = [...new Set(s.mockups.map((m) => m.round))].sort((a, b) => a - b);
   const latest = rounds.at(-1) ?? 0;
   const asked = Number(useSearchParams().get("round"));
-  const [round, setRound] = useState(rounds.includes(asked) ? asked : latest);
-  const [n, setN] = useState(1);
+  const approvals = s.decisions.filter((d) => d.kind === "approval");
+  // the approval that counts now: none after a reopen or a major change, even if older ones exist
+  const lastApproval = approvals.find((d) => d.id === s.currentApprovalId);
+  // an approval names its version by id and digest; older ones only by their direction's words
+  const isApproved = (m: DesignMockupDTO) =>
+    lastApproval?.binding ? lastApproval.binding.mockupId === m.id : lastApproval?.direction === directionOf(m);
+  // after an approval the page opens on the approved version; `?round=` still picks a round
+  const approvedMockup = s.status !== "exploring" ? s.mockups.find(isApproved) : undefined;
+  const [round, setRound] = useState(rounds.includes(asked) ? asked : (approvedMockup?.round ?? latest));
+  const [n, setN] = useState(approvedMockup && !rounds.includes(asked) ? approvedMockup.n : 1);
+  const [aboutMotion, setAboutMotion] = useState(false);
   const [width, setWidth] = useState<Width>("desktop");
   const [approving, setApproving] = useState(false);
   const [run, setRun] = useState(0);
@@ -301,29 +310,37 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
 
   const versions = s.mockups.filter((m) => m.round === round);
   const current = versions.find((m) => m.n === n) ?? versions[0];
-  const approvals = s.decisions.filter((d) => d.kind === "approval");
-  // the approval that counts now: none after a reopen or a major change, even if older ones exist
-  const lastApproval = approvals.find((d) => d.id === s.currentApprovalId);
-  // an approval names its version by id and digest; older ones only by their direction's words
-  const isApproved = (m: DesignMockupDTO) =>
-    lastApproval?.binding ? lastApproval.binding.mockupId === m.id : lastApproval?.direction === directionOf(m);
+  const interactiveCount = versions.filter((m) => m.interactive).length;
+  // the "Interactive" chip only tells versions apart in a round that mixes static and interactive ones
+  const mixed = interactiveCount > 0 && interactiveCount < versions.length;
   const brokenBinding = lastApproval?.binding && lastApproval.binding.status !== "bound" ? lastApproval.binding : null;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || approving) return;
       const t = e.target as HTMLElement | null;
-      if (t?.closest("input, textarea, select, [contenteditable], [role=dialog]")) return;
+      // other controls keep their own keys: fields, dialogs, menus, the round and width radios, history rows, links
+      if (
+        t?.closest(
+          "input, textarea, select, [contenteditable], [role=dialog], [role=menu], [role=radiogroup], summary, a, button:not([role=tab])",
+        )
+      )
+        return;
       const count = versions.length;
-      if (/^[1-9]$/.test(e.key) && Number(e.key) <= count) setN(Number(e.key));
-      else if (e.key === "ArrowRight" && count > 1) setN((x) => (x % count) + 1);
-      else if (e.key === "ArrowLeft" && count > 1) setN((x) => ((x + count - 2) % count) + 1);
-      else return;
+      let next: number | null = null;
+      if (/^[1-9]$/.test(e.key) && Number(e.key) <= count) next = Number(e.key);
+      else if (e.key === "ArrowRight" && count > 1) next = (n % count) + 1;
+      else if (e.key === "ArrowLeft" && count > 1) next = ((n + count - 2) % count) + 1;
+      if (next === null) return;
       e.preventDefault();
+      setN(next);
+      // focus follows the selection when it was on a version tab (roving tabindex)
+      if (t?.getAttribute("role") === "tab")
+        requestAnimationFrame(() => document.getElementById(`version-tab-${next}`)?.focus());
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [versions.length, approving]);
+  }, [versions.length, approving, n]);
 
   if (!current) return null;
 
@@ -335,7 +352,6 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
         </h2>
         <p className="text-sm text-ink-muted">
           Round {round} · {versions.length} version{versions.length === 1 ? "" : "s"}
-          <span className="max-sm:hidden"> · 1–{versions.length} or ← → to switch</span>
         </p>
       </div>
 
@@ -366,14 +382,17 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
             <Pill
               key={m.id}
               role="tab"
+              id={`version-tab-${m.n}`}
               aria-selected={m.id === current.id}
               aria-controls="mockup-panel"
+              aria-keyshortcuts={m.n <= 9 ? String(m.n) : undefined}
+              tabIndex={m.id === current.id ? 0 : -1}
               active={m.id === current.id}
               onClick={() => setN(m.n)}
             >
               <span className="font-mono tabular-nums opacity-70">{m.n}</span>
               {m.title}
-              {m.interactive && (
+              {mixed && m.interactive && (
                 <span className="rounded-full bg-surface-raised px-1.5 text-[12px] text-ink-secondary">
                   Interactive
                 </span>
@@ -454,25 +473,42 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
           </span>
         </div>
       )}
-      {current.interactive && (
-        <p className="text-[13px] text-ink-muted">
-          Interactive version: its motion runs only in the interactive preview.
+      <div className="space-y-2">
+        <p className="flex items-center gap-2 text-[13px] text-ink-muted">
+          {interactiveCount === versions.length
+            ? `${versions.length === 1 ? "This version is" : "All versions are"} interactive: ${versions.length === 1 ? "its" : "their"} motion runs in the interactive preview.`
+            : current.interactive
+              ? "Interactive version: its motion runs in the interactive preview."
+              : "Motion follows your browser’s setting."}
+          <button
+            type="button"
+            aria-label="About motion and reduced motion"
+            aria-expanded={aboutMotion}
+            aria-controls="about-motion"
+            onClick={() => setAboutMotion((o) => !o)}
+            className="inline-grid size-6 shrink-0 place-items-center rounded-full bg-surface text-ink-secondary outline-none hover:bg-surface-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text focus-visible:outline-solid"
+          >
+            <Info className="size-3.5" aria-hidden />
+          </button>
         </p>
-      )}
+        <p
+          id="about-motion"
+          hidden={!aboutMotion}
+          className="max-w-xl rounded-xl bg-surface px-3.5 py-2.5 text-[13px] text-ink-muted"
+        >
+          Motion follows your browser
+          {reduce !== null && (
+            <>
+              , which has reduced motion <b className="font-medium text-ink">{reduce ? "on" : "off"}</b>
+            </>
+          )}
+          . To preview the other setting, switch Reduce motion in your system settings, or use Motion: reduced in the
+          interactive preview, then press Replay.
+        </p>
+      </div>
       <div id="mockup-panel" role="tabpanel" aria-label={`Version ${current.n}: ${current.title}`}>
         <Frame mockup={current} width={width} run={run} />
       </div>
-      <p className="text-[13px] text-ink-muted">
-        Version {current.n} · digest <span className="font-mono">{current.digest.slice(0, 12)}</span>: an approval names
-        this exact content.
-      </p>
-      {reduce !== null && (
-        <p className="text-[13px] text-ink-muted" aria-live="polite">
-          Motion follows your browser, which has reduced motion{" "}
-          <b className="font-medium text-ink">{reduce ? "on" : "off"}</b>. To preview the other setting, switch Reduce
-          motion in your system settings, or emulate it in DevTools › Rendering, then press Replay.
-        </p>
-      )}
 
       <ApproveDialog
         mockup={current}

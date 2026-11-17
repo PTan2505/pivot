@@ -3,6 +3,7 @@
 import { LayoutGrid, List, SlidersHorizontal, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   RESOURCE_TYPES,
   SOURCE_CATEGORIES,
@@ -14,7 +15,7 @@ import {
 } from "@pivot/core/types";
 import { Breadcrumbs, typeCrumbs, type Crumb } from "@/components/breadcrumbs";
 import { FolderShelf } from "@/components/folder-shelf";
-import { FacetRail, LandingRail, type LandingShow } from "@/components/library-rail";
+import { FacetRail, LandingRail, type LandingShow, type RailOrder } from "@/components/library-rail";
 import {
   openFolder as openFolderMotion,
   refreshScroll,
@@ -337,21 +338,22 @@ export function LibraryView({
   const pageRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const shelfRef = useRef<HTMLDivElement>(null);
-  const compactRef = useRef<HTMLDivElement>(null);
-  const compactTitleRef = useRef<HTMLSpanElement>(null);
-  const glassRef = useRef<HTMLDivElement>(null);
-  const chromeRef = useRef<HTMLDivElement>(null);
+  const railRef = useRef<HTMLElement>(null);
+  const railHeadRef = useRef<HTMLDivElement>(null);
+  const railTitleRef = useRef<HTMLSpanElement>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
+  // below lg the title docks into the top bar's row once it has scrolled under it (direction D)
+  const [docked, setDocked] = useState(false);
   useCondensingHead(
     {
       title: titleRef,
-      compact: compactRef,
-      compactTitle: compactTitleRef,
-      glass: glassRef,
-      chrome: chromeRef,
+      rail: railRef,
+      railHead: railHeadRef,
+      railTitle: railTitleRef,
       controls: controlsRef,
       shelf: shelfRef,
     },
+    setDocked,
     // rebuilt only when the page changes; other layout changes just re-measure (a rebuild would hide the head)
     [rail, landing, !!items],
   );
@@ -391,19 +393,6 @@ export function LibraryView({
       allCollections.filter((c) => c.count > 0).length
     : 0;
 
-  const sortSelect = (
-    <Select value={params.sort} onValueChange={(v) => set({ sort: v as typeof params.sort })}>
-      <SelectTrigger size="sm" className="w-[176px]" aria-label="Sort">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="updated">Recently edited</SelectItem>
-        <SelectItem value="created">Newest first</SelectItem>
-        <SelectItem value="oldest">Oldest first</SelectItem>
-        <SelectItem value="title">Title A–Z</SelectItem>
-      </SelectContent>
-    </Select>
-  );
   const viewToggle = (
     <ToggleGroup
       type="single"
@@ -422,6 +411,12 @@ export function LibraryView({
       </ToggleGroupItem>
     </ToggleGroup>
   );
+  const order: RailOrder = {
+    sort: params.sort,
+    onSort: (sort) => set({ sort }),
+    layout: params.view === "list" ? "list" : "grid",
+    onLayout: changeView,
+  };
   const railContent = landing ? (
     <LandingRail
       types={params.section.types}
@@ -430,58 +425,65 @@ export function LibraryView({
       folderCount={folderCount}
       show={show}
       onShow={setShow}
-      sort={params.sort}
-      onSort={(sort) => set({ sort })}
+      order={order}
     />
   ) : (
-    <FacetRail items={items} selected={params.tags} onToggle={toggleTag} />
+    <FacetRail items={items} selected={params.tags} onToggle={toggleTag} order={order} />
   );
   // Below lg the rail moves into a popover behind a "Filters (n)" pill.
-  const filtersButton = (
+  const filtersFor = (trigger: ReactNode) => (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="secondary" size="sm" className="lg:hidden">
-          <SlidersHorizontal aria-hidden /> {params.tags.length ? `Filters (${params.tags.length})` : "Filters"}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="max-h-[70vh] w-72 overflow-y-auto p-3">
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      {/* touch-sized rows here: this popover is how phones and tablets reach the rail */}
+      <PopoverContent align="end" className="max-h-[70vh] w-72 overflow-y-auto p-3 [&_a]:min-h-11 [&_button]:min-h-11">
         {railContent}
       </PopoverContent>
     </Popover>
   );
-  return (
-    <div ref={pageRef} className="flex min-h-full flex-col">
-      {rail && (
-        // M1: the compact head; the display title collapses into it while the page scrolls (transparent and inert
-        // until then). Its glass is a layer of its own so it can fade in under the title; the text keeps the glass inks.
-        <div
-          ref={compactRef}
-          data-condensing-head
-          inert
-          className="pointer-events-none sticky top-(--topbar-h) isolate z-30 -mb-14 flex h-14 items-center gap-3 px-4 opacity-0 [--ink-muted:var(--ink)] [--ink-secondary:var(--ink)] [--ink-subtle:var(--ink)] md:px-10 [&_*]:scroll-mt-[calc(-1*var(--rail-pad,0px))]"
+  const filtersLabel = params.tags.length ? `Filters (${params.tags.length})` : "Filters";
+  const filtersButton = filtersFor(
+    <Button variant="secondary" size="sm" className="lg:hidden">
+      <SlidersHorizontal aria-hidden /> {filtersLabel}
+    </Button>,
+  );
+  // below lg, once the title has gone under the bar: the title, its count and Filters in the bar's row (direction D)
+  const dockSlot = docked && rail && typeof document !== "undefined" ? document.getElementById("topbar-dock") : null;
+  const dock =
+    dockSlot &&
+    createPortal(
+      <>
+        {/* the h1 stays the page's heading: screen readers skip this copy */}
+        <span
+          aria-hidden
+          className="min-w-0 truncate text-[17px] leading-[1.2] font-medium tracking-[-0.01em] text-ink"
         >
-          <div ref={glassRef} aria-hidden className="glass absolute inset-0 -z-10" />
-          <span
-            ref={compactTitleRef}
-            className="min-w-0 truncate text-[22px] leading-[1.2] font-medium tracking-[-0.02em] text-ink"
-          >
-            {heading}
+          {heading}
+        </span>
+        {items && (
+          <span aria-hidden className="font-mono text-[13px] text-ink tabular-nums">
+            {items.length}
           </span>
-          <div ref={chromeRef} className="flex min-w-0 flex-1 items-center gap-3">
-            {items && (
-              <span className="font-mono text-[13px] text-ink tabular-nums">
-                <Rolling n={items.length} />
+        )}
+        {filtersFor(
+          <button
+            type="button"
+            aria-label={`${filtersLabel}: sort, layout and facets`}
+            className="relative ml-auto grid size-11 shrink-0 place-items-center rounded-full text-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-text [&_svg]:size-5"
+          >
+            <SlidersHorizontal aria-hidden />
+            {params.tags.length > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 h-[18px] min-w-[18px] rounded-full bg-inverse px-1 text-center font-mono text-[12px] leading-[18px] font-medium text-on-inverse">
+                {params.tags.length}
               </span>
             )}
-            <div className="ml-auto flex shrink-0 items-center gap-2">
-              {filtersButton}
-              {/* phones keep the compact head to one row: Sort stays in the head band above */}
-              <div className="hidden sm:block">{sortSelect}</div>
-              {viewToggle}
-            </div>
-          </div>
-        </div>
-      )}
+          </button>,
+        )}
+      </>,
+      dockSlot,
+    );
+  return (
+    <div ref={pageRef} className="flex min-h-full flex-col">
+      {dock}
       {rail ? (
         <section className="flex flex-col gap-4 px-4 pt-8 pb-2 md:px-10 md:pt-10">
           {trail.length > 1 && (
@@ -510,9 +512,9 @@ export function LibraryView({
                 <Rolling n={items.length} />
               </span>
             )}
-            <div ref={controlsRef} data-arrive className="ml-auto flex flex-wrap items-center gap-2 pb-1">
+            {/* from lg, Sort and Layout live in the rail; below it, in Filters (with the facets) */}
+            <div ref={controlsRef} data-arrive className="ml-auto flex flex-wrap items-center gap-2 pb-1 lg:hidden">
               {filtersButton}
-              {sortSelect}
               {viewToggle}
             </div>
           </div>
@@ -657,9 +659,20 @@ export function LibraryView({
       >
         {rail && (
           <aside
+            ref={railRef}
             data-arrive
-            className="hidden lg:sticky lg:top-[calc(var(--topbar-h)+72px)] lg:block lg:max-h-[calc(100dvh-var(--topbar-h)-88px)] lg:overflow-y-auto lg:pb-6"
+            className="hidden lg:sticky lg:top-[calc(var(--topbar-h)+16px)] lg:-mt-14 lg:block lg:max-h-[calc(100dvh-var(--topbar-h)-32px)] lg:overflow-y-auto lg:pb-6"
           >
+            {/* M1 lands the display title here; it is the page's h1 seen again, so screen readers skip it */}
+            <div ref={railHeadRef} aria-hidden className="mb-4 flex h-10 items-baseline gap-2.5 px-3 opacity-0">
+              <span
+                ref={railTitleRef}
+                className="min-w-0 truncate text-[22px] leading-[1.2] font-medium tracking-[-0.02em] text-ink"
+              >
+                {heading}
+              </span>
+              {items && <span className="font-mono text-[13px] text-ink-subtle tabular-nums">{items.length}</span>}
+            </div>
             {railContent}
           </aside>
         )}
