@@ -1,16 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Check, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Ellipsis, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { DesignSessionDetailDTO, DesignStatus } from "@pivot/core/types";
-import { ConfirmButton } from "@/components/confirm-button";
+import type { DesignDecisionDTO, DesignSessionDetailDTO, DesignSnapshotDTO, DesignStatus } from "@pivot/core/types";
 import { DesignCandidates } from "@/components/design-candidates";
 import { DesignMockups } from "@/components/design-mockups";
 import { Markdown } from "@/components/markdown";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -36,8 +52,65 @@ const NEXT_STEP: Partial<Record<DesignStatus, { to: DesignStatus; label: string 
   building: { to: "done", label: "Mark done" },
 };
 
-/** Where the work is: the lifecycle as a stepper, what the current step means, and the moves you can make by hand. */
-function StatusStepper({
+const shortDate = (at: string) => new Date(at).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+const dateTime = (at: string) =>
+  new Date(at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+
+/** The lifecycle as a stepper. */
+function Stepper({ status, saving }: { status: DesignStatus; saving: boolean }) {
+  const current = STEPS.indexOf(status);
+  return (
+    <ol
+      aria-label="Status"
+      className={cn("flex flex-wrap items-center gap-y-1", status === "abandoned" && "opacity-50")}
+    >
+      {STEPS.map((st, i) => {
+        const isCurrent = st === status;
+        const isPast = current > i;
+        return (
+          <li key={st} className="flex items-center" aria-current={isCurrent ? "step" : undefined}>
+            {i > 0 && (
+              <span aria-hidden className={cn("h-0.5 w-3 sm:w-7", isPast || isCurrent ? "bg-success" : "bg-divider")} />
+            )}
+            <span
+              className={cn(
+                "flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[13px] sm:gap-2 sm:px-3",
+                isCurrent ? "bg-surface-raised font-medium text-ink" : isPast ? "text-ink-secondary" : "text-ink-muted",
+              )}
+            >
+              {isPast ? (
+                <Check className="size-3.5" aria-label="done" />
+              ) : isCurrent ? (
+                saving ? (
+                  <Loader2 className="size-3 animate-spin" aria-label="Saving" />
+                ) : (
+                  <span aria-hidden className={cn("size-2 rounded-full", STEP_DOT[st])} />
+                )
+              ) : null}
+              {DESIGN_STATUS_LABEL[st]}
+            </span>
+          </li>
+        );
+      })}
+      {status === "abandoned" && (
+        <li
+          aria-current="step"
+          className="ml-2 flex h-8 items-center gap-2 rounded-full bg-surface-raised px-3 text-[13px] font-medium text-ink"
+        >
+          {saving ? (
+            <Loader2 className="size-3 animate-spin" aria-label="Saving" />
+          ) : (
+            <span aria-hidden className="size-2 rounded-full bg-ink-subtle" />
+          )}
+          Abandoned
+        </li>
+      )}
+    </ol>
+  );
+}
+
+/** One clause on where the session is, the one next move, and the rarer moves under More. */
+function StatusRow({
   session: s,
   saving,
   onChange,
@@ -46,144 +119,185 @@ function StatusStepper({
   saving: boolean;
   onChange: (status: DesignStatus) => void;
 }) {
-  const approvals = s.decisions.filter((d) => d.kind === "approval");
-  const approvedOn = approvals.length
-    ? new Date(approvals.at(-1)!.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })
-    : null;
-  const current = STEPS.indexOf(s.status);
+  const [reopening, setReopening] = useState(false);
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const hadApproval = s.decisions.some((d) => d.kind === "approval");
   const note: Record<DesignStatus, string> = {
-    exploring: approvals.length
-      ? "Changed since the last approval: approve the new direction to go on."
+    exploring: hadApproval
+      ? "Changed since the last approval: approve again to go on."
       : s.mockups.length
-        ? "Waiting for you to approve a version: below with your owner passphrase, or in the chat with Claude."
-        : "Waiting for a version to approve: Claude saves the direction here as a mockup.",
-    approved: `Direction approved on ${approvedOn}. Ready to build.`,
-    building: "The approved direction is being built.",
+        ? "Waiting for your approval."
+        : "Waiting for a version to approve.",
+    approved: "Approved. Ready to build.",
+    building: "Being built.",
     done: "Built and checked.",
     abandoned: "Stopped. Kept for reference.",
   };
   const next = NEXT_STEP[s.status];
-  const pill = "rounded-full";
+  const canReopen = s.status === "approved" || s.status === "building" || s.status === "done";
   return (
-    <div className="space-y-3">
-      <ol
-        aria-label="Status"
-        className={cn("flex flex-wrap items-center gap-y-1", s.status === "abandoned" && "opacity-50")}
-      >
-        {STEPS.map((st, i) => {
-          const isCurrent = st === s.status;
-          const isPast = current > i;
-          return (
-            <li key={st} className="flex items-center" aria-current={isCurrent ? "step" : undefined}>
-              {i > 0 && (
-                <span
-                  aria-hidden
-                  className={cn("h-0.5 w-3 sm:w-7", isPast || isCurrent ? "bg-success" : "bg-divider")}
-                />
-              )}
-              <span
-                className={cn(
-                  "flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[13px] sm:gap-2 sm:px-3",
-                  isCurrent
-                    ? "bg-surface-raised font-medium text-ink"
-                    : isPast
-                      ? "text-ink-secondary"
-                      : "text-ink-muted",
-                )}
-              >
-                {isPast ? (
-                  <Check className="size-3.5" aria-label="done" />
-                ) : isCurrent ? (
-                  saving ? (
-                    <Loader2 className="size-3 animate-spin" aria-label="Saving" />
-                  ) : (
-                    <span aria-hidden className={cn("size-2 rounded-full", STEP_DOT[st])} />
-                  )
-                ) : null}
-                {DESIGN_STATUS_LABEL[st]}
-              </span>
-            </li>
-          );
-        })}
-        {s.status === "abandoned" && (
-          <li
-            aria-current="step"
-            className="ml-2 flex h-8 items-center gap-2 rounded-full bg-surface-raised px-3 text-[13px] font-medium text-ink"
-          >
-            {saving ? (
-              <Loader2 className="size-3 animate-spin" aria-label="Saving" />
-            ) : (
-              <span aria-hidden className="size-2 rounded-full bg-ink-subtle" />
-            )}
-            Abandoned
-          </li>
-        )}
-      </ol>
-      <p className="text-sm text-ink-muted" aria-live="polite">
+    <div className="flex flex-wrap items-center gap-2">
+      <p className="mr-2 text-sm text-ink-muted" aria-live="polite">
         {note[s.status]}
-        {(s.status === "exploring" || s.status === "approved") &&
-          " Exploring and Approved follow the brief and your approval; you move the rest."}
       </p>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {next && (
-          <Button
-            size="sm"
-            variant="secondary"
-            className={cn(pill, "bg-inverse text-on-inverse hover:bg-inverse/90 hover:text-on-inverse")}
-            disabled={saving}
-            onClick={() => onChange(next.to)}
-          >
-            {next.label} <ArrowRight />
+      {next && (
+        <Button
+          size="sm"
+          variant="secondary"
+          className="rounded-full bg-inverse text-on-inverse hover:bg-inverse/90 hover:text-on-inverse"
+          disabled={saving}
+          onClick={() => onChange(next.to)}
+        >
+          {next.label} <ArrowRight />
+        </Button>
+      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          {/* stays enabled while a move saves, so focus stays on it after a menu choice */}
+          <Button ref={moreRef} size="sm" variant="ghost">
+            <Ellipsis /> More
           </Button>
-        )}
-        {s.status === "done" && (
-          <Button size="sm" variant="ghost" disabled={saving} onClick={() => onChange("building")}>
-            Back to building
-          </Button>
-        )}
-        {s.status === "abandoned" ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={saving}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" sideOffset={6} className="w-52">
+          {s.status === "done" && (
+            <DropdownMenuItem disabled={saving} onSelect={() => onChange("building")}>
+              Back to building
+            </DropdownMenuItem>
+          )}
+          {s.status === "abandoned" ? (
             // back to approved only when an approval still counts; otherwise it needs approving again
-            onClick={() => onChange(s.currentApprovalId ? "approved" : "exploring")}
-          >
-            Restore
-          </Button>
-        ) : (
-          <Button size="sm" variant="ghost" disabled={saving} onClick={() => onChange("abandoned")}>
-            Abandon
-          </Button>
-        )}
-        {(s.status === "approved" || s.status === "building" || s.status === "done") && (
-          <ConfirmButton
-            title="Reopen this session?"
-            description="It goes back to Exploring, and the work needs approving again before more building."
-            confirmLabel="Reopen"
-            onConfirm={() => onChange("exploring")}
-          >
-            <Button size="sm" variant="ghost" disabled={saving}>
+            <DropdownMenuItem
+              disabled={saving}
+              onSelect={() => onChange(s.currentApprovalId ? "approved" : "exploring")}
+            >
+              Restore
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem disabled={saving} onSelect={() => onChange("abandoned")}>
+              Abandon
+            </DropdownMenuItem>
+          )}
+          {canReopen && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={saving} onSelect={() => setReopening(true)}>
+                Reopen…
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <AlertDialog open={reopening} onOpenChange={setReopening}>
+        <AlertDialogContent
+          // opened from the menu, it has no trigger of its own: focus goes back to More
+          onCloseAutoFocus={(e) => {
+            e.preventDefault();
+            moreRef.current?.focus();
+          }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reopen this session?</AlertDialogTitle>
+            <AlertDialogDescription>
+              It goes back to Exploring, and the work needs approving again before more building.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => onChange("exploring")}>
               Reopen
-            </Button>
-          </ConfirmButton>
-        )}
-      </div>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
-const MILESTONE_LABEL = { initial: "First brief", approved: "Approved brief", major_change: "Major change" } as const;
+/** The approval that counts, kept in view while the work is built: which version, where, when, and the owner's note. */
+function ApprovedBand({ session: s }: { session: DesignSessionDetailDTO }) {
+  const a = s.decisions.find((d) => d.id === s.currentApprovalId && d.kind === "approval");
+  if (!a || !["approved", "building", "done"].includes(s.status)) return null;
+  const m = a.binding && s.mockups.find((x) => x.id === a.binding!.mockupId);
+  return (
+    <div className="flex max-w-4xl flex-wrap items-baseline gap-x-2.5 gap-y-1 rounded-[14px] bg-surface px-4 py-3 text-sm text-ink">
+      <span className="inline-flex items-center gap-1.5 font-medium text-success">
+        <Check className="size-3.5" aria-hidden /> Approved
+      </span>
+      <span>
+        {m ? `version ${m.n} “${m.title}”` : a.direction || a.summary}
+        {a.source === "owner" && " in PIVOT"}
+        {a.source === "chat" && " in the chat"} · {shortDate(a.createdAt)}
+      </span>
+      {a.details ? (
+        a.source === "chat" ? (
+          // a chat approval's details already quote the user's words
+          <span className="line-clamp-2 [overflow-wrap:anywhere] text-ink-secondary">{a.details}</span>
+        ) : (
+          <q className="[overflow-wrap:anywhere] text-ink-secondary">{a.details}</q>
+        )
+      ) : (
+        <span className="text-ink-muted">No note.</span>
+      )}
+    </div>
+  );
+}
+
+const MILESTONE_LABEL = { initial: "Brief", approved: "Approved brief", major_change: "Major change" } as const;
 const DECISION_LABEL = {
   approval: "Approved",
   change: "Changed",
-  deviation: "Deviation found in QA",
+  deviation: "Deviation",
   qa: "QA report",
 } as const;
 
+/** A brief's own title: its first heading, without the markdown. */
+function briefTitle(md: string) {
+  const h = md.match(/^#{1,3}\s+(.+)$/m)?.[1] ?? md.split("\n").find((l) => l.trim()) ?? "";
+  return h.replace(/[*_`]/g, "").trim();
+}
+
+const snapshotLine = (x: DesignSnapshotDTO) =>
+  [
+    briefTitle(x.markdown),
+    x.note,
+    x.referenceIds.length ? `${x.referenceIds.length} reference${x.referenceIds.length === 1 ? "" : "s"}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+const decisionLabel = (d: DesignDecisionDTO) =>
+  DECISION_LABEL[d.kind] + (d.source === "owner" ? " in PIVOT" : d.source === "chat" ? " in the chat" : "");
+
+function SnapshotBody({ x }: { x: DesignSnapshotDTO }) {
+  return (
+    <>
+      <div className="text-sm">
+        <Markdown>{x.markdown}</Markdown>
+      </div>
+      {x.referenceIds.length > 0 && (
+        <p className="mt-2 flex flex-wrap gap-1.5 text-xs">
+          {x.referenceIds.map((r, i) => (
+            <Link key={r} href={`/r/${r}`} className="rounded-full bg-surface-raised px-2.5 py-0.5 hover:underline">
+              Reference {i + 1}
+            </Link>
+          ))}
+        </p>
+      )}
+    </>
+  );
+}
+
+const chevron = (
+  <ChevronDown
+    aria-hidden
+    className="size-4 shrink-0 text-ink-muted transition-transform group-open:rotate-180 motion-reduce:transition-none"
+  />
+);
+
 /**
- * One design session: its briefs at each milestone and the decisions, in time order. The newest brief is open; older
- * ones are collapsed.
+ * One design session, in the order you use it: where it is (and the approval being built), the mockups, the
+ * references, the current brief, and the history on demand. Every brief and decision stays here, collapsed, each with its
+ * own link (#brief-…, #decision-…).
  */
 export function DesignSessionView({ id }: { id: string }) {
   const qc = useQueryClient();
@@ -222,14 +336,43 @@ export function DesignSessionView({ id }: { id: string }) {
     }
   };
 
+  // #brief-… and #decision-… open that item of the history (once the session has loaded, and on later hash changes)
+  const loaded = !!s;
+  useEffect(() => {
+    if (!loaded) return;
+    const openHash = () => {
+      const el = document.getElementById(decodeURIComponent(window.location.hash.slice(1)));
+      if (el instanceof HTMLDetailsElement) {
+        el.open = true;
+        el.scrollIntoView({ block: "start" });
+      }
+    };
+    openHash();
+    window.addEventListener("hashchange", openHash);
+    return () => window.removeEventListener("hashchange", openHash);
+  }, [loaded]);
+
+  const historyRef = useRef<HTMLOListElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const expandAll = () => {
+    const next = !expanded;
+    historyRef.current?.querySelectorAll("details").forEach((d) => (d.open = next));
+    setExpanded(next);
+  };
+  // the label follows the rows, however they were opened (by hand, a #link, Expand all)
+  const syncExpanded = () => {
+    const rows = [...(historyRef.current?.querySelectorAll("details") ?? [])];
+    setExpanded(rows.length > 0 && rows.every((d) => d.open));
+  };
+
   if (isLoading) return <Loader2 className="m-10 size-4 animate-spin text-ink-muted" aria-label="Loading" />;
   if (error || !s) return <p className="m-10 text-sm text-danger">This design session doesn’t exist.</p>;
 
-  const timeline = [
-    ...s.snapshots.map((x) => ({ at: x.createdAt, kind: "snapshot" as const, x })),
+  const brief = s.snapshots.at(-1);
+  const history = [
+    ...s.snapshots.filter((x) => x.id !== brief?.id).map((x) => ({ at: x.createdAt, kind: "snapshot" as const, x })),
     ...s.decisions.map((d) => ({ at: d.createdAt, kind: "decision" as const, d })),
-  ].sort((a, b) => a.at.localeCompare(b.at));
-  const lastSnapshot = s.snapshots.at(-1)?.id;
+  ].sort((a, b) => b.at.localeCompare(a.at));
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 pt-8 pb-16 md:px-10">
@@ -241,64 +384,93 @@ export function DesignSessionView({ id }: { id: string }) {
         </Button>
         <h1 className="text-[clamp(32px,4.5vw,56px)] leading-[1] font-medium tracking-[-0.04em]">{s.title}</h1>
         <p className="text-sm text-ink-muted">
-          {[s.targetProject, s.surface, `started ${new Date(s.createdAt).toLocaleDateString()}`]
-            .filter(Boolean)
-            .join(" · ")}
+          {[s.targetProject, `started ${shortDate(s.createdAt)}`].filter(Boolean).join(" · ")}
         </p>
-        <StatusStepper session={s} saving={saving} onChange={setStatus} />
+        <Stepper status={s.status} saving={saving} />
+        <StatusRow session={s} saving={saving} onChange={setStatus} />
       </div>
-      {s.candidates?.length > 0 && <DesignCandidates candidates={s.candidates} />}
+      <ApprovedBand session={s} />
       {s.mockups.length > 0 && <DesignMockups session={s} />}
-      <ol className="max-w-4xl space-y-3">
-        {timeline.map((item) =>
-          item.kind === "decision" ? (
-            <li key={item.d.id} className="space-y-1 rounded-[14px] bg-surface px-4 py-3">
-              <p className="text-xs text-ink-muted">
-                <span className="text-ink-secondary">
-                  {DECISION_LABEL[item.d.kind]}
-                  {item.d.source === "owner" && " in PIVOT"}
-                  {item.d.source === "chat" && " in the chat"}
-                </span>{" "}
-                · {new Date(item.at).toLocaleString()}
-              </p>
-              <p className="text-sm text-ink">{item.d.summary}</p>
-              {item.d.direction && <p className="text-sm text-ink-secondary">Direction: {item.d.direction}</p>}
-              {item.d.details && (
-                <div className="text-sm">
-                  <Markdown>{item.d.details}</Markdown>
-                </div>
-              )}
-            </li>
-          ) : (
-            <li key={item.x.id}>
-              <details open={item.x.id === lastSnapshot} className="rounded-[14px] bg-surface px-4 py-3">
-                <summary className="cursor-pointer text-xs text-ink-muted">
-                  <span className="text-ink-secondary">{MILESTONE_LABEL[item.x.milestone]}</span> ·{" "}
-                  {new Date(item.at).toLocaleString()}
-                  {item.x.referenceIds.length > 0 && ` · ${item.x.referenceIds.length} references`}
-                  {item.x.note && ` · ${item.x.note}`}
-                </summary>
-                <div className="mt-3 text-sm">
-                  <Markdown>{item.x.markdown}</Markdown>
-                </div>
-                {item.x.referenceIds.length > 0 && (
-                  <p className="mt-2 flex flex-wrap gap-1.5 text-xs">
-                    {item.x.referenceIds.map((r, i) => (
-                      <Link
-                        key={r}
-                        href={`/r/${r}`}
-                        className="rounded-full bg-surface-raised px-2.5 py-0.5 hover:underline"
-                      >
-                        Reference {i + 1}
-                      </Link>
-                    ))}
-                  </p>
-                )}
-              </details>
-            </li>
-          ),
-        )}
-      </ol>
+      {s.candidates?.length > 0 && <DesignCandidates candidates={s.candidates} />}
+
+      {brief && (
+        <section aria-labelledby="current-brief-heading" className="max-w-4xl space-y-3">
+          <h2 id="current-brief-heading" className="text-xl font-medium tracking-[-0.02em]">
+            Brief
+          </h2>
+          <details id={`brief-${brief.id}`} className="group scroll-mt-28 rounded-[14px] bg-surface">
+            <summary className="flex cursor-pointer list-none items-center gap-3 rounded-[14px] px-4 py-2.5 text-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text focus-visible:outline-solid [&::-webkit-details-marker]:hidden">
+              <span className="min-w-0 flex-1 text-ink sm:truncate">
+                {snapshotLine(brief)} · <span className="text-ink-secondary">{MILESTONE_LABEL[brief.milestone]}</span> ·{" "}
+                <span className="text-ink-muted">{shortDate(brief.createdAt)}</span>
+              </span>
+              <span className="flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-ink-secondary">
+                <span className="group-open:hidden">Read brief</span>
+                <span className="hidden group-open:inline">Close</span>
+                {chevron}
+              </span>
+            </summary>
+            <div className="px-4 pb-4">
+              <SnapshotBody x={brief} />
+            </div>
+          </details>
+        </section>
+      )}
+
+      {history.length > 0 && (
+        <section aria-labelledby="history-heading" className="max-w-4xl space-y-3">
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <h2 id="history-heading" className="text-xl font-medium tracking-[-0.02em]">
+              History
+            </h2>
+            <span className="text-sm text-ink-muted">
+              {history.length}
+              {history.length > 1 && " · newest first"}
+            </span>
+            {history.length > 1 && (
+              <Button size="sm" variant="ghost" className="ml-auto" onClick={expandAll}>
+                {expanded ? "Collapse all" : "Expand all"}
+              </Button>
+            )}
+          </div>
+          <ol ref={historyRef} className="space-y-0.5">
+            {history.map((item) => {
+              const key = item.kind === "decision" ? `decision-${item.d.id}` : `brief-${item.x.id}`;
+              return (
+                <li key={key}>
+                  <details id={key} onToggle={syncExpanded} className="group scroll-mt-28 rounded-xl bg-surface">
+                    <summary className="flex cursor-pointer list-none items-start gap-3 rounded-xl px-3.5 py-2.5 text-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text focus-visible:outline-solid sm:grid sm:grid-cols-[150px_120px_1fr_16px] [&::-webkit-details-marker]:hidden">
+                      <span className="font-medium text-ink-secondary max-sm:hidden">
+                        {item.kind === "decision" ? decisionLabel(item.d) : MILESTONE_LABEL[item.x.milestone]}
+                      </span>
+                      <span className="text-[13px] text-ink-muted max-sm:hidden">{dateTime(item.at)}</span>
+                      <span className="min-w-0 flex-1 text-ink group-open:whitespace-normal sm:truncate">
+                        <span className="text-ink-secondary sm:hidden">
+                          {item.kind === "decision" ? decisionLabel(item.d) : MILESTONE_LABEL[item.x.milestone]} ·{" "}
+                        </span>
+                        {item.kind === "decision" ? item.d.summary : snapshotLine(item.x)}
+                      </span>
+                      <span className="mt-0.5">{chevron}</span>
+                    </summary>
+                    <div className="space-y-2 px-3.5 pb-3.5 text-sm text-ink-secondary">
+                      <p className="text-[13px] text-ink-muted sm:hidden">{dateTime(item.at)}</p>
+                      {item.kind === "decision" ? (
+                        <>
+                          {item.d.direction && <p>Direction: {item.d.direction}</p>}
+                          {item.d.details && <Markdown>{item.d.details}</Markdown>}
+                          {!item.d.direction && !item.d.details && <p className="text-ink-muted">Nothing more.</p>}
+                        </>
+                      ) : (
+                        <SnapshotBody x={item.x} />
+                      )}
+                    </div>
+                  </details>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      )}
     </div>
   );
 }
