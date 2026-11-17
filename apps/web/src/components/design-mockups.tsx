@@ -1,10 +1,11 @@
 "use client";
 
-import { Check, ExternalLink, Loader2, RotateCcw } from "lucide-react";
+import { AppWindow, Check, ExternalLink, Loader2, RotateCcw, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import type { PreviewState } from "@pivot/core/preview-launcher";
 import type { DesignMockupDTO, DesignSessionDetailDTO } from "@pivot/core/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -101,14 +102,22 @@ function ApproveDialog({
   sessionId,
   open,
   onOpenChange,
+  initialNote = "",
 }: {
   mockup: DesignMockupDTO;
   sessionId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** The note written when the version was chosen in the preview. */
+  initialNote?: string;
 }) {
   const qc = useQueryClient();
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(initialNote);
+  const [lastInitial, setLastInitial] = useState(initialNote);
+  if (initialNote !== lastInitial) {
+    setLastInitial(initialNote);
+    setNote(initialNote);
+  }
   const [passphrase, setPassphrase] = useState("");
   const [saving, setSaving] = useState(false);
   // A single-use challenge for this version and digest, fetched fresh for every attempt: `null` while loading, `false`
@@ -138,6 +147,7 @@ function ApproveDialog({
       });
       qc.setQueryData(["design-session", sessionId], s);
       await qc.invalidateQueries({ queryKey: ["design-sessions"] });
+      await api(`/api/design/sessions/${sessionId}/preview`, { method: "DELETE" }).catch(() => {});
       onOpenChange(false);
       setNote("");
       setPassphrase("");
@@ -242,6 +252,42 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
   const [approving, setApproving] = useState(false);
   const [run, setRun] = useState(0);
   const reduce = useReducedMotion();
+  const qc = useQueryClient();
+  const canApprove = s.status === "exploring";
+
+  // The interactive preview window PIVOT opens for this session, and the version chosen there, if any.
+  const preview = useQuery({
+    queryKey: ["design-preview", s.id],
+    queryFn: () => api<PreviewState>(`/api/design/sessions/${s.id}/preview`),
+    refetchInterval: (q) => (q.state.data?.open || canApprove ? 2000 : false),
+  });
+  const pick = canApprove ? (preview.data?.pick ?? null) : null;
+  const [opening, setOpening] = useState(false);
+  const openPreview = async () => {
+    setOpening(true);
+    try {
+      const st = await api<PreviewState>(`/api/design/sessions/${s.id}/preview`, { method: "POST", json: { round } });
+      qc.setQueryData(["design-preview", s.id], st);
+      if (st.error) toast.error(st.error);
+      else toast.success("The interactive preview opened in its own window.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not open the preview");
+    } finally {
+      setOpening(false);
+    }
+  };
+  const dismissPick = async () => {
+    const st = await api<PreviewState>(`/api/design/sessions/${s.id}/preview`, { method: "DELETE" });
+    qc.setQueryData(["design-preview", s.id], st);
+  };
+  // A version chosen in the preview: show it here and open its approval once.
+  const [handledPick, setHandledPick] = useState<string | null>(null);
+  if (pick && pick.at !== handledPick) {
+    setHandledPick(pick.at);
+    setRound(pick.round);
+    setN(pick.n);
+    setApproving(true);
+  }
 
   // a new round arriving (the page refreshes while exploring) opens on its first version
   const seen = useRef(latest);
@@ -262,7 +308,6 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
   const isApproved = (m: DesignMockupDTO) =>
     lastApproval?.binding ? lastApproval.binding.mockupId === m.id : lastApproval?.direction === directionOf(m);
   const brokenBinding = lastApproval?.binding && lastApproval.binding.status !== "bound" ? lastApproval.binding : null;
-  const canApprove = s.status === "exploring";
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -360,6 +405,10 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
               Open alone <ExternalLink />
             </a>
           </Button>
+          <Button size="sm" variant="secondary" disabled={opening} onClick={openPreview}>
+            {opening ? <Loader2 className="animate-spin" /> : <AppWindow />}
+            {preview.data?.open && preview.data.round === round ? "Preview open" : "Open interactive preview"}
+          </Button>
           {canApprove && (
             <Button
               size="sm"
@@ -382,11 +431,32 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
         </p>
       )}
 
+      {pick && (
+        <div role="status" className="flex flex-wrap items-center gap-2 rounded-[14px] bg-surface px-4 py-3 text-sm">
+          <span className="text-ink">
+            You chose version {pick.n}, “{pick.title}”, in the preview.
+          </span>
+          <span className="ml-auto flex gap-1.5">
+            <Button
+              size="sm"
+              className="rounded-full bg-inverse text-on-inverse hover:bg-inverse/90"
+              onClick={() => {
+                setRound(pick.round);
+                setN(pick.n);
+                setApproving(true);
+              }}
+            >
+              <Check /> Approve it…
+            </Button>
+            <Button size="sm" variant="ghost" onClick={dismissPick} aria-label="Dismiss the choice">
+              <X />
+            </Button>
+          </span>
+        </div>
+      )}
       {current.interactive && (
         <p className="text-[13px] text-ink-muted">
-          <b className="font-medium text-ink">Interactive version.</b> Its scripts don’t run on this page, so its
-          interactions and motion are missing here. Ask Claude to open the interactive preview: a separate browser
-          window that runs this exact version (same digest) with no network and no access to PIVOT.
+          Interactive version: its motion runs only in the interactive preview.
         </p>
       )}
       <div id="mockup-panel" role="tabpanel" aria-label={`Version ${current.n}: ${current.title}`}>
@@ -404,7 +474,13 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
         </p>
       )}
 
-      <ApproveDialog mockup={current} sessionId={s.id} open={approving} onOpenChange={setApproving} />
+      <ApproveDialog
+        mockup={current}
+        sessionId={s.id}
+        open={approving}
+        onOpenChange={setApproving}
+        initialNote={pick && pick.mockupId === current.id ? pick.note : ""}
+      />
     </section>
   );
 }
