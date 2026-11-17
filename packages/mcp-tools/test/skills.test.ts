@@ -185,7 +185,9 @@ describe("the watcher belongs to the session the user talks to", () => {
 
 describe("a pick from the interactive preview", () => {
   it("pivot-design treats Choose this version as a pick, then asks before recording a chat approval", () => {
-    expect(d).toContain("**Choose this version** in the preview sends the user's pick to you");
+    expect(d).toContain("**Choose this version** in a preview you started sends the user's pick to you");
+    expect(d).toContain("the session page has **Open interactive preview**");
+    expect(spec).toContain("**Mở preview từ PIVOT**");
     expect(d).toContain("That is the user's pick, not an approval");
     expect(spec).toContain("Nút **Choose this version** gửi lựa chọn của người dùng");
   });
