@@ -214,8 +214,19 @@ export function TopBar() {
         {/* phone and tablet: a full-width row that shrinks into a 56px capsule */}
         <div className="relative h-16 lg:hidden">
           <div ref={phoneShellRef} aria-hidden className="nav-shell pointer-events-auto absolute inset-0" />
-          <div ref={prowRef} className="pointer-events-auto relative flex h-full items-center gap-1 pr-5 pl-7">
-            <Logo data-nb className="mr-auto" />
+          <div
+            ref={prowRef}
+            className="pointer-events-auto relative flex h-full items-center gap-1 pr-5 pl-7"
+            data-search-open={search.open === "phone" || undefined}
+          >
+            {/* a page can dock its title here once it has scrolled under the bar (Library and References, below lg);
+              the logo after it steps aside while it holds something */}
+            <div
+              id="topbar-dock"
+              data-nb
+              className="peer flex min-w-0 flex-1 items-center gap-2 empty:hidden in-data-search-open:invisible motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in motion-safe:slide-in-from-bottom-1"
+            />
+            <Logo data-nb data-logo className="mr-auto peer-[:not(:empty)]:hidden in-data-search-open:invisible" />
             <button
               ref={phoneSearchRef}
               type="button"
@@ -227,7 +238,7 @@ export function TopBar() {
             >
               <Search aria-hidden />
             </button>
-            <InboxLink data-nb className="size-11 bg-transparent [&_svg]:size-5" />
+            <InboxLink data-nb className="size-11 bg-transparent in-data-search-open:invisible [&_svg]:size-5" />
             <SearchField fieldRef={phoneFieldRef} search={search} host="phone" />
           </div>
         </div>
@@ -243,7 +254,7 @@ export function TopBar() {
   );
 }
 
-function Logo({ className, ...rest }: { className?: string; "data-nb"?: boolean }) {
+function Logo({ className, ...rest }: { className?: string; "data-nb"?: boolean; "data-logo"?: boolean }) {
   return (
     <Link
       {...rest}
