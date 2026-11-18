@@ -1,4 +1,4 @@
-// The pivot-ui CLI without a built server: options, the launch refusals, the links to native packages, doctor,
+// The pivot-studio CLI without a built server: options, the launch refusals, the links to native packages, doctor,
 // passphrase and extension. The package itself (npm pack, npx, a real start) is checked by hand; see apps/cli/README.md.
 import { execFile } from "node:child_process";
 import fs from "node:fs";
@@ -18,9 +18,9 @@ import { dist, resolveDataDir } from "../lib/paths.mjs";
 import { serverEnv } from "../lib/start.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const bin = path.resolve(here, "../bin/pivot-ui.mjs");
+const bin = path.resolve(here, "../bin/pivot-studio.mjs");
 const pkg = JSON.parse(fs.readFileSync(path.resolve(here, "../package.json"), "utf8"));
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pivot-ui-test-"));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pivot-studio-test-"));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 const dir = (name) => fs.mkdtempSync(path.join(tmp, `${name}-`));
 
@@ -60,7 +60,7 @@ describe("options", () => {
   });
 
   it("prints help and the version, and exits 1 on an unknown command or option", async () => {
-    expect((await cli(["help"])).out).toMatch(/Usage: pivot-ui.*\n[\s\S]*preview <session>/);
+    expect((await cli(["help"])).out).toMatch(/Usage: pivot-studio.*\n[\s\S]*preview <session>/);
     expect(await cli(["--version"])).toEqual({ code: 0, out: `${pkg.version}\n` });
     expect((await cli(["deploy"])).code).toBe(1);
     const bad = await cli(["--bogus"]);
@@ -200,7 +200,7 @@ describe("doctor", () => {
     expect(byName["API token"].ok).toBe(true);
     expect(byName["Owner passphrase"]).toMatchObject({
       ok: false,
-      fix: expect.stringContaining("pivot-ui passphrase"),
+      fix: expect.stringContaining("pivot-studio passphrase"),
     });
     expect(byName["PIVOT"].ok).toBe(false);
     expect(byName["Claude Code plugin"]).toMatchObject({ ok: true, detail: "pivot@pivot" });

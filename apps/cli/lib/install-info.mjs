@@ -8,7 +8,7 @@ export const INSTALL_FILE = "install.json";
 
 /**
  * Records the install. `requireFrom` is a file inside it from which `playwright` resolves (createRequire's base):
- * the package.json of pivot-ui, or of packages/core in a checkout.
+ * the package.json of pivot-studio, or of packages/core in a checkout.
  */
 export function writeInstallInfo({ dataDir, kind, root, requireFrom, version }) {
   fs.mkdirSync(dataDir, { recursive: true });

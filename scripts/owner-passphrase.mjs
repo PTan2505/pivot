@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Sets the owner passphrase: pnpm owner:passphrase   (run it yourself, in your own terminal, in the PIVOT folder)
-// The same as `pivot-ui passphrase`; the rules and the stored format are in apps/cli/lib/passphrase.mjs.
+// The same as `pivot-studio passphrase`; the rules and the stored format are in apps/cli/lib/passphrase.mjs.
 //   --replace   replace a passphrase that is already set
 //   --stdin     read the passphrase from standard input (one line), for scripted setups such as tests
 import path from "node:path";

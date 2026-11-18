@@ -1,4 +1,4 @@
-// `pivot-ui start`: serve PIVOT on 127.0.0.1 from the built server in dist/app, with its data in ~/.pivot.
+// `pivot-studio start`: serve PIVOT on 127.0.0.1 from the built server in dist/app, with its data in ~/.pivot.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
@@ -79,7 +79,7 @@ export async function start(opts) {
   }
   if (await portBusy(port)) {
     console.error(
-      `› Something else is using port ${port}. Start PIVOT on another one: pivot-ui start --port ${Number(port) + 1}`,
+      `› Something else is using port ${port}. Start PIVOT on another one: pivot-studio start --port ${Number(port) + 1}`,
     );
     return 1;
   }
@@ -90,7 +90,7 @@ export async function start(opts) {
     return 1;
   }
   if (!fs.existsSync(path.join(dist.app, "server.js"))) {
-    console.error(`› This copy of pivot-ui has no built server (${dist.app}). Reinstall it.`);
+    console.error(`› This copy of pivot-studio has no built server (${dist.app}). Reinstall it.`);
     return 1;
   }
 
@@ -100,7 +100,7 @@ export async function start(opts) {
   }
   const missing = linkExternals();
   if (missing.length) {
-    console.error(`› These packages are missing from the install: ${missing.join(", ")}. Reinstall pivot-ui.`);
+    console.error(`› These packages are missing from the install: ${missing.join(", ")}. Reinstall pivot-studio.`);
     return 1;
   }
   writeInstallInfo({

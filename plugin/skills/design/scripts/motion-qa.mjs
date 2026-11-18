@@ -726,9 +726,9 @@ export function renderMarkdown(r) {
 // ---- browser ---------------------------------------------------------------------------------------------------
 
 /**
- * The files PIVOT's Playwright can be required from, in order: PIVOT_REPO; a PIVOT checkout or pivot-ui package this
+ * The files PIVOT's Playwright can be required from, in order: PIVOT_REPO; a PIVOT checkout or pivot-studio package this
  * script sits in; and the PIVOT install that last started with this data folder (<data dir>/install.json, written by
- * `npm start` and `pivot-ui start`), which is how a copy installed with the Claude Code plugin finds it.
+ * `npm start` and `pivot-studio start`), which is how a copy installed with the Claude Code plugin finds it.
  */
 export function playwrightBases({
   env = process.env,
@@ -739,7 +739,7 @@ export function playwrightBases({
   for (let dir = from, i = 0; i < 8; i++, dir = path.dirname(dir)) {
     bases.push(path.join(dir, "packages/core/package.json"));
     try {
-      if (JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")).name === "pivot-ui")
+      if (JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")).name === "pivot-studio")
         bases.push(path.join(dir, "package.json"));
     } catch {
       // no package.json here
@@ -760,7 +760,7 @@ export function loadPlaywright({ env = process.env } = {}) {
   const bases = playwrightBases({ env });
   if (!bases.length)
     throw new Error(
-      "Playwright not found: start PIVOT once (npm start in a checkout, or pivot-ui start) so this script can find it, or set PIVOT_REPO. Motion stays Not Verified.",
+      "Playwright not found: start PIVOT once (npm start in a checkout, or pivot-studio start) so this script can find it, or set PIVOT_REPO. Motion stays Not Verified.",
     );
   for (const base of bases) {
     const req = createRequire(base);
@@ -777,7 +777,7 @@ export function loadPlaywright({ env = process.env } = {}) {
     return { chromium: playwright.chromium, version: req("playwright/package.json").version, repo: path.dirname(base) };
   }
   throw new Error(
-    `Playwright isn't installed where PIVOT is (${bases.map((b) => path.dirname(b)).join(", ")}): run pnpm install in the checkout, or reinstall pivot-ui. Motion stays Not Verified until it runs.`,
+    `Playwright isn't installed where PIVOT is (${bases.map((b) => path.dirname(b)).join(", ")}): run pnpm install in the checkout, or reinstall pivot-studio. Motion stays Not Verified until it runs.`,
   );
 }
 

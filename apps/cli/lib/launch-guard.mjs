@@ -1,4 +1,4 @@
-// Fail-closed checks for both launchers (scripts/start.mjs in a checkout, pivot-ui start), kept apart so they can be tested without starting
+// Fail-closed checks for both launchers (scripts/start.mjs in a checkout, pivot-studio start), kept apart so they can be tested without starting
 // anything. See docs/incident-2026-11-10-real-environment.md.
 import fs from "node:fs";
 import path from "node:path";

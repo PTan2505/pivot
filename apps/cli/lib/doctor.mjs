@@ -1,4 +1,4 @@
-// `pivot-ui doctor`: what this machine has and what is missing, each with the command that fixes it. Reads only.
+// `pivot-studio doctor`: what this machine has and what is missing, each with the command that fixes it. Reads only.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -56,14 +56,14 @@ export async function checks({ dataDir: flag, port, env = process.env, nodeVersi
     ok: chromium.installed,
     need: true,
     detail: chromium.installed ? chromium.path : "not installed",
-    fix: "Run `pivot-ui start` once: it downloads Chromium (about 150 MB).",
+    fix: "Run `pivot-studio start` once: it downloads Chromium (about 150 MB).",
   });
   const ffmpeg = ffmpegStatus(chromium.path);
   add({
     name: "ffmpeg (motion recording)",
     ok: ffmpeg.installed,
     detail: ffmpeg.installed ? ffmpeg.path : "not found beside Chromium",
-    fix: "It comes with Chromium: run `pivot-ui start` once. Screenshots work without it; motion recording doesn't.",
+    fix: "It comes with Chromium: run `pivot-studio start` once. Screenshots work without it; motion recording doesn't.",
   });
 
   const token = fs.existsSync(path.join(dataDir, "api-token"));
@@ -71,14 +71,14 @@ export async function checks({ dataDir: flag, port, env = process.env, nodeVersi
     name: "API token",
     ok: token,
     detail: token ? path.join(dataDir, "api-token") : "not created yet",
-    fix: "PIVOT creates it when it starts: run `pivot-ui start`.",
+    fix: "PIVOT creates it when it starts: run `pivot-studio start`.",
   });
   const passphrase = fs.existsSync(path.join(dataDir, "owner-approval.json"));
   add({
     name: "Owner passphrase",
     ok: passphrase,
     detail: passphrase ? "set" : "not set",
-    fix: "Run `pivot-ui passphrase` in your own terminal. Approving a design in PIVOT needs it.",
+    fix: "Run `pivot-studio passphrase` in your own terminal. Approving a design in PIVOT needs it.",
   });
 
   const running = await pivotAt(url);
@@ -86,7 +86,7 @@ export async function checks({ dataDir: flag, port, env = process.env, nodeVersi
     name: "PIVOT",
     ok: running,
     detail: running ? `running at ${url}` : `not answering at ${url}`,
-    fix: "Run `pivot-ui start`.",
+    fix: "Run `pivot-studio start`.",
   });
 
   const plugins = pivotPlugins(scoped);
