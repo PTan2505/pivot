@@ -725,29 +725,60 @@ export function renderMarkdown(r) {
 
 // ---- browser ---------------------------------------------------------------------------------------------------
 
-/** PIVOT's Playwright, found from this script's real location (the skill is linked from the PIVOT repo). */
-export function loadPlaywright() {
-  const roots = [];
-  if (process.env.PIVOT_REPO) roots.push(process.env.PIVOT_REPO);
-  let dir = path.dirname(fs.realpathSync(fileURLToPath(import.meta.url)));
-  for (let i = 0; i < 8; i++, dir = path.dirname(dir)) roots.push(dir);
-  const repo = roots.find((r) => fs.existsSync(path.join(r, "packages/core/package.json")));
-  if (!repo)
-    throw new Error(
-      "Playwright not found: this script must run from the PIVOT repository (or set PIVOT_REPO). Motion stays Not Verified.",
-    );
-  const req = createRequire(path.join(repo, "packages/core/package.json"));
-  let playwright;
-  try {
-    playwright = req("playwright");
-  } catch {
-    throw new Error(
-      `Playwright isn't installed in ${repo}: run pnpm install there. Motion stays Not Verified until it runs.`,
-    );
+/**
+ * The files PIVOT's Playwright can be required from, in order: PIVOT_REPO; a PIVOT checkout or pivot-ui package this
+ * script sits in; and the PIVOT install that last started with this data folder (<data dir>/install.json, written by
+ * `npm start` and `pivot-ui start`), which is how a copy installed with the Claude Code plugin finds it.
+ */
+export function playwrightBases({
+  env = process.env,
+  from = path.dirname(fs.realpathSync(fileURLToPath(import.meta.url))),
+} = {}) {
+  const bases = [];
+  if (env.PIVOT_REPO) bases.push(path.join(env.PIVOT_REPO, "packages/core/package.json"));
+  for (let dir = from, i = 0; i < 8; i++, dir = path.dirname(dir)) {
+    bases.push(path.join(dir, "packages/core/package.json"));
+    try {
+      if (JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")).name === "pivot-ui")
+        bases.push(path.join(dir, "package.json"));
+    } catch {
+      // no package.json here
+    }
   }
-  if (!fs.existsSync(playwright.chromium.executablePath()))
-    throw new Error("Chromium isn't installed: run `pnpm setup:browser` in the PIVOT repo. Motion stays Not Verified.");
-  return { chromium: playwright.chromium, version: req("playwright/package.json").version, repo };
+  const dataDir = path.resolve((env.PIVOT_DATA_DIR || "~/.pivot").replace(/^~(?=$|[/\\])/, os.homedir()));
+  try {
+    const info = JSON.parse(fs.readFileSync(path.join(dataDir, "install.json"), "utf8"));
+    if (info?.app === "pivot" && typeof info.requireFrom === "string") bases.push(info.requireFrom);
+  } catch {
+    // PIVOT hasn't started with this data folder yet
+  }
+  return bases.filter((b) => fs.existsSync(b));
+}
+
+/** PIVOT's Playwright and its Chromium (playwrightBases says where it looks). */
+export function loadPlaywright({ env = process.env } = {}) {
+  const bases = playwrightBases({ env });
+  if (!bases.length)
+    throw new Error(
+      "Playwright not found: start PIVOT once (npm start in a checkout, or pivot-ui start) so this script can find it, or set PIVOT_REPO. Motion stays Not Verified.",
+    );
+  for (const base of bases) {
+    const req = createRequire(base);
+    let playwright;
+    try {
+      playwright = req("playwright");
+    } catch {
+      continue;
+    }
+    if (!fs.existsSync(playwright.chromium.executablePath()))
+      throw new Error(
+        "Chromium isn't installed: start PIVOT once (it downloads it), or run `pnpm setup:browser` in a checkout. Motion stays Not Verified.",
+      );
+    return { chromium: playwright.chromium, version: req("playwright/package.json").version, repo: path.dirname(base) };
+  }
+  throw new Error(
+    `Playwright isn't installed where PIVOT is (${bases.map((b) => path.dirname(b)).join(", ")}): run pnpm install in the checkout, or reinstall pivot-ui. Motion stays Not Verified until it runs.`,
+  );
 }
 
 /** Runs in the page (or the viewer's frame) at every poll: the element's watched values and its animations. */

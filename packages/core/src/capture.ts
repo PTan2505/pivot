@@ -431,7 +431,7 @@ async function ffmpegPath() {
 /** An ffmpeg process turning the JPEG frames written to it into a VP9 webm at `file`. */
 async function startEncoder(file: string) {
   const proc = spawn(
-    await ffmpegPath(),
+    /*turbopackIgnore: true*/ await ffmpegPath(),
     [
       ...["-loglevel", "error", "-f", "image2pipe", "-c:v", "mjpeg", "-framerate", String(MOTION_FPS), "-i", "pipe:0"],
       ...["-c:v", "libvpx-vp9", "-crf", "28", "-b:v", "0", "-deadline", "good", "-cpu-used", "5", "-row-mt", "1"],

@@ -1,0 +1,34 @@
+# Publishes the npm package pivot-ui (apps/cli) when a tag v<version> is pushed, e.g. v0.1.0 for version 0.1.0.
+# Needs the repository secret NPM_TOKEN (an npm automation token). The "npm" environment can be given required
+# reviewers in the repository settings, so every publish waits for the owner's approval.
+name: Publish pivot-ui
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+  id-token: write # npm provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: The tag matches the package version
+        run: test "v$(node -p "require('./apps/cli/package.json').version")" = "$GITHUB_REF_NAME"
+      - run: pnpm --filter pivot-ui test
+      - run: pnpm cli:build
+      - run: npm publish --provenance --access public
+        working-directory: apps/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

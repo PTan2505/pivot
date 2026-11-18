@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // The npm package (apps/cli, `pnpm cli:build`) ships a self-contained server; a checkout keeps `next start`.
+  output: process.env.PIVOT_STANDALONE === "1" ? "standalone" : undefined,
   cacheComponents: true,
   partialPrefetching: true,
   transpilePackages: ["@pivot/core"],

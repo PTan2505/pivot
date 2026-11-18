@@ -1,6 +1,6 @@
 # PIVOT — notes for Claude
 
-Personal UI/UX resource library: pnpm monorepo with `apps/web` (Next.js 16 app + API), `apps/extension` (Chrome MV3) and `packages/core` (schema, migrations, library logic). Decisions: [docs/SPEC.md](docs/SPEC.md). Visual rules: [DESIGN.md](DESIGN.md). Reply in the language the user writes in. Everything written to the repo (code, docs, UI copy, commits, PRs) is in English.
+Personal UI/UX resource library: pnpm monorepo with `apps/web` (Next.js 16 app + API), `apps/extension` (Chrome MV3), `apps/cli` (the npm package `pivot-ui`) and `packages/core` (schema, migrations, library logic). Decisions: [docs/SPEC.md](docs/SPEC.md). Visual rules: [DESIGN.md](DESIGN.md). Reply in the language the user writes in. Everything written to the repo (code, docs, UI copy, commits, PRs) is in English.
 
 ## Current focus: approved decisions
 
@@ -53,6 +53,7 @@ pnpm ext:build         # build the extension into apps/extension/dist
 pnpm mcp:build         # build the MCP server into apps/mcp/dist and plugin/server/server.js; commit the latter (a test
                        # fails when it is stale). Setup: README "Design with Claude Code", apps/mcp/README.md
 pnpm plugin:validate   # Claude Code's validator on plugin/ and .claude-plugin/marketplace.json
+pnpm cli:build         # pack the app into apps/cli/dist for the npm package pivot-ui (see apps/cli/README.md)
 ```
 
 Run `pnpm check` (format check, lint, typecheck, tests) before saying a change is done. To try the app without touching the real Neon database, R2 bucket or data folder, start a scratch PIVOT: `node scripts/start.mjs --scratch <tmp dir>` (port 4400; it never reads `.env`, keeps its own data and Claude skill folders, refuses `~/.pivot` and port 4321), or the `pivot-scratch` launch configuration. Tests, demos and QA scripts never start or write to the real PIVOT: anything that writes to a PIVOT checks it first with `scripts/qa/scratch-guard.mjs`. Never start the `pivot` launch configuration for testing.
