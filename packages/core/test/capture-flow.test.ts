@@ -19,7 +19,7 @@ let baseUrl: string;
  * What the test server answers: a page whose colour changes per capture, a block page, a sign-in wall, a 503 the
  * first time it is asked (then the page), a 429 with Retry-After the first time, or a page that never finishes.
  */
-let mode: "page" | "blocked" | "signin" | "flaky" | "limited" | "slow" | "hover" = "page";
+let mode: "page" | "blocked" | "signin" | "flaky" | "limited" | "slow" | "hover" | "smooth" = "page";
 let hits = 0;
 let failuresLeft = 0;
 
@@ -50,6 +50,19 @@ beforeAll(async () => {
       return res.end("<title>Busy</title><body>Try again</body>");
     }
     if (mode === "slow" && browser) return; // never answers
+    if (mode === "smooth") {
+      // a transform-based smooth scroller: the document is locked, the wheel moves the content, which ends in green;
+      // the sliding box is a CSS animation for the recorder to step
+      return res.end(
+        `<style>html,body{margin:0;overflow:hidden;height:100%;background:#234}#c div{height:900px}#c footer{height:600px;background:#0f0}
+        #t{position:fixed;top:0;left:0;width:20px;height:20px;background:#fff;animation:go 3s linear forwards}@keyframes go{to{transform:translateX(300px)}}</style>
+        <body><div id="t"></div><div id="c"><div></div><div></div><div></div><footer></footer></div><script>
+        let target = 0, cur = 0; const c = document.getElementById("c");
+        addEventListener("wheel", (e) => { e.preventDefault(); target = Math.max(0, Math.min(c.scrollHeight - innerHeight, target + e.deltaY)); }, { passive: false });
+        (function loop() { cur += (target - cur) * 0.2; c.style.transform = "translateY(" + -cur + "px)"; requestAnimationFrame(loop); })();
+        </script></body>`,
+      );
+    }
     if (mode === "hover") {
       // anything under a pointer turns red
       return res.end(
@@ -340,6 +353,27 @@ describe.skipIf(!(await (await import("../src/capture")).playwrightStatus()).ins
     expect(keyframes.map((k) => k.meta.scrollY)).toEqual([0, expect.any(Number)]);
     // the page is about 1360px tall in a 900px window: the recording reaches its bottom
     expect(keyframes[1].meta.scrollY).toBeGreaterThan(400);
+  });
+
+  it("records a smooth-scroll page with the wheel, to its end", { timeout: 120_000 }, async () => {
+    mode = "smooth";
+    try {
+      const shots = await capture.screenshotUrl(`${baseUrl}?smooth`, { motion: true });
+      const last = shots.keyframes[shots.keyframes.length - 1];
+      // the content moved by a transform, not a scroll, and the video followed it to the green end
+      expect(last.scrollY).toBeGreaterThan(2000);
+      const { data: px, info } = await sharp(last.data).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+      const bottom = (info.height - 10) * info.width * info.channels;
+      expect([px[bottom], px[bottom + 1], px[bottom + 2]]).toEqual([
+        expect.any(Number),
+        expect.toSatisfy((g: number) => g > 200),
+        expect.any(Number),
+      ]);
+      // rests at the top and bottom plus the glide through 3000px of content
+      expect(shots.videoDurationMs).toBeGreaterThan(3000);
+    } finally {
+      mode = "page";
+    }
   });
 
   it("records motion without a pointer on the page", { timeout: 120_000 }, async () => {

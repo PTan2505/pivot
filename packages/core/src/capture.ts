@@ -376,14 +376,18 @@ const MOBILE_UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 /** The recording plays at this rate; every frame is a screenshot taken at its own scroll position. */
 const MOTION_FPS = 30;
-/** Cruising scroll speed in the video, px per second of video. */
-const MOTION_SPEED = 900;
-/** Time the scroll takes to reach that speed, and to slow to a stop at the bottom. */
-const MOTION_EASE_S = 0.6;
+/**
+ * The scroll goes one screen at a time: it glides down one window height, comes to a stop and rests there, then goes
+ * on. A glide takes the screen's height at this speed (px per second of video), plus the ease in and out.
+ */
+const MOTION_SPEED = 600;
+const MOTION_EASE_S = 0.4;
+/** The rest on each screen between glides. */
+const MOTION_STEP_HOLD_S = 0.7;
 /** The video rests this long on the first and the last screen. */
 const MOTION_HOLD_S = 1;
 /** Wall-clock limit for taking the frames; a slower page ends its video where the scroll got to. */
-const MOTION_BUDGET_MS = 75_000;
+const MOTION_BUDGET_MS = 90_000;
 const MAX_KEYFRAMES = 8;
 
 /** Scrolls to a position; returns where the page is and how far it can scroll (up to the full-page cap). */
@@ -471,18 +475,109 @@ function spread<T>(items: T[], max: number) {
 }
 
 /**
+ * Pages that scroll through a JavaScript smooth-scroll library (Lenis, Locomotive, GSAP ScrollSmoother…), or that
+ * lock the document and move their content with a transform. `scrollTo` doesn't move them, or is undone on the next
+ * frame, so the recording drives them the way a visitor does: with the mouse wheel.
+ */
+const NEEDS_WHEEL = `(() => {
+  const de = document.documentElement, body = document.body;
+  if (window.lenis || window.__lenis || window.locomotiveScroll || window.LocomotiveScroll) return true;
+  if (window.ScrollSmoother && window.ScrollSmoother.get && window.ScrollSmoother.get()) return true;
+  if (/(^|\\s)(lenis|has-scroll-smooth|has-scroll-init)(\\s|$)/.test(de.className)) return true;
+  if (document.querySelector("[data-scroll-container], #smooth-wrapper, #smooth-content, [data-lenis-prevent]")) return true;
+  const el = document.scrollingElement || de;
+  const locked = [de, body].some((n) => n && getComputedStyle(n).overflowY === "hidden");
+  if (!locked || el.scrollHeight > innerHeight + 10) return false;
+  let tallest = 0;
+  for (const n of body.querySelectorAll(":scope > *, :scope > * > *, :scope > * > * > *")) {
+    tallest = Math.max(tallest, n.getBoundingClientRect().height);
+  }
+  return tallest > innerHeight * 1.5;
+})()`;
+
+/**
+ * Where the visitor is in the page, for any way of scrolling: the document's own scroll position, or how far the
+ * tallest piece of content has moved up (a transform-based smooth scroller moves that instead of scrolling).
+ * The first call picks the element to follow.
+ */
+const SCROLL_PROGRESS = `(() => {
+  const el = document.scrollingElement || document.documentElement;
+  let t = window.__pivotTrack;
+  if (!t || !t.isConnected) {
+    t = document.body;
+    for (const n of document.body.querySelectorAll(":scope > *, :scope > * > *, :scope > * > * > *")) {
+      if (n.getBoundingClientRect().height > t.getBoundingClientRect().height) t = n;
+    }
+    window.__pivotTrack = t;
+    window.__pivotTop = t.getBoundingClientRect().top + el.scrollTop;
+  }
+  const r = t.getBoundingClientRect();
+  const moved = Math.max(el.scrollTop, window.__pivotTop - r.top);
+  const end = Math.min(${MAX_FULL_PAGE_HEIGHT}, Math.max(el.scrollHeight, r.height + window.__pivotTop)) - innerHeight;
+  return { at: Math.round(moved), max: Math.max(0, Math.round(end)) };
+})()`;
+
+/**
+ * Advances every CSS animation, CSS transition and Web Animation on the page by one video frame. They run on the
+ * browser's own clock, which the fake clock doesn't reach, so each is paused the first time it is seen and stepped
+ * by hand from then on. Scroll-linked animations follow the scroll, not time, and are left alone.
+ */
+const stepAnimations = (ms: number) => `(() => {
+  for (const a of document.getAnimations()) {
+    if (a.timeline !== document.timeline) continue;
+    if (!a.__pivotStepped) {
+      if (a.playState !== "running") continue;
+      a.pause();
+      a.__pivotStepped = true;
+    }
+    a.currentTime = (Number(a.currentTime) || 0) + ${ms};
+  }
+})()`;
+
+/** `promise`, or nothing once `ms` has passed in real time (the page's own timers are frozen while recording). */
+const within = <T>(promise: Promise<T>, ms: number): Promise<T | undefined> =>
+  Promise.race([
+    promise.catch(() => undefined),
+    new Promise<undefined>((done) => setTimeout(() => done(undefined), ms)),
+  ]);
+
+/**
  * Records the page scrolling from top to bottom as a smooth 30 fps video, the way a screen recording of a visitor
- * reads it: a rest on the first screen, an eased glide down at a steady speed, a rest at the bottom. Each frame is a
- * screenshot taken at its exact scroll position, so a slow page never stutters the video (waiting for images costs
- * time, not frames), and scroll-triggered reveals play as the page reaches them. Keyframes come from the same frames.
+ * reads it: a rest on the first screen, then one screen at a time (an eased glide down a window height, a short rest
+ * on the new screen), and a rest at the bottom. Keyframes are the settled last frames of those rests.
+ *
+ * Time on the page is virtual. The page's clock (timers, requestAnimationFrame, performance.now, Date), installed
+ * when the page opened, is paused here and moved forward exactly one frame (1/30 s) before each screenshot, and CSS
+ * and Web Animations are stepped by the same amount. However long a screenshot or an image takes, every animation in
+ * the video plays at its real speed, in step with the scroll, and scroll-scrubbed timelines (GSAP ScrollTrigger)
+ * get the frames they need to catch up. Pages with a smooth-scroll library are scrolled with the mouse wheel and
+ * followed by where their content actually is; the others jump to each frame's position. Keyframes come from the
+ * same frames.
  */
 async function recordScroll(page: Page, file: string) {
+  const wheel = await page.evaluate<boolean>(NEEDS_WHEEL).catch(() => false);
   await page.evaluate(NO_SMOOTH_SCROLL).catch(() => {});
-  await page.evaluate(UNLOCK_INNER_SCROLL).catch(() => {});
+  if (!wheel) await page.evaluate(UNLOCK_INNER_SCROLL).catch(() => {});
   await page.evaluate(EAGER_IMAGES).catch(() => {});
   const vp = page.viewportSize() ?? DESKTOP;
-  // The pointer is never moved onto the page: a resting pointer would light up rows and pop tooltips as they pass under it.
-  await page.evaluate(IMAGES_ON_SCREEN).catch(() => {});
+  await within(page.evaluate(IMAGES_ON_SCREEN), 1_500);
+  // The pointer stays off the page when the page can be scrolled without it: a resting pointer would light up rows
+  // and pop tooltips as they pass under it. Wheel events need one, so it sits on the right edge, over the scrollbar.
+  if (wheel) await page.mouse.move(vp.width - 3, Math.round(vp.height / 2));
+
+  // From here on the page's time moves only when a frame is taken.
+  const now = await page.evaluate<number>("Date.now()");
+  await page.clock.pauseAt(now + 1);
+  const frameMs = 1000 / MOTION_FPS;
+  // whole milliseconds per step, carried over so 30 frames are exactly one second
+  let clockMs = 0;
+  let framesTicked = 0;
+  const tick = async () => {
+    const next = Math.round(++framesTicked * frameMs);
+    await page.clock.runFor(next - clockMs);
+    clockMs = next;
+    await page.evaluate(stepAnimations(frameMs)).catch(() => {});
+  };
 
   const cdp = await page.context().newCDPSession(page);
   const encoder = await startEncoder(file);
@@ -490,45 +585,65 @@ async function recordScroll(page: Page, file: string) {
   let frames = 0;
   let y = 0;
   const shoot = async () => {
+    await tick();
     const { data } = await cdp.send("Page.captureScreenshot", { format: "jpeg", quality: 90, optimizeForSpeed: true });
     const jpeg = Buffer.from(data, "base64");
     await encoder.write(jpeg);
     frames++;
     return jpeg;
   };
+  const progress = () => page.evaluate<{ at: number; max: number }>(SCROLL_PROGRESS);
   try {
     const started = Date.now();
+    let { max } = wheel ? await progress() : await page.evaluate<{ at: number; max: number }>(scrollAndMeasure(0));
     candidates.push({ jpeg: await shoot(), scrollY: 0 });
     for (let i = 1; i < MOTION_FPS * MOTION_HOLD_S; i++) await shoot();
 
-    const accel = MOTION_SPEED / MOTION_EASE_S;
-    let speed = 0;
     let stuck = 0;
-    let waitedAt = 0;
-    let { max } = await page.evaluate<{ at: number; max: number }>(scrollAndMeasure(0));
-    while (y < max - 0.5 && Date.now() - started < MOTION_BUDGET_MS) {
-      // speed up to cruising, and slow down in time to stop at the bottom (which moves if the page grows)
-      speed = Math.min(MOTION_SPEED, speed + accel / MOTION_FPS, Math.sqrt(2 * accel * (max - y)));
-      y = Math.min(max, y + Math.max(speed, 20) / MOTION_FPS);
-      const moved = await page.evaluate<{ at: number; max: number }>(scrollAndMeasure(Math.round(y)));
-      max = moved.max;
-      // a page that won't scroll any further is done
-      stuck = moved.at < Math.round(y) - 2 ? stuck + 1 : 0;
-      if (stuck >= MOTION_FPS / 2) break;
-      if (y - waitedAt >= vp.height / 2) {
-        await page.evaluate(IMAGES_ON_SCREEN).catch(() => {});
-        waitedAt = y;
+    let at = 0;
+    const inBudget = () => Date.now() - started < MOTION_BUDGET_MS;
+    // one screen per glide, eased in and out; the bottom moves if the page grows on the way
+    while (y < max - 0.5 && stuck < MOTION_FPS && inBudget()) {
+      const from = y;
+      const to = Math.min(max, from + vp.height);
+      const n = Math.max(6, Math.round(MOTION_FPS * ((to - from) / MOTION_SPEED + MOTION_EASE_S)));
+      for (let i = 1; i <= n && inBudget(); i++) {
+        const target = from + ((to - from) * (1 - Math.cos((Math.PI * i) / n))) / 2;
+        const step = target - y;
+        y = target;
+        let moved: { at: number; max: number };
+        if (wheel) {
+          // the library eases toward where the wheel sent it; the video follows the content, not the wheel
+          await page.mouse.wheel(0, step);
+          moved = await progress();
+        } else {
+          moved = await page.evaluate<{ at: number; max: number }>(scrollAndMeasure(Math.round(y)));
+        }
+        max = Math.max(moved.max, 0);
+        // a page that won't follow the scroll any further is done: the document stops short of the position, or a
+        // smooth scroller stays put while the wheel runs well ahead of it
+        const behind = wheel ? y - moved.at > vp.height / 4 && moved.at <= at + 0.5 : moved.at < Math.round(y) - 2;
+        stuck = behind ? stuck + 1 : 0;
+        at = wheel ? moved.at : Math.round(y);
+        if (stuck >= MOTION_FPS) break;
+        await shoot();
       }
-      const jpeg = await shoot();
-      if (y - candidates[candidates.length - 1].scrollY >= vp.height * 0.8) {
-        candidates.push({ jpeg, scrollY: Math.round(y) });
-      }
+      if (stuck >= MOTION_FPS || y >= max - 0.5) break;
+      // the rest on this screen: its images load, its entrance animations play, a smooth scroller catches up, and its
+      // last frame, settled, is this screen's keyframe
+      await within(page.evaluate(IMAGES_ON_SCREEN), 1_500);
+      let settled = await shoot();
+      for (let i = 1; i < MOTION_FPS * MOTION_STEP_HOLD_S; i++) settled = await shoot();
+      if (wheel) at = (await progress()).at;
+      candidates.push({ jpeg: settled, scrollY: at });
     }
-    await page.evaluate(IMAGES_ON_SCREEN).catch(() => {});
+    await within(page.evaluate(IMAGES_ON_SCREEN), 1_500);
     let last = await shoot();
+    // the rest at the bottom also lets a smooth scroller glide to a stop
     for (let i = 1; i < MOTION_FPS * MOTION_HOLD_S; i++) last = await shoot();
-    if (y - candidates[candidates.length - 1].scrollY >= vp.height * 0.25) {
-      candidates.push({ jpeg: last, scrollY: Math.round(y) });
+    if (wheel) at = (await progress()).at;
+    if (at - candidates[candidates.length - 1].scrollY >= vp.height * 0.25) {
+      candidates.push({ jpeg: last, scrollY: at });
     }
     await encoder.finish();
   } catch (err) {
@@ -671,6 +786,8 @@ export async function screenshotUrl(
   };
   try {
     const page = await context.newPage();
+    // A recording runs the page on a fake clock it can pause and step (see recordScroll); until then it keeps real time.
+    if (motion) await page.clock.install();
     const settle = networkQuiet(page);
     const response = await page.goto(start, { waitUntil: "load", timeout: 30_000 });
     await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
