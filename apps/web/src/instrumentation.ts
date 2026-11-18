@@ -3,7 +3,10 @@ export async function register() {
   const { purgeExpiredTrash } = await import("@pivot/core/resources");
   const { resumePendingCaptures } = await import("@pivot/core/capture");
   const { pruneAssetCache } = await import("@pivot/core/assets");
+  const { apiToken } = await import("@pivot/core/api-token");
   try {
+    // the MCP server and the extension read it from the data folder; create it now, not when Settings is first opened
+    apiToken();
     await purgeExpiredTrash();
     await resumePendingCaptures();
     await pruneAssetCache();
