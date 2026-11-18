@@ -2,10 +2,11 @@
 
 import { Check, Copy, Eye, EyeOff, Loader2, Pencil, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  OTHER_TYPES,
   TAG_KIND_LABELS,
   TAG_KINDS,
   type CaptureSettings,
@@ -19,7 +20,18 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { api, keys, useInvalidate, useSearchProviders, useSettings, useTags } from "@/lib/api";
+import {
+  api,
+  keys,
+  useCounts,
+  useInvalidate,
+  useSearchProviders,
+  useSetShowOther,
+  useSettings,
+  useShowOther,
+  useTags,
+  useUiSettings,
+} from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
 
 function Row({
@@ -183,6 +195,65 @@ function StorageRow() {
 }
 
 const THEME_LABEL: Record<CaptureTheme, string> = { dark: "Dark", light: "Light", both: "Both (two captures)" };
+
+/**
+ * What PIVOT shows. "Other resource types" brings back everything outside design: the Knowledge and Skills sections,
+ * their types in Add and ⌘K, and Export and Share package. ⌘K's "Show other resource types…" lands here (#other-types)
+ * with focus on the checkbox.
+ */
+function LibrarySection() {
+  const { data } = useUiSettings();
+  const setShowOther = useSetShowOther();
+  const { data: counts } = useCounts();
+  const boxRef = useRef<HTMLButtonElement>(null);
+  const [announce, setAnnounce] = useState("");
+  const hiddenItems = counts ? OTHER_TYPES.reduce((n, t) => n + (counts[t] ?? 0), 0) : 0;
+  useEffect(() => {
+    if (data && window.location.hash === "#other-types") {
+      boxRef.current?.scrollIntoView({ block: "center" });
+      boxRef.current?.focus({ preventScroll: true });
+    }
+  }, [data]);
+  const toggle = (on: boolean) =>
+    setShowOther.mutate(on, {
+      onSuccess: () => setAnnounce(on ? "Knowledge and Skills added to the navigation" : "Knowledge and Skills hidden"),
+      onError: (err) => toast.error(err instanceof Error ? err.message : "Could not save the setting"),
+    });
+  return (
+    <section id="other-types" className="scroll-mt-28 space-y-3">
+      <div>
+        <h2 className="text-[22px] leading-[1.2] font-medium tracking-[-0.02em]">Library</h2>
+        <p className="text-sm text-muted-foreground">What PIVOT shows. Nothing here deletes anything.</p>
+      </div>
+      <dl className="rounded-[14px] bg-surface px-5">
+        <Row label="Other resource types">
+          {data && (
+            <label className="flex items-start gap-2">
+              <Checkbox
+                ref={boxRef}
+                className="mt-0.5"
+                checked={data.showOtherTypes}
+                // aria-disabled, not disabled: a disabled control would drop keyboard focus while it saves
+                aria-disabled={setShowOther.isPending || undefined}
+                aria-describedby="other-types-help"
+                onCheckedChange={(v) => !setShowOther.isPending && toggle(!!v)}
+              />
+              Show prompts, snippets, coding rules, checklists, MCP configs and skills
+            </label>
+          )}
+          <p id="other-types-help" className="mt-1.5 text-xs text-muted-foreground">
+            Adds Knowledge and Skills to the navigation, their types to Add and ⌘K, and Export and Share package to
+            selections. Nothing is deleted while they are hidden.
+            {hiddenItems > 0 && ` You have ${hiddenItems} of these ${hiddenItems === 1 ? "item" : "items"}.`}
+          </p>
+          <p role="status" aria-live="polite" className="sr-only">
+            {announce}
+          </p>
+        </Row>
+      </dl>
+    </section>
+  );
+}
 
 /** Defaults for server screenshots; each capture can still override them from the Retake menu or the extension. */
 function CaptureSection() {
@@ -417,6 +488,7 @@ function ExtensionSection({ serverUrl }: { serverUrl?: string }) {
 export default function SettingsPage() {
   const { data: s } = useSettings();
   const { data: tags = [] } = useTags();
+  const showOther = useShowOther();
   return (
     <div className="mx-auto max-w-4xl space-y-12 px-4 pt-10 pb-16 md:px-10">
       <section className="space-y-3">
@@ -436,7 +508,8 @@ export default function SettingsPage() {
             )}
           </Row>
           <StorageRow />
-          <Row label="Global skills" value={s?.skillsDir} />
+          {/* reads ~/.claude/skills: part of Skills, outside design */}
+          {showOther && <Row label="Global skills" value={s?.skillsDir} />}
           <Row label="Default export folder" value={s?.exportsDir} />
           <Row label="Screenshots">
             {s &&
@@ -454,6 +527,7 @@ export default function SettingsPage() {
         </dl>
       </section>
 
+      <LibrarySection />
       <CaptureSection />
       <SearchSection />
 

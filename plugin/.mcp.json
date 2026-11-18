@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "pivot": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server/server.js"],
+      "env": { "PIVOT_URL": "${user_config.pivot_url}" }
+    }
+  }
+}

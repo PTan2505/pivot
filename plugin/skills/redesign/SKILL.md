@@ -1,11 +1,11 @@
 ---
-name: pivot-redesign
-description: Redesign an existing component or page in the user's project as they ask (restyle, rework the layout, modernise, clean up, make it feel like X). When the user gives a reference (a URL, a site or product, a PIVOT reference, a screenshot) or asks for consistency with a specific component or page ("make Settings match the Dashboard", "like our pricing cards"), find and study those references first and follow the pivot-design workflow with the "pivot" MCP server. Otherwise audit what exists and propose a direction in the project's design system. Approval follows the change's risk, impact on shared components is checked first, and the result is compared with the "before" screenshots. Use for UI that already exists; use pivot-design for new screens or components. Skip logic, backend or copy-only work.
+name: redesign
+description: Redesign an existing component or page in the user's project as they ask (restyle, rework the layout, modernise, clean up, make it feel like X). When the user gives a reference (a URL, a site or product, a PIVOT reference, a screenshot) or asks for consistency with a specific component or page ("make Settings match the Dashboard", "like our pricing cards"), find and study those references first and follow the pivot:design workflow with the "pivot" MCP server. Otherwise audit what exists and propose a direction in the project's design system. Approval follows the change's risk, impact on shared components is checked first, and the result is compared with the "before" screenshots. Use for UI that already exists; use pivot:design for new screens or components. Skip logic, backend or copy-only work.
 ---
 
 # PIVOT redesign workflow
 
-A redesign changes how something **that already exists** looks and is laid out. Its job, data and behaviour stay the same unless the user asks otherwise. The design workflow, the PIVOT tools and their rules are those of the `pivot-design` skill; this skill adds what a redesign needs: a path, a risk level, the impact on shared code, the "before" as evidence, and the design system as the limit.
+A redesign changes how something **that already exists** looks and is laid out. Its job, data and behaviour stay the same unless the user asks otherwise. The design workflow, the PIVOT tools and their rules are those of the `pivot:design` skill; this skill adds what a redesign needs: a path, a risk level, the impact on shared code, the "before" as evidence, and the design system as the limit.
 
 **Design documents live in PIVOT, never in the target project.** Briefs, decisions and session notes are not written into the project's repository.
 
@@ -16,7 +16,7 @@ A redesign changes how something **that already exists** looks and is laid out. 
 - `impeccable`: a technical QA audit;
 - a motion specialist, when the change is about motion.
 
-You run them yourself, through the `pivot-specialist` agent (`specialists.md` §1); the user doesn't invoke them. A specialist never replaces this skill's approval, design-system or impact rules.
+You run them yourself, through the `pivot:specialist` agent (`specialists.md` §1); the user doesn't invoke them. A specialist never replaces this skill's approval, design-system or impact rules.
 
 **Specialist checkpoint.** Right after the classification line (§0), show the user one line in the chat, and again at §6 for QA:
 
@@ -27,16 +27,16 @@ Required defaults by risk (`specialists.md` §2):
 
 - **Small fix:** none, unless the user asks.
 - **Minor:** one design-stage specialist, the one that owns the problem (`ui-ux-pro-max` for UX or an app screen, Taste for a public page's look).
-- **Major:** `ui-ux-pro-max` on the brief, always; plus Taste for a public web page; plus `animate` when motion changes. At QA, an `impeccable` audit through `pivot-specialist` after the slop check.
+- **Major:** `ui-ux-pro-max` on the brief, always; plus Taste for a public web page; plus `animate` when motion changes. At QA, an `impeccable` audit through `pivot:specialist` after the slop check.
 - **"None" at Minor or Major** only when the user said not to use specialists (quote their words). The project's design system or tokens are never the reason: they decide how it looks, not whether the structure works.
 - A required specialist that can't run is reported as `unavailable` (or `consulted`) and doesn't block the work.
 
 Before naming a specialist:
 
-- read `specialists.md` in the `pivot-design` skill folder (`../pivot-design/specialists.md` from this skill's folder);
+- read `specialists.md` in the `pivot:design` skill folder (`../design/specialists.md` from this skill's folder);
 - confirm the specialist is installed by reading its `SKILL.md` (`specialists.md` §1).
 
-Don't preload every specialist's instructions. Report each with its run label (`specialists.md` §1): `ran (skill)` only through `pivot-specialist`, `ran (script)`, `consulted` or `unavailable`. Reading a specialist's instructions is not running it. Never invoke a specialist with the Skill tool yourself, and never use another agent or Claude process when `pivot-specialist` isn't available.
+Don't preload every specialist's instructions. Report each with its run label (`specialists.md` §1): `ran (skill)` only through `pivot:specialist`, `ran (script)`, `consulted` or `unavailable`. Reading a specialist's instructions is not running it. Never invoke a specialist with the Skill tool yourself, and never use another agent or Claude process when `pivot:specialist` isn't available.
 
 ## 0. Classify the request
 
@@ -55,9 +55,9 @@ Pick a **path** and a **risk level**, and say both in one line before doing anyt
 
 If it's unclear which component or page to match ("make it look like the rest of the app"), ask, then take path A.
 
-**Options.** For a Minor or Major redesign, ask the user the `pivot-design` §1 options checkpoint right after this classification, with the same tool, skip and record rules: motion level, screen priority, pages, and specialists always; motion technology when the redesign changes motion; directions only for a Major redesign; reference sources only on path A. Small fixes skip it.
+**Options.** For a Minor or Major redesign, ask the user the `pivot:design` §1 options checkpoint right after this classification, with the same tool, skip and record rules: motion level, screen priority, pages, and specialists always; motion technology when the redesign changes motion; directions only for a Major redesign; reference sources only on path A. Small fixes skip it.
 
-**Motion.** Add the motion level to the classification line, from `pivot-design`'s [motion.md](../pivot-design/motion.md) §2 (`Motion: none | standard | advanced — <reason>`). Changing how anything moves (adding, removing or retiming motion) is an **interaction** change, so it is **Major**, with motion.md's brief block, preview and approval rules. A Minor redesign keeps the existing motion exactly as it is, and its checks confirm that.
+**Motion.** Add the motion level to the classification line, from `pivot:design`'s [motion.md](../design/motion.md) §2 (`Motion: none | standard | advanced — <reason>`). Changing how anything moves (adding, removing or retiming motion) is an **interaction** change, so it is **Major**, with motion.md's brief block, preview and approval rules. A Minor redesign keeps the existing motion exactly as it is, and its checks confirm that.
 
 ## 1. Before you start
 
@@ -71,11 +71,11 @@ If it's unclear which component or page to match ("make it look like the rest of
 
 ## 2. Path A: reference-led
 
-Follow `pivot-design` §2–§10 in this order:
+Follow `pivot:design` §2–§10 in this order:
 
 1. Classify and assess impact (§0–§1).
 2. Find and inspect references.
-3. Show the shortlist and wait for the user's pick (`pivot-design` §4).
+3. Show the shortlist and wait for the user's pick (`pivot:design` §4).
 4. Write and show the redesign brief.
 5. Save it as `initial` (§4 step 1).
 6. Make the mockups.
@@ -83,7 +83,7 @@ Follow `pivot-design` §2–§10 in this order:
 8. Build (§5).
 9. QA (§6).
 
-These steps differ from `pivot-design`:
+These steps differ from `pivot:design`:
 
 - **Find the references the user named first**; they outrank anything you find yourself.
   - **A component or page in this project** (the consistency target): read its code, look at it at desktop and phone widths, and note its tokens, components, spacing, type, density, grouping, states and motion. Matching means **reusing those components and tokens**, not copying values by eye.
@@ -91,14 +91,14 @@ These steps differ from `pivot-design`:
   - **A URL not in PIVOT:** check PIVOT by host first. If it isn't there, it is still a reference because the user gave it: open it if you can, and cite it as "given by the user, not saved". `save_reference` only when asked.
   - **A screenshot:** study it closely; it shows exactly what the user means.
 - **Fill gaps only:**
-  - PIVOT first. Before any general library search, call `list_facets` once per task, as `pivot-design` §2 says, and reuse its result after a resume.
+  - PIVOT first. Before any general library search, call `list_facets` once per task, as `pivot:design` §2 says, and reuse its result after a resume.
   - Then `search_external`: free providers only, never paid sources' tools, and web search only when the user asks.
   - Keep 2–4 references in all.
-- **Brief:** `pivot-design`'s shape, titled "Redesign brief", plus:
+- **Brief:** `pivot:design`'s shape, titled "Redesign brief", plus:
   - **Keep** and **Impact** lines (the consumers from §1);
   - a reference row for the current state ("this project, screenshot/code"), and one for the consistency target.
-- **Mockups:** as `pivot-design` §7 says (2–3 directions for a Major change, 4–5 only when broad exploration helps, saved to the session in PIVOT with `save_design_mockups`, the local viewer only as its fallback), each showing before and after side by side. For a component, follow §7's component rules too: in its page, with its states. When the redesign covers several pages or screens, each version is one direction holding all of them (§7's multi-page rule), never one version per page.
-- **Session and approval** follow §4, which replaces `pivot-design` §6 and §8 where they differ.
+- **Mockups:** as `pivot:design` §7 says (2–3 directions for a Major change, 4–5 only when broad exploration helps, saved to the session in PIVOT with `save_design_mockups`, the local viewer only as its fallback), each showing before and after side by side. For a component, follow §7's component rules too: in its page, with its states. When the redesign covers several pages or screens, each version is one direction holding all of them (§7's multi-page rule), never one version per page.
+- **Session and approval** follow §4, which replaces `pivot:design` §6 and §8 where they differ.
 
 ## 3. Path B: direct
 
@@ -112,7 +112,7 @@ No library search unless the user asks for references (then switch to path A).
    - which tokens and components it uses;
    - its impact.
 3. **Save** it as `initial` (§4 step 1).
-4. **Mockup:** for a Major change, follow `pivot-design` §7: 2–3 directions when the look is open (4–5 only when broad exploration helps), or one when the direction is already settled. Save them to the session in PIVOT either way and start the watcher, so the user can approve there.
+4. **Mockup:** for a Major change, follow `pivot:design` §7: 2–3 directions when the look is open (4–5 only when broad exploration helps), or one when the direction is already settled. Save them to the session in PIVOT either way and start the watcher, so the user can approve there.
 5. **Ask and wait** as §4 says.
 6. **Build** (§5) and **check** (§6).
 
@@ -129,11 +129,11 @@ Small fixes get no session and no approval step. Minor and Major changes follow 
    | Risk  | Path A                                                        | Path B                    |
    | ----- | ------------------------------------------------------------- | ------------------------- |
    | Minor | The brief and the direction                                   | The direction             |
-   | Major | The brief and mockups, before/after (`pivot-design` §7 to §8) | A mockup of the direction |
+   | Major | The brief and mockups, before/after (`pivot:design` §7 to §8) | A mockup of the direction |
 
 3. **Act on the answer:**
-   - **The user approves, in PIVOT or in the chat** (`pivot-design` §8). Save the direction as at least one mockup version (`save_design_mockups`; for Minor, one static version showing it is enough). Then give the user the session page's link: they press **Approve this version** there with the owner passphrase, or approve the named version in the chat, which you record with `record_chat_approval` (their words quoted exactly; a preference gets one confirming question first).
-   - **An approval made in PIVOT or recorded from the chat** (the watcher wakes you, or `get_design_session` shows an approval with `source: "owner"` or `"chat"`) is the explicit yes, with the user's note or words word for word. Call `set_design_status` with `status: "building"` before the first edit, then build. Follow `pivot-design` §8: build the chosen version with what the note asks, unless the note asks for a major change; then ask. A Major change approved this way still needs the before/after comparison in QA. `get_design_session` also shows the status, which you read as `pivot-design` §6 says: abandoned means stop and ask, and exploring after an approval means approval is needed again.
+   - **The user approves, in PIVOT or in the chat** (`pivot:design` §8). Save the direction as at least one mockup version (`save_design_mockups`; for Minor, one static version showing it is enough). Then give the user the session page's link: they press **Approve this version** there with the owner passphrase, or approve the named version in the chat, which you record with `record_chat_approval` (their words quoted exactly; a preference gets one confirming question first).
+   - **An approval made in PIVOT or recorded from the chat** (the watcher wakes you, or `get_design_session` shows an approval with `source: "owner"` or `"chat"`) is the explicit yes, with the user's note or words word for word. Call `set_design_status` with `status: "building"` before the first edit, then build. Follow `pivot:design` §8: build the chosen version with what the note asks, unless the note asks for a major change; then ask. A Major change approved this way still needs the before/after comparison in QA. `get_design_session` also shows the status, which you read as `pivot:design` §6 says: abandoned means stop and ask, and exploring after an approval means approval is needed again.
    - **Changes requested:** revise the proposal (and its mockup, for Major), show it again, and build only once the **revised** direction gets a yes.
    - **A rejection:** don't build. Ask what they want instead; a new direction goes back to step 2, in the same session.
    - **Silence, approval of something else, or a vague "just do it" on a Major change** is not approval. Ask again.
@@ -141,7 +141,7 @@ Small fixes get no session and no approval step. Minor and Major changes follow 
 5. **After approval:**
    - A change of structure or direction goes back to step 2 with a `major_change` brief (`note`: what changed and why).
    - A change the user makes within the direction is recorded with `kind: "change"`.
-   - A difference found in QA is classified as `pivot-design` §10 says:
+   - A difference found in QA is classified as `pivot:design` §10 says:
      - a refinement within scope goes in the summary;
      - a departure from an approved requirement or detail is a `deviation`;
      - a material change goes back to step 2;
@@ -170,9 +170,9 @@ If the write tools fail or the connection is read-only, say so in one line and s
 
 **Escalate:** when a check finds a problem, or the change reaches further than expected, move up to the next level.
 
-**Slop check** (Minor and Major): always run `pivot-design` §10's slop check on the changed files and the after screenshots. That is the detector when `impeccable` is installed, the checklist, and for Major the critique. It runs whatever the specialist checkpoint said.
+**Slop check** (Minor and Major): always run `pivot:design` §10's slop check on the changed files and the after screenshots. That is the detector when `impeccable` is installed, the checklist, and for Major the critique. It runs whatever the specialist checkpoint said.
 
-**Specialist audits** (the QA checkpoint, then `specialists.md`): Major gets an `impeccable` audit through `pivot-specialist`; other audits are optional additions at the Minor and Major levels. They never replace these checks. Report their functional and aesthetic findings separately. Pre-existing or out-of-scope findings are follow-ups, not deviations (`pivot-design` §10).
+**Specialist audits** (the QA checkpoint, then `specialists.md`): Major gets an `impeccable` audit through `pivot:specialist`; other audits are optional additions at the Minor and Major levels. They never replace these checks. Report their functional and aesthetic findings separately. Pre-existing or out-of-scope findings are follow-ups, not deviations (`pivot:design` §10).
 
 **Small fix: minimal.** Check the changed thing where it's used, at the widths it affects, and that nothing next to it moved. No screenshot matrix, no session.
 
@@ -215,20 +215,20 @@ If the write tools fail or the connection is read-only, say so in one line and s
   - a broken state;
   - a layout shift or overflow.
 
-  Fix an unintended difference. If one stays, report it and classify it as `pivot-design` §10 says:
+  Fix an unintended difference. If one stays, report it and classify it as `pivot:design` §10 says:
   - a departure from the approval is a `deviation`;
   - a defect that was already there is a separate finding.
 
   It never ships silently.
 
-**Close the session** (Minor and Major) as `pivot-design` §10 says: record the QA with `record_design_qa` (`level` `minor` or `major`; Minor needs no critique and no QA audit), then `set_design_status` with `status: "done"` once nothing is left for the user to decide. `done` is refused until the QA is recorded.
+**Close the session** (Minor and Major) as `pivot:design` §10 says: record the QA with `record_design_qa` (`level` `minor` or `major`; Minor needs no critique and no QA audit), then `set_design_status` with `status: "done"` once nothing is left for the user to decide. `done` is refused until the QA is recorded.
 
 **Baselines and reporting:**
 
 - If the project keeps visual baselines, update them **only** for intended differences, as part of the approved change.
 - Don't commit the comparison screenshots unless the project already does.
 - Report what you compared, the unintended differences you found (and fixed or recorded), and what you couldn't check.
-- Report evidence as `pivot-design` §10 says:
+- Report evidence as `pivot:design` §10 says:
   - keep generated, inspected and delivered screenshots apart;
   - say whose result each check is;
   - mark blocked or unperformed checks **unverified**, never passed.

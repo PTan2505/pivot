@@ -53,29 +53,32 @@ The token is what lets the extension write to the API; regenerate it in Settings
 
 ## Design with Claude Code
 
-Two pieces let Claude Code design and redesign screens in any project from **your** saved references:
+One Claude Code **plugin**, `pivot` (in [`plugin/`](plugin)), lets Claude Code design and redesign screens in any project from **your** saved references:
 
-- **The `pivot` MCP server** (`apps/mcp`): the tools Claude uses to search and look at your library, and to keep a design session's brief and decisions in PIVOT.
-- **Two skills** (`.claude/skills`): the workflow Claude follows with those tools.
-  - `pivot-design`: for new screens and components.
-  - `pivot-redesign`: for UI that already exists.
+- **The `pivot` MCP server**: the tools Claude uses to search and look at your library, and to keep a design session's brief and decisions in PIVOT. The plugin ships it as one bundled file, built from `apps/mcp`.
+- **Two skills**: the workflow Claude follows with those tools.
+  - `/pivot:design`: for new screens and components.
+  - `/pivot:redesign`: for UI that already exists.
+- **The `pivot:specialist` agent**: read-only; the skills use it to run specialist skills.
+- **A session-start check** that tells you when PIVOT isn't running.
 
 ### Set up (once)
 
-1. **Start PIVOT:** run `npm start`. The tools work through the running app at `http://127.0.0.1:4321`.
-2. **Build and register the MCP server for every project:**
+1. **Start PIVOT:** run `npm start`. The tools work through the running app at `http://127.0.0.1:4321`. Write tools use the API token in `~/.pivot/api-token`, which PIVOT creates when it starts.
+2. **Install the plugin** from this repo's marketplace:
    ```bash
-   pnpm mcp:build
-   claude mcp add pivot --scope user -- node /absolute/path/to/stan-bag/apps/mcp/dist/server.js
+   claude plugin marketplace add PTan2505/pivot
    ```
-   In Claude Code, `/mcp` should list `pivot` as connected. Write tools use the API token from `~/.pivot/api-token`, which is created automatically. Details and troubleshooting: [apps/mcp/README.md](apps/mcp/README.md).
-3. **Install the skills:**
    ```bash
-   pnpm skill:install
+   claude plugin install pivot@pivot
    ```
-   This **symlinks** `~/.claude/skills/pivot-design` and `pivot-redesign` to `.claude/skills/` in this repo, and `~/.claude/agents/pivot-specialist.md` (the read-only agent that runs specialist skills for them) to `.claude/agents/`. It never replaces a file that's already there. There is one copy, kept in git: edit the skills here and every project picks up the change. Claude Code reads whatever branch this checkout is on, so keep it on `dev` for day-to-day use. Agents are loaded when a Claude Code session starts, so open a new session after the first install.
+   Then open a new Claude Code session: `/mcp` should list the plugin's `pivot` server as connected, and `/pivot:design` should be there. If PIVOT runs on another port, set the plugin's **PIVOT address** option (`/plugin`, or `/config`).
 
-### Tools (the `pivot` MCP server)
+**Working on PIVOT itself:** add the marketplace from your checkout instead, `claude plugin marketplace add /absolute/path/to/pivot`. A plugin added from a local folder loads in place, so edits to `plugin/` apply at the next session (or `/reload-plugins`). For one session only, `claude --plugin-dir ./plugin` works too. After changing the MCP server, run `pnpm mcp:build`: it also rewrites `plugin/server/server.js`, which is committed.
+
+**Coming from `pnpm skill:install`:** that command is gone. Remove its old links (`~/.claude/skills/pivot-design`, `~/.claude/skills/pivot-redesign`, `~/.claude/agents/pivot-specialist.md`) and the hand-added server (`claude mcp remove pivot --scope user`), then install the plugin. The skills are now `/pivot:design` and `/pivot:redesign`.
+
+### Tools (the plugin's `pivot` MCP server)
 
 | Tool                     | Kind  | What Claude uses it for                                                                                     |
 | ------------------------ | ----- | ----------------------------------------------------------------------------------------------------------- |
@@ -104,15 +107,15 @@ Two pieces let Claude Code design and redesign screens in any project from **you
 
 | You want to…                   | Skill                | Example request                                                       |
 | ------------------------------ | -------------------- | --------------------------------------------------------------------- |
-| Design something new           | `pivot-design`       | "Design the onboarding screen for this app using my PIVOT references" |
-| Rework something that exists   | `pivot-redesign`     | "The pricing cards feel flat and hard to compare. Rework the layout"  |
+| Design something new           | `/pivot:design`      | "Design the onboarding screen for this app using my PIVOT references" |
+| Rework something that exists   | `/pivot:redesign`    | "The pricing cards feel flat and hard to compare. Rework the layout"  |
 | Make one explicit small change | either (no workflow) | "The Sign in button sits 2px low. Align it"                           |
 
-Claude usually picks the right skill. Start with "Use pivot-design…" or "Use pivot-redesign…" to be sure.
+Claude usually picks the right skill. Start your request with `/pivot:design` or `/pivot:redesign` to be sure.
 
 ### The flow
 
-1. **Classify.** `pivot-redesign` states:
+1. **Classify.** `pivot:redesign` states:
    - a **path**: A, reference-led (you named references, a page to match, or asked for inspiration), or B, direct;
    - a **risk level**, which decides the approval step:
 
@@ -122,12 +125,12 @@ Claude usually picks the right skill. Start with "Use pivot-design…" or "Use p
    | Minor     | Styling inside existing tokens; layout unchanged                                     | Proposes a direction and waits for a yes, unless you authorised it up front |
    | Major     | Layout, hierarchy, structure, responsive behaviour, shared components or other pages | **Always a mockup and an explicit yes.** "Just do it" is not approval       |
 
-   New designs with `pivot-design` follow the Major path.
+   New designs with `pivot:design` follow the Major path.
 
-   Both also state a **motion level**: `none` (the default), `standard` (micro-interactions, transitions) or `advanced` (scroll storytelling, pinning, morphing…). Your words decide it when you say anything about motion. Changing how something moves is always Major. The rules live in `.claude/skills/pivot-design/motion.md`.
+   Both also state a **motion level**: `none` (the default), `standard` (micro-interactions, transitions) or `advanced` (scroll storytelling, pinning, morphing…). Your words decide it when you say anything about motion. Changing how something moves is always Major. The rules live in `plugin/skills/design/motion.md`.
 
 2. **Specialist checkpoint.** One line shown to you: `Specialists: <name> — <stage> — <purpose>`, or `none — <reason>`.
-   - The specialists are `ui-ux-pro-max`, `design-taste-frontend` (public pages only), `impeccable` (QA audit) and `animate` (motion). Claude runs them through the read-only `pivot-specialist` agent.
+   - The specialists are `ui-ux-pro-max`, `design-taste-frontend` (public pages only), `impeccable` (QA audit) and `animate` (motion). Claude runs them through the read-only `pivot:specialist` agent.
    - Required by risk: a new design or Major redesign always gets `ui-ux-pro-max` on the brief and an `impeccable` audit at QA (plus Taste on a public page, `animate` for motion); a Minor redesign gets the one that owns its problem; a small fix gets none.
    - "None" otherwise only when you say not to use specialists. Your design system is never the reason to skip them.
 3. **Impact and baseline** (redesign):
@@ -186,7 +189,9 @@ apps/extension      Chrome extension (Manifest V3, Vite + React)
 apps/mcp            stdio MCP server for Claude Code
 packages/core       Database schema, migrations and all library logic
 packages/mcp-tools  MCP tool definitions, independent of the transport
-.claude/skills      pivot-design, pivot-redesign (+ the shared specialists.md policy)
+.claude-plugin      the marketplace that lists the plugin
+plugin             the Claude Code plugin: skills design and redesign (+ the shared specialists.md policy),
+                   the specialist agent, the bundled MCP server and the session-start hook
 scripts/start.mjs
 ```
 
@@ -195,8 +200,8 @@ pnpm test          # core unit + integration tests (PGlite in a temp folder)
 pnpm typecheck
 pnpm lint
 pnpm db:generate   # after editing packages/core/src/db/schema.ts
-pnpm mcp:build     # build the MCP server into apps/mcp/dist
-pnpm skill:install # link the design skills and the pivot-specialist agent into ~/.claude
+pnpm mcp:build     # build the MCP server into apps/mcp/dist and plugin/server
+pnpm plugin:validate # Claude Code's validator on the plugin and the marketplace
 ```
 
 ## Security

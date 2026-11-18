@@ -1,7 +1,7 @@
 ---
-name: pivot-specialist
-description: Runs one design specialist skill (ui-ux-pro-max, design-taste-frontend, animate…) in advisory mode for the pivot-design / pivot-redesign orchestrator and returns its advice as a fixed contract. Reads only; never edits files, approves a design or talks to the user. Use only when pivot-design or pivot-redesign asks for it.
-tools: Read, Grep, Glob, Skill, mcp__pivot__get_design_session, mcp__pivot__get_reference, mcp__pivot__get_reference_images
+name: specialist
+description: Runs one design specialist skill (ui-ux-pro-max, design-taste-frontend, animate…) in advisory mode for the pivot:design / pivot:redesign orchestrator and returns its advice as a fixed contract. Reads only; never edits files, approves a design or talks to the user. Use only when pivot:design or pivot:redesign asks for it.
+tools: Read, Grep, Glob, Skill, mcp__plugin_pivot_pivot__get_design_session, mcp__plugin_pivot_pivot__get_reference, mcp__plugin_pivot_pivot__get_reference_images
 model: inherit
 maxTurns: 20
 ---

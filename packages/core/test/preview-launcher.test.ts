@@ -76,6 +76,6 @@ setTimeout(() => process.exit(0), 50);
   it("finds the skill's preview script from inside this checkout", () => {
     const found = previewScript(path.resolve(__dirname, ".."));
     expect(found && fs.existsSync(found)).toBe(true);
-    expect(found).toMatch(/\.claude\/skills\/pivot-design\/scripts\/preview\.mjs$/);
+    expect(found).toMatch(/plugin\/skills\/design\/scripts\/preview\.mjs$/);
   });
 });

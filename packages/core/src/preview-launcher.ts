@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 /**
- * Opens the interactive preview (`pivot-design/scripts/preview.mjs`) from PIVOT's own session page, so the owner
+ * Opens the interactive preview (`design/scripts/preview.mjs` in the plugin) from PIVOT's own session page, so the owner
  * doesn't need an agent to try a round's versions. The preview is the same separate, network-locked Chromium window
  * an agent opens: PIVOT only starts it and reads its event lines. A version the owner chooses there ("Choose this
  * version") is kept here as the session's pending pick, so the session page can open its approval dialog on that
@@ -59,11 +59,11 @@ export function clearPreviewPick(sessionId: string) {
   if (e) e.pick = null;
 }
 
-/** The preview script of the pivot-design skill in this PIVOT checkout (PIVOT_PREVIEW_SCRIPT overrides it). */
+/** The preview script of the pivot:design skill in this PIVOT checkout (PIVOT_PREVIEW_SCRIPT overrides it). */
 export function previewScript(from = process.cwd()): string | null {
   if (process.env.PIVOT_PREVIEW_SCRIPT) return process.env.PIVOT_PREVIEW_SCRIPT;
   for (let dir = path.resolve(from); ; dir = path.dirname(dir)) {
-    const p = path.join(dir, ".claude/skills/pivot-design/scripts/preview.mjs");
+    const p = path.join(dir, "plugin/skills/design/scripts/preview.mjs");
     if (fs.existsSync(p)) return p;
     if (path.dirname(dir) === dir) return null;
   }
@@ -91,7 +91,7 @@ export function openPreview({
   if (e.child && e.round === round) return previewState(sessionId);
   if (e.child) e.child.kill();
   if (!script) {
-    e.error = "The interactive preview isn't installed here (pivot-design/scripts/preview.mjs).";
+    e.error = "The interactive preview isn't installed here (design/scripts/preview.mjs).";
     return previewState(sessionId);
   }
   e.error = null;

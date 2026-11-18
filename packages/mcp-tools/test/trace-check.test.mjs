@@ -138,6 +138,33 @@ describe("trace-check specialist labels", () => {
     );
     expect(r.specialists).toEqual({});
   });
+
+  it("ignores the plugin's skills too, but still counts a global skill that shares their short name", () => {
+    const r = analyze(
+      trace([
+        ["Skill", { skill: "pivot:design" }],
+        ["Read", { file_path: "/u/.claude/plugins/cache/pivot/pivot/0.1.0/skills/design/specialists.md" }],
+        ["Read", { file_path: "/repo/pivot/plugin/skills/redesign/SKILL.md" }],
+        ["Skill", { skill: "design" }],
+      ]),
+      opts,
+    );
+    expect(Object.keys(r.specialists)).toEqual(["design"]);
+    expect(r.specialists.design.label).toBe("ran (skill)");
+  });
+
+  it("counts the plugin's MCP tools like the hand-added server's", () => {
+    const r = analyze(
+      trace([
+        ["mcp__plugin_pivot_pivot__get_design_session", { sessionId: "s" }],
+        ["mcp__plugin_pivot_pivot__set_design_status", { sessionId: "s", status: "building" }],
+        edit,
+      ]),
+      opts,
+    );
+    expect(r.mcp).toMatchObject({ get_design_session: 1, set_design_status: 1 });
+    expect(r.gate.ok).toBe(true);
+  });
 });
 
 describe("trace-check approval gate", () => {

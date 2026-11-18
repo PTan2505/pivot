@@ -4,7 +4,7 @@ import { ChevronDown, FolderPlus, Link2, Plus, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef } from "react";
 import { toast } from "sonner";
-import { RESOURCE_TYPES, TYPE_DEFS, type ResourceType } from "@pivot/core/types";
+import { TYPE_DEFS, visibleTypes, type ResourceType } from "@pivot/core/types";
 import { TypeIcon } from "@/components/type-icon";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useUi } from "@/components/ui-store";
-import { createResource, uploadFiles, useInvalidate } from "@/lib/api";
+import { createResource, uploadFiles, useInvalidate, useShowOther } from "@/lib/api";
 
 const UPLOAD_TYPES: ResourceType[] = ["media", "icon", "animation"];
 const ACCEPT = "image/*,video/*,.svg,.json,.lottie,.woff,.woff2,.ttf,.otf";
@@ -70,6 +70,7 @@ export function AddMenu({
   const invalidate = useInvalidate();
   const { openAddUrl } = useUi();
   const createOfType = useCreateOfType();
+  const newTypes = visibleTypes(useShowOther());
 
   const pickFile = (type?: ResourceType) => {
     forcedType.current = type ?? null;
@@ -108,7 +109,7 @@ export function AddMenu({
       )}
       <DropdownMenuSeparator />
       <DropdownMenuLabel className="text-xs text-muted-foreground">New</DropdownMenuLabel>
-      {RESOURCE_TYPES.map((t) => (
+      {newTypes.map((t) => (
         <DropdownMenuItem key={t} onSelect={() => createOfType(t, pickFile)}>
           <TypeIcon type={t} /> {TYPE_DEFS[t].label}
         </DropdownMenuItem>

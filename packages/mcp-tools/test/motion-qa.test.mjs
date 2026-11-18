@@ -1,4 +1,4 @@
-// pivot-design's motion QA script (.claude/skills/pivot-design/scripts/motion-qa.mjs): the QA contract (Pass, Fail,
+// pivot:design's motion QA script (plugin/skills/design/scripts/motion-qa.mjs): the QA contract (Pass, Fail,
 // Not Verified), tracing to the approved brief, the overall status, and one real browser run on its fixture page.
 import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 import { analyze, parseTranscript } from "../../../scripts/trace-check.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const scriptPath = path.resolve(here, "../../../.claude/skills/pivot-design/scripts/motion-qa.mjs");
+const scriptPath = path.resolve(here, "../../../plugin/skills/design/scripts/motion-qa.mjs");
 const qa = await import(pathToFileURL(scriptPath).href);
 const { validatePlan, parseBriefMotion, traceItems, judgeItem, aggregate, renderMarkdown, signature, verifyEvidence } =
   qa;
@@ -573,7 +573,7 @@ describe("in a transcript", () => {
     }),
   ];
   it("trace-check counts motion QA runs apart from specialists, and never as a specialist run", () => {
-    const skill = "/Users/u/.claude/skills/pivot-design/scripts/motion-qa.mjs";
+    const skill = "/Users/u/.claude/plugins/cache/pivot/pivot/0.1.0/skills/design/scripts/motion-qa.mjs";
     const text = [
       ...line(0, "Bash", { command: `node ${skill} /tmp/s/plan.json --out /tmp/s/qa --brief /tmp/s/brief.md` }, true),
       ...line(1, "Bash", { command: `node ${skill} --self-test --out /tmp/s/self` }),

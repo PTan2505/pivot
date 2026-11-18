@@ -1,11 +1,11 @@
 # Workflow demo (dev-only)
 
-An end-to-end run of the `pivot-design` workflow on a synthetic project, **Kettle & Leaf**, a fictional tea
+An end-to-end run of the `pivot:design` workflow on a synthetic project, **Kettle & Leaf**, a fictional tea
 subscription landing page. It goes from requirements, through references (gate 1), mockups, the interactive preview
 and approval (gate 2), to implementation and QA, and covers the failure paths along the way. It drives:
 
 - the real MCP tools (`packages/mcp-tools`), over the MCP server's `HttpSource`;
-- the real preview (`pivot-design/scripts/preview.mjs`);
+- the real preview (`pivot:design/scripts/preview.mjs`);
 - the real watcher (`wait-for-decision.mjs`);
 - motion QA (`motion-qa.mjs`);
 - axe-core.
@@ -59,5 +59,5 @@ It stops otherwise.
 To try the preview window yourself after a run, use the session id from `report.md`:
 
 ```bash
-node .claude/skills/pivot-design/scripts/preview.mjs <sessionId> --url http://127.0.0.1:4400
+node plugin/skills/design/scripts/preview.mjs <sessionId> --url http://127.0.0.1:4400
 ```

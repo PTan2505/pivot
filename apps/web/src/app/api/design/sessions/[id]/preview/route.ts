@@ -19,7 +19,7 @@ export const GET = route(async (_req: Request, { params }: IdParams) => {
 });
 
 /**
- * Opens the interactive preview of a round in its own, network-locked window (pivot-design's preview.mjs), so the
+ * Opens the interactive preview of a round in its own, network-locked window (pivot:design's preview.mjs), so the
  * owner can try every version without an agent. Writes need this origin or the API token (proxy.ts), like any write.
  */
 export const POST = route(async (req: Request, { params }: IdParams) => {

@@ -227,7 +227,7 @@ export const resourceLinks = pgTable(
 );
 
 /**
- * One piece of design work done with the pivot-design skill, from the first complete brief on. Small fixes don't get
+ * One piece of design work done with the pivot:design skill, from the first complete brief on. Small fixes don't get
  * one. Briefs and decisions live here, never in the target project's repository.
  */
 export const designSessions = pgTable(

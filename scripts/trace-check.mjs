@@ -15,8 +15,12 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-/** Our own skills: never counted as specialists. */
-const OWN_SKILLS = new Set(["pivot-design", "pivot-redesign"]);
+/** Our own skills, as the plugin names them (`pivot:design`) and as the old global skills did: never specialists. */
+const OWN_SKILLS = new Set(["pivot:design", "pivot:redesign", "pivot-design", "pivot-redesign"]);
+/** The PIVOT plugin's folder, installed (plugins/cache/pivot/pivot/<version>) or in this repo (plugin/). */
+const OWN_PLUGIN_DIR = /\/(?:plugins\/cache\/pivot\/pivot\/[^/\s]+|plugin)\/(?=skills\/(?:design|redesign)\/)/g;
+/** The PIVOT MCP server's tools: `pivot` added by hand, or the plugin's server. */
+const MCP_PREFIX = /^mcp__(?:pivot|plugin_pivot_pivot)__/;
 const WRITE_TOOLS = new Set(["Edit", "Write", "NotebookEdit", "MultiEdit"]);
 const READ_TOOLS = new Set(["Read", "Grep", "Glob"]);
 /** Shell commands that change files. A heuristic: the report marks these counts as such. */
@@ -93,7 +97,13 @@ const skillName = (s) => {
 };
 /** Every `/skills/<name>` folder in a path or command (`cd …/skills/x` included), from any skills folder (~/.claude/skills, ~/.agents/skills…). */
 const skillsInPath = (p) => [
-  ...new Set([...String(p ?? "").matchAll(/\/skills\/([A-Za-z0-9][\w.-]{0,63})(?=[/\s;:'"&|)]|$)/g)].map((m) => m[1])),
+  ...new Set(
+    [
+      ...String(p ?? "")
+        .replace(OWN_PLUGIN_DIR, "/pivot-plugin-")
+        .matchAll(/\/skills\/([A-Za-z0-9][\w.-]{0,63})(?=[/\s;:'"&|)]|$)/g),
+    ].map((m) => m[1]),
+  ),
 ];
 const pathOf = (input) => input.file_path ?? input.notebook_path ?? input.path ?? null;
 
@@ -132,13 +142,13 @@ export function analyze(events, { target, scratch, specialists = [], knownSkills
   const writes = { target: 0, scratch: 0, other: 0, shellHeuristic: 0 };
   const gate = { building: null, buildingRefused: 0, approvalsRecorded: 0, firstTargetWrite: null };
   const mcp = {};
-  // pivot-design's own motion QA script: run (not printed), and whether it exited 0 (overall Pass).
+  // pivot:design's own motion QA script: run (not printed), and whether it exited 0 (overall Pass).
   const motionQa = { runs: 0, selfTests: 0, nonZeroExits: 0 };
 
   calls.forEach((c, i) => {
     const name = c.name;
-    if (name.startsWith("mcp__pivot__")) {
-      const tool = name.slice("mcp__pivot__".length);
+    if (MCP_PREFIX.test(name)) {
+      const tool = name.replace(MCP_PREFIX, "");
       mcp[tool] = (mcp[tool] ?? 0) + 1;
       if (tool === "set_design_status" && c.input.status === "building") {
         if (failed(c)) gate.buildingRefused++;
@@ -148,6 +158,7 @@ export function analyze(events, { target, scratch, specialists = [], knownSkills
       return;
     }
     if (name === "Skill") {
+      if (OWN_SKILLS.has(String(c.input.skill))) return;
       const s = skillName(c.input.skill);
       if (OWN_SKILLS.has(s)) return;
       const e = entry(s);

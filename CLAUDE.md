@@ -1,12 +1,12 @@
 # PIVOT — notes for Claude
 
-Personal UI/UX resource library: pnpm monorepo with `apps/web` (Next.js 16 app + API), `apps/extension` (Chrome MV3) and `packages/core` (schema, migrations, library logic). Decisions: [docs/SPEC.md](docs/SPEC.md). Visual rules: [DESIGN.md](DESIGN.md). Talk to the user in Vietnamese; code, UI copy and commits in English.
+Personal UI/UX resource library: pnpm monorepo with `apps/web` (Next.js 16 app + API), `apps/extension` (Chrome MV3) and `packages/core` (schema, migrations, library logic). Decisions: [docs/SPEC.md](docs/SPEC.md). Visual rules: [DESIGN.md](DESIGN.md). Reply in the language the user writes in. Everything written to the repo (code, docs, UI copy, commits, PRs) is in English.
 
 ## Current focus: approved decisions
 
-The reference-first plan ([docs/reference-first-plan.md](docs/reference-first-plan.md)) is done. Work now follows [docs/decisions-plan.md](docs/decisions-plan.md), which implements the approved decisions in [docs/PIVOT_DECISIONS.md](docs/PIVOT_DECISIONS.md): Part A (the `pivot-design` skill, MCP and the design workflow) and Part B (capture, the extension and the library).
+The reference-first plan ([docs/reference-first-plan.md](docs/reference-first-plan.md)) is done. Work now follows [docs/decisions-plan.md](docs/decisions-plan.md), which implements the approved decisions in [docs/PIVOT_DECISIONS.md](docs/PIVOT_DECISIONS.md): Part A (the `pivot:design` skill, MCP and the design workflow) and Part B (capture, the extension and the library).
 
-- In scope: references, sources, collections, search and filters, capture, the extension, MCP and the `pivot-design` and `pivot-redesign` skills. Skill packs, prompts, snippets, rules and checklists are frozen: keep them working, don't extend them.
+- In scope: references, sources, collections, search and filters, capture, the extension, MCP, the Claude Code plugin (`plugin/`) and its `pivot:design` and `pivot:redesign` skills. Skill packs, prompts, snippets, rules and checklists are frozen: keep them working, don't extend them.
 - Go phase by phase: audit → gaps → implement → test → report. Tick a decision as it is verified, not when it's written.
 - Log each phase in [docs/decisions-progress.md](docs/decisions-progress.md) using the plan's report format.
 - Design workflow: no implementation before the user explicitly approves a design direction. Design briefs, decisions and session notes go into PIVOT, never into a target project's repo. Write-tool names and schemas wait for the approved proposal (plan Phase 5a).
@@ -33,8 +33,8 @@ The reference-first plan ([docs/reference-first-plan.md](docs/reference-first-pl
 
 [docs/SPEC.md](docs/SPEC.md) is the source of truth for what PIVOT does. **Every change that adds or alters a feature, behaviour or piece of logic updates the spec in the same branch and PR as the code** — new or changed resource types, API routes, database or storage behaviour, settings, security rules, extension capabilities, and anything removed.
 
-- A decision goes in the §1 table: add a row, or edit the existing row and mark it `(cập nhật YYYY-MM-DD)`. A feature area goes in its section, or in a new numbered section marked `(bổ sung YYYY-MM-DD)`. When something from "Ngoài phạm vi" gets built, remove it from that list.
-- Rewrite statements that are no longer true instead of appending a contradiction. Write in Vietnamese, like the rest of the file.
+- A decision goes in the §1 table: add a row, or edit the existing row and mark it `(updated YYYY-MM-DD)`. A feature area goes in its section, or in a new numbered section marked `(added YYYY-MM-DD)`. When something from "Out of MVP scope" gets built, remove it from that list.
+- Rewrite statements that are no longer true instead of appending a contradiction. Write in English, like every document in the repo.
 - Visual or UI changes also update [DESIGN.md](DESIGN.md).
 - Refactors, tooling, tests and copy fixes that change no behaviour need no spec edit; say so in the PR description.
 - A task is not done until SPEC.md still describes what the code does.
@@ -50,8 +50,9 @@ pnpm format            # Prettier, whole repo (pnpm format:check to verify)
 pnpm check             # format:check + lint + typecheck + test
 pnpm db:generate       # after editing packages/core/src/db/schema.ts — commit the new migration
 pnpm ext:build         # build the extension into apps/extension/dist
-pnpm mcp:build         # build the stdio MCP server into apps/mcp/dist (setup: apps/mcp/README.md)
-pnpm skill:install     # link the pivot-design / pivot-redesign skills and the pivot-specialist agent into ~/.claude
+pnpm mcp:build         # build the MCP server into apps/mcp/dist and plugin/server/server.js; commit the latter (a test
+                       # fails when it is stale). Setup: README "Design with Claude Code", apps/mcp/README.md
+pnpm plugin:validate   # Claude Code's validator on plugin/ and .claude-plugin/marketplace.json
 ```
 
 Run `pnpm check` (format check, lint, typecheck, tests) before saying a change is done. To try the app without touching the real Neon database, R2 bucket or data folder, start a scratch PIVOT: `node scripts/start.mjs --scratch <tmp dir>` (port 4400; it never reads `.env`, keeps its own data and Claude skill folders, refuses `~/.pivot` and port 4321), or the `pivot-scratch` launch configuration. Tests, demos and QA scripts never start or write to the real PIVOT: anything that writes to a PIVOT checks it first with `scripts/qa/scratch-guard.mjs`. Never start the `pivot` launch configuration for testing.

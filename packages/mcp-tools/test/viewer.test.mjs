@@ -1,4 +1,4 @@
-// The local mockup viewer (.claude/skills/pivot-design/viewer/make-viewer.mjs): what it inlines, removes and allows.
+// The local mockup viewer (plugin/skills/design/viewer/make-viewer.mjs): what it inlines, removes and allows.
 // Browser behaviour (sandbox, policy, navigation) is checked by scripts/qa/preview-checks.mjs viewer.
 import fs from "node:fs";
 import os from "node:os";
@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const { buildViewer, inlineMockup, versionPolicy, versionSandbox } = await import(
-  pathToFileURL(path.resolve(here, "../../../.claude/skills/pivot-design/viewer/make-viewer.mjs")).href
+  pathToFileURL(path.resolve(here, "../../../plugin/skills/design/viewer/make-viewer.mjs")).href
 );
 
 const dirs = [];

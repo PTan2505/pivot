@@ -1,4 +1,4 @@
-// End-to-end demo of the pivot-design workflow on a synthetic project, against a SCRATCH PIVOT (README.md):
+// End-to-end demo of the pivot:design workflow on a synthetic project, against a SCRATCH PIVOT (README.md):
 // requirements → references (gate 1) → mockups → interactive preview → approval (gate 2) → implementation → QA,
 // plus the failure paths. It plays the agent's part with the real MCP tools (packages/mcp-tools over the MCP
 // server's HttpSource), the real preview script and motion QA.
@@ -20,13 +20,13 @@ import { WRITE_TOOLS } from "../../../packages/mcp-tools/src/write-tools";
 
 const HERE = import.meta.dirname;
 const REPO = path.resolve(HERE, "../../..");
-const SKILL = path.join(REPO, ".claude/skills/pivot-design");
+const SKILL = path.join(REPO, "plugin/skills/design");
 const BASE = (process.env.PIVOT_URL ?? "").replace(/\/+$/, "");
 const OUT = process.env.E2E_OUT ?? fs.mkdtempSync(path.join(os.tmpdir(), "pivot-workflow-demo-"));
 const req = createRequire(path.join(REPO, "packages/mcp-tools/package.json"));
 
-type Q = typeof import("../../../.claude/skills/pivot-design/scripts/motion-qa.mjs");
-type P = typeof import("../../../.claude/skills/pivot-design/scripts/preview.mjs");
+type Q = typeof import("../../../plugin/skills/design/scripts/motion-qa.mjs");
+type P = typeof import("../../../plugin/skills/design/scripts/preview.mjs");
 let qa: Q;
 let pv: P;
 let source: HttpSource;

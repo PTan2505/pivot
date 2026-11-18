@@ -19,7 +19,8 @@ const reader: PivotSource = {
   ],
   counts: async () => ({}),
   listSources: async () => [],
-  getImage: async () => ({ data: Buffer.alloc(0), mimeType: "image/png" }),
+  agentImage: async () => ({ data: Buffer.alloc(0), mimeType: "image/jpeg", width: 0, height: 0 }),
+  agentSlices: async () => ({ slices: [], total: 0, pageWidth: 0, pageHeight: 0 }),
 };
 
 function writerSource() {

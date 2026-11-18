@@ -19,13 +19,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { extractVariables } from "@pivot/core/prompt-vars";
-import {
-  RESOURCE_TYPES,
-  TYPE_DEFS,
-  type MetaField,
-  type ResourceDetailDTO,
-  type ResourceType,
-} from "@pivot/core/types";
+import { TYPE_DEFS, visibleTypes, type MetaField, type ResourceDetailDTO, type ResourceType } from "@pivot/core/types";
 import { AssetGallery, useAttach } from "@/components/asset-gallery";
 import { Breadcrumbs, typeCrumbs } from "@/components/breadcrumbs";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -54,6 +48,7 @@ import {
   useBulk,
   useInvalidate,
   useResource,
+  useShowOther,
   useSkillStatuses,
   useUpdateResource,
   type TagInput,
@@ -530,6 +525,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
   const copy = useCopyResource();
   const bulk = useBulk();
   const { openExport } = useUi();
+  const showOther = useShowOther();
   const attach = useAttach(resource.id);
   const titleRef = useRef<HTMLInputElement>(null);
   const isNew = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("new");
@@ -591,12 +587,14 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
         <Button variant="secondary" className={grow} onClick={() => flush().then(() => copyContext([resource.id]))}>
           <ClipboardCopy /> {label("Context")}
         </Button>
-        <Button
-          className={iconOnly ? "flex-[1.6]" : undefined}
-          onClick={() => flush().then(() => openExport({ ids: [resource.id], name: draft.title }))}
-        >
-          <PackageOpen /> Export
-        </Button>
+        {showOther && (
+          <Button
+            className={iconOnly ? "flex-[1.6]" : undefined}
+            onClick={() => flush().then(() => openExport({ ids: [resource.id], name: draft.title }))}
+          >
+            <PackageOpen /> Export
+          </Button>
+        )}
         <Button variant="destructive" size="icon" aria-label="Move to trash" onClick={trash}>
           <Trash2 />
         </Button>
@@ -825,13 +823,16 @@ function TypeSelect({
   onChange: (type: ResourceType) => void;
   className?: string;
 }) {
+  // the design types, plus this item's own type when it is one of the hidden ones
+  const types = visibleTypes(useShowOther());
+  if (!types.includes(value)) types.push(value);
   return (
     <Select value={value} onValueChange={(v) => onChange(v as ResourceType)}>
       <SelectTrigger id="type" size="sm" className={className} aria-label="Type">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {RESOURCE_TYPES.map((t) => (
+        {types.map((t) => (
           <SelectItem key={t} value={t}>
             <TypeIcon type={t} /> {TYPE_DEFS[t].label}
           </SelectItem>

@@ -1,0 +1,18 @@
+{
+  "name": "pivot",
+  "version": "0.1.0",
+  "description": "Design and redesign UI with Claude from your own PIVOT reference library: MCP tools, the design and redesign skills (/pivot:design, /pivot:redesign) and the read-only specialist agent. Needs the PIVOT app running locally.",
+  "author": { "name": "Phuc Tan", "url": "https://github.com/PTan2505" },
+  "homepage": "https://github.com/PTan2505/pivot",
+  "repository": "https://github.com/PTan2505/pivot",
+  "license": "MIT",
+  "keywords": ["design", "ui", "references", "mockups", "mcp"],
+  "userConfig": {
+    "pivot_url": {
+      "type": "string",
+      "title": "PIVOT address",
+      "description": "Where the PIVOT app runs on this machine. Keep the default unless you start PIVOT on another port.",
+      "default": "http://127.0.0.1:4321"
+    }
+  }
+}

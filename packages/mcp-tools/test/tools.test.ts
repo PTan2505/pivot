@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { fitForAgent, sliceForAgent } from "@pivot/core/agent-images";
 import { describe, expect, it } from "vitest";
 import type { ResourceDetailDTO, SearchPage, SearchRequest } from "@pivot/core/types";
 import { ToolError, type PivotSource } from "../src/source";
@@ -108,7 +109,10 @@ function fakeSource(over: Partial<PivotSource> = {}) {
     listSources: async () => [
       { id: "s1", title: "Dribbble", sourceUrl: "https://dribbble.com/", meta: { category: "inspiration" } },
     ],
-    getImage: async (assetId) => ({ data: await png(1440, assetId === "full" ? 6192 : 900), mimeType: "image/png" }),
+    // what the app's /api/assets/[id]/agent does
+    agentImage: async (assetId) => fitForAgent(await png(1440, assetId === "full" ? 6192 : 900)),
+    agentSlices: async (assetId, from, count) =>
+      sliceForAgent(await png(1440, assetId === "full" ? 6192 : 900), from, count),
     ...over,
   };
   return { source, searches };
@@ -189,6 +193,30 @@ describe("PIVOT MCP tools", () => {
     expect(page.values.map((v) => v.name)).toEqual(["Pricing"]);
     expect(text(r)).toContain("Inspiration (1)");
     expect(text(r)).toContain("Pricing pages (5)");
+  });
+
+  it("leave Knowledge and Skills out while the user hides other resource types", async () => {
+    const counts = async () => ({ reference: 25, source: 45, prompt: 3, skill: 2 });
+    const hidden = fakeSource({ counts, uiSettings: async () => ({ showOtherTypes: false }) });
+    const r = await runTool(tool("list_facets"), hidden.source, {});
+    const sections = (r.structuredContent!.sections as { id: string }[]).map((s) => s.id);
+    expect(sections).toEqual(["library", "sources"]);
+    expect(text(r)).not.toMatch(/Prompts|Skills/);
+    for (const input of [{ section: "knowledge" }, { types: ["reference", "prompt"] }]) {
+      const s = await runTool(tool("search_references"), hidden.source, input);
+      expect(s.isError).toBe(true);
+      expect(text(s)).toMatch(/hidden in this PIVOT/);
+    }
+    expect(hidden.searches).toHaveLength(0);
+    // shown, or a source without the setting (an older app): everything, as before
+    for (const over of [{ counts, uiSettings: async () => ({ showOtherTypes: true }) }, { counts }]) {
+      const shown = fakeSource(over);
+      const all = await runTool(tool("list_facets"), shown.source, {});
+      expect((all.structuredContent!.sections as unknown[]).length).toBe(4);
+      expect(text(all)).toContain("Prompts & Briefs 3");
+      await runTool(tool("search_references"), shown.source, { section: "knowledge" });
+      expect(shown.searches).toHaveLength(1);
+    }
   });
 
   it("get_reference_images sends the cover and pages through the full page in slices", async () => {

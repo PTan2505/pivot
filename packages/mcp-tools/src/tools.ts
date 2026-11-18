@@ -1,9 +1,12 @@
 import { z } from "zod";
 import { hostOf } from "@pivot/core/source-match";
 import {
+  isOtherSection,
+  isOtherType,
   RESOURCE_TYPES,
   SEARCH_SORTS,
   SECTIONS,
+  visibleSections,
   SOURCE_CATEGORIES,
   TAG_KIND_LABELS,
   TAG_KINDS,
@@ -12,7 +15,7 @@ import {
   type ResourceDetailDTO,
   type SearchHit,
 } from "@pivot/core/types";
-import { fitImage, imageTokens, sliceFullPage, type ImagePart } from "./images";
+import { imageTokens, type ImagePart } from "./images";
 import { ToolError, type PivotSource } from "./source";
 
 // The PIVOT MCP tools, independent of transport: a server registers TOOLS and calls runTool with its PivotSource.
@@ -73,7 +76,9 @@ const searchInput = {
   section: z
     .enum(SECTIONS.map((s) => s.id) as [string, ...string[]])
     .optional()
-    .describe("A whole navbar section instead of types: library, knowledge, sources or skills."),
+    .describe(
+      "A whole navbar section instead of types: library or sources (knowledge and skills only while the user shows other resource types in PIVOT's Settings).",
+    ),
   facets: z
     .array(z.object({ kind: z.enum(TAG_KINDS), name: z.string().min(1).max(80) }))
     .max(10)
@@ -99,6 +104,18 @@ const searchReferences: PivotTool<typeof searchInput> = {
   description: `Search the user's PIVOT library of saved UI references (screenshots of real websites with page type, domain, style and pattern facets) and design sources. Start here to find references for a screen you are designing: query by what the page is ("pricing", "sign in", "docs sidebar") and narrow with facets. Returns compact results with ids; use get_reference for details and get_reference_images to look at them. ${UNTRUSTED}`,
   inputSchema: searchInput,
   async run(source, input) {
+    // the types outside design stay hidden from agents while the user hides them in PIVOT
+    if (!(await showsOtherTypes(source))) {
+      const hidden = [
+        ...(input.section && isOtherSection(input.section as (typeof SECTIONS)[number]["id"]) ? [input.section] : []),
+        ...(input.types ?? []).filter(isOtherType),
+      ];
+      if (hidden.length)
+        throw new ToolError(
+          "invalid_input",
+          `${hidden.join(", ")} ${hidden.length === 1 ? "is" : "are"} hidden in this PIVOT (Settings › Other resource types). Search references, the library's other types or sources instead.`,
+        );
+    }
     let collectionId: string | undefined;
     if (input.collection) {
       if (UUID.test(input.collection)) collectionId = input.collection;
@@ -409,6 +426,12 @@ const getReference: PivotTool<typeof idInput> = {
   },
 };
 
+/** PIVOT's "Other resource types" setting; a source without it (or an older app) shows everything. */
+async function showsOtherTypes(source: PivotSource): Promise<boolean> {
+  if (!source.uiSettings) return true;
+  return (await source.uiSettings()).showOtherTypes;
+}
+
 // ---- list_facets ------------------------------------------------------------------------------------------------
 
 const listFacets: PivotTool<Record<string, never>> = {
@@ -418,14 +441,15 @@ const listFacets: PivotTool<Record<string, never>> = {
     "What exists in the user's PIVOT library to filter by: sections and types with counts, facet values (page type, domain, style, pattern, technology) and tags with how many items use them, source categories, and collections. Use the names it returns as search_references facets.",
   inputSchema: {},
   async run(source) {
-    const [counts, tags, collections, sources] = await Promise.all([
+    const [counts, tags, collections, sources, showOther] = await Promise.all([
       source.counts(),
       source.listTags(),
       source.listCollections(),
       source.listSources(),
+      showsOtherTypes(source),
     ]);
     const overview = {
-      sections: SECTIONS.map((s) => ({
+      sections: visibleSections(showOther).map((s) => ({
         id: s.id,
         label: s.label,
         types: s.types.map((t) => ({ type: t, label: TYPE_DEFS[t].plural, count: counts[t] ?? 0 })),
@@ -493,7 +517,7 @@ const getReferenceImages: PivotTool<typeof imagesInput> = {
     let left = maxImages;
 
     if ((which === "cover" || which === "all") && cover && left > 0) {
-      const img = await fitImage((await source.getImage(cover.assetId, "original")).data);
+      const img = await source.agentImage(cover.assetId);
       parts.push(image(img));
       notes.push(
         `Cover (first screen), ${cover.width}×${cover.height}, sent at ${img.width}×${img.height} (~${imageTokens(img.width, img.height)} tokens).`,
@@ -501,7 +525,7 @@ const getReferenceImages: PivotTool<typeof imagesInput> = {
       left--;
     }
     if ((which === "fullpage" || which === "all") && full && left > 0) {
-      const page = await sliceFullPage((await source.getImage(full.assetId, "original")).data, fromSlice, left);
+      const page = await source.agentSlices(full.assetId, fromSlice, left);
       for (const s of page.slices) parts.push(image(s));
       notes.push(
         page.slices.length
@@ -539,7 +563,7 @@ const getReferenceImages: PivotTool<typeof imagesInput> = {
             }));
       const picked = all.slice(fromSlice, fromSlice + maxImages);
       for (const item of picked) {
-        const img = await fitImage((await source.getImage(item.assetId, "original")).data);
+        const img = await source.agentImage(item.assetId);
         parts.push(image(img));
         notes.push(
           `${item.label}, sent at ${img.width}×${img.height} (~${imageTokens(img.width, img.height)} tokens).`,

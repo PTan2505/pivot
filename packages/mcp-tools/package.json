@@ -1,6 +1,12 @@
 {
   "name": "@pivot/mcp-tools",
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PTan2505/pivot.git",
+    "directory": "packages/mcp-tools"
+  },
   "private": true,
   "type": "module",
   "exports": {
@@ -12,11 +18,11 @@
   },
   "dependencies": {
     "@pivot/core": "workspace:*",
-    "sharp": "^0.35.5",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "sharp": "^0.35.5",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
   }

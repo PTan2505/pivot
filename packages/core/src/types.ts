@@ -380,6 +380,47 @@ export function isSectionId(v: unknown): v is SectionId {
   return SECTIONS.some((s) => s.id === v);
 }
 
+/**
+ * Everything outside PIVOT's design job: the Knowledge and Skills sections and their types. They are hidden from the
+ * navigation, Add, ⌘K, the extension and MCP unless the "Other resource types" setting is on; their items stay in the
+ * library and keep opening by link.
+ */
+export const OTHER_SECTION_IDS = ["knowledge", "skills"] as const satisfies readonly SectionId[];
+export const OTHER_TYPES = [
+  "prompt",
+  "skill",
+  "snippet",
+  "rule",
+  "checklist",
+  "mcp",
+] as const satisfies readonly ResourceType[];
+
+export function isOtherType(type: ResourceType): boolean {
+  return (OTHER_TYPES as readonly ResourceType[]).includes(type);
+}
+
+export function isOtherSection(id: SectionId): boolean {
+  return (OTHER_SECTION_IDS as readonly SectionId[]).includes(id);
+}
+
+/** The sections shown in the navigation for this setting. */
+export function visibleSections(showOther: boolean): readonly Section[] {
+  return showOther ? SECTIONS : SECTIONS.filter((s) => !isOtherSection(s.id));
+}
+
+/** The types offered for adding, picking and searching for this setting. */
+export function visibleTypes(showOther: boolean): ResourceType[] {
+  return showOther ? [...RESOURCE_TYPES] : RESOURCE_TYPES.filter((t) => !isOtherType(t));
+}
+
+/** App-wide display settings (`app_settings` key `ui`). */
+export interface UiSettings {
+  /** Show the Knowledge and Skills sections, their types, Export and Share package. Off by default. */
+  showOtherTypes: boolean;
+}
+
+export const DEFAULT_UI_SETTINGS: UiSettings = { showOtherTypes: false };
+
 export function isResourceType(v: unknown): v is ResourceType {
   return typeof v === "string" && (RESOURCE_TYPES as readonly string[]).includes(v);
 }
@@ -722,7 +763,7 @@ export type DesignDecisionKind = (typeof DESIGN_DECISION_KINDS)[number];
 /** What a session's history holds: those decisions, and the QA reports recorded through record_design_qa. */
 export type DesignRecordKind = DesignDecisionKind | "qa";
 
-/** How big the work QA checked was: a new design (pivot-design), or a Minor or Major redesign (pivot-redesign). */
+/** How big the work QA checked was: a new design (pivot:design), or a Minor or Major redesign (pivot:redesign). */
 export const DESIGN_QA_LEVELS = ["new", "minor", "major"] as const;
 export type DesignQaLevel = (typeof DESIGN_QA_LEVELS)[number];
 /** Whether impeccable's detector ran in the slop check. */

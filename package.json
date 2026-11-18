@@ -1,5 +1,10 @@
 {
   "name": "pivot",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PTan2505/pivot.git"
+  },
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.9.1",
@@ -22,8 +27,8 @@
     "format:check": "prettier --check .",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "mcp:build": "pnpm --filter @pivot/mcp build",
-    "skill:install": "node scripts/install-skill.mjs",
-    "owner:passphrase": "node scripts/owner-passphrase.mjs"
+    "owner:passphrase": "node scripts/owner-passphrase.mjs",
+    "plugin:validate": "claude plugin validate ./plugin --strict && claude plugin validate . --strict"
   },
   "devDependencies": {
     "lefthook": "^2.2.2",
