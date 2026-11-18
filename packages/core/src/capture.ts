@@ -386,15 +386,25 @@ const MOTION_EASE_S = 0.4;
 const MOTION_STEP_HOLD_S = 0.7;
 /** The video rests this long on the first and the last screen. */
 const MOTION_HOLD_S = 1;
-/** Wall-clock limit for taking the frames; a slower page ends its video where the scroll got to. */
-const MOTION_BUDGET_MS = 90_000;
+/**
+ * How far down a recording goes. Far taller than the full-page screenshot (whose height an image has to hold), so a
+ * long landing page is recorded to its footer; it only stops a page that keeps growing as it scrolls (a feed).
+ */
+export const MOTION_MAX_HEIGHT = 50_000;
+/**
+ * Wall-clock limit for taking the frames; a slower page ends its video where the scroll got to. At about 50 ms a
+ * frame, a page as tall as MOTION_MAX_HEIGHT needs roughly four minutes, with the waits for images on each screen.
+ */
+const MOTION_BUDGET_MS = 300_000;
+/** The whole recording capture: opening the page, the frames (MOTION_BUDGET_MS) and finishing the video. */
+const MOTION_TIMEOUT_MS = MOTION_BUDGET_MS + 90_000;
 const MAX_KEYFRAMES = 8;
 
-/** Scrolls to a position; returns where the page is and how far it can scroll (up to the full-page cap). */
+/** Scrolls to a position; returns where the page is and how far it can scroll (up to the recording's cap). */
 const scrollAndMeasure = (y: number) => `(() => {
   scrollTo(0, ${y});
   const el = document.scrollingElement || document.documentElement;
-  return { at: el.scrollTop, max: Math.max(0, Math.min(${MAX_FULL_PAGE_HEIGHT}, el.scrollHeight) - innerHeight) };
+  return { at: el.scrollTop, max: Math.max(0, Math.min(${MOTION_MAX_HEIGHT}, el.scrollHeight) - innerHeight) };
 })()`;
 
 /**
@@ -513,7 +523,7 @@ const SCROLL_PROGRESS = `(() => {
   }
   const r = t.getBoundingClientRect();
   const moved = Math.max(el.scrollTop, window.__pivotTop - r.top);
-  const end = Math.min(${MAX_FULL_PAGE_HEIGHT}, Math.max(el.scrollHeight, r.height + window.__pivotTop)) - innerHeight;
+  const end = Math.min(${MOTION_MAX_HEIGHT}, Math.max(el.scrollHeight, r.height + window.__pivotTop)) - innerHeight;
   return { at: Math.round(moved), max: Math.max(0, Math.round(end)) };
 })()`;
 
@@ -704,7 +714,7 @@ export async function screenshotUrl(
   url: string,
   {
     fullPage = true,
-    timeoutMs = CAPTURE_TIMEOUT_MS,
+    timeoutMs: timeoutOption,
     expandContent = false,
     colorScheme = "dark",
     signal,
@@ -713,6 +723,7 @@ export async function screenshotUrl(
     motion = false,
   }: {
     fullPage?: boolean;
+    /** The whole capture's limit: 2 minutes, or longer for a recording (MOTION_TIMEOUT_MS). */
     timeoutMs?: number;
     expandContent?: boolean;
     colorScheme?: "light" | "dark";
@@ -726,6 +737,7 @@ export async function screenshotUrl(
     motion?: boolean;
   } = {},
 ) {
+  const timeoutMs = timeoutOption ?? (motion ? MOTION_TIMEOUT_MS : CAPTURE_TIMEOUT_MS);
   if (signal?.aborted) throw new CaptureError("The capture was cancelled.", "cancelled");
   await assertPublicUrl(url);
   const start = await followRedirects(url);
