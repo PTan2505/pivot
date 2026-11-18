@@ -763,7 +763,7 @@ export type DesignDecisionKind = (typeof DESIGN_DECISION_KINDS)[number];
 /** What a session's history holds: those decisions, and the QA reports recorded through record_design_qa. */
 export type DesignRecordKind = DesignDecisionKind | "qa";
 
-/** How big the work QA checked was: a new design (pivot-design), or a Minor or Major redesign (pivot-redesign). */
+/** How big the work QA checked was: a new design (pivot:design), or a Minor or Major redesign (pivot:redesign). */
 export const DESIGN_QA_LEVELS = ["new", "minor", "major"] as const;
 export type DesignQaLevel = (typeof DESIGN_QA_LEVELS)[number];
 /** Whether impeccable's detector ran in the slop check. */

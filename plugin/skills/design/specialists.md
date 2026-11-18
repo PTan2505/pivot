@@ -1,6 +1,6 @@
 # Specialists
 
-Shared by `pivot-design` and `pivot-redesign`. Their **specialist checkpoint** line is `Specialists: none — <reason>`, or `<name> — <stage> — <purpose>`. After a specialist runs, its result is reported with one of the run labels in §1.
+Shared by `pivot:design` and `pivot:redesign`. Their **specialist checkpoint** line is `Specialists: none — <reason>`, or `<name> — <stage> — <purpose>`. After a specialist runs, its result is reported with one of the run labels in §1.
 
 - A "none" line (a small fix, or the user said not to use specialists) needs nothing from this file.
 - Read this file before naming or using a specialist.
@@ -77,19 +77,19 @@ Use the cheapest way that answers the question. Each has a **run label**, and a 
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
 | **Consult**  | Read only the section or reference file the step needs, with the Read tool.                                                                                                                                                                                  | `consulted`                                   |
 | **Script**   | Run one command §4 allows, from your own session.                                                                                                                                                                                                            | `ran (script)`                                |
-| **Subagent** | Start the `pivot-specialist` agent (`Agent` with `subagent_type: "pivot-specialist"`). It loads the specialist with the Skill tool in its own context, can only read (no edit, write or shell tools; PIVOT read tools only), and returns the contract below. | `ran (skill)`, only when its contract says so |
+| **Subagent** | Start the `pivot:specialist` agent (`Agent` with `subagent_type: "pivot:specialist"`). It loads the specialist with the Skill tool in its own context, can only read (no edit, write or shell tools; PIVOT read tools only), and returns the contract below. | `ran (skill)`, only when its contract says so |
 | —            | The specialist isn't installed, or the Skill tool refused it.                                                                                                                                                                                                | `unavailable`                                 |
 
-- **Never invoke a specialist with the Skill tool in your own session.** It runs the specialist's whole workflow there (draws, setup, gates) and takes over the turn. Its full advice comes only through `pivot-specialist`.
+- **Never invoke a specialist with the Skill tool in your own session.** It runs the specialist's whole workflow there (draws, setup, gates) and takes over the turn. Its full advice comes only through `pivot:specialist`.
 - **Skills that can't be model-invoked** (`review-animations`, `prototype`) are only ever consulted.
-- **When `pivot-specialist` isn't available** ("Agent type not found": `pnpm skill:install` wasn't run in the PIVOT repo, or it was linked after the session started, since agents load when a session starts):
+- **When `pivot:specialist` isn't available** ("Agent type not found": `pnpm skill:install` wasn't run in the PIVOT repo, or it was linked after the session started, since agents load when a session starts):
   - consult or run a script instead, and label it so;
   - never use a general-purpose or other agent in its place;
   - never start another Claude process (`claude -p`).
 - **A specialist that is `unavailable`** (not installed, or refused by the Skill tool) is skipped and reported as such. Nothing stands in for it: no other agent, no other Claude process, no invented advice.
 - **One run per specialist per phase.** A specialist already in the brief's Specialists ledger (§5) isn't run again for the same phase, after a resume included.
 
-**What to give `pivot-specialist`:** the specialist's exact name, the phase, the one question it should answer, and a **handoff folder** in your scratchpad (never in the target project):
+**What to give `pivot:specialist`:** the specialist's exact name, the phase, the one question it should answer, and a **handoff folder** in your scratchpad (never in the target project):
 
 - `brief.md`: the current brief;
 - `system.md`: at most 60 lines on the target's tokens, type, components and rules;
@@ -119,7 +119,7 @@ If a contract is long, you may summarise it, but keep every recommendation, cons
 | `ui-ux-pro-max`                              | UX patterns, information hierarchy, layout, forms, navigation, tables and charts, accessibility, stack notes. Suits app screens and dashboards as well as sites                                                                                                                                                                                                   | Generating a replacement design system for a project that has one                                                                                                                                                              |
 | `design-taste-frontend` (Taste Skill v2)     | **Public-facing web pages** (landing, marketing, product, portfolio, hero): reading the brief, aesthetic direction, composition, copy discipline, redesign analysis, anti-slop checks, critique of screenshots                                                                                                                                                    | Dashboards, admin, settings or other app screens by default: its own description excludes them (an explicit request follows the steps below). Never substitute another Taste variant (`-v1`, `-v2-experimental`, `gpt-taste`…) |
 | `impeccable`                                 | Technical UI audit (accessibility, performance, theming, responsive, implementation integrity) with its bundled detector. Suits app UI and pages                                                                                                                                                                                                                  | Building, re-theming, or writing product or design documents                                                                                                                                                                   |
-| `animate`                                    | Motion decisions when the motion level is standard or advanced ([motion.md](motion.md)): whether something should move, its purpose, properties, curve and duration, interruption, exit and reduced motion. Advice through `pivot-specialist`                                                                                                                     | Writing the animation code: only you build, after approval                                                                                                                                                                     |
+| `animate`                                    | Motion decisions when the motion level is standard or advanced ([motion.md](motion.md)): whether something should move, its purpose, properties, curve and duration, interruption, exit and reduced motion. Advice through `pivot:specialist`                                                                                                                     | Writing the animation code: only you build, after approval                                                                                                                                                                     |
 | `find-animation-opportunities`               | Which motion earns its place and which to reject, for an existing UI or a brief that adds motion. Read-only                                                                                                                                                                                                                                                       | Adding motion the request didn't ask for                                                                                                                                                                                       |
 | `animation-performance`, `review-animations` | QA of motion that was built: frame budget and composite-only properties; the review standards. `review-animations` is consult-only                                                                                                                                                                                                                                | Design-stage choices                                                                                                                                                                                                           |
 | `gsap-*`                                     | Advanced motion built with GSAP (motion.md §7), consulted as API references: at build, `gsap-core` plus the stack's (`gsap-react`, `gsap-frameworks`) and the features' (`gsap-scrolltrigger`, `gsap-timeline`, `gsap-plugins`, `gsap-utils`) skills; at QA, `gsap-performance`. Read only the ones the build uses; they don't count toward the specialist limits | Deciding what should move or how it feels (that is `animate`); installing GSAP before the approved brief names it                                                                                                              |
@@ -152,16 +152,16 @@ If a contract is long, you may summarise it, but keep every recommendation, cons
   No two may do the same job.
 
 - **"None"** at Minor, Major or for a new design only when the user said not to use specialists: quote their words on the checkpoint line.
-- **QA:** every new design and Minor or Major redesign gets the **slop check** (`pivot-design` §10). It runs whatever was chosen above:
+- **QA:** every new design and Minor or Major redesign gets the **slop check** (`pivot:design` §10). It runs whatever was chosen above:
   - `impeccable detect` when installed;
   - a checklist against `DESIGN.md`;
   - for new designs and Major work, a text critique against `impeccable`'s `reference/critique.md`.
 
-  New designs and Major redesigns also get an **`impeccable` audit through `pivot-specialist`** (its `reference/audit.md` criteria, on the changed files, the after screenshots and the detector's output). A further audit (Taste's `lint.mjs`/`inspect.mjs` on a public page) may be added at the Minor and Major levels. QA audits don't count toward the design-stage defaults.
+  New designs and Major redesigns also get an **`impeccable` audit through `pivot:specialist`** (its `reference/audit.md` criteria, on the changed files, the after screenshots and the detector's output). A further audit (Taste's `lint.mjs`/`inspect.mjs` on a public page) may be added at the Minor and Major levels. QA audits don't count toward the design-stage defaults.
 
-- **A required specialist that can't run** (not installed, refused by the Skill tool, or `pivot-specialist` isn't in the session) is reported as `unavailable` (or `consulted` when you read its files instead). It doesn't block the work, and nothing stands in for it.
+- **A required specialist that can't run** (not installed, refused by the Skill tool, or `pivot:specialist` isn't in the session) is reported as `unavailable` (or `consulted` when you read its files instead). It doesn't block the work, and nothing stands in for it.
 
-**By cost:** prefer reading a reference file, then a single read-only command, then a `pivot-specialist` run, and only then a script that renders pages. A motion specialist counts toward the same limits as the others.
+**By cost:** prefer reading a reference file, then a single read-only command, then a `pivot:specialist` run, and only then a script that renders pages. A motion specialist counts toward the same limits as the others.
 
 ## 3. Where each one helps
 
@@ -262,7 +262,7 @@ Record a specialist's influence only when it **materially** shaped the direction
   - no design session;
   - name the specialist and what it contributed in the final summary;
   - the small fix's scope and checks stay as they are.
-- **QA findings** are classified as `pivot-design` §10 says.
+- **QA findings** are classified as `pivot:design` §10 says.
   - A `deviation` is recorded only for a departure from an approved requirement or design detail.
   - Pre-existing defects, unrelated accessibility findings and out-of-scope issues are not deviations: report them separately as findings and recommend follow-up work.
   - Never widen the implementation to fix them without approval.

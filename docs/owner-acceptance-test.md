@@ -17,11 +17,11 @@ can do: a real pick, a real approval, and judging the result.
    database. If you'd rather look first without touching your library, try it on a throwaway copy:
    `node scripts/start.mjs --scratch /tmp/pivot-try` (port 4400, its own empty library).
 
-2. Rebuild the MCP server and relink the skills, then **start a new Claude Code session**, because agents and MCP
-   servers load at start:
+2. Rebuild the MCP server, make sure the `pivot` plugin is installed from this checkout (README, "Set up"), then
+   **start a new Claude Code session**, because agents and MCP servers load at start:
 
    ```bash
-   pnpm mcp:build && pnpm skill:install
+   pnpm mcp:build
    ```
 
 3. Set your owner passphrase, in **your own** terminal, never through Claude. Use at least 12 characters, and nothing

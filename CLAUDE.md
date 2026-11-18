@@ -4,9 +4,9 @@ Personal UI/UX resource library: pnpm monorepo with `apps/web` (Next.js 16 app +
 
 ## Current focus: approved decisions
 
-The reference-first plan ([docs/reference-first-plan.md](docs/reference-first-plan.md)) is done. Work now follows [docs/decisions-plan.md](docs/decisions-plan.md), which implements the approved decisions in [docs/PIVOT_DECISIONS.md](docs/PIVOT_DECISIONS.md): Part A (the `pivot-design` skill, MCP and the design workflow) and Part B (capture, the extension and the library).
+The reference-first plan ([docs/reference-first-plan.md](docs/reference-first-plan.md)) is done. Work now follows [docs/decisions-plan.md](docs/decisions-plan.md), which implements the approved decisions in [docs/PIVOT_DECISIONS.md](docs/PIVOT_DECISIONS.md): Part A (the `pivot:design` skill, MCP and the design workflow) and Part B (capture, the extension and the library).
 
-- In scope: references, sources, collections, search and filters, capture, the extension, MCP and the `pivot-design` and `pivot-redesign` skills. Skill packs, prompts, snippets, rules and checklists are frozen: keep them working, don't extend them.
+- In scope: references, sources, collections, search and filters, capture, the extension, MCP, the Claude Code plugin (`plugin/`) and its `pivot:design` and `pivot:redesign` skills. Skill packs, prompts, snippets, rules and checklists are frozen: keep them working, don't extend them.
 - Go phase by phase: audit → gaps → implement → test → report. Tick a decision as it is verified, not when it's written.
 - Log each phase in [docs/decisions-progress.md](docs/decisions-progress.md) using the plan's report format.
 - Design workflow: no implementation before the user explicitly approves a design direction. Design briefs, decisions and session notes go into PIVOT, never into a target project's repo. Write-tool names and schemas wait for the approved proposal (plan Phase 5a).
@@ -50,8 +50,9 @@ pnpm format            # Prettier, whole repo (pnpm format:check to verify)
 pnpm check             # format:check + lint + typecheck + test
 pnpm db:generate       # after editing packages/core/src/db/schema.ts — commit the new migration
 pnpm ext:build         # build the extension into apps/extension/dist
-pnpm mcp:build         # build the stdio MCP server into apps/mcp/dist (setup: apps/mcp/README.md)
-pnpm skill:install     # link the pivot-design / pivot-redesign skills and the pivot-specialist agent into ~/.claude
+pnpm mcp:build         # build the MCP server into apps/mcp/dist and plugin/server/server.js; commit the latter (a test
+                       # fails when it is stale). Setup: README "Design with Claude Code", apps/mcp/README.md
+pnpm plugin:validate   # Claude Code's validator on plugin/ and .claude-plugin/marketplace.json
 ```
 
 Run `pnpm check` (format check, lint, typecheck, tests) before saying a change is done. To try the app without touching the real Neon database, R2 bucket or data folder, start a scratch PIVOT: `node scripts/start.mjs --scratch <tmp dir>` (port 4400; it never reads `.env`, keeps its own data and Claude skill folders, refuses `~/.pivot` and port 4321), or the `pivot-scratch` launch configuration. Tests, demos and QA scripts never start or write to the real PIVOT: anything that writes to a PIVOT checks it first with `scripts/qa/scratch-guard.mjs`. Never start the `pivot` launch configuration for testing.
