@@ -8,42 +8,48 @@ web
 
 ## Users
 
-One person: the owner, a designer-developer who designs and builds interfaces every day. They use PIVOT while working, with Claude Code open beside it. They save inspiration as they find it, and later pull it back up while designing a screen or briefing an AI agent.
+Designer-developers who design and build interfaces with Claude Code. Each one runs their own PIVOT on their own machine, with Claude Code open beside it. They save UI references as they find them, and later design from them: Claude searches their library, they pick the references, approve a direction, and Claude builds it.
+
+PIVOT was built by its owner for their own daily work, and was opened as open source on 2026-11-18. The owner is still the main user and the one whose taste sets the bar.
 
 ## Product Purpose
 
-PIVOT is a personal, local-first library for everything that feeds UI work:
+PIVOT does one job: designing and implementing UI from your own references. It has two halves:
 
-- references (screenshots of real pages) and the sources they come from;
-- UI libraries, images, icons, animations, fonts and palettes;
-- prompts, code snippets, coding rules, checklists and MCP configs;
-- the owner's Claude Code skills.
+- **A library of references:**
+  - screenshots of real pages: full pages, sections, interaction states and recorded motion;
+  - the sources they come from, and collections;
+  - facets to find them again: page type, domain, visual style and UI pattern.
+- **Design sessions with Claude Code**, through the `pivot` plugin. Claude searches the library and shows a shortlist the user picks from, then writes a brief. Mockups go into PIVOT, the user approves one with a passphrase, and Claude builds it and records the QA. The briefs, mockups, decisions and approvals live in PIVOT, never in the project being designed.
 
-It succeeds when saving takes a keystroke, finding takes a glance, and a curated set can be handed to Claude Code as context (copy context, export bundle).
+It succeeds when saving takes a keystroke, finding takes a glance, and a design session ends with something built that the user approved and can trace back to the references behind it.
+
+PIVOT started as a wider resource bag (prompts, snippets, rules, checklists, Claude Code skills, MCP configs, export and share). Those are hidden behind **Other resource types** in Settings and kept working, but they are not part of the product's job and are not extended.
 
 ## Positioning
 
-PIVOT is not a public gallery or a team tool. It is one person's working bag, and it is wired into their own tools:
+PIVOT is not a public gallery, a hosted service or a team tool. It is a personal library that lives on the user's machine and is wired into their own tools:
 
-- it reads and writes the global Claude Code skills on disk and shows the installed plugins;
-- it captures full pages with a real browser, scrolling the whole page first;
-- it pairs with a Chrome extension;
-- it exports context sized for an LLM.
+- it captures full pages with a real browser, scrolling the whole page first, and records motion;
+- it pairs with a Chrome extension for saving while browsing;
+- it is the memory and the approval gate of Claude Code's design work: the MCP server, the `/pivot:design` and `/pivot:redesign` skills, and approvals only the owner can give.
 
 ## Operating Context
 
-- Runs locally (`npm start`, http://127.0.0.1:4321); the API answers only localhost and the paired extension.
-- Data lives in Neon Postgres, with PGlite as the offline fallback; files live in Cloudflare R2 (bucket `pivot`), or in `~/.pivot` without R2.
-- Captures pages with Playwright; syncs skills from `~/.claude/skills` and the installed plugins.
-- The navbar has four sections: Library (visual references), Knowledge (prompts, snippets, rules, checklists, MCP), Sources (aggregator sites) and Skills.
+- Runs locally on `127.0.0.1:4321`: `npx pivot-studio`, or `npm start` in a checkout. The API answers only localhost; writes need PIVOT's own pages or its API token.
+- Data lives in `~/.pivot` (PGlite and local files) by default. The user can point it at their own Postgres (Neon) and Cloudflare R2 bucket.
+- Captures pages with Playwright's Chromium.
+- The navbar shows two sections, **Library** (references and other design resources) and **Sources** (sites to browse). **Design sessions**, **Collections**, **Settings** and **Trash** are in the More menu.
+- Claude Code connects through the `pivot` plugin: the MCP server, the two design skills, the read-only `pivot:specialist` agent and a session-start check.
 
 ## Capabilities and Constraints
 
-- Decisions and behaviour are recorded in `docs/SPEC.md`, which every change must keep current. Branching rules are in `CLAUDE.md`.
-- Stack: a pnpm monorepo with Next.js 16 (Cache Components), Tailwind v4 + shadcn/ui, TanStack Query, Drizzle, and a Chrome MV3 extension.
+- Decisions and behaviour are recorded in `docs/SPEC.md`, which every change must keep current. Branching rules are in `CLAUDE.md`; contribution rules in `CONTRIBUTING.md`.
+- Stack: a pnpm monorepo with Next.js 16 (Cache Components), Tailwind v4 + shadcn/ui, TanStack Query, Drizzle, a Chrome MV3 extension, a stdio MCP server, and the npm package `pivot-studio`.
 - UI copy is in English. Users talk to Claude in any language; Claude replies in theirs, and what it writes into the repo or PIVOT stays in English, except the user's own words, which are quoted as written.
 - Saved screenshots must be shown in their true colours: the chrome must never tint or distort the work being collected.
-- Out of scope for now: projects, backup/restore, resource-to-resource links, an MCP server, AI tagging.
+- Nothing is built before the owner approves a design direction, and only the owner approves: with the passphrase in PIVOT, or in their own words in the chat.
+- Out of scope: hosting, accounts and teams; projects; an AI model running inside the app; public share links; integrations with paid reference sources (link-out only).
 
 ## Brand Commitments
 
@@ -53,14 +59,15 @@ PIVOT is not a public gallery or a team tool. It is one person's working bag, an
 
 ## Evidence on Hand
 
-The live library has real content (44 design sources, 55 skills, references) and a design-system artifact on claude.ai. There are no users besides the owner and no public claims; never invent any.
+The owner's library has real content: references, design sources and design sessions run with Claude Code. PIVOT has just been opened as open source and has no users besides the owner yet, and no public claims: never invent users, numbers or testimonials.
 
 ## Product Principles
 
 1. Collected work is the content: the chrome recedes, and the screenshots keep their true colour.
-2. Speed over ceremony: a keystroke to save, a glance to find, one click to hand context to an agent.
-3. Local and owned: the owner's machine, buckets and files, with nothing shared unless exported.
-4. Every view is linkable: filters, sections and categories live in the URL.
+2. Speed over ceremony: a keystroke to save, a glance to find.
+3. The user approves, the agent builds: the agent proposes and explains, and nothing is built without the owner's yes.
+4. Local and owned: the user's machine, buckets and files. Only the pages they capture and the catalog searches they allow reach the network.
+5. Every view is linkable: filters, sections and categories live in the URL.
 
 ## Accessibility & Inclusion
 
