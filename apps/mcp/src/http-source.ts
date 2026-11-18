@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { ImagePart, PageSlices } from "@pivot/mcp-tools/images";
 import { ToolError, type PivotSource, type PivotWriter } from "@pivot/mcp-tools/source";
 import type {
   DesignCandidateDTO,
@@ -251,9 +252,31 @@ export class HttpSource implements PivotSource, PivotWriter {
     return (await res.json()) as { id: string; path: string; existing?: boolean; title?: string };
   }
 
-  async getImage(assetId: string, variant: "thumb" | "original") {
-    const res = await this.call(`/api/assets/${encodeURIComponent(assetId)}${variant === "thumb" ? "?thumb=1" : ""}`);
-    if (!res) throw new ToolError("no_images", "That screenshot is missing from storage.");
-    return { data: Buffer.from(await res.arrayBuffer()), mimeType: res.headers.get("content-type") ?? "image/webp" };
+  /** The app shrinks the screenshot; an app from before that route answers 404. */
+  async agentImage(assetId: string): Promise<ImagePart> {
+    const res = await this.call(`/api/assets/${encodeURIComponent(assetId)}/agent`);
+    if (!res) throw missingImage();
+    return {
+      data: Buffer.from(await res.arrayBuffer()),
+      mimeType: "image/jpeg",
+      width: Number(res.headers.get("x-image-width")) || 0,
+      height: Number(res.headers.get("x-image-height")) || 0,
+    };
   }
+
+  async agentSlices(assetId: string, from: number, count: number): Promise<PageSlices> {
+    const page = await this.json<
+      Omit<PageSlices, "slices"> & { slices: (Omit<PageSlices["slices"][number], "data"> & { data: string })[] }
+    >(`/api/assets/${encodeURIComponent(assetId)}/agent?slices=1&from=${from}&count=${count}`);
+    if (!page) throw missingImage();
+    return { ...page, slices: page.slices.map((s) => ({ ...s, data: Buffer.from(s.data, "base64") })) };
+  }
+}
+
+/** The screenshot is gone, or PIVOT predates `/api/assets/[id]/agent`. */
+function missingImage() {
+  return new ToolError(
+    "no_images",
+    "PIVOT couldn't prepare that screenshot: it is missing from storage, or PIVOT is older than this MCP server (update PIVOT).",
+  );
 }

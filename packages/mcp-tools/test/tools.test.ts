@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { fitForAgent, sliceForAgent } from "@pivot/core/agent-images";
 import { describe, expect, it } from "vitest";
 import type { ResourceDetailDTO, SearchPage, SearchRequest } from "@pivot/core/types";
 import { ToolError, type PivotSource } from "../src/source";
@@ -108,7 +109,10 @@ function fakeSource(over: Partial<PivotSource> = {}) {
     listSources: async () => [
       { id: "s1", title: "Dribbble", sourceUrl: "https://dribbble.com/", meta: { category: "inspiration" } },
     ],
-    getImage: async (assetId) => ({ data: await png(1440, assetId === "full" ? 6192 : 900), mimeType: "image/png" }),
+    // what the app's /api/assets/[id]/agent does
+    agentImage: async (assetId) => fitForAgent(await png(1440, assetId === "full" ? 6192 : 900)),
+    agentSlices: async (assetId, from, count) =>
+      sliceForAgent(await png(1440, assetId === "full" ? 6192 : 900), from, count),
     ...over,
   };
   return { source, searches };

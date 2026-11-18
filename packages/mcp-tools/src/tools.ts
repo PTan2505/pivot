@@ -15,7 +15,7 @@ import {
   type ResourceDetailDTO,
   type SearchHit,
 } from "@pivot/core/types";
-import { fitImage, imageTokens, sliceFullPage, type ImagePart } from "./images";
+import { imageTokens, type ImagePart } from "./images";
 import { ToolError, type PivotSource } from "./source";
 
 // The PIVOT MCP tools, independent of transport: a server registers TOOLS and calls runTool with its PivotSource.
@@ -517,7 +517,7 @@ const getReferenceImages: PivotTool<typeof imagesInput> = {
     let left = maxImages;
 
     if ((which === "cover" || which === "all") && cover && left > 0) {
-      const img = await fitImage((await source.getImage(cover.assetId, "original")).data);
+      const img = await source.agentImage(cover.assetId);
       parts.push(image(img));
       notes.push(
         `Cover (first screen), ${cover.width}×${cover.height}, sent at ${img.width}×${img.height} (~${imageTokens(img.width, img.height)} tokens).`,
@@ -525,7 +525,7 @@ const getReferenceImages: PivotTool<typeof imagesInput> = {
       left--;
     }
     if ((which === "fullpage" || which === "all") && full && left > 0) {
-      const page = await sliceFullPage((await source.getImage(full.assetId, "original")).data, fromSlice, left);
+      const page = await source.agentSlices(full.assetId, fromSlice, left);
       for (const s of page.slices) parts.push(image(s));
       notes.push(
         page.slices.length
@@ -563,7 +563,7 @@ const getReferenceImages: PivotTool<typeof imagesInput> = {
             }));
       const picked = all.slice(fromSlice, fromSlice + maxImages);
       for (const item of picked) {
-        const img = await fitImage((await source.getImage(item.assetId, "original")).data);
+        const img = await source.agentImage(item.assetId);
         parts.push(image(img));
         notes.push(
           `${item.label}, sent at ${img.width}×${img.height} (~${imageTokens(img.width, img.height)} tokens).`,

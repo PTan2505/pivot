@@ -20,6 +20,7 @@ import type {
   SourceCategory,
   TagDTO,
 } from "@pivot/core/types";
+import type { ImagePart, PageSlices } from "./images";
 
 /**
  * Where the tools get their data. The stdio server implements it over the running app's HTTP API; a remote server
@@ -36,8 +37,10 @@ export interface PivotSource {
   counts(): Promise<Partial<Record<ResourceType, number>>>;
   /** Every saved source (to count them by category); a library has tens, not thousands. */
   listSources(): Promise<{ id: string; title: string; sourceUrl: string | null; meta: Record<string, unknown> }[]>;
-  /** An asset's bytes: its small thumbnail, or the original file. */
-  getImage(assetId: string, variant: "thumb" | "original"): Promise<{ data: Buffer; mimeType: string }>;
+  /** A screenshot shrunk to fit the edge Claude reads at (1568px), prepared by the app. */
+  agentImage(assetId: string): Promise<ImagePart>;
+  /** `count` slices of a full-page screenshot from slice `from`, 960px wide, prepared by the app. */
+  agentSlices(assetId: string, from: number, count: number): Promise<PageSlices>;
   /**
    * Hybrid search, external side: free public catalogs searched by the app, plus search links for other sites.
    * Optional, so an older app (or a source without it) makes `search_external` say so instead of failing.

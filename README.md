@@ -68,7 +68,7 @@ Two pieces let Claude Code design and redesign screens in any project from **you
    pnpm mcp:build
    claude mcp add pivot --scope user -- node /absolute/path/to/pivot/apps/mcp/dist/server.js
    ```
-   In Claude Code, `/mcp` should list `pivot` as connected. Write tools use the API token from `~/.pivot/api-token`, which is created automatically. Details and troubleshooting: [apps/mcp/README.md](apps/mcp/README.md).
+   In Claude Code, `/mcp` should list `pivot` as connected. Write tools use the API token from `~/.pivot/api-token`, which PIVOT creates when it starts. Details and troubleshooting: [apps/mcp/README.md](apps/mcp/README.md).
 3. **Install the skills:**
    ```bash
    pnpm skill:install

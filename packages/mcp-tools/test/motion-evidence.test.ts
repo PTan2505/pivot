@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { fitForAgent, sliceForAgent } from "@pivot/core/agent-images";
 import { describe, expect, it } from "vitest";
 import type { AssetDTO, ResourceDetailDTO } from "@pivot/core/types";
 import type { PivotSource } from "../src/source";
@@ -77,14 +78,16 @@ function sourceFor(assets: AssetDTO[]) {
     listCollections: async () => [],
     counts: async () => ({}),
     listSources: async () => [],
-    getImage: async (assetId: string) => {
+    agentImage: async (assetId: string) => {
       fetched.push(assetId);
-      return {
-        data: await sharp({ create: { width: 1440, height: 900, channels: 3, background: "#123456" } })
+      return fitForAgent(
+        await sharp({ create: { width: 1440, height: 900, channels: 3, background: "#123456" } })
           .png()
           .toBuffer(),
-        mimeType: "image/png",
-      };
+      );
+    },
+    agentSlices: async () => {
+      throw new Error("not used");
     },
   } as unknown as PivotSource;
   return { source, fetched };

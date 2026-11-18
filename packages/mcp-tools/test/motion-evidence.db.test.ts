@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
+import { fitForAgent, sliceForAgent } from "@pivot/core/agent-images";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PivotSource } from "../src/source";
 import { runTool, TOOLS } from "../src/tools";
@@ -44,12 +45,17 @@ beforeAll(async () => {
     listCollections: async () => [],
     counts: async () => ({}),
     listSources: async () => [],
-    getImage: async (assetId) => {
-      const row = await assets.getAsset(assetId);
-      if (!row) throw new Error("missing asset");
-      return { data: await assets.readAssetBytes(row), mimeType: row.mimeType };
-    },
+    // what the app's /api/assets/[id]/agent does, on the real stored bytes
+    agentImage: async (assetId) => fitForAgent(await bytes(assetId)),
+    agentSlices: async (assetId, from, count) => sliceForAgent(await bytes(assetId), from, count),
   } as PivotSource;
+  async function bytes(assetId: string) {
+    const row = await assets.getAsset(assetId);
+    if (!row) throw new Error("missing asset");
+    const data = await assets.readAssetBytes(row);
+    if (!data) throw new Error("missing file");
+    return data;
+  }
 
   // A reference recorded with motion, saved the way capture saves it (capture.ts, captureExtras).
   const recorded = await resources.createResource({
