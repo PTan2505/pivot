@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
+  isOtherType,
   RESOURCE_TYPES,
   TAG_KIND_LABELS,
   TYPE_DEFS,
@@ -59,7 +60,7 @@ const PAGE_TYPES = RESOURCE_TYPES.filter((t) => t !== "skill");
 const TEXT_TYPES: ResourceType[] = ["snippet", "prompt", "rule", "checklist"];
 /** Offered first when saving a page; the rest sit behind "More types". */
 const MAIN_TYPES: ResourceType[] = ["reference", "source", "library", "media", "animation", "typography"];
-const OTHER_TYPES = PAGE_TYPES.filter((t) => !MAIN_TYPES.includes(t));
+const MORE_TYPES = PAGE_TYPES.filter((t) => !MAIN_TYPES.includes(t));
 /**
  * Facets asked for when saving a page, so the form stays short; everything else can be added in PIVOT.
  * A reference skips Pattern: patterns describe components more than whole pages.
@@ -318,6 +319,9 @@ export function Popup() {
   const [mode, setMode] = useState<Mode>("page");
   const [step, setStep] = useState<Step>("type");
   const [moreTypes, setMoreTypes] = useState(false);
+  // PIVOT's "Other resource types": off hides the text types and saving selected text (a server without the setting
+  // shows everything, as before)
+  const [showOther, setShowOther] = useState(false);
   const [type, setType] = useState<ResourceType>("reference");
   const [textType, setTextType] = useState<ResourceType>("snippet");
   const [title, setTitle] = useState("");
@@ -365,9 +369,11 @@ export function Popup() {
       setTitle(info.title);
       setDescription(info.description);
       setText(info.selection);
-      if (info.selection) setMode("selection");
-      const { lastType } = await chrome.storage.local.get("lastType");
-      const last = PAGE_TYPES.find((t) => t === lastType);
+      const stored = await chrome.storage.local.get(["lastType", "cache:showOther"]);
+      const other = stored["cache:showOther"] === true;
+      setShowOther(other);
+      if (info.selection && other) setMode("selection");
+      const last = PAGE_TYPES.find((t) => t === stored.lastType && (other || !isOtherType(t)));
       const known = knownSourceFor(info.url);
       if (known && isHomePage(info.url)) {
         setType("source");
@@ -401,6 +407,19 @@ export function Popup() {
         setDuplicates(d.duplicates);
         setDuplicateTotal(d.total ?? d.duplicates.length);
         setNeedsUpdate(!caps.features.includes("clip.client-request-id"));
+        const shown = caps.features.includes("settings.ui")
+          ? (await api.uiSettings().catch(() => ({ showOtherTypes: other }))).showOtherTypes
+          : true;
+        setShowOther(shown);
+        void chrome.storage.local
+          .set({ "cache:showOther": shown })
+          .then(() => chrome.runtime.sendMessage({ type: "pivot:ui-settings" }))
+          .catch(() => {});
+        if (shown && info.selection && !other) setMode("selection");
+        if (!shown) {
+          setMode("page");
+          setType((t) => (isOtherType(t) ? "reference" : t));
+        }
         void chrome.storage.local.set({ "cache:tags": t, "cache:collections": c });
         setStatus("ready");
         // waiting saves go out now that PIVOT answers
@@ -806,7 +825,7 @@ export function Popup() {
         {pending.length > 0 && (
           <PendingPanel items={pending} offline={offline} onChange={reloadPending} onReview={setReviewing} />
         )}
-        {page?.selection && (
+        {page?.selection && showOther && (
           <div
             role="tablist"
             aria-label="What to save"
@@ -854,9 +873,11 @@ export function Popup() {
               <p className="text-xs text-ink-muted">This is {knownSource}’s home page, so Source is picked.</p>
             )}
             <div className="grid grid-cols-2 gap-1">
-              {(moreTypes ? [...MAIN_TYPES, ...OTHER_TYPES] : MAIN_TYPES).map((t) => (
-                <TypeOption key={t} type={t} last={t === type} onChoose={chooseType} />
-              ))}
+              {(moreTypes ? [...MAIN_TYPES, ...MORE_TYPES] : MAIN_TYPES)
+                .filter((t) => showOther || !isOtherType(t))
+                .map((t) => (
+                  <TypeOption key={t} type={t} last={t === type} onChoose={chooseType} />
+                ))}
             </div>
             {!moreTypes && (
               <button

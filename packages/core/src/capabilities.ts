@@ -26,6 +26,8 @@ export const API_FEATURES = [
   "suggestions",
   /** Hybrid search: `GET /api/search/external` (free direct catalogs plus link-outs). */
   "search.external",
+  /** `GET|PATCH /api/settings/ui`: `{ showOtherTypes }`, whether the types outside design are shown. */
+  "settings.ui",
 ] as const;
 
 export type ApiFeature = (typeof API_FEATURES)[number];

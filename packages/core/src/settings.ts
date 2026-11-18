@@ -3,7 +3,9 @@ import { getDb } from "./db/client";
 import { appSettings } from "./db/schema";
 import {
   DEFAULT_CAPTURE_SETTINGS,
+  DEFAULT_UI_SETTINGS,
   DIRECT_PROVIDER_IDS,
+  type UiSettings,
   type DirectProviderId,
   type CaptureOptions,
   type CaptureSettings,
@@ -48,6 +50,31 @@ export async function setCaptureSettings(patch: unknown): Promise<CaptureSetting
   await db
     .insert(appSettings)
     .values({ key: "capture", value: { ...next } })
+    .onConflictDoUpdate({ target: appSettings.key, set: { value: { ...next }, updatedAt: new Date() } });
+  return next;
+}
+
+/** Keeps only known keys with valid values. */
+export function cleanUiSettings(input: unknown): Partial<UiSettings> {
+  const v = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
+  const out: Partial<UiSettings> = {};
+  if (typeof v.showOtherTypes === "boolean") out.showOtherTypes = v.showOtherTypes;
+  return out;
+}
+
+/** App-wide display settings, such as whether the types outside design are shown. */
+export async function getUiSettings(): Promise<UiSettings> {
+  const db = await getDb();
+  const [row] = await db.select().from(appSettings).where(eq(appSettings.key, "ui")).limit(1);
+  return { ...DEFAULT_UI_SETTINGS, ...cleanUiSettings(row?.value) };
+}
+
+export async function setUiSettings(patch: unknown): Promise<UiSettings> {
+  const next = { ...(await getUiSettings()), ...cleanUiSettings(patch) };
+  const db = await getDb();
+  await db
+    .insert(appSettings)
+    .values({ key: "ui", value: { ...next } })
     .onConflictDoUpdate({ target: appSettings.key, set: { value: { ...next }, updatedAt: new Date() } });
   return next;
 }

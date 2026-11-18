@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { toast } from "sonner";
-import { isResourceType, SECTIONS } from "@pivot/core/types";
+import { isOtherType, isResourceType, visibleSections } from "@pivot/core/types";
 import { AddMenu } from "@/components/add-menu";
 import { PivotMark, PivotWordmark } from "@/components/brand";
 import { clip, clipTo, eases, reducedMotion, useIndicator, useScrollDirection } from "@/components/nav-motion";
@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { sectionHref } from "@/hooks/use-library-params";
-import { api, useCollections, useCounts, useInvalidate } from "@/lib/api";
+import { api, useCollections, useCounts, useInvalidate, useShowOther } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const LIBRARY_ROUTES = /^\/($|collections\/|trash$)/;
@@ -36,7 +36,7 @@ const wide = () => window.matchMedia("(min-width: 64rem)").matches;
 /**
  * The top bar, direction "1 · Floating capsule" with the owner's major change "6 · Full width, then capsule · A content
  * stays" (design session "PIVOT navbar redesign", approved 2026-11-16). From 1024px: at the top of the page a glass bar
- * 72px tall across the full width, holding the logo, the four sections, a 320px search pill, Inbox (only while
+ * 72px tall across the full width, holding the logo, the sections, a 320px search pill, Inbox (only while
  * something waits), More and Add inside a 1240px frame. Scrolling down shrinks the glass into a capsule 1240×60px,
  * 12px below the top (M2′); the content stays in its frame and drops 6px. Below 1024px: a full-width 64px row (logo,
  * search, Inbox) that shrinks into a 56px capsule the same way, and a dock at the bottom with the sections, More and
@@ -58,7 +58,9 @@ export function TopBar() {
   const phoneFieldRef = useRef<HTMLDivElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const [newCollection, setNewCollection] = useState(false);
-  const preferType = pathname === "/" && isResourceType(type) ? type : undefined;
+  const showOther = useShowOther();
+  // a hidden type's page doesn't turn Add into "New prompt…"
+  const preferType = pathname === "/" && isResourceType(type) && (showOther || !isOtherType(type)) ? type : undefined;
 
   // The page starts below the bar.
   useEffect(() => {
@@ -349,7 +351,7 @@ function MoreMenu({
   );
 }
 
-/** Below 1024px: the four sections and More in a glass dock at the bottom, Add apart in ember. */
+/** Below 1024px: the sections and More in a glass dock at the bottom, Add apart in ember. */
 function PhoneDock({
   dockRef,
   more,
@@ -361,6 +363,7 @@ function PhoneDock({
 }) {
   const { active, routeKey } = useActiveSection();
   const [shown, select] = useOptimisticSection(active, routeKey);
+  const sections = visibleSections(useShowOther());
   const listRef = useRef<HTMLDivElement>(null);
   const indRef = useRef<HTMLDivElement>(null);
   useIndicator(listRef, indRef, shown, 16);
@@ -376,7 +379,7 @@ function PhoneDock({
       <nav aria-label="Sections" className="glass-strong flex gap-0.5 rounded-[24px] p-1.5">
         <div data-nav-list className="relative">
           <div ref={listRef} className="flex gap-0.5">
-            {SECTIONS.map((s) => {
+            {sections.map((s) => {
               const Icon = SECTION_ICONS[s.id];
               return (
                 <Link
@@ -401,7 +404,7 @@ function PhoneDock({
             className="pointer-events-none absolute inset-0 flex gap-0.5 bg-inverse text-on-inverse"
             style={{ clipPath: "inset(0px 100% 0px 0px round 16px)" }}
           >
-            {SECTIONS.map((s) => {
+            {sections.map((s) => {
               const Icon = SECTION_ICONS[s.id];
               return (
                 <div key={s.id} className={cn(cell, "text-on-inverse")}>

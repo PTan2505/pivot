@@ -18,6 +18,7 @@ import type {
   SearchRequest,
   SourceCategory,
   TagDTO,
+  UiSettings,
 } from "@pivot/core/types";
 
 /**
@@ -118,6 +119,11 @@ export class HttpSource implements PivotSource, PivotWriter {
 
   async listCollections() {
     return (await this.json<CollectionDTO[]>("/api/collections")) ?? [];
+  }
+
+  /** An app from before the setting (no such route) hides nothing. */
+  async uiSettings(): Promise<UiSettings> {
+    return (await this.json<UiSettings>("/api/settings/ui")) ?? { showOtherTypes: true };
   }
 
   async counts() {

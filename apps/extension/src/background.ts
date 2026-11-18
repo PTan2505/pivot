@@ -1,4 +1,4 @@
-import { getConfig, type ClipData } from "./lib/api";
+import { api, getConfig, type ClipData } from "./lib/api";
 import type { PendingItem } from "./lib/queue";
 import { pendingStore } from "./lib/pending-store";
 import { getCaptureSession } from "./lib/capture-session";
@@ -25,10 +25,28 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
     chrome.contextMenus.create({ id: MENU.image, title: "Save image to PIVOT", contexts: ["image"] });
     chrome.contextMenus.create({ id: MENU.snippet, title: "Save selection as snippet", contexts: ["selection"] });
     chrome.contextMenus.create({ id: MENU.prompt, title: "Save selection as prompt", contexts: ["selection"] });
+    void applyTextMenus();
   });
   // First install: open options so the token can be pasted.
   if (reason === "install" && !(await getConfig()).token) chrome.runtime.openOptionsPage();
 });
+
+/**
+ * Snippets and prompts are outside design: their menu items show only while PIVOT's "Other resource types" is on. A
+ * server without that setting shows them, as before; while PIVOT is away the last known answer stays (hidden when it was never known, like the popup).
+ */
+async function applyTextMenus() {
+  let shown: boolean;
+  try {
+    const { features } = await api.capabilities();
+    shown = features.includes("settings.ui") ? (await api.uiSettings()).showOtherTypes : true;
+    await chrome.storage.local.set({ "cache:showOther": shown });
+  } catch {
+    shown = (await chrome.storage.local.get("cache:showOther"))["cache:showOther"] === true;
+  }
+  for (const id of [MENU.snippet, MENU.prompt])
+    chrome.contextMenus.update(id, { visible: shown }, () => void chrome.runtime.lastError);
+}
 
 const SYNC_ALARM = "pivot-sync";
 
@@ -65,6 +83,7 @@ async function scheduleSync() {
 }
 
 async function backgroundSync() {
+  void applyTextMenus();
   const summary = await syncNow();
   if (summary.synced) {
     await notify(
@@ -320,6 +339,8 @@ async function startPicker(tabId: number, mode: "select" | "crop") {
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
   // The popup asks for a background sync after it queues something, so the alarm keeps going after it closes.
   if (message?.type === "pivot:queue-changed") void scheduleSync();
+  // The popup has just read PIVOT's "Other resource types": the selection menu items follow at once.
+  if (message?.type === "pivot:ui-settings") void applyTextMenus();
   // The popup starts the picker, then closes; the page reports back here.
   if (message?.type === "pivot:section-start") void startPicker(message.tabId, message.mode);
   if (message?.type === "pivot:section-picked" && sender.tab) {

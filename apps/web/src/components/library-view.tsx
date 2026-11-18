@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
-  RESOURCE_TYPES,
+  visibleTypes,
   SOURCE_CATEGORIES,
   TAG_KIND_LABELS,
   TYPE_DEFS,
@@ -46,6 +46,7 @@ import {
   useCollectionCovers,
   useCollections,
   useResource,
+  useShowOther,
   usePrimeResources,
   useResources,
   useTags,
@@ -244,7 +245,9 @@ export function LibraryView({
   const { set } = params;
   // Sections only apply to the library itself; collections and the trash cover every type.
   const library = mode === "library" && !collectionId;
-  const typeChoices = library ? params.section.types : RESOURCE_TYPES;
+  // collections and the trash list every type; their type filter offers what's shown
+  const showOther = useShowOther();
+  const typeChoices = library ? params.section.types : visibleTypes(showOther);
   // Hybrid search: with a query in the library, look in it, outside it, or both.
   const searching = library && !!params.q.trim();
   const scope = searching ? params.scope : "library";
@@ -567,7 +570,11 @@ export function LibraryView({
         <section className="flex flex-col gap-6 px-4 pt-8 pb-2 md:px-10 md:pt-10">
           {trail.length > 1 && <Breadcrumbs items={trail} />}
           <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
-            <h1 className="text-[clamp(44px,6vw,72px)] leading-[0.96] font-medium tracking-[-0.045em] text-balance text-ink">
+            {/* focusable from code (after "Show them" reveals a hidden section), not by Tab */}
+            <h1
+              tabIndex={-1}
+              className="text-[clamp(44px,6vw,72px)] leading-[0.96] font-medium tracking-[-0.045em] text-balance text-ink outline-none"
+            >
               {heading}
             </h1>
             {/* Just the number: what's listed right now (it follows search and filters); none when only searching outside. */}

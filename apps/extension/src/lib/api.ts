@@ -56,6 +56,8 @@ export const api = {
     ),
   /** What the server supports; a server from before this endpoint answers 404, which counts as nothing. */
   capabilities: () => request<{ apiVersion: number; features: string[] }>("/api/capabilities"),
+  /** Whether the types outside design are shown (servers with the "settings.ui" feature). */
+  uiSettings: () => request<{ showOtherTypes: boolean }>("/api/settings/ui"),
   tags: () => request<TagDTO[]>("/api/tags"),
   collections: () => request<CollectionDTO[]>("/api/collections"),
   /** The newest 3 saves of the same page (with a thumbnail path when they have a cover) and how many in all. */

@@ -20,7 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ConfirmButton } from "@/components/confirm-button";
 import { useUi } from "@/components/ui-store";
 import { copyContext } from "@/hooks/use-copy-resource";
-import { api, useBulk, useCollections, useInvalidate } from "@/lib/api";
+import { api, useBulk, useCollections, useInvalidate, useShowOther } from "@/lib/api";
 
 export function AddToCollection({
   ids,
@@ -130,6 +130,8 @@ export function SelectionBar({
 }) {
   const bulk = useBulk();
   const { openExport } = useUi();
+  // Export and Share package write bundles to a folder: outside design, so only with "Other resource types"
+  const showOther = useShowOther();
   if (!ids.length) return null;
 
   const run = async (action: "trash" | "restore" | "purge" | "removeFromCollection" | "reviewed", message: string) => {
@@ -151,12 +153,16 @@ export function SelectionBar({
           <Button variant="ghost" onClick={() => copyContext(ids)}>
             <ClipboardCopy /> Copy context
           </Button>
-          <Button variant="ghost" onClick={() => openExport({ ids, name: exportName })}>
-            <PackageOpen /> Export
-          </Button>
-          <Button variant="ghost" onClick={() => sharePackage(ids, exportName)}>
-            <Share2 /> Share package
-          </Button>
+          {showOther && (
+            <>
+              <Button variant="ghost" onClick={() => openExport({ ids, name: exportName })}>
+                <PackageOpen /> Export
+              </Button>
+              <Button variant="ghost" onClick={() => sharePackage(ids, exportName)}>
+                <Share2 /> Share package
+              </Button>
+            </>
+          )}
           <AddToCollection ids={ids} onDone={onClear}>
             <Button variant="ghost">
               <FolderInput /> Collection

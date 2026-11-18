@@ -13,6 +13,7 @@ import type {
   SkillStatusDTO,
   TagDTO,
   TagKind,
+  UiSettings,
 } from "@pivot/core/types";
 
 export class ApiError extends Error {
@@ -49,6 +50,7 @@ export const keys = {
   sourceStats: ["source-stats"] as const,
   external: (q: string, limit: number) => ["external-search", q, limit] as const,
   providers: ["search-providers"] as const,
+  uiSettings: ["ui-settings"] as const,
 };
 
 export interface ResourceQuery {
@@ -176,6 +178,25 @@ export interface Settings {
 
 export function useSettings() {
   return useQuery({ queryKey: keys.settings, queryFn: () => api<Settings>("/api/settings"), staleTime: 60_000 });
+}
+
+export function useUiSettings() {
+  return useQuery({ queryKey: keys.uiSettings, queryFn: () => api<UiSettings>("/api/settings/ui"), staleTime: 60_000 });
+}
+
+/** Whether the types outside design (Knowledge, Skills, Export, Share package) are shown. False until it has loaded. */
+export function useShowOther(): boolean {
+  return useUiSettings().data?.showOtherTypes ?? false;
+}
+
+/** Saves the setting and updates every surface that reads it at once. */
+export function useSetShowOther() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (showOtherTypes: boolean) =>
+      api<UiSettings>("/api/settings/ui", { method: "PATCH", json: { showOtherTypes } }),
+    onSuccess: (next) => qc.setQueryData(keys.uiSettings, next),
+  });
 }
 
 export function useSkillStatuses(enabled = true) {

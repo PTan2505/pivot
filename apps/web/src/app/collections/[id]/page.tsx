@@ -10,7 +10,7 @@ import { LibraryView } from "@/components/library-view";
 import { Button } from "@/components/ui/button";
 import { useUi } from "@/components/ui-store";
 import { copyContext } from "@/hooks/use-copy-resource";
-import { api, useInvalidate } from "@/lib/api";
+import { api, useInvalidate, useShowOther } from "@/lib/api";
 import type { CollectionDTO } from "@pivot/core/types";
 
 function NameInput({ id, initial }: { id: string; initial: string }) {
@@ -59,6 +59,7 @@ function CollectionActions({ id }: { id: string }) {
   const router = useRouter();
   const invalidate = useInvalidate();
   const { openExport } = useUi();
+  const showOther = useShowOther();
   const { data } = useCollection(id);
   const ids = useQuery({
     queryKey: ["resources", { collection: id, ids: true }],
@@ -71,13 +72,15 @@ function CollectionActions({ id }: { id: string }) {
       <Button variant="secondary" disabled={!all.length} onClick={() => copyContext(all)}>
         <ClipboardCopy /> Copy context
       </Button>
-      <Button
-        variant="secondary"
-        disabled={!all.length}
-        onClick={() => openExport({ ids: all, name: data?.name ?? "collection" })}
-      >
-        <PackageOpen /> Export
-      </Button>
+      {showOther && (
+        <Button
+          variant="secondary"
+          disabled={!all.length}
+          onClick={() => openExport({ ids: all, name: data?.name ?? "collection" })}
+        >
+          <PackageOpen /> Export
+        </Button>
+      )}
       <ConfirmButton
         title={`Delete “${data?.name}”?`}
         description="Only the collection is deleted. Its resources stay in your library."
