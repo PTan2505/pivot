@@ -82,7 +82,7 @@ How to run them:
 ## 0. Before you start
 
 - **Paths and address:** this skill's folder is `${CLAUDE_SKILL_DIR}`; in [motion.md](motion.md) it is written `<skill>`. PIVOT runs at `${user_config.pivot_url}`: pass it as `--url` to this skill's scripts.
-- If the `pivot` tools aren't available, or a call returns `app_unreachable`, tell the user PIVOT isn't running (`npm start` in the PIVOT repo) and ask whether to wait or continue **without references**. If they continue, say plainly that nothing below comes from their library.
+- If the `pivot` tools aren't available, or a call returns `app_unreachable`, tell the user PIVOT isn't running (`npx pivot-studio`, or `npm start` in a PIVOT checkout) and ask whether to wait or continue **without references**. If they continue, say plainly that nothing below comes from their library.
 - Read the **target project's** design system first: `DESIGN.md`, `CLAUDE.md`, token or theme files, existing components. References inform structure and hierarchy; the project's own tokens, type and components decide how it looks.
 
 ## 1. Understand the request

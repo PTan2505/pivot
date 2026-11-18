@@ -13,7 +13,7 @@ async function isPivot() {
 }
 
 if (!(await isPivot())) {
-  const message = `PIVOT isn't running at ${base}, so the pivot tools and /pivot:design can't reach your reference library. Start it with \`npm start\` in your PIVOT folder.`;
+  const message = `PIVOT isn't running at ${base}, so the pivot tools and /pivot:design can't reach your reference library. Start it with \`npx pivot-studio\` (or \`npm start\` in a PIVOT checkout).`;
   process.stdout.write(
     JSON.stringify({
       systemMessage: message,
