@@ -1,0 +1,49 @@
+{
+  "name": "pivot-ui",
+  "version": "0.1.0",
+  "description": "PIVOT: your own library of UI references, and design sessions with Claude Code. Runs locally.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PTan2505/pivot.git",
+    "directory": "apps/cli"
+  },
+  "homepage": "https://github.com/PTan2505/pivot#readme",
+  "keywords": [
+    "design",
+    "ui",
+    "references",
+    "claude-code",
+    "mcp"
+  ],
+  "type": "module",
+  "bin": {
+    "pivot-ui": "bin/pivot-ui.mjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "prepack": "node build.mjs --check-built",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1156.0",
+    "@electric-sql/pglite": "0.5.11",
+    "next": "16.4.6",
+    "playwright": "1.64.1",
+    "postgres": "3.4.9",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "sharp": "0.35.5"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.5"
+  }
+}

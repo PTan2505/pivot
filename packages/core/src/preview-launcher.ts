@@ -62,7 +62,7 @@ export function clearPreviewPick(sessionId: string) {
 /** The preview script of the pivot:design skill in this PIVOT checkout (PIVOT_PREVIEW_SCRIPT overrides it). */
 export function previewScript(from = process.cwd()): string | null {
   if (process.env.PIVOT_PREVIEW_SCRIPT) return process.env.PIVOT_PREVIEW_SCRIPT;
-  for (let dir = path.resolve(from); ; dir = path.dirname(dir)) {
+  for (let dir = path.resolve(/*turbopackIgnore: true*/ from); ; dir = path.dirname(dir)) {
     const p = path.join(dir, "plugin/skills/design/scripts/preview.mjs");
     if (fs.existsSync(p)) return p;
     if (path.dirname(dir) === dir) return null;
