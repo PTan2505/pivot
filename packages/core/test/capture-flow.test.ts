@@ -361,6 +361,25 @@ describe.skipIf(!(await (await import("../src/capture")).playwrightStatus()).ins
     expect(keyframes[1].meta.scrollY).toBeGreaterThan(400);
   });
 
+  it("keeps the browser open for a recording that outlasts the idle close", { timeout: 120_000 }, async () => {
+    mode = "page";
+    const idle = capture.captureTiming.idleCloseMs;
+    capture.captureTiming.idleCloseMs = 1_000;
+    try {
+      // a screenshot that just finished arms the idle close; the recording that follows takes longer than that
+      await capture.screenshotUrl(baseUrl, { fullPage: false });
+      const after = await capture.screenshotUrl(`${baseUrl}?motion`, { motion: true });
+      expect(after.video?.length).toBeGreaterThan(1000);
+      // and a screenshot finishing while a recording runs doesn't close the browser under it either
+      const recording = capture.screenshotUrl(`${baseUrl}?motion`, { motion: true });
+      await new Promise((r) => setTimeout(r, 300));
+      await capture.screenshotUrl(baseUrl, { fullPage: false });
+      expect((await recording).video?.length).toBeGreaterThan(1000);
+    } finally {
+      capture.captureTiming.idleCloseMs = idle;
+    }
+  });
+
   it("records a smooth-scroll page with the wheel, to its end", { timeout: 120_000 }, async () => {
     mode = "smooth";
     try {
