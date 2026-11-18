@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterAll, describe, expect, it } from "vitest";
-import { builtVersion, externalsOf, RUNTIME } from "../build.mjs";
+import { builtVersion, externalsOf, REQUIRED, RUNTIME } from "../build.mjs";
 import { parseArgs } from "../lib/args.mjs";
 import { checks } from "../lib/doctor.mjs";
 import { installExtension } from "../lib/extension.mjs";
@@ -137,6 +137,13 @@ describe("the native packages", () => {
         "sharp",
       ].sort(),
     );
+  });
+
+  it("ship with PIVOT's license and the third-party notices", () => {
+    expect(fs.readFileSync(path.resolve(here, "../LICENSE"), "utf8")).toBe(
+      fs.readFileSync(path.resolve(here, "../../../LICENSE"), "utf8"),
+    );
+    expect(REQUIRED).toContain("THIRD_PARTY_NOTICES.md");
   });
 
   it("are read from the build's pnpm links, and anything but a link there stops the build", () => {

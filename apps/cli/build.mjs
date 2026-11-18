@@ -32,6 +32,7 @@ export const REQUIRED = [
   "scripts/preview.mjs",
   "scripts/motion-qa.mjs",
   "extension/manifest.json",
+  "THIRD_PARTY_NOTICES.md",
 ];
 
 /** The runtime packages the server needs installed: everything it loads from node_modules, pinned to the build's. */
@@ -130,6 +131,8 @@ function main(argv) {
   for (const f of ["preview.mjs", "motion-qa.mjs"])
     fs.copyFileSync(path.join(repo, "plugin/skills/design/scripts", f), path.join(out, "scripts", f));
   fs.cpSync(path.join(repo, "apps/extension/dist"), path.join(out, "extension"), { recursive: true });
+  // the built app includes third-party code under its own terms (GSAP among them)
+  fs.copyFileSync(path.join(repo, "THIRD_PARTY_NOTICES.md"), path.join(out, "THIRD_PARTY_NOTICES.md"));
 
   check();
   console.log(`Built ${path.relative(process.cwd(), out)} for pivot-ui ${pkg.version}`);
