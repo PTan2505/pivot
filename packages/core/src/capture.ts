@@ -36,10 +36,10 @@ const SCROLL_BUDGET_MS = 45_000;
 const CAPTURE_TIMEOUT_MS = 120_000;
 /** Titles of bot-check and block pages, which are served in place of the site. */
 const CHALLENGE_TITLE = /^(just a moment|attention required|access denied|security check|verifying you are human)/i;
-const IDLE_CLOSE_MS = 2 * 60 * 1000;
-
-/** Waits between automatic retries. Exported so tests can shorten them. */
+/** Waits between automatic retries, and the idle browser's lifetime. Exported so tests can shorten them. */
 export const captureTiming = {
+  /** The shared browser closes once no capture has used it for this long. */
+  idleCloseMs: 2 * 60 * 1000,
   /** Before the 1st and 2nd retry of a timeout, network error or HTTP 502/503/504. */
   retryDelaysMs: [5_000, 20_000],
   /** A 429 asking to wait longer than this fails instead of retrying. */
@@ -84,6 +84,8 @@ interface Job {
 interface CaptureState {
   browser?: Promise<Browser>;
   idleTimer?: ReturnType<typeof setTimeout>;
+  /** Captures using the shared browser right now; it is only closed for being idle when this is 0. */
+  inUse?: number;
   queue: Job[];
   running: boolean;
   /** The job being captured now, and how to stop it. */
@@ -118,9 +120,16 @@ export async function closeCaptureBrowser() {
   await (await b)?.close().catch(() => {});
 }
 
+/**
+ * Arms the idle close once the last capture using the browser is done. A capture in progress (a recording can take
+ * minutes, and runs right after the same job's screenshots) is never cut off by a timer an earlier one armed.
+ */
 function scheduleIdleClose() {
   clearTimeout(state.idleTimer);
-  state.idleTimer = setTimeout(closeCaptureBrowser, IDLE_CLOSE_MS);
+  if (state.inUse) return;
+  state.idleTimer = setTimeout(() => {
+    if (!state.inUse) void closeCaptureBrowser();
+  }, captureTiming.idleCloseMs);
 }
 
 /** Resolves once the page has had no request in flight for `quietMs`, or after `maxMs`. */
@@ -741,6 +750,8 @@ export async function screenshotUrl(
   if (signal?.aborted) throw new CaptureError("The capture was cancelled.", "cancelled");
   await assertPublicUrl(url);
   const start = await followRedirects(url);
+  // an idle close armed by an earlier capture must not land while this one sets up
+  clearTimeout(state.idleTimer);
   const b = await browser();
   // Service workers would answer requests the route below never sees.
   const videoDir = motion ? await fs.mkdtemp(path.join(os.tmpdir(), "pivot-motion-")) : null;
@@ -796,6 +807,8 @@ export async function screenshotUrl(
     await Promise.all(checks);
     if (privateUrl) throw new UnsafeUrlError("The page sent the browser to a private address, so it wasn't captured.");
   };
+  // held until this capture is done, so no idle close takes the browser away mid-capture (see scheduleIdleClose)
+  state.inUse = (state.inUse ?? 0) + 1;
   try {
     const page = await context.newPage();
     // A recording runs the page on a fake clock it can pause and step (see recordScroll); until then it keeps real time.
@@ -876,6 +889,7 @@ export async function screenshotUrl(
     clearTimeout(deadline);
     await context.close().catch(() => {});
     if (videoDir) await fs.rm(videoDir, { recursive: true, force: true }).catch(() => {});
+    state.inUse = Math.max(0, (state.inUse ?? 1) - 1);
     scheduleIdleClose();
   }
 }
