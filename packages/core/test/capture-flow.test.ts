@@ -17,9 +17,10 @@ let server: http.Server;
 let baseUrl: string;
 /**
  * What the test server answers: a page whose colour changes per capture, a block page, a sign-in wall, a 503 the
- * first time it is asked (then the page), a 429 with Retry-After the first time, or a page that never finishes.
+ * first time it is asked (then the page), a 429 with Retry-After the first time, a page that never finishes, or a
+ * page taller than the full-page screenshot's cap that ends in green.
  */
-let mode: "page" | "blocked" | "signin" | "flaky" | "limited" | "slow" | "hover" | "smooth" = "page";
+let mode: "page" | "blocked" | "signin" | "flaky" | "limited" | "slow" | "hover" | "smooth" | "tall" = "page";
 let hits = 0;
 let failuresLeft = 0;
 
@@ -61,6 +62,11 @@ beforeAll(async () => {
         addEventListener("wheel", (e) => { e.preventDefault(); target = Math.max(0, Math.min(c.scrollHeight - innerHeight, target + e.deltaY)); }, { passive: false });
         (function loop() { cur += (target - cur) * 0.2; c.style.transform = "translateY(" + -cur + "px)"; requestAnimationFrame(loop); })();
         </script></body>`,
+      );
+    }
+    if (mode === "tall") {
+      return res.end(
+        `<style>body{margin:0;background:#234}div{height:13400px}footer{height:600px;background:#0f0}</style><body><div></div><footer></footer></body>`,
       );
     }
     if (mode === "hover") {
@@ -371,6 +377,24 @@ describe.skipIf(!(await (await import("../src/capture")).playwrightStatus()).ins
       ]);
       // rests at the top and bottom plus the glide through 3000px of content
       expect(shots.videoDurationMs).toBeGreaterThan(3000);
+    } finally {
+      mode = "page";
+    }
+  });
+
+  it("records a page taller than the full-page screenshot to its end", { timeout: 240_000 }, async () => {
+    mode = "tall";
+    try {
+      const shots = await capture.screenshotUrl(`${baseUrl}?tall`, { motion: true });
+      const last = shots.keyframes[shots.keyframes.length - 1];
+      // 14000px in a 900px window: the scroll ends at 13100, past where the 12000px screenshot cap would stop it
+      expect(capture.MOTION_MAX_HEIGHT).toBeGreaterThan(capture.MAX_FULL_PAGE_HEIGHT);
+      expect(last.scrollY).toBe(13100);
+      const { data: px, info } = await sharp(last.data).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+      const bottom = (info.height - 10) * info.width * info.channels;
+      expect(px[bottom + 1]).toBeGreaterThan(200);
+      // rests at the top and bottom plus 15 screens of glides and rests
+      expect(shots.videoDurationMs).toBeGreaterThan(35_000);
     } finally {
       mode = "page";
     }
