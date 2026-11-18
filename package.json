@@ -1,5 +1,10 @@
 {
   "name": "pivot",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PTan2505/pivot.git"
+  },
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.9.1",

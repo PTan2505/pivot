@@ -45,7 +45,7 @@ Errors come back as tool results with a code the agent can act on: `not_found`, 
    ```
 3. Register it with Claude Code. For every project on this machine:
    ```bash
-   claude mcp add pivot --scope user -- node /absolute/path/to/stan-bag/apps/mcp/dist/server.js
+   claude mcp add pivot --scope user -- node /absolute/path/to/pivot/apps/mcp/dist/server.js
    ```
    Or only inside this repo, from its root:
    ```bash

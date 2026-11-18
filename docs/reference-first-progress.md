@@ -197,7 +197,7 @@ Not a plan phase: two problems the owner hit while saving references.
   - `lib/url.ts` (new), `components/resource-detail.tsx`, `components/resource-card.tsx`: Open links go through `openableUrl`, which only opens http/https and adds `https://` to a bare host (G12, S6).
   - `components/screenshot-viewer.tsx` (new), `components/asset-gallery.tsx`: View at full size opens the screenshot at its captured width (up to 1440px) in a full-height sheet that scrolls (G13).
   - Tests: `library.test.ts` — newest and oldest sort, and search + facet + type + source combined.
-  - Docs: SPEC §8 (new, "Tìm lại và dùng lại"; card is now §9, out of scope §10); DESIGN.md (page head, empty and no-match states, full-size viewer).
+  - Docs: SPEC §8 (new, "Finding and reusing"; card is now §9, out of scope §10); DESIGN.md (page head, empty and no-match states, full-size viewer).
 - **Checks run and results:** `pnpm typecheck`, `pnpm lint` pass; `library.test.ts` 10/10. Changed files pass Prettier.
 - **Manual verification** (scratch app: Attio, Stripe and Linear tagged by page type and domain; Attio captured):
   - Sort lists Recently edited, Newest first, Oldest first, Title A–Z. Oldest first gives Attio, Stripe, Linear (`?sort=oldest`); Newest first gives the reverse.

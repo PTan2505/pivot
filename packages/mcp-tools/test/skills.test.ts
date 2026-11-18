@@ -98,7 +98,7 @@ describe("mockups in PIVOT and the decision watcher", () => {
     expect(r).toContain("**The user approves, in PIVOT or in the chat**");
     expect(r).toMatch(/`record_chat_approval` \(their words quoted exactly/);
     expect(r).not.toContain("Minor with explicit up-front authorisation");
-    expect(spec).toMatch(/duyệt trong chat/i);
+    expect(spec).toMatch(/approves? in the chat/i);
   });
   it("QA compares the build with the approved version's stored HTML, checks sideways scroll and accessibility", () => {
     expect(d).toContain("**Against the approved version itself, layout and accessibility:**");
@@ -179,7 +179,7 @@ describe("the watcher belongs to the session the user talks to", () => {
     expect(d).toContain("**The session the user talks to owns the watcher.**");
     expect(d).toContain("its watcher ends with it and can't wake you");
     expect(d).toContain("Never end the turn that asks for the approval without a running watcher");
-    expect(spec).toContain("Watcher thuộc về phiên đang nói chuyện với người dùng");
+    expect(spec).toContain("The watcher belongs to the session that is talking to the user");
   });
 });
 
@@ -187,9 +187,9 @@ describe("a pick from the interactive preview", () => {
   it("pivot-design treats Choose this version as a pick, then asks before recording a chat approval", () => {
     expect(d).toContain("**Choose this version** in a preview you started sends the user's pick to you");
     expect(d).toContain("the session page has **Open interactive preview**");
-    expect(spec).toContain("**Mở preview từ PIVOT**");
+    expect(spec).toContain("**Open the preview from PIVOT**");
     expect(d).toContain("That is the user's pick, not an approval");
-    expect(spec).toContain("Nút **Choose this version** gửi lựa chọn của người dùng");
+    expect(spec).toContain("The **Choose this version** button sends the user's choice");
   });
 });
 
@@ -206,8 +206,8 @@ describe("approval provenance", () => {
   }
   it("specialists.md and SPEC agree", () => {
     expect(specialists).toContain("Never replace or paraphrase the authorisation");
-    expect(spec).toContain("nguyên văn lời duyệt");
-    expect(spec).toContain("không ghi lại");
+    expect(spec).toContain("the approval words verbatim");
+    expect(spec).toContain("is not recorded");
   });
 });
 
@@ -221,10 +221,10 @@ describe("QA differences are classified in one place", () => {
     ])
       expect(d).toContain(s);
     for (const s of [
-      "tinh chỉnh trong phạm vi",
-      "lệch khỏi một yêu cầu hay chi tiết đã duyệt",
-      "thay đổi đáng kể",
-      "lỗi có sẵn từ trước",
+      "a refinement within scope",
+      "a departure from an approved requirement or detail",
+      "a material change",
+      "a pre-existing defect",
     ])
       expect(spec).toContain(s);
   });
@@ -273,7 +273,7 @@ describe("specialists run by risk", () => {
   });
   it("a specialist is named only after its SKILL.md was read; SPEC describes the checkpoint", () => {
     expect(specialists).toContain("Name a specialist on the checkpoint line only after this Read succeeds");
-    expect(spec).toContain("Specialists: none — <lý do>");
+    expect(spec).toContain("Specialists: none — <reason>");
   });
 });
 
@@ -321,7 +321,7 @@ describe("shortlist, mockups and slop check", () => {
     expect(r).toContain("start the watcher");
   });
   it("SPEC describes the shortlist, mockups, viewer and slop check", () => {
-    for (const s of ["shortlist", "**2–3 mockup**", "make-viewer.mjs", "Kiểm tra AI slop"])
+    for (const s of ["shortlist", "**2–3 mockups**", "make-viewer.mjs", "AI slop check"])
       expect(spec.includes(s), s).toBe(true);
   });
 });
@@ -336,8 +336,8 @@ describe("QA is recorded before a session is done", () => {
   });
   it("SPEC and the READMEs describe the QA report and the done gate", () => {
     for (const t of [spec, read("README.md"), read("apps/mcp/README.md")]) expect(t).toContain("record_design_qa");
-    expect(spec).toContain("**Bản ghi QA**");
-    expect(spec).toContain("không phải ranh giới bảo mật");
+    expect(spec).toContain("**QA record**");
+    expect(spec).toContain("is not a security boundary");
   });
 });
 
@@ -544,7 +544,7 @@ describe("motion is part of the design", () => {
     expect(d.replace(/\s+/g, " ")).toContain("A screenshot never proves an animation");
   });
   it("SPEC and PIVOT_DECISIONS describe the motion foundation", () => {
-    for (const x of ["mức motion", "Xem trước và duyệt motion", "--interactive"])
+    for (const x of ["motion level", "Preview and approve motion", "--interactive"])
       expect(spec.includes(x), x).toBe(true);
     expect(read("docs/PIVOT_DECISIONS.md")).toContain("**Orchestrator v2, P0c: motion foundation**");
   });
@@ -595,8 +595,8 @@ describe("motion QA traces to the approved brief and never passes on missing evi
     expect(flat).toContain("Typing one is not an authorization");
     expect(flat).toContain("the authorization is the user's reply. A field in the plan never sets them.");
     expect(flat).not.toContain("only the command line grants them");
-    expect(spec).toContain("gõ cờ không phải là sự cho phép");
-    expect(spec).not.toContain("chỉ dòng lệnh mới cấp được");
+    expect(spec).toContain("typing a flag is not permission");
+    expect(spec).not.toContain("only the command line can grant");
     expect(flat).toContain("which must be a new, empty folder");
     expect(flat).toContain("It proves the files match the report, not that the report is genuine.");
     expect(flat).toContain("A final state alone never proves the trigger");
@@ -639,7 +639,7 @@ describe("pivot-design: several pages are one direction per version (L1, text on
     expect(d).toMatch(/ask before leaving a page out/);
     expect(d).toContain("viewer/multi-page.html");
     expect(r).toMatch(/never one version per page/);
-    expect(spec).toMatch(/một version là một hướng/i);
+    expect(spec).toMatch(/one version is one direction/i);
   });
   it("ships a page-bar template that needs no scripts or #links, with every page wired", () => {
     expect(tpl).not.toMatch(/<script/i);
@@ -679,7 +679,7 @@ describe("pivot-design: options checkpoint after step 1 (L1, text only)", () => 
     expect(motionMd).toMatch(/§1 options checkpoint: mark it `set by you`/);
     expect(motionMd).toMatch(/A level the user set is raised only with their yes/);
     expect(r).toMatch(/\*\*Options\.\*\* For a Minor or Major redesign/);
-    expect(spec).toMatch(/Hỏi lựa chọn sau bước 1/);
+    expect(spec).toMatch(/Ask the options after step 1/);
   });
 });
 
@@ -690,7 +690,7 @@ describe("pivot-design: UI layouts and components kept apart (L1, text only)", (
     expect(d).toMatch(/`category` \(`layout` or `component`/);
     expect(ordered(d, ["**UI layouts**\n\n| Reference", "**Components**\n\n| Reference", "| Used for"])).toBe(true);
     expect(src).toMatch(/category: z\s*\.enum\(DESIGN_REFERENCE_CATEGORIES\)/);
-    expect(spec).toMatch(/Reference: UI layout và component/);
+    expect(spec).toMatch(/References: UI layout and component/);
   });
 });
 
@@ -711,6 +711,6 @@ describe("pivot-design: GSAP for advanced motion (L1, text only)", () => {
     expect(d).toMatch(/\| Motion technology\s+\|/);
     expect(d).toMatch(/\*\*Motion technology:\*\* the brief's \*\*Technology\*\* line/);
     expect(r).toMatch(/motion technology when the redesign changes motion/);
-    expect(spec).toMatch(/GSAP cho motion advanced/);
+    expect(spec).toMatch(/GSAP for advanced motion/);
   });
 });

@@ -66,7 +66,7 @@ Two pieces let Claude Code design and redesign screens in any project from **you
 2. **Build and register the MCP server for every project:**
    ```bash
    pnpm mcp:build
-   claude mcp add pivot --scope user -- node /absolute/path/to/stan-bag/apps/mcp/dist/server.js
+   claude mcp add pivot --scope user -- node /absolute/path/to/pivot/apps/mcp/dist/server.js
    ```
    In Claude Code, `/mcp` should list `pivot` as connected. Write tools use the API token from `~/.pivot/api-token`, which is created automatically. Details and troubleshooting: [apps/mcp/README.md](apps/mcp/README.md).
 3. **Install the skills:**

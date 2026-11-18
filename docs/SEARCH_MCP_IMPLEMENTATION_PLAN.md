@@ -15,7 +15,7 @@
   Fixes: word-start matching, stop words, and a small synonym map for the facet vocabulary.
 
 - **Semantic search (08) still does not pass its own gate.** The library now holds 25 references (21 with facets) plus 45 sources and 56 skills. That is enough for a first 30-query evaluation set, but the misses above are all lexical. Defer embeddings until the evaluation set shows misses that the fixes above can't cover.
-- **MCP (09) and the skill (10) are entirely missing.** No MCP SDK is installed; the SPEC still lists "MCP server" under _Ngoài phạm vi_; `reference-first-plan.md` freezes it.
+- **MCP (09) and the skill (10) are entirely missing.** No MCP SDK is installed; the SPEC still lists "MCP server" under _Out of MVP scope_; `reference-first-plan.md` freezes it.
 - **The brief's premise now holds.** Reference-first Phases 0–5 are all merged (PRs up to #30), including the stitched full-page capture. The MCP's `get_reference_images` depends on that capture.
 - **Recommended smallest build:**
   1. a `searchResources()` service in `packages/core`, with the lexical fixes above;
@@ -214,7 +214,7 @@ Estimates are working days and assume Phase 5's real references exist.
 - [x] Commit, PR and merge Phase 4; live ⌥⇧D check in Chrome (#27, owner's check).
 - [x] Phase 5: 20+ real references with facets, 3 collections (#28). **This is the evaluation corpus.** Full pages re-captured with the stitched method (#29, #30).
 - [x] Owner decisions: stdio now, with the tools in a transport-independent package (§5.1); the skill lives in the repo and is synced to `~/.claude/skills` (§5.4); P0 read-only first.
-- [x] `docs/SPEC.md`: remove "MCP server" from _Ngoài phạm vi_. Add a §1 decision row (MCP: stdio adapter over the local API, read-only P0) and a new section for search pagination and the MCP tools. `docs/reference-first-plan.md`: note the MCP initiative follows Phase 5.
+- [x] `docs/SPEC.md`: remove "MCP server" from _Out of MVP scope_. Add a §1 decision row (MCP: stdio adapter over the local API, read-only P0) and a new section for search pagination and the MCP tools. `docs/reference-first-plan.md`: note the MCP initiative follows Phase 5.
 
 ### Step 1 — Shared search service (brief 06–07) (2–3 d) — done in #32
 
