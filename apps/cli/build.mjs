@@ -3,8 +3,8 @@
 //                node_modules: npm installs the runtime packages listed in package.json for each machine instead, and
 //                app/externals.json names the hashed links `start` recreates (lib/externals.mjs)
 //   migrations/  the database migrations (PIVOT_MIGRATIONS_DIR)
-//   scripts/     the design skill's preview.mjs and motion-qa.mjs (pivot-ui preview / motion-qa)
-//   extension/   the built Chrome extension (pivot-ui extension)
+//   scripts/     the design skill's preview.mjs and motion-qa.mjs (pivot-studio preview / motion-qa)
+//   extension/   the built Chrome extension (pivot-studio extension)
 //
 //   node build.mjs                 build the web app and the extension, then assemble dist/
 //   node build.mjs --skip-builds   assemble dist/ from the last builds
@@ -76,7 +76,7 @@ function main(argv) {
 
   if (!argv.includes("--skip-builds")) {
     // a throwaway data folder and no database or bucket: building must never touch a real library
-    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "pivot-ui-build-"));
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "pivot-studio-build-"));
     run("pnpm", ["--filter", "web", "exec", "next", "build"], {
       PIVOT_STANDALONE: "1",
       NEXT_TELEMETRY_DISABLED: "1",
@@ -108,7 +108,7 @@ function main(argv) {
   // the server and its chunks are CommonJS, inside a "type": "module" package
   fs.writeFileSync(
     path.join(app, "package.json"),
-    JSON.stringify({ name: "pivot-ui-app", private: true, type: "commonjs" }, null, 2) + "\n",
+    JSON.stringify({ name: "pivot-studio-app", private: true, type: "commonjs" }, null, 2) + "\n",
   );
   fs.cpSync(path.join(standalone, ".next"), path.join(app, ".next"), {
     recursive: true,
@@ -135,7 +135,7 @@ function main(argv) {
   fs.copyFileSync(path.join(repo, "THIRD_PARTY_NOTICES.md"), path.join(out, "THIRD_PARTY_NOTICES.md"));
 
   check();
-  console.log(`Built ${path.relative(process.cwd(), out)} for pivot-ui ${pkg.version}`);
+  console.log(`Built ${path.relative(process.cwd(), out)} for pivot-studio ${pkg.version}`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

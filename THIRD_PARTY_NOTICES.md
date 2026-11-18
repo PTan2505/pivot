@@ -12,7 +12,7 @@ PIVOT's own code is under the [MIT License](LICENSE). It depends on third-party 
 - **License:** GSAP's [Standard "No Charge" License](https://gsap.com/standard-license), from Webflow. It is free, including for commercial use, but it is **not** an open-source license, and the MIT License does not apply to GSAP.
 - **What it prohibits:** using GSAP in a tool that lets people build visual animations without code and competes with Webflow's visual animation builder, without Webflow's written consent. It also prohibits removing or altering GSAP's proprietary notices. PIVOT is not such a tool.
 - **What it doesn't address:** the license text does not mention npm packages, bundled builds or open-source projects.
-- **The npm package:** `pivot-ui` contains a built copy of the web app, so it distributes GSAP's code. Its `dist/THIRD_PARTY_NOTICES.md` is this file.
+- **The npm package:** `pivot-studio` contains a built copy of the web app, so it distributes GSAP's code. Its `dist/THIRD_PARTY_NOTICES.md` is this file.
 - **If you fork PIVOT:** read the license yourself before you ship or redistribute a build that includes GSAP, especially if your fork adds a visual animation builder.
 
 ## Tools downloaded at run time

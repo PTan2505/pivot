@@ -18,7 +18,7 @@ PIVOT runs on your own machine for one user. It is built to keep other websites,
   - The extension and the Claude Code tools use that token.
 - **Approvals:**
   - Approving a design, or restoring a backup, needs the owner passphrase on top of the token. Only a scrypt hash of it is stored.
-  - It is set from a terminal (`pivot-ui passphrase`), never over the API, so an agent holding the token can't approve.
+  - It is set from a terminal (`pivot-studio passphrase`), never over the API, so an agent holding the token can't approve.
 - **Fetching pages:** URL fetches and screenshots refuse private and local network addresses.
 - **Untrusted content:**
   - Uploaded files are served with a sandboxing Content Security Policy.

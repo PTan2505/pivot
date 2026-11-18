@@ -629,7 +629,7 @@ describe("in a browser", () => {
       fs.mkdirSync(data);
       const from = path.dirname(copy);
       expect(playwrightBases({ env: { PIVOT_DATA_DIR: data }, from })).toEqual([]);
-      // what `npm start` / `pivot-ui start` write
+      // what `npm start` / `pivot-studio start` write
       const core = path.resolve(path.dirname(scriptPath), "../../../../packages/core/package.json");
       fs.writeFileSync(path.join(data, "install.json"), JSON.stringify({ app: "pivot", requireFrom: core }));
       expect(playwrightBases({ env: { PIVOT_DATA_DIR: data }, from })).toEqual([core]);

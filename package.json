@@ -15,7 +15,7 @@
     "start": "node scripts/start.mjs",
     "dev": "node scripts/start.mjs --dev",
     "build": "pnpm --filter web build",
-    "test": "pnpm --filter @pivot/core --filter @pivot/mcp-tools --filter extension --filter pivot-ui test",
+    "test": "pnpm --filter @pivot/core --filter @pivot/mcp-tools --filter extension --filter pivot-studio test",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm --filter web lint",
     "db:generate": "pnpm --filter @pivot/core db:generate",
@@ -27,7 +27,7 @@
     "format:check": "prettier --check .",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "mcp:build": "pnpm --filter @pivot/mcp build",
-    "cli:build": "pnpm --filter pivot-ui build",
+    "cli:build": "pnpm --filter pivot-studio build",
     "owner:passphrase": "node scripts/owner-passphrase.mjs",
     "plugin:validate": "claude plugin validate ./plugin --strict && claude plugin validate . --strict"
   },

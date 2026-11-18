@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** The pivot-ui package folder (an npm install, an npx cache entry, or apps/cli in a checkout). */
+/** The pivot-studio package folder (an npm install, an npx cache entry, or apps/cli in a checkout). */
 export const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 export const dist = {

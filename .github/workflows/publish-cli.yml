@@ -1,7 +1,7 @@
-# Publishes the npm package pivot-ui (apps/cli) when a tag v<version> is pushed, e.g. v0.1.0 for version 0.1.0.
+# Publishes the npm package pivot-studio (apps/cli) when a tag v<version> is pushed, e.g. v0.1.0 for version 0.1.0.
 # Needs the repository secret NPM_TOKEN (an npm automation token). The "npm" environment can be given required
 # reviewers in the repository settings, so every publish waits for the owner's approval.
-name: Publish pivot-ui
+name: Publish pivot-studio
 
 on:
   push:
@@ -26,7 +26,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: The tag matches the package version
         run: test "v$(node -p "require('./apps/cli/package.json').version")" = "$GITHUB_REF_NAME"
-      - run: pnpm --filter pivot-ui test
+      - run: pnpm --filter pivot-studio test
       - run: pnpm cli:build
       - run: npm publish --provenance --access public
         working-directory: apps/cli

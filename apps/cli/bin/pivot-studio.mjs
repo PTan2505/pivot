@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// pivot-ui: run PIVOT, your local library of UI references, and the tools around it. `pivot-ui help` lists them.
+// pivot-studio: run PIVOT, your local library of UI references, and the tools around it. `pivot-studio help` lists them.
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { parseArgs } from "../lib/args.mjs";
 import { dist, packageVersion, resolveDataDir } from "../lib/paths.mjs";
 
-const HELP = `pivot-ui ${packageVersion()}: your library of UI references, run locally.
+const HELP = `pivot-studio ${packageVersion()}: your library of UI references, run locally.
 
-Usage: pivot-ui [command] [options]
+Usage: pivot-studio [command] [options]
 
 Commands
   start               Serve PIVOT on http://127.0.0.1:4321 (the default command)
@@ -63,7 +63,7 @@ async function main(argv) {
     case "extension":
       return (await import("../lib/extension.mjs")).installExtension(opts);
     default:
-      throw new Error(`Unknown command ${JSON.stringify(command)}. Run pivot-ui help.`);
+      throw new Error(`Unknown command ${JSON.stringify(command)}. Run pivot-studio help.`);
   }
 }
 
