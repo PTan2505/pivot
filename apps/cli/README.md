@@ -1,9 +1,9 @@
-# pivot-ui
+# pivot-studio
 
 PIVOT is your own library of UI references (screenshots of real sites, tagged by page type, domain, style and pattern) and the place where design sessions with Claude Code live. It runs on your machine, and your references stay there.
 
 ```bash
-npx pivot-ui
+npx pivot-studio
 ```
 
 That serves PIVOT on http://127.0.0.1:4321 and opens it. The first start downloads Chromium for screenshots (about 150 MB). Node.js 22 or newer is required.
@@ -16,14 +16,14 @@ claude plugin install pivot --marketplace PTan2505/pivot
 
 ## Commands
 
-| Command                       | What it does                                                                           |
-| ----------------------------- | -------------------------------------------------------------------------------------- |
-| `pivot-ui` / `pivot-ui start` | Serve PIVOT (`--port`, `--data-dir`, `--no-open`)                                      |
-| `pivot-ui doctor`             | Check Node, Chromium, the data folder, the token, the passphrase, PIVOT and the plugin |
-| `pivot-ui passphrase`         | Set the owner passphrase that approving a design needs (`--replace` to change it)      |
-| `pivot-ui extension`          | Put the Chrome extension in `<data folder>/extension` and print how to load it         |
-| `pivot-ui preview <session>`  | Open a design session's mockups in a separate, network-locked browser window           |
-| `pivot-ui motion-qa <plan>`   | Check a build's motion against an approved plan                                        |
+| Command                               | What it does                                                                           |
+| ------------------------------------- | -------------------------------------------------------------------------------------- |
+| `pivot-studio` / `pivot-studio start` | Serve PIVOT (`--port`, `--data-dir`, `--no-open`)                                      |
+| `pivot-studio doctor`                 | Check Node, Chromium, the data folder, the token, the passphrase, PIVOT and the plugin |
+| `pivot-studio passphrase`             | Set the owner passphrase that approving a design needs (`--replace` to change it)      |
+| `pivot-studio extension`              | Put the Chrome extension in `<data folder>/extension` and print how to load it         |
+| `pivot-studio preview <session>`      | Open a design session's mockups in a separate, network-locked browser window           |
+| `pivot-studio motion-qa <plan>`       | Check a build's motion against an approved plan                                        |
 
 ## Your data
 
@@ -39,7 +39,7 @@ To try a build before publishing, without touching your real data or port:
 
 ```bash
 pnpm cli:build && cd apps/cli && npm pack
-HOME=$(mktemp -d) npx ./pivot-ui-*.tgz start --data-dir /tmp/pivot-try --port 4410
+HOME=$(mktemp -d) npx ./pivot-studio-*.tgz start --data-dir /tmp/pivot-try --port 4410
 ```
 
 License: MIT.

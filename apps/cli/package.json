@@ -1,5 +1,5 @@
 {
-  "name": "pivot-ui",
+  "name": "pivot-studio",
   "version": "0.1.0",
   "description": "PIVOT: your own library of UI references, and design sessions with Claude Code. Runs locally.",
   "license": "MIT",
@@ -18,7 +18,7 @@
   ],
   "type": "module",
   "bin": {
-    "pivot-ui": "bin/pivot-ui.mjs"
+    "pivot-studio": "bin/pivot-studio.mjs"
   },
   "files": [
     "bin",

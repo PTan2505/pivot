@@ -10,7 +10,7 @@ const VALUED = new Set(["port", "data-dir"]);
 
 export function parseArgs(args, command) {
   const allowed = ALLOWED[command];
-  if (!allowed) throw new Error(`Unknown command ${JSON.stringify(command)}. Run pivot-ui help.`);
+  if (!allowed) throw new Error(`Unknown command ${JSON.stringify(command)}. Run pivot-studio help.`);
   const opts = { open: true };
   for (let i = 0; i < args.length; i++) {
     const m = /^--([a-z-]+)(?:=(.*))?$/.exec(args[i]);

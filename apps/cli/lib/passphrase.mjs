@@ -1,4 +1,4 @@
-// Sets the owner passphrase (`pivot-ui passphrase`, or `pnpm owner:passphrase` in a checkout). Run it yourself, in your
+// Sets the owner passphrase (`pivot-studio passphrase`, or `pnpm owner:passphrase` in a checkout). Run it yourself, in your
 // own terminal.
 //
 // Approving a design in PIVOT (and restoring a backup) needs this passphrase, so that only you can approve, never an

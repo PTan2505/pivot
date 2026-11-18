@@ -19,13 +19,13 @@ You need [Node.js 22+](https://nodejs.org) and [Claude Code](https://code.claude
 1. **Run PIVOT** (it opens at <http://127.0.0.1:4321>; the first start downloads Chromium for screenshots, about 150 MB):
 
    ```bash
-   npx pivot-ui
+   npx pivot-studio
    ```
 
 2. **Set your owner passphrase.** Approving a design asks for it, so an agent can never approve on your behalf. Run this in your own terminal:
 
    ```bash
-   npx pivot-ui passphrase
+   npx pivot-studio passphrase
    ```
 
 3. **Connect Claude Code** with the plugin (Claude Code 2.1.292 or newer), then start a new Claude Code session:
@@ -37,7 +37,7 @@ You need [Node.js 22+](https://nodejs.org) and [Claude Code](https://code.claude
 4. **Check everything:**
 
    ```bash
-   npx pivot-ui doctor
+   npx pivot-studio doctor
    ```
 
 5. **Save a few references:** paste a URL into PIVOT (⌘V anywhere), or use the [Chrome extension](#chrome-extension). Then, in a project, ask Claude Code: _"Design the pricing page with /pivot:design"_.
@@ -98,7 +98,7 @@ Files go to Cloudflare R2 when the R2 keys are set, otherwise to the data folder
 ## Chrome extension
 
 ```bash
-npx pivot-ui extension
+npx pivot-studio extension
 ```
 
 This puts the extension in `~/.pivot/extension` (from source: `pnpm ext:build`, then use `apps/extension/dist`). In Chrome, open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick that folder. Then open the extension's options and paste the server URL and API token from **PIVOT › Settings › Browser extension**.
@@ -237,7 +237,7 @@ To pick up earlier work, say "continue the Ledgerly pricing session". Claude rea
 apps/web            Next.js app (UI + API routes)
 apps/extension      Chrome extension (Manifest V3, Vite + React)
 apps/mcp            stdio MCP server for Claude Code
-apps/cli            the npm package pivot-ui: CLI, and the build that packs the app into it
+apps/cli            the npm package pivot-studio: CLI, and the build that packs the app into it
 packages/core       Database schema, migrations and all library logic
 packages/mcp-tools  MCP tool definitions, independent of the transport
 .claude-plugin      the marketplace that lists the plugin
