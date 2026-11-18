@@ -42,7 +42,7 @@ The usual way is the Claude Code plugin, which registers this server for you: se
 
 To register it by hand instead (without the plugin):
 
-1. Start PIVOT (`npm start` at the repo root, which serves `http://127.0.0.1:4321`). The MCP server only reads through it.
+1. Start PIVOT (`npx pivot-studio`, or `npm start` at the root of a checkout; both serve `http://127.0.0.1:4321`). The MCP server only reads through it.
 2. Build the server:
    ```bash
    pnpm mcp:build

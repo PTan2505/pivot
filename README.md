@@ -10,7 +10,7 @@ PIVOT is your own library of UI references, and the place where Claude Code desi
 - **Design with Claude Code.** In any project, ask Claude to design or rework a screen. It searches **your** references, shows you a shortlist to pick from, writes a short brief, and puts 2–3 mockups in PIVOT. Nothing is built until you approve one, with a passphrase only you know. Then it builds the approved version with your project's own components and checks it.
 - **Local and private.** PIVOT runs on your machine (`127.0.0.1` only). Your library stays in a folder on your computer unless you point it at your own Postgres or R2 bucket.
 
-> **Status:** early, built and used by one person. Expect rough edges. The npm package isn't published yet, so for now [run it from source](#from-source).
+> **Status:** early, built and used by one person. Expect rough edges, and please [report them](https://github.com/PTan2505/pivot/issues).
 
 ## Quick start
 
