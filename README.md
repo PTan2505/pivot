@@ -4,89 +4,127 @@
 
 # PIVOT
 
-Personal UI/UX resource library that runs on your machine: save websites (with automatic screenshots), images, icons, animations, palettes, prompts, Claude Code skills, snippets, rules, checklists and MCP configs — then copy or export them as context for Claude Code, or let Claude Code design from them directly (see [Design with Claude Code](#design-with-claude-code)).
+PIVOT is your own library of UI references, and the place where Claude Code designs from it.
 
-Requirements: [docs/SPEC.md](docs/SPEC.md) (decisions) · [docs/requirements-v0.1.md](docs/requirements-v0.1.md) (original brief) · Design: [DESIGN.md](DESIGN.md).
+- **Collect** screenshots of real websites as you browse: full pages, sections, interaction states and recorded motion, tagged by page type, domain, style and pattern.
+- **Design with Claude Code.** In any project, ask Claude to design or rework a screen. It searches **your** references, shows you a shortlist to pick from, writes a short brief, and puts 2–3 mockups in PIVOT. Nothing is built until you approve one, with a passphrase only you know. Then it builds the approved version with your project's own components and checks it.
+- **Local and private.** PIVOT runs on your machine (`127.0.0.1` only). Your library stays in a folder on your computer unless you point it at your own Postgres or R2 bucket.
 
-## Run
+> **Status:** early, built and used by one person. Expect rough edges. The npm package isn't published yet, so for now [run it from source](#from-source).
+
+## Quick start
+
+You need [Node.js 22+](https://nodejs.org) and [Claude Code](https://code.claude.com). Chrome is optional, for the extension.
+
+1. **Run PIVOT** (it opens at <http://127.0.0.1:4321>; the first start downloads Chromium for screenshots, about 150 MB):
+
+   ```bash
+   npx pivot-ui
+   ```
+
+2. **Set your owner passphrase.** Approving a design asks for it, so an agent can never approve on your behalf. Run this in your own terminal:
+
+   ```bash
+   npx pivot-ui passphrase
+   ```
+
+3. **Connect Claude Code** with the plugin (Claude Code 2.1.292 or newer), then start a new Claude Code session:
+
+   ```bash
+   claude plugin install pivot --marketplace PTan2505/pivot
+   ```
+
+4. **Check everything:**
+
+   ```bash
+   npx pivot-ui doctor
+   ```
+
+5. **Save a few references:** paste a URL into PIVOT (⌘V anywhere), or use the [Chrome extension](#chrome-extension). Then, in a project, ask Claude Code: _"Design the pricing page with /pivot:design"_.
+
+### From source
 
 ```bash
+git clone https://github.com/PTan2505/pivot.git && cd pivot
+corepack enable   # provides the pnpm version the repo pins
 npm start
 ```
 
-Installs dependencies and Playwright's Chromium if missing, rebuilds when the code changed, serves on <http://127.0.0.1:4321> and opens the browser. `npm run dev` runs the Next.js dev server with the same settings.
-
-### Without cloning the repo (npm)
-
-The same app ships as the npm package [`pivot-ui`](apps/cli/README.md):
+`npm start` installs dependencies and Chromium when they're missing, rebuilds when the code changed, serves on <http://127.0.0.1:4321> and opens the browser. Set the passphrase with `pnpm owner:passphrase`. For the plugin, add the marketplace from your checkout so edits apply at the next session:
 
 ```bash
-npx pivot-ui
+claude plugin marketplace add "$PWD"
 ```
 
-Data goes to `~/.pivot`; settings such as `DATABASE_URL` go in `~/.pivot/.env`. `npx pivot-ui doctor` checks the machine, `npx pivot-ui passphrase` sets the owner passphrase and `npx pivot-ui extension` prepares the Chrome extension. The package isn't published yet; until it is, run it from a checkout as above.
+```bash
+claude plugin install pivot@pivot
+```
 
-## Configuration (`.env` at the repo root)
+## Your data and privacy
+
+- **Where it lives:** `~/.pivot` (or `PIVOT_DATA_DIR`): the local database (PGlite), screenshots and files, the API token, and the hash of your owner passphrase. Back it up like any folder, or use **Settings › Backup & restore**.
+- **What leaves your machine:**
+  - the pages you save: PIVOT fetches them, their metadata and favicon, and screenshots them in a local Chromium;
+  - catalog searches: when the library falls short, Claude can search three free component catalogs (Magic UI, React Bits, shadcn/ui) with generic words, never your brief or project names;
+  - your own Postgres and R2, only if you configure them.
+
+  The npm package turns off Next.js telemetry. A checkout follows Next.js's default; turn it off with `npx next telemetry disable`.
+
+- **Who can write:** PIVOT answers only on `127.0.0.1`. Writes need PIVOT's own pages or its API token (`~/.pivot/api-token`), which the extension and the Claude Code tools use. Approving a design needs your passphrase on top. See [SECURITY.md](SECURITY.md).
+
+## Configuration
+
+Put settings in `~/.pivot/.env` for the npm package, or in `.env` at the repo root for a checkout. Everything is optional.
 
 | Variable                                                                 | Default            |                                                                                                                                                       |
 | ------------------------------------------------------------------------ | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`                                                           | _unset_            | Unset → embedded Postgres (PGlite) in `~/.pivot/db`, works offline. Set → Neon/any Postgres.                                                          |
 | `PIVOT_DATA_DIR`                                                         | `~/.pivot`         | Database (local mode), files (when R2 is not set), cache, default export folder.                                                                      |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | _unset_            | All four set → screenshots and uploads go to a private Cloudflare R2 bucket instead of this computer. `R2_ENDPOINT` only for EU-jurisdiction buckets. |
-| `CLAUDE_SKILLS_DIR`                                                      | `~/.claude/skills` | Global skills that the Skills view syncs with.                                                                                                        |
+| `CLAUDE_SKILLS_DIR`                                                      | `~/.claude/skills` | Global skills that the Skills view syncs with (only shown with other resource types on).                                                              |
 | `PORT`                                                                   | `4321`             |                                                                                                                                                       |
 
-Files (screenshots, uploads) go to Cloudflare R2 when the R2 keys are set, otherwise to the data folder. The app serves them itself, so the bucket stays private. Each file remembers where it lives, so switching is safe; Settings › Files has **Test storage** and **Move local files to R2**. Files that Copy context hands to Claude Code are downloaded to `~/.pivot/cache` and pruned after a week.
+Files go to Cloudflare R2 when the R2 keys are set, otherwise to the data folder. The app serves them itself, so the bucket stays private. Each file remembers where it lives, so switching is safe; **Settings › Files** has **Test storage** and **Move local files to R2**.
 
 ## Everyday use
 
-- **⌘K** — search everything, jump anywhere, create; **⌘↵** on a result copies it.
-- **⌘V anywhere** — paste one or many URLs to add them; paste an image to save it. Drag files onto the window to upload.
-- **Select** cards (hover checkbox, ⇧-click for ranges, ⌘A) → _Copy context_ or _Export_ a bundle (`context.md`, prompts, skills, resized assets) into any folder, with a token estimate.
-- **Prompts** support `{{variable}}` and `{{variable|default}}`; copying asks for the values.
-- **Skills** sync from `~/.claude/skills` automatically when you open the Skills view. Edits stay in the app until you press _Save to disk_; changes on both sides are flagged as a conflict.
+- **⌘K:** search everything, jump anywhere, create.
+- **⌘V anywhere:** paste one or many URLs to add them; paste an image to save it. Drag files onto the window to upload.
+- **Collections, sources and facets** keep the library findable: page type, domain, visual style and UI pattern.
+- **Design sessions** (the **Design sessions** button, `/design`): every brief, mockup round, approval, decision and QA report Claude records, per project.
 - **Trash** keeps deleted items for 30 days.
+- **Other resource types:** PIVOT started as a wider resource bag (prompts, snippets, rules, checklists, Claude Code skills, MCP configs, export and share). Those are hidden by default; turn them on in **Settings › Other resource types**.
 
 ## Chrome extension
 
 ```bash
-pnpm ext:build
+npx pivot-ui extension
 ```
 
-Then in Chrome: `chrome://extensions` → enable **Developer mode** → **Load unpacked** → pick `apps/extension/dist`. Open the extension's options and paste the server URL and API token from PIVOT › Settings › Browser extension.
+This puts the extension in `~/.pivot/extension` (from source: `pnpm ext:build`, then use `apps/extension/dist`). In Chrome, open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick that folder. Then open the extension's options and paste the server URL and API token from **PIVOT › Settings › Browser extension**.
 
-- **⌥⇧S** / toolbar button — popup with a screenshot of what you see (works on logged-in pages), title and description read from the page, type, facets, notes, collection. If text is selected, you can save it as a snippet, prompt, rule or checklist instead.
-- **⌥⇧D** — quick-save the current tab without the popup.
-- **Right-click** a page, link or image → _Save … to PIVOT_; selected text → _Save selection as snippet / prompt_.
+- **⌥⇧S** or the toolbar button: a popup with a screenshot of what you see (works on logged-in pages), the title and description read from the page, type, facets, notes and collection.
+- **⌥⇧D:** quick-save the current tab without the popup.
+- **Right-click** a page, link or image → _Save … to PIVOT_.
 
-The token is what lets the extension write to the API; regenerate it in Settings if it leaks. After changing extension code, run `pnpm ext:build` (or `pnpm ext:dev` to rebuild on save) and press reload on the extension card.
+The token is what lets the extension write to PIVOT; regenerate it in Settings if it leaks.
 
 ## Design with Claude Code
 
-One Claude Code **plugin**, `pivot` (in [`plugin/`](plugin)), lets Claude Code design and redesign screens in any project from **your** saved references:
+The `pivot` Claude Code plugin (in [`plugin/`](plugin)) contains:
 
-- **The `pivot` MCP server**: the tools Claude uses to search and look at your library, and to keep a design session's brief and decisions in PIVOT. The plugin ships it as one bundled file, built from `apps/mcp`.
-- **Two skills**: the workflow Claude follows with those tools.
-  - `/pivot:design`: for new screens and components.
-  - `/pivot:redesign`: for UI that already exists.
-- **The `pivot:specialist` agent**: read-only; the skills use it to run specialist skills.
+- **The `pivot` MCP server:** the tools Claude uses to search and look at your library, and to keep a design session's brief and decisions in PIVOT.
+- **Two skills:**
+  - `/pivot:design` for new screens and components;
+  - `/pivot:redesign` for UI that already exists.
+- **The `pivot:specialist` agent:** read-only; the skills use it to run specialist skills.
 - **A session-start check** that tells you when PIVOT isn't running.
 
-### Set up (once)
+If PIVOT runs on another port, set the plugin's **PIVOT address** option (`/plugin`). Claude Code shows the plugin's tools as `mcp__plugin_pivot_pivot__*`.
 
-1. **Start PIVOT:** run `npm start`. The tools work through the running app at `http://127.0.0.1:4321`. Write tools use the API token in `~/.pivot/api-token`, which PIVOT creates when it starts.
-2. **Install the plugin** from this repo's marketplace:
-   ```bash
-   claude plugin marketplace add PTan2505/pivot
-   ```
-   ```bash
-   claude plugin install pivot@pivot
-   ```
-   Then open a new Claude Code session: `/mcp` should list the plugin's `pivot` server as connected, and `/pivot:design` should be there. If PIVOT runs on another port, set the plugin's **PIVOT address** option (`/plugin`, or `/config`).
+### Specialist skills (optional)
 
-**Working on PIVOT itself:** add the marketplace from your checkout instead, `claude plugin marketplace add /absolute/path/to/pivot`. A plugin added from a local folder loads in place, so edits to `plugin/` apply at the next session (or `/reload-plugins`). For one session only, `claude --plugin-dir ./plugin` works too. After changing the MCP server, run `pnpm mcp:build`: it also rewrites `plugin/server/server.js`, which is committed.
-
-**Coming from `pnpm skill:install`:** that command is gone. Remove its old links (`~/.claude/skills/pivot-design`, `~/.claude/skills/pivot-redesign`, `~/.claude/agents/pivot-specialist.md`) and the hand-added server (`claude mcp remove pivot --scope user`), then install the plugin. The skills are now `/pivot:design` and `/pivot:redesign`.
+The design skills get a second opinion from other Claude Code skills when you have them installed: `ui-ux-pro-max` (UX structure), `design-taste-frontend` (public web pages), `impeccable` (QA audit; `claude plugin marketplace add pbakaus/impeccable`) and `animate` (motion). Without them, PIVOT still works and reports each one as unavailable.
 
 ### Tools (the plugin's `pivot` MCP server)
 
@@ -97,20 +135,22 @@ One Claude Code **plugin**, `pivot` (in [`plugin/`](plugin)), lets Claude Code d
 | `get_reference`          | read  | One reference's link, description, your notes, facets, screenshots and motion evidence (observed / unknown) |
 | `get_reference_images`   | read  | Look at it: the cover, the full page in ~2,000-token slices, motion keyframes or interaction states         |
 | `search_external`        | read  | Free public component catalogs (Magic UI, React Bits, shadcn/ui), only when the library falls short         |
-| `save_design_brief`      | write | Store the brief at a milestone: `initial` (opens a design session), `approved`, `major_change`              |
-| `record_design_decision` | write | Record a `change` after approval or a QA `deviation` (approvals are yours, in PIVOT)                        |
-| `save_design_mockups`    | write | Put a round of mockups on the session's page in PIVOT, where you compare them and approve one               |
-| `record_design_qa`       | write | Record the QA report (slop check, specialists, what stayed unverified) before the session is marked done    |
-| `record_chat_approval`   | write | Record the user's approval given in the chat, with their words quoted and the version's digest              |
-| `set_design_status`      | write | Mark an approved session `building` when Claude starts coding, and `done` after the build and recorded QA   |
 | `get_design_session`     | read  | Read a session to continue earlier work, or the approval you made in PIVOT                                  |
+| `propose_references`     | write | Put the 6–10 recommended references on the session's page, numbered, for you to pick from                   |
+| `select_references`      | write | Record which of them you picked, in your own words                                                          |
+| `save_design_brief`      | write | Store the brief at a milestone: `initial` (opens a design session), `approved`, `major_change`              |
+| `save_design_mockups`    | write | Put a round of mockups on the session's page in PIVOT, where you compare them and approve one               |
+| `record_chat_approval`   | write | Record the user's approval given in the chat, with their words quoted and the version's digest              |
+| `record_design_decision` | write | Record a `change` after approval or a QA `deviation` (approvals are yours, in PIVOT)                        |
+| `record_design_qa`       | write | Record the QA report (slop check, specialists, what stayed unverified) before the session is marked done    |
+| `set_design_status`      | write | Mark an approved session `building` when Claude starts coding, and `done` after the build and recorded QA   |
 | `suggest_metadata`       | write | Suggest facets or a title for a reference; it waits in your Inbox                                           |
 | `annotate_reference`     | write | Add a dated agent note to a reference; your notes stay as they are                                          |
 | `save_reference`         | write | Save a page to the library, only when you ask                                                               |
 
 **Where things live:**
 
-- Briefs, mockups and decisions live in PIVOT (the **Design sessions** button, `/design`), never in the project being designed.
+- Briefs, mockups and decisions live in PIVOT, never in the project being designed.
 - Nothing Claude writes overwrites what you confirmed.
 
 ### Which skill
@@ -191,7 +231,7 @@ When QA is finished with nothing left for you to decide, Claude marks the sessio
 
 To pick up earlier work, say "continue the Ledgerly pricing session". Claude reads it with `get_design_session`, checks its status first, and doesn't record the approval twice. The full rules are in the skills and in [docs/SPEC.md](docs/SPEC.md) §10.
 
-## Layout
+## Develop
 
 ```
 apps/web            Next.js app (UI + API routes)
@@ -201,21 +241,25 @@ apps/cli            the npm package pivot-ui: CLI, and the build that packs the 
 packages/core       Database schema, migrations and all library logic
 packages/mcp-tools  MCP tool definitions, independent of the transport
 .claude-plugin      the marketplace that lists the plugin
-plugin             the Claude Code plugin: skills design and redesign (+ the shared specialists.md policy),
-                   the specialist agent, the bundled MCP server and the session-start hook
-scripts/start.mjs  npm start / npm run dev in a checkout
+plugin              the Claude Code plugin: skills design and redesign (+ the shared specialists.md policy),
+                    the specialist agent, the bundled MCP server and the session-start hook
+scripts/start.mjs   npm start / npm run dev in a checkout
 ```
 
 ```bash
-pnpm test          # core unit + integration tests (PGlite in a temp folder)
-pnpm typecheck
-pnpm lint
-pnpm db:generate   # after editing packages/core/src/db/schema.ts
-pnpm mcp:build     # build the MCP server into apps/mcp/dist and plugin/server
+pnpm check           # format check, lint, typecheck, tests
+pnpm db:generate     # after editing packages/core/src/db/schema.ts
+pnpm mcp:build       # build the MCP server into apps/mcp/dist and plugin/server
 pnpm plugin:validate # Claude Code's validator on the plugin and the marketplace
-pnpm cli:build     # pack the app (standalone server, migrations, scripts, extension) into apps/cli/dist
+pnpm cli:build       # pack the app (standalone server, migrations, scripts, extension) into apps/cli/dist
 ```
+
+How to set up, test against a throwaway PIVOT and send a change: [CONTRIBUTING.md](CONTRIBUTING.md). What PIVOT does, decision by decision: [docs/SPEC.md](docs/SPEC.md). Visual rules: [DESIGN.md](DESIGN.md).
 
 ## Security
 
-The server binds to `127.0.0.1` only. API requests must target localhost (blocks DNS rebinding) and writes must come from the app's own pages or carry the API token (blocks cross-site requests and local scripts; the extension and the MCP write tools use the token). URL fetching and screenshots refuse private/local network addresses. Uploaded files are served with a sandboxing CSP.
+The server binds to `127.0.0.1` only. API requests must target localhost (blocks DNS rebinding) and writes must come from the app's own pages or carry the API token (blocks cross-site requests and local scripts). URL fetching and screenshots refuse private and local network addresses. Uploaded files and mockups are served sandboxed. To report a vulnerability, see [SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE). PIVOT uses GSAP, which has its own no-charge license; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
