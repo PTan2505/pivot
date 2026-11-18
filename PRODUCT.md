@@ -41,7 +41,7 @@ PIVOT is not a public gallery or a team tool. It is one person's working bag, an
 
 - Decisions and behaviour are recorded in `docs/SPEC.md`, which every change must keep current. Branching rules are in `CLAUDE.md`.
 - Stack: a pnpm monorepo with Next.js 16 (Cache Components), Tailwind v4 + shadcn/ui, TanStack Query, Drizzle, and a Chrome MV3 extension.
-- UI copy is in English. The owner talks to Claude in Vietnamese or English.
+- UI copy is in English. Users talk to Claude in any language; Claude replies in theirs, and what it writes into the repo or PIVOT stays in English, except the user's own words, which are quoted as written.
 - Saved screenshots must be shown in their true colours: the chrome must never tint or distort the work being collected.
 - Out of scope for now: projects, backup/restore, resource-to-resource links, an MCP server, AI tagging.
 

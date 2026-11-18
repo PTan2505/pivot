@@ -1,6 +1,6 @@
 # PIVOT — notes for Claude
 
-Personal UI/UX resource library: pnpm monorepo with `apps/web` (Next.js 16 app + API), `apps/extension` (Chrome MV3) and `packages/core` (schema, migrations, library logic). Decisions: [docs/SPEC.md](docs/SPEC.md). Visual rules: [DESIGN.md](DESIGN.md). Talk to the user in Vietnamese; code, UI copy and commits in English.
+Personal UI/UX resource library: pnpm monorepo with `apps/web` (Next.js 16 app + API), `apps/extension` (Chrome MV3) and `packages/core` (schema, migrations, library logic). Decisions: [docs/SPEC.md](docs/SPEC.md). Visual rules: [DESIGN.md](DESIGN.md). Reply in the language the user writes in. Everything written to the repo (code, docs, UI copy, commits, PRs) is in English.
 
 ## Current focus: approved decisions
 
@@ -33,8 +33,8 @@ The reference-first plan ([docs/reference-first-plan.md](docs/reference-first-pl
 
 [docs/SPEC.md](docs/SPEC.md) is the source of truth for what PIVOT does. **Every change that adds or alters a feature, behaviour or piece of logic updates the spec in the same branch and PR as the code** — new or changed resource types, API routes, database or storage behaviour, settings, security rules, extension capabilities, and anything removed.
 
-- A decision goes in the §1 table: add a row, or edit the existing row and mark it `(cập nhật YYYY-MM-DD)`. A feature area goes in its section, or in a new numbered section marked `(bổ sung YYYY-MM-DD)`. When something from "Ngoài phạm vi" gets built, remove it from that list.
-- Rewrite statements that are no longer true instead of appending a contradiction. Write in Vietnamese, like the rest of the file.
+- A decision goes in the §1 table: add a row, or edit the existing row and mark it `(updated YYYY-MM-DD)`. A feature area goes in its section, or in a new numbered section marked `(added YYYY-MM-DD)`. When something from "Out of MVP scope" gets built, remove it from that list.
+- Rewrite statements that are no longer true instead of appending a contradiction. Write in English, like every document in the repo.
 - Visual or UI changes also update [DESIGN.md](DESIGN.md).
 - Refactors, tooling, tests and copy fixes that change no behaviour need no spec edit; say so in the PR description.
 - A task is not done until SPEC.md still describes what the code does.

@@ -1,6 +1,6 @@
 # Mockups in PIVOT: proposal
 
-**Status:** approved by the owner on 2026-11-03 ("duyệt cả 4, làm luôn"), with one addition: the agent builds as soon as a version is approved in PIVOT, without the owner going back to the chat (§1 step 5). Built as described here, with two changes from the first draft: mockup HTML is stored in the database rather than the blob store (§2), and the agent waits with a background watcher (§1, §6).
+**Status:** approved by the owner on 2026-11-03 ("approve all 4, build them now" (original: "duyệt cả 4, làm luôn")), with one addition: the agent builds as soon as a version is approved in PIVOT, without the owner going back to the chat (§1 step 5). Built as described here, with two changes from the first draft: mockup HTML is stored in the database rather than the blob store (§2), and the agent waits with a background watcher (§1, §6).
 
 **What it changes:** a decision already taken, which needs the owner's explicit approval.
 
