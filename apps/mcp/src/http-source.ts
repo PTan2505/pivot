@@ -57,7 +57,7 @@ export class HttpSource implements PivotSource, PivotWriter {
     } catch {
       throw new ToolError(
         "app_unreachable",
-        `PIVOT isn't answering at ${this.base}. Start it with \`npm start\` in the PIVOT folder, then try again.`,
+        `PIVOT isn't answering at ${this.base}. Start it with \`npx pivot-studio\` (or \`npm start\` in a PIVOT checkout), then try again.`,
       );
     }
     if (res.status === 403) {
