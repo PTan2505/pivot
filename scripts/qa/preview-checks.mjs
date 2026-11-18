@@ -23,7 +23,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const { chromium } = createRequire(path.join(repo, "packages/core/package.json"))("playwright");
 const { buildViewer } = await import(
-  pathToFileURL(path.join(repo, ".claude/skills/pivot-design/viewer/make-viewer.mjs")).href
+  pathToFileURL(path.join(repo, "plugin/skills/design/viewer/make-viewer.mjs")).href
 );
 
 const results = [];

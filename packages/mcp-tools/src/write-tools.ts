@@ -253,7 +253,7 @@ const saveDesignMockups: PivotTool<typeof mockupsInput> = {
       url ? `The user opens it at ${url}` : "",
       "The user can approve a version there, with a note (get_design_session then shows that approval with source owner), or approve one in the chat: then record it with record_chat_approval.",
       versions.some((v) => "interactive" in v)
-        ? `Interactive versions: ${versions.flatMap((v, i) => ("interactive" in v ? [i + 1] : [])).join(", ")}. Their scripts don't run on PIVOT's page; open them for the user with the interactive preview (node <pivot-design skill>/scripts/preview.mjs ${sessionId}).`
+        ? `Interactive versions: ${versions.flatMap((v, i) => ("interactive" in v ? [i + 1] : [])).join(", ")}. Their scripts don't run on PIVOT's page; open them for the user with the interactive preview (node <pivot:design skill>/scripts/preview.mjs ${sessionId}).`
         : "",
       dropped.size ? `Removed (scripts and remote files don't load in PIVOT): ${[...dropped].join(", ")}` : "",
       missing.size ? `Missing local files: ${[...missing].join(", ")}` : "",
@@ -335,7 +335,7 @@ const qaInput = {
   sessionId: z.string().regex(UUID).describe("The design session (building)."),
   level: z
     .enum(DESIGN_QA_LEVELS)
-    .describe("new: a new design (pivot-design). minor or major: a redesign at that risk level (pivot-redesign)."),
+    .describe("new: a new design (pivot:design). minor or major: a redesign at that risk level (pivot:redesign)."),
   summary: z.string().min(1).max(300).describe("One line: what QA found, and whether anything is left."),
   slopCheck: z
     .object({
@@ -360,7 +360,7 @@ const qaInput = {
         .optional()
         .describe("The text critique against impeccable's critique.md. Required for level new and major."),
     })
-    .describe("pivot-design §10's slop check."),
+    .describe("pivot:design §10's slop check."),
   specialists: z
     .array(
       z.object({

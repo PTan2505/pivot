@@ -1,4 +1,4 @@
-// pivot-design's interactive preview (.claude/skills/pivot-design/scripts/preview.mjs): versions are checked against
+// pivot:design's interactive preview (plugin/skills/design/scripts/preview.mjs): versions are checked against
 // their digests before anything is shown, run only in a separate Chromium behind motion QA's gate, can't reach other
 // hosts, local files or the preview's controls, and the controls (width, reduced motion, compare, replay) work.
 import { execFile } from "node:child_process";
@@ -11,9 +11,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const P = await import(
-  pathToFileURL(path.resolve(here, "../../../.claude/skills/pivot-design/scripts/preview.mjs")).href
-);
+const P = await import(pathToFileURL(path.resolve(here, "../../../plugin/skills/design/scripts/preview.mjs")).href);
 const { mockupDigest, loadVersions, startPreview, PreviewError, versionPolicy, versionSandbox } = P;
 
 const SID = "11111111-2222-4333-8444-555555555555";
@@ -397,9 +395,7 @@ setTimeout(() => { location.href = "file://${secretFile}"; }, 900);
 
     it("positive control: the same mockup reaches the recorder from an ungated browser", async () => {
       const { chromium } = (
-        await import(
-          pathToFileURL(path.resolve(here, "../../../.claude/skills/pivot-design/scripts/motion-qa.mjs")).href
-        )
+        await import(pathToFileURL(path.resolve(here, "../../../plugin/skills/design/scripts/motion-qa.mjs")).href)
       ).loadPlaywright();
       const plain = http.createServer((_q, r) => r.end(hostile()));
       await new Promise((r) => plain.listen(0, "127.0.0.1", r));
@@ -441,7 +437,7 @@ setTimeout(() => { location.href = "file://${secretFile}"; }, 900);
 
 describe("the preview script", () => {
   it("takes only a PIVOT on this machine as --url", async () => {
-    const script = path.resolve(here, "../../../.claude/skills/pivot-design/scripts/preview.mjs");
+    const script = path.resolve(here, "../../../plugin/skills/design/scripts/preview.mjs");
     const { status, stderr } = await new Promise((resolve) =>
       execFile(process.execPath, [script, SID, "--url", "https://pivot.example.com"], (e, _o, err) =>
         resolve({ status: e?.code ?? 0, stderr: String(err) }),
@@ -459,7 +455,7 @@ describe("the preview script", () => {
       res.end(await r.text());
     });
     await new Promise((r) => api.listen(0, "127.0.0.1", r));
-    const script = path.resolve(here, "../../../.claude/skills/pivot-design/scripts/preview.mjs");
+    const script = path.resolve(here, "../../../plugin/skills/design/scripts/preview.mjs");
     // async: the fake PIVOT answers from this process, so it must not be blocked while the script runs
     const { status, stderr } = await new Promise((resolve) =>
       execFile(process.execPath, [script, SID, "--url", `http://127.0.0.1:${api.address().port}`], (e, _out, err) =>

@@ -10,7 +10,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc --noEmit && esbuild src/server.ts --bundle --platform=node --format=esm --target=node22 --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=dist/server.js",
+    "build": "tsc --noEmit && node build.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

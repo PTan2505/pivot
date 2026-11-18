@@ -1,0 +1,18 @@
+{
+  "description": "Tells Claude (and you) at session start when the PIVOT app isn't running, so the design skills don't fail halfway.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/check-pivot.mjs"],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 # Motion
 
-Shared by `pivot-design` and `pivot-redesign`. Motion is part of the design: it is classified, briefed, previewed,
+Shared by `pivot:design` and `pivot:redesign`. Motion is part of the design: it is classified, briefed, previewed,
 approved and checked like layout and type, never added as an effect during the build. Most screens need little or
 none: don't force animation onto work that doesn't ask for it.
 
@@ -14,12 +14,12 @@ none: don't force animation onto work that doesn't ask for it.
 
 ## 2. Classify
 
-At `pivot-design` §1 (or `pivot-redesign` §0), write one line:
+At `pivot:design` §1 (or `pivot:redesign` §0), write one line:
 
 `Motion: none | standard | advanced — <reason> (auto | set by you)`
 
 - **The user's words decide** when they say anything about motion ("no animation", "subtle transitions", "scroll
-  storytelling like X"), and so does their answer at `pivot-design`'s §1 options checkpoint: mark it `set by you`.
+  storytelling like X"), and so does their answer at `pivot:design`'s §1 options checkpoint: mark it `set by you`.
 - **Otherwise classify from the surface and the request** (`auto`):
   - **none** by default, and for forms, settings, data-dense app screens, docs and fixes that don't mention motion;
   - **standard** when the request or the brief's directions involve interaction feedback or transitions (a toggle,
@@ -27,7 +27,7 @@ At `pivot-design` §1 (or `pivot-redesign` §0), write one line:
     surface should use;
   - **advanced** only when the request asks for one of the Advanced effects, or a chosen reference's evidence (§3)
     shows it as the point of the page.
-- **Re-check once, after the user picks references** (`pivot-design` §4): the picks can raise the level; the user can
+- **Re-check once, after the user picks references** (`pivot:design` §4): the picks can raise the level; the user can
   lower it. A level the user set is raised only with their yes. Don't change it again after the brief unless the user asks.
 - Write the level in the brief header. Level **none** adds nothing else to the workflow.
 
@@ -185,7 +185,7 @@ There is no separate motion approval: the user approves the direction **and** it
 ## 7. Technology
 
 Choose by level, and write the choice and its reason on the brief's **Technology** line. The user's answer at
-`pivot-design`'s §1 options checkpoint (motion technology) wins over these defaults.
+`pivot:design`'s §1 options checkpoint (motion technology) wins over these defaults.
 
 1. What the target project already uses for motion comes first, at any level: its CSS conventions, or a motion library
    already installed (GSAP, Motion, Rive). Don't add a second library beside one it has; if the user picked GSAP and
@@ -208,7 +208,7 @@ approval. The `gsap-*` skills are consulted only when GSAP is the chosen technol
 - Every motion has a reduced-motion path (gentler or none), exactly as briefed.
 - Interruptible: a second input retargets, doesn't queue or jump.
 - Clean up on unmount: listeners, observers, timelines, `requestAnimationFrame` loops.
-- Keep the approved timing and easing; a different feel is a deviation (`pivot-design` §10).
+- Keep the approved timing and easing; a different feel is a deviation (`pivot:design` §10).
 - **With GSAP** (§7), consult the `gsap-*` skills for the API, reading only the ones the build uses (`specialists.md`
   §2): `gsap-core` always; `gsap-react` in React or Next.js, `gsap-frameworks` in Vue or Svelte; `gsap-scrolltrigger`,
   `gsap-timeline`, `gsap-plugins` or `gsap-utils` for the features used. Register every plugin, scope and revert
@@ -262,7 +262,7 @@ intended, what was observed running, what is inferred or unverified, and what de
    - `target` may instead be `{ "file": "<path>" }` or a mockup folder shown through the viewer
      (`{ "viewer": "<folder>", "version": <n>, "interactive": true }`), to check a preview before gate 2.
 
-3. **Run it:** `node <skill>/scripts/motion-qa.mjs <plan.json> --out <scratchpad>/motion-qa --brief <scratchpad>/brief.md`
+3. **Run it:** `PIVOT_URL=<PIVOT's address> node <skill>/scripts/motion-qa.mjs <plan.json> --out <scratchpad>/motion-qa --brief <scratchpad>/brief.md`
    - It performs each trigger with real input (page load, the scroll wheel, the mouse, Tab), at desktop and phone
      width, with full motion and with the browser's reduced-motion emulation, and each twice: the second run is the
      Replay, from a fresh page (in the viewer, its own Replay button). It waits for the page to stop moving before a
@@ -313,11 +313,11 @@ intended, what was observed running, what is inferred or unverified, and what de
    and sequence, keyboard order, the fallback (Advanced), fidelity to the approved preview, cleanup after leaving the
    view (listeners, observers, timelines), and accessibility (focus visible, nothing that flashes). Say which of these
    you looked at.
-6. **Act on it** as `pivot-design` §10 says: fix a bug and run the plan again; a departure from the brief is a
+6. **Act on it** as `pivot:design` §10 says: fix a bug and run the plan again; a departure from the brief is a
    `deviation`; a material change goes back to gate 2.
 
 Report the result in the QA summary: the overall status, each essential item with its result, and the report's path.
-Keep apart what you generated, what you looked at and what you hand over (`pivot-design` §10). A behaviour you
+Keep apart what you generated, what you looked at and what you hand over (`pivot:design` §10). A behaviour you
 couldn't trigger or measure is unverified, never a pass. Reduced motion checked by the script is **browser
 emulation**; the OS setting and a real device are unverified unless the user checked them and said so.
 
@@ -327,7 +327,7 @@ emulation**; the OS setting and a real device are unverified unless the user che
 - Motion references: they share the task's image budget.
 - A motion specialist counts toward the specialist limits (`specialists.md` §2).
 
-## In `pivot-redesign`
+## In `pivot:redesign`
 
 - A change to motion behaviour is an **interaction** change, so it is **Major**.
 - A Minor (styling-only) redesign keeps existing motion exactly as it is, and its checks confirm that.

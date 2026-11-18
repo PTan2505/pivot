@@ -10,3 +10,6 @@ apps/web/src/components/ui
 docs/requirements-v0.1.md
 *.pem
 *.crx
+
+# The plugin's MCP server: built by `pnpm mcp:build`, committed as is.
+plugin/server

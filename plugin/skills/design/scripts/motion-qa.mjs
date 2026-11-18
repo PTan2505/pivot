@@ -17,7 +17,7 @@
 //
 // Writes report.json, report.md and screenshots (and videos with --video) to --out: a new, empty folder in the
 // scratchpad, never in the target project. `--verify report.json` re-checks the evidence files against their sha256.
-// Previews must be local: a loopback URL, a file, or a mockup folder shown through the pivot-design viewer (its sandbox
+// Previews must be local: a loopback URL, a file, or a mockup folder shown through the pivot:design viewer (its sandbox
 // and policy); never PIVOT's own app. Every connection goes through a local gate that lets the browser reach only the
 // preview's exact origin (redirects, WebSockets and workers included; not other ports or names of this machine), plus
 // local origins given with --allow-origin and public hosts with --allow-remote. WebRTC is turned off with Chromium
@@ -1118,7 +1118,7 @@ export async function runPlan(
     fs.writeFileSync(path.join(viewerDir, "index.html"), page);
     url = `${pathToFileURL(path.join(viewerDir, "index.html")).href}#${v.n}`;
     targetHash = v.digest;
-    targetLabel = `mockup ${v.n} "${v.title}" in the pivot-design viewer (${v.interactive ? "interactive" : "static"}, digest ${v.digest})`;
+    targetLabel = `mockup ${v.n} "${v.title}" in the pivot:design viewer (${v.interactive ? "interactive" : "static"}, digest ${v.digest})`;
   }
 
   let implementation = plan.version ?? "(not given)";

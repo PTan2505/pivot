@@ -1,4 +1,4 @@
-// Static contract checks for the PIVOT design skills (.claude/skills/pivot-design, pivot-redesign): the tools and
+// Static contract checks for the PIVOT design skills (plugin/skills/design, pivot:redesign): the tools and
 // enum values they name exist, their steps stay in order, and the rules they share agree with each other and with
 // docs/SPEC.md. These prove what the files say, not what an agent does; behaviour is checked from traces
 // (scripts/trace-check.mjs).
@@ -11,11 +11,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.
 const P = (...p: string[]) => path.join(root, ...p);
 const read = (...p: string[]) => fs.readFileSync(P(...p), "utf8");
 
-const d = read(".claude/skills/pivot-design/SKILL.md");
-const r = read(".claude/skills/pivot-redesign/SKILL.md");
-const specialists = read(".claude/skills/pivot-design/specialists.md");
-const motionMd = read(".claude/skills/pivot-design/motion.md");
-const files = { "pivot-design": d, "pivot-redesign": r, specialists, motion: motionMd } as const;
+const d = read("plugin/skills/design/SKILL.md");
+const r = read("plugin/skills/redesign/SKILL.md");
+const specialists = read("plugin/skills/design/specialists.md");
+const motionMd = read("plugin/skills/design/motion.md");
+const files = { "pivot:design": d, "pivot:redesign": r, specialists, motion: motionMd } as const;
 const spec = read("docs/SPEC.md");
 const src = ["tools.ts", "write-tools.ts", "external-tools.ts"].map((f) => read("packages/mcp-tools/src", f)).join("");
 const types = read("packages/core/src/types.ts");
@@ -80,11 +80,11 @@ describe("skills name real MCP tools and values", () => {
 });
 
 describe("mockups in PIVOT and the decision watcher", () => {
-  it("pivot-design saves mockups to PIVOT and waits with the watcher in the background", () => {
+  it("pivot:design saves mockups to PIVOT and waits with the watcher in the background", () => {
     expect(d).toContain("save_design_mockups");
     expect(d).toContain("wait-for-decision.mjs");
     expect(d).toContain("run_in_background");
-    expect(fs.existsSync(P(".claude/skills/pivot-design/scripts/wait-for-decision.mjs"))).toBe(true);
+    expect(fs.existsSync(P("plugin/skills/design/scripts/wait-for-decision.mjs"))).toBe(true);
   });
   it("the user approves in PIVOT or in the chat; a chat approval quotes their own words and is never inferred", () => {
     for (const t of [d, r]) expect(t).toContain('source: "owner"');
@@ -107,11 +107,11 @@ describe("mockups in PIVOT and the decision watcher", () => {
   });
 
   it("interactive versions open in the gated preview, whose script exists; the viewer is its fallback", () => {
-    expect(fs.existsSync(path.join(root, ".claude/skills/pivot-design/scripts/preview.mjs"))).toBe(true);
-    expect(d).toContain("node <skill>/scripts/preview.mjs <sessionId>");
+    expect(fs.existsSync(path.join(root, "plugin/skills/design/scripts/preview.mjs"))).toBe(true);
+    expect(d).toContain('node "${CLAUDE_SKILL_DIR}/scripts/preview.mjs" <sessionId> --url ${user_config.pivot_url}');
     expect(d).toContain("`interactive: true`");
     expect(d).toContain("It can't approve anything itself.");
-    const motion = read(".claude/skills/pivot-design/motion.md");
+    const motion = read("plugin/skills/design/motion.md");
     expect(motion).toContain("**Interactive preview (Advanced, or any essential CSS can't show).**");
     expect(motion).toContain("**Executable local preview (fallback):**");
   });
@@ -119,21 +119,24 @@ describe("mockups in PIVOT and the decision watcher", () => {
   it("the local viewer is only a fallback, and its script exists", () => {
     expect(d).toContain("**Fallback:** use it instead of PIVOT");
     expect(d).toContain("viewer/make-viewer.mjs");
-    expect(fs.existsSync(P(".claude/skills/pivot-design/viewer/make-viewer.mjs"))).toBe(true);
+    expect(fs.existsSync(P("plugin/skills/design/viewer/make-viewer.mjs"))).toBe(true);
   });
 });
 
 describe("shared files resolve and install", () => {
-  it("pivot-redesign reaches pivot-design's specialists.md by its relative path", () => {
-    expect(fs.existsSync(P(".claude/skills/pivot-redesign/../pivot-design/specialists.md"))).toBe(true);
+  it("pivot:redesign reaches pivot:design's specialists.md by its relative path", () => {
+    expect(fs.existsSync(P("plugin/skills/redesign/../design/specialists.md"))).toBe(true);
   });
-  it("pnpm skill:install links both skills", () => {
-    expect(read("scripts/install-skill.mjs")).toContain('["pivot-design", "pivot-redesign"]');
+  it("the plugin ships both skills and the agent under their short names", () => {
+    expect(/^name: design$/m.test(d)).toBe(true);
+    expect(/^name: redesign$/m.test(r)).toBe(true);
+    expect(/^name: specialist$/m.test(read("plugin/agents/specialist.md"))).toBe(true);
+    expect(fs.existsSync(P("scripts/install-skill.mjs"))).toBe(false);
   });
 });
 
 describe("steps stay in order", () => {
-  it("pivot-design: flow line and section order", () => {
+  it("pivot:design: flow line and section order", () => {
     const flow = /The flow is \*\*(.+?)\*\*/.exec(d)?.[1] ?? "";
     expect(
       ordered(flow, ["search", "shortlist", "brief", "design session", "mockups", "approval", "build", "QA"]),
@@ -141,12 +144,12 @@ describe("steps stay in order", () => {
     const sections = ["## 2. Search", "## 4. Shortlist", "## 5. Brief", "## 6. Design session", "## 7. Mockups"];
     expect(ordered(d, [...sections, "## 8. Approval", "## 9. Build", "## 10. QA"])).toBe(true);
   });
-  it("pivot-design: facets first, brief before mockups, showing the brief isn't a gate", () => {
+  it("pivot:design: facets first, brief before mockups, showing the brief isn't a gate", () => {
     expect(d).toContain("before your first general library search");
     expect(d).toContain("Showing the brief is not an approval gate");
     expect(d).toContain("right after you show it and before the mockups");
   });
-  it("pivot-redesign: path A and path B order", () => {
+  it("pivot:redesign: path A and path B order", () => {
     const a = /in this order:\n\n([\s\S]+?)\n\n/.exec(r)?.[1] ?? "";
     expect(
       ordered(a, ["Classify", "references", "shortlist", "brief", "`initial`", "mockups", "approval", "Build", "QA"]),
@@ -156,7 +159,7 @@ describe("steps stay in order", () => {
       true,
     );
   });
-  it("pivot-redesign: no brief after mockups, facets before search, no library search on path B", () => {
+  it("pivot:redesign: no brief after mockups, facets before search, no library search on path B", () => {
     expect(r).toContain("doesn't allow writing the brief only after the mockups");
     expect(r).toContain("Before any general library search, call `list_facets` once per task");
     expect(r).toContain("No library search unless the user asks for references");
@@ -166,7 +169,7 @@ describe("steps stay in order", () => {
 });
 
 describe("mockups are described as they look", () => {
-  it("pivot-design describes each version from its rest state, with measures and triggers", () => {
+  it("pivot:design describes each version from its rest state, with measures and triggers", () => {
     expect(d).toContain("Describe each version by what it shows, state by state");
     expect(d).toContain("**Start from the rest state:**");
     expect(d).toContain("A verb alone");
@@ -175,7 +178,7 @@ describe("mockups are described as they look", () => {
 });
 
 describe("the watcher belongs to the session the user talks to", () => {
-  it("pivot-design starts the watcher itself when another agent made the mockups", () => {
+  it("pivot:design starts the watcher itself when another agent made the mockups", () => {
     expect(d).toContain("**The session the user talks to owns the watcher.**");
     expect(d).toContain("its watcher ends with it and can't wake you");
     expect(d).toContain("Never end the turn that asks for the approval without a running watcher");
@@ -184,7 +187,7 @@ describe("the watcher belongs to the session the user talks to", () => {
 });
 
 describe("a pick from the interactive preview", () => {
-  it("pivot-design treats Choose this version as a pick, then asks before recording a chat approval", () => {
+  it("pivot:design treats Choose this version as a pick, then asks before recording a chat approval", () => {
     expect(d).toContain("**Choose this version** in a preview you started sends the user's pick to you");
     expect(d).toContain("the session page has **Open interactive preview**");
     expect(spec).toContain("**Open the preview from PIVOT**");
@@ -195,8 +198,8 @@ describe("a pick from the interactive preview", () => {
 
 describe("approval provenance", () => {
   for (const [f, t] of [
-    ["pivot-design", d],
-    ["pivot-redesign", r],
+    ["pivot:design", d],
+    ["pivot:redesign", r],
   ] as const) {
     it(`${f}: the owner's own note is the approval's words, read back with get_design_session`, () => {
       expect(t).toMatch(/the user's note[^.]*word for word/);
@@ -212,7 +215,7 @@ describe("approval provenance", () => {
 });
 
 describe("QA differences are classified in one place", () => {
-  it("pivot-design §10 has the four classes and SPEC describes them", () => {
+  it("pivot:design §10 has the four classes and SPEC describes them", () => {
     for (const s of [
       "Refinement within the approved scope",
       "Departure from an approved requirement or design detail",
@@ -228,17 +231,17 @@ describe("QA differences are classified in one place", () => {
     ])
       expect(spec).toContain(s);
   });
-  it("pivot-redesign and specialists.md point to pivot-design §10", () => {
-    expect(r).toContain("`pivot-design` §10");
-    expect(specialists).toContain("`pivot-design` §10");
+  it("pivot:redesign and specialists.md point to pivot:design §10", () => {
+    expect(r).toContain("`pivot:design` §10");
+    expect(specialists).toContain("`pivot:design` §10");
     expect(specialists).not.toContain("departs from the approved direction");
   });
 });
 
 describe("specialists run by risk", () => {
   for (const [f, t] of [
-    ["pivot-design", d],
-    ["pivot-redesign", r],
+    ["pivot:design", d],
+    ["pivot:redesign", r],
   ] as const) {
     it(`${f}: checkpoint line shown to the user, "none" only for a small fix or the user's words, no preloading`, () => {
       expect(t).toContain("`Specialists: none — <reason>`");
@@ -253,11 +256,11 @@ describe("specialists run by risk", () => {
   }
   it("new designs and Major redesigns always get ui-ux-pro-max on the brief and an impeccable audit at QA", () => {
     expect(d).toContain("**New design** (this skill's full flow), or a Major redesign");
-    expect(d).toContain("plus an `impeccable` audit through `pivot-specialist`");
-    expect(d).toContain("run the `impeccable` audit through `pivot-specialist` after the slop check");
+    expect(d).toContain("plus an `impeccable` audit through `pivot:specialist`");
+    expect(d).toContain("run the `impeccable` audit through `pivot:specialist` after the slop check");
     expect(r).toContain("**Major:** `ui-ux-pro-max` on the brief, always");
     expect(specialists).toContain("`ui-ux-pro-max` on the brief, always");
-    expect(specialists).toContain("**`impeccable` audit through `pivot-specialist`**");
+    expect(specialists).toContain("**`impeccable` audit through `pivot:specialist`**");
     expect(specialists).toContain("required defaults");
     expect(specialists).not.toContain("Most tasks need none");
   });
@@ -283,7 +286,7 @@ describe("evidence is reported as it is", () => {
     expect(d).toContain("actually looked at");
     expect(d).toContain("hand to the user");
     expect(d).toContain("**unverified**, never a pass");
-    expect(r).toContain("Report evidence as `pivot-design` §10 says");
+    expect(r).toContain("Report evidence as `pivot:design` §10 says");
   });
   it("no universal pixel-diff mandate", () => {
     expect(r).toContain("Use a pixel diff when the tooling has one");
@@ -314,10 +317,10 @@ describe("shortlist, mockups and slop check", () => {
     expect(d).toContain("whatever the specialist checkpoint said");
     expect(d).toContain("never its `critique-storage write`");
     expect(r).toContain("**Slop check** (Minor and Major): always run");
-    expect(specialists).toContain("**slop check** (`pivot-design` §10)");
+    expect(specialists).toContain("**slop check** (`pivot:design` §10)");
   });
-  it("pivot-redesign path B mockups follow pivot-design §7 with the watcher", () => {
-    expect(r).toContain("follow `pivot-design` §7");
+  it("pivot:redesign path B mockups follow pivot:design §7 with the watcher", () => {
+    expect(r).toContain("follow `pivot:design` §7");
     expect(r).toContain("start the watcher");
   });
   it("SPEC describes the shortlist, mockups, viewer and slop check", () => {
@@ -327,7 +330,7 @@ describe("shortlist, mockups and slop check", () => {
 });
 
 describe("QA is recorded before a session is done", () => {
-  it("pivot-design and pivot-redesign record the QA, then mark done", () => {
+  it("pivot:design and pivot:redesign record the QA, then mark done", () => {
     expect(d).toContain("**Record the QA** with `record_design_qa`");
     expect(d).toContain("It refuses `done` until a QA report is recorded after the current approval.");
     expect(d).toContain("record what you did, never what you meant to do");
@@ -342,16 +345,16 @@ describe("QA is recorded before a session is done", () => {
 });
 
 describe("session status", () => {
-  it("pivot-design marks building before the first edit and done only when nothing is left", () => {
+  it("pivot:design marks building before the first edit and done only when nothing is left", () => {
     expect(d).toContain('**Before the first edit,** call `set_design_status` with `status: "building"`');
     expect(d).toContain('call `set_design_status` with `status: "done"`');
     expect(d).toContain("a departure waits for the user's decision");
   });
-  it("pivot-design reads the status on resume", () => {
+  it("pivot:design reads the status on resume", () => {
     expect(d).toContain("`abandoned`: the user stopped this work");
     expect(d).toContain("The old approval no longer covers building");
   });
-  it("pivot-redesign: building after approval, done at QA, status read on resume", () => {
+  it("pivot:redesign: building after approval, done at QA, status read on resume", () => {
     expect(r).toContain('Call `set_design_status` with `status: "building"` before the first edit');
     expect(r).toContain("**Close the session**");
     expect(r).toContain("abandoned means stop and ask");
@@ -363,7 +366,7 @@ describe("session status", () => {
 });
 
 describe("components", () => {
-  it("no stale 2–3 mockup count in pivot-design", () => {
+  it("no stale 2–3 mockup count in pivot:design", () => {
     expect(d).not.toContain("2–3 mockups");
     expect(d).not.toContain("instead of 2–3");
   });
@@ -390,26 +393,27 @@ describe("components", () => {
 });
 
 describe("specialists run for real, labelled by what happened", () => {
-  const agent = read(".claude/agents/pivot-specialist.md");
+  const agent = read("plugin/agents/specialist.md");
   const agentTools = (/^tools: (.+)$/m.exec(agent)?.[1] ?? "").split(",").map((t) => t.trim());
   const labels = ["`ran (skill)`", "`ran (script)`", "`consulted`", "`unavailable`"];
 
-  it("the pivot-specialist agent can read and load skills but never write or run commands", () => {
-    expect(agentTools).toEqual(expect.arrayContaining(["Read", "Skill", "mcp__pivot__get_design_session"]));
+  it("the pivot:specialist agent can read and load skills but never write or run commands", () => {
+    expect(agentTools).toEqual(
+      expect.arrayContaining(["Read", "Skill", "mcp__plugin_pivot_pivot__get_design_session"]),
+    );
     for (const banned of ["Edit", "Write", "NotebookEdit", "Bash", "Agent"]) expect(agentTools).not.toContain(banned);
-    expect(agentTools.filter((t) => t.startsWith("mcp__pivot__") && !/__(get|list|search)_/.test(t))).toEqual([]);
+    expect(
+      agentTools.filter((t) => t.startsWith("mcp__plugin_pivot_pivot__") && !/__(get|list|search)_/.test(t)),
+    ).toEqual([]);
   });
-  it("the agent returns the contract, and is linked by pnpm skill:install without overwriting", () => {
+  it("the agent returns the contract", () => {
     for (const f of ["Specialist:", "Why:", "Input:", "Recommendations:", "Constraints:", "Conflicts:", "Verify:"])
       expect(agent).toContain(f);
     expect(agent).toContain("Outcome (orchestrator): pending");
-    const install = read("scripts/install-skill.mjs");
-    expect(install).toContain(".claude/agents/pivot-specialist.md");
-    expect(install).toContain("isn't a link to this repo");
   });
   it("specialists.md defines the three ways, the four labels and the contract", () => {
     for (const l of labels) expect(specialists).toContain(l);
-    expect(specialists).toContain('subagent_type: "pivot-specialist"');
+    expect(specialists).toContain('subagent_type: "pivot:specialist"');
     for (const f of ["Recommendations:", "Conflicts:", "Verify:", "Outcome (orchestrator): pending"])
       expect(specialists).toContain(f);
     expect(specialists).toContain("`adopted`, `partially adopted`, `rejected` or `not applicable`");
@@ -430,14 +434,14 @@ describe("specialists run for real, labelled by what happened", () => {
   it("the 400-word contract budget is soft, and summaries keep every recommendation, constraint, conflict and check", () => {
     expect(specialists).toContain("about 400 words is a soft budget, not a limit");
     expect(specialists).toContain("keep every recommendation, constraint, conflict and verification item");
-    expect(read(".claude/agents/pivot-specialist.md")).toContain(
+    expect(read("plugin/agents/specialist.md")).toContain(
       "never drop a recommendation, constraint, conflict or verification item to fit",
     );
     expect(read("docs/decisions-progress.md")).toContain("Structure: PASS");
   });
   it("skills report run labels, keep a ledger and don't re-run ledgered specialists", () => {
-    expect(d).toContain("`ran (skill)` only when `pivot-specialist` loaded the specialist");
-    expect(r).toContain("`ran (skill)` only through `pivot-specialist`");
+    expect(d).toContain("`ran (skill)` only when `pivot:specialist` loaded the specialist");
+    expect(r).toContain("`ran (skill)` only through `pivot:specialist`");
     expect(specialists).toContain("`<name> — <phase> — <run label> — <outcome>:");
     expect(d).toContain("already in the latest brief's Specialists ledger isn't run again");
     expect(specialists).toContain("**One run per specialist per phase.**");
@@ -453,14 +457,14 @@ describe("specialists run for real, labelled by what happened", () => {
     expect(specialists).toContain("Skills that can't be model-invoked");
   });
   it("SPEC and PIVOT_DECISIONS describe the mechanism", () => {
-    for (const x of ["pivot-specialist", "`ran (skill)`", "`consulted`", "claude -p"])
+    for (const x of ["pivot:specialist", "`ran (skill)`", "`consulted`", "claude -p"])
       expect(spec.includes(x), x).toBe(true);
     expect(read("docs/PIVOT_DECISIONS.md")).toContain("**Orchestrator v2, P0b**");
   });
 });
 
 describe("motion is part of the design", () => {
-  const motion = read(".claude/skills/pivot-design/motion.md");
+  const motion = read("plugin/skills/design/motion.md");
 
   it("motion.md defines the three levels and the classification line, none by default", () => {
     for (const l of ["**None**", "**Standard**", "**Advanced**"]) expect(motion).toContain(l);
@@ -472,7 +476,7 @@ describe("motion is part of the design", () => {
   it("both skills classify motion and point to motion.md", () => {
     expect(d).toContain("**the motion level:**");
     expect(d).toContain("**Re-check the motion level**");
-    expect(r).toContain("../pivot-design/motion.md");
+    expect(r).toContain("../design/motion.md");
     expect(r).toContain("so it is **Major**");
     expect(r).toContain("A Minor redesign keeps the existing motion exactly as it is");
   });
@@ -529,7 +533,7 @@ describe("motion is part of the design", () => {
     expect(motion).toContain("measure is unverified, never a pass");
   });
   it("the local viewer is hardened and motion specialists follow the level", () => {
-    const viewer = read(".claude/skills/pivot-design/viewer/make-viewer.mjs");
+    const viewer = read("plugin/skills/design/viewer/make-viewer.mjs");
     expect(viewer).toContain("connect-src 'none'");
     expect(viewer).not.toContain('allow-same-origin"');
     expect(specialists).toContain("when the motion level is standard or advanced");
@@ -566,7 +570,7 @@ describe("motion QA traces to the approved brief and never passes on missing evi
         "**Check by hand",
       ]),
     ).toBe(true);
-    expect(fs.existsSync(P(".claude/skills/pivot-design/scripts/motion-qa.mjs"))).toBe(true);
+    expect(fs.existsSync(P("plugin/skills/design/scripts/motion-qa.mjs"))).toBe(true);
     expect(flat).toContain(
       "node <skill>/scripts/motion-qa.mjs <plan.json> --out <scratchpad>/motion-qa --brief <scratchpad>/brief.md",
     );
@@ -605,7 +609,7 @@ describe("motion QA traces to the approved brief and never passes on missing evi
     expect(flat).toContain("Reduced motion checked by the script is **browser emulation**");
     expect(flat).toContain("`--allow-remote` adds public hosts (never this machine or a private network).");
   });
-  it("pivot-design §10 and pivot-redesign use it; SPEC and PIVOT_DECISIONS describe it", () => {
+  it("pivot:design §10 and pivot:redesign use it; SPEC and PIVOT_DECISIONS describe it", () => {
     expect(d).toContain("`scripts/motion-qa.mjs` against the build");
     expect(d).toContain("the overall status is Pass only when every essential item passed");
     expect(r).toContain("a `motion-qa.mjs` run on the current build, before any edit, gives the before");
@@ -614,7 +618,7 @@ describe("motion QA traces to the approved brief and never passes on missing evi
   });
 });
 
-describe("pivot-design: discovery and gate 1 (L1, text only)", () => {
+describe("pivot:design: discovery and gate 1 (L1, text only)", () => {
   it("opens the session at the requirements, proposes references in PIVOT, and records only the user's pick", () => {
     expect(d).toMatch(/open the design session/);
     expect(d).toMatch(/`propose_references`/);
@@ -629,8 +633,8 @@ describe("pivot-design: discovery and gate 1 (L1, text only)", () => {
   });
 });
 
-describe("pivot-design: several pages are one direction per version (L1, text only)", () => {
-  const tpl = read(".claude/skills/pivot-design/viewer/multi-page.html");
+describe("pivot:design: several pages are one direction per version (L1, text only)", () => {
+  const tpl = read("plugin/skills/design/viewer/multi-page.html");
   it("makes every version a direction holding all the requested pages, never one version per page", () => {
     expect(d).toMatch(/\*\*the pages or screens in scope\*\*/);
     expect(d).toMatch(/\*\*Pages:\*\* <several pages or screens only/);
@@ -656,7 +660,7 @@ describe("pivot-design: several pages are one direction per version (L1, text on
   });
 });
 
-describe("pivot-design: options checkpoint after step 1 (L1, text only)", () => {
+describe("pivot:design: options checkpoint after step 1 (L1, text only)", () => {
   it("asks the open options after understanding the request, before the session opens", () => {
     expect(d).toMatch(/### Options checkpoint/);
     expect(ordered(d, ["### Options checkpoint", "Then **open the design session**", "## 2. Search"])).toBe(true);
@@ -683,7 +687,7 @@ describe("pivot-design: options checkpoint after step 1 (L1, text only)", () => 
   });
 });
 
-describe("pivot-design: UI layouts and components kept apart (L1, text only)", () => {
+describe("pivot:design: UI layouts and components kept apart (L1, text only)", () => {
   it("defines the two kinds, proposes layouts first, and shows two tables in the chat and the brief", () => {
     expect(d).toMatch(/\*\*Two kinds of reference, kept apart from here to the brief:\*\*/);
     expect(d).toMatch(/\*\*UI layouts first, then the components\*\*/);
@@ -694,8 +698,8 @@ describe("pivot-design: UI layouts and components kept apart (L1, text only)", (
   });
 });
 
-describe("pivot-design: GSAP for advanced motion (L1, text only)", () => {
-  const motion = read(".claude/skills/pivot-design/motion.md");
+describe("pivot:design: GSAP for advanced motion (L1, text only)", () => {
+  const motion = read("plugin/skills/design/motion.md");
   it("defaults advanced motion to GSAP, standard to CSS, after what the project already uses", () => {
     expect(motion).toMatch(/\*\*Advanced: GSAP\*\* \(the `gsap` package\)/);
     expect(motion).toMatch(/`@gsap\/react` in a React\s+or Next\.js project/);

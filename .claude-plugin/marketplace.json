@@ -1,0 +1,14 @@
+{
+  "name": "pivot",
+  "owner": { "name": "Phuc Tan", "url": "https://github.com/PTan2505" },
+  "metadata": {
+    "description": "PIVOT: design and build UI from your own library of saved references."
+  },
+  "plugins": [
+    {
+      "name": "pivot",
+      "source": "./plugin",
+      "description": "Design and redesign UI with Claude from your own PIVOT reference library: MCP tools, the design and redesign skills, and the specialist agent."
+    }
+  ]
+}

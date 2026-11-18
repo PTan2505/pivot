@@ -7,7 +7,7 @@ import type { DesignSessionDTO } from "@pivot/core/types";
 import { api } from "@/lib/api";
 import { DESIGN_STATUS_LABEL } from "@/components/design-session";
 
-/** Design work done with the pivot-design skill: one session per piece of work, newest first. */
+/** Design work done with the pivot:design skill: one session per piece of work, newest first. */
 export default function DesignSessionsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["design-sessions"],
@@ -27,7 +27,7 @@ export default function DesignSessionsPage() {
         <Loader2 className="size-4 animate-spin text-ink-muted" aria-label="Loading" />
       ) : sessions.length === 0 ? (
         <p className="text-sm text-ink-muted">
-          None yet. They appear when the pivot-design skill saves its first brief.
+          None yet. They appear when the pivot:design skill saves its first brief.
         </p>
       ) : (
         <ol className="space-y-2">

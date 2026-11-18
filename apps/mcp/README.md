@@ -38,11 +38,16 @@ Errors come back as tool results with a code the agent can act on: `not_found`, 
 
 ## Set up
 
+The usual way is the Claude Code plugin, which registers this server for you: see the root [README](../../README.md#design-with-claude-code). It ships the server as `plugin/server/server.js`, one file bundled from this folder.
+
+To register it by hand instead (without the plugin):
+
 1. Start PIVOT (`npm start` at the repo root, which serves `http://127.0.0.1:4321`). The MCP server only reads through it.
 2. Build the server:
    ```bash
    pnpm mcp:build
    ```
+   This writes one self-contained file to `apps/mcp/dist/server.js` and the same file to `plugin/server/server.js`. Commit the second one when it changes: the plugin uses it as committed, and a test fails when it is stale.
 3. Register it with Claude Code. For every project on this machine:
    ```bash
    claude mcp add pivot --scope user -- node /absolute/path/to/pivot/apps/mcp/dist/server.js
@@ -51,7 +56,7 @@ Errors come back as tool results with a code the agent can act on: `not_found`, 
    ```bash
    claude mcp add pivot --scope project -- node apps/mcp/dist/server.js
    ```
-4. In Claude Code, `/mcp` should list `pivot` with 13 tools. Ask something like "find dark pricing pages in PIVOT".
+4. In Claude Code, `/mcp` should list `pivot` with its tools. Ask something like "find dark pricing pages in PIVOT". Don't keep this and the plugin at the same time: you would get every tool twice.
 
 ### Configuration
 
@@ -60,7 +65,7 @@ Errors come back as tool results with a code the agent can act on: `not_found`, 
 | `PIVOT_URL`   | `http://127.0.0.1:4321`                              | Where the PIVOT app is running.                                                  |
 | `PIVOT_TOKEN` | contents of `<PIVOT_DATA_DIR or ~/.pivot>/api-token` | The API token (Settings in the app). Reads don't need it; every write tool does. |
 
-Pass them with `claude mcp add … -e PIVOT_URL=http://127.0.0.1:4400 -- node …`. Nothing secret is stored in the repo.
+With the plugin, set `PIVOT_URL` through its **PIVOT address** option. By hand, pass them with `claude mcp add … -e PIVOT_URL=http://127.0.0.1:4400 -- node …`. Nothing secret is stored in the repo.
 
 ## Troubleshooting
 
@@ -76,9 +81,9 @@ claude mcp remove pivot --scope user
 
 ## Design skills
 
-Two skills in `.claude/skills` tell Claude how to use these tools:
+The plugin's two skills tell Claude how to use these tools:
 
-- **`pivot-design`** for new screens. The flow is:
+- **`/pivot:design`** for new screens. The flow is:
   1. understand;
   2. `list_facets`, search and look;
   3. a brief with attributed references, saved as `initial`;
@@ -86,19 +91,6 @@ Two skills in `.claude/skills` tell Claude how to use these tools:
   5. your explicit approval: **Approve this version** in PIVOT with your owner passphrase (set it once in your own terminal with `pnpm owner:passphrase`), or approve the named version in the chat, which Claude records with your words (Claude waits on it in the background and builds right away);
   6. build;
   7. QA.
-- **`pivot-redesign`** for existing UI. It sets a path and a risk level (small fix / Minor / Major) that decides the approval step. It also checks the impact on shared code, and compares the result with "before" screenshots.
+- **`/pivot:redesign`** for existing UI. It sets a path and a risk level (small fix / Minor / Major) that decides the approval step. It also checks the impact on shared code, and compares the result with "before" screenshots.
 
-Both share an optional-specialist policy (`pivot-design/specialists.md`).
-
-Link them into every project with:
-
-```bash
-pnpm skill:install
-```
-
-The links point at this repo, so editing the skills here updates them everywhere. The full walkthrough is in the root [README](../../README.md#design-with-claude-code).
-
-## Develop
-
-- Tool definitions and their tests: `packages/mcp-tools` (`pnpm --filter @pivot/mcp-tools test`). They're written against the `PivotSource` interface, so a later remote server (Streamable HTTP) can reuse them unchanged; see `docs/SEARCH_MCP_IMPLEMENTATION_PLAN.md`.
-- This app only adds the stdio transport (`src/server.ts`) and `HttpSource` (`src/http-source.ts`).
+Both share an optional-specialist policy (`plugin/skills/design/specialists.md`). They live in [`plugin/skills`](../../plugin/skills); the full walkthrough is in the root [README](../../README.md#design-with-claude-code).
