@@ -598,7 +598,8 @@ describe("in a browser", () => {
       const copy = path.join(dir, "motion-qa.mjs");
       fs.copyFileSync(scriptPath, copy);
       fs.writeFileSync(path.join(dir, "plan.json"), JSON.stringify({ target: { file: copy }, items: [item()] }));
-      const env = { ...process.env };
+      // a data folder no PIVOT has started with, so there is no install.json to follow either
+      const env = { ...process.env, PIVOT_DATA_DIR: path.join(dir, "data") };
       delete env.PIVOT_REPO;
       let out = null;
       try {
@@ -612,6 +613,37 @@ describe("in a browser", () => {
       expect(out?.status).toBe(3);
       expect(out?.stderr).toContain("Playwright not found");
       expect(out?.stderr).toContain("Not Verified");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("finds Playwright through the install PIVOT recorded when it started (a copy installed with the plugin)", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "motion-qa-plugin-copy-"));
+    try {
+      const copy = path.join(dir, "scripts", "motion-qa.mjs");
+      fs.mkdirSync(path.dirname(copy));
+      fs.copyFileSync(scriptPath, copy);
+      const { playwrightBases } = await import(pathToFileURL(copy).href);
+      const data = path.join(dir, "data");
+      fs.mkdirSync(data);
+      const from = path.dirname(copy);
+      expect(playwrightBases({ env: { PIVOT_DATA_DIR: data }, from })).toEqual([]);
+      // what `npm start` / `pivot-ui start` write
+      const core = path.resolve(path.dirname(scriptPath), "../../../../packages/core/package.json");
+      fs.writeFileSync(path.join(data, "install.json"), JSON.stringify({ app: "pivot", requireFrom: core }));
+      expect(playwrightBases({ env: { PIVOT_DATA_DIR: data }, from })).toEqual([core]);
+      // PIVOT_REPO comes first; a broken or foreign record is ignored
+      expect(
+        playwrightBases({
+          env: { PIVOT_DATA_DIR: data, PIVOT_REPO: path.dirname(path.dirname(path.dirname(core))) },
+          from,
+        }),
+      ).toEqual([core, core]);
+      fs.writeFileSync(path.join(data, "install.json"), JSON.stringify({ app: "other", requireFrom: core }));
+      expect(playwrightBases({ env: { PIVOT_DATA_DIR: data }, from })).toEqual([]);
+      fs.writeFileSync(path.join(data, "install.json"), "{not json");
+      expect(playwrightBases({ env: { PIVOT_DATA_DIR: data }, from })).toEqual([]);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

@@ -10,6 +10,8 @@ import os from "node:os";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { writeInstallInfo } from "../apps/cli/lib/install-info.mjs";
+import { resolveDataDir } from "../apps/cli/lib/paths.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const web = path.join(root, "apps/web");
@@ -100,20 +102,11 @@ if (scratchAt >= 0) {
   loadEnv(path.join(root, ".env"));
 }
 
-// The project used to be called Stan Bag and kept its data in ~/.stan-bag (API token, cache, local database).
-// Move it once to the new default so the paired extension and local data carry over.
-const legacyDataDir = path.join(os.homedir(), ".stan-bag");
-const dataDir = path.join(os.homedir(), ".pivot");
-if (!process.env.PIVOT_DATA_DIR && !fs.existsSync(dataDir) && fs.existsSync(legacyDataDir)) {
-  fs.renameSync(legacyDataDir, dataDir);
-  console.log(`› Moved ${legacyDataDir} to ${dataDir}`);
-}
-
 // fail closed: never start an empty local library in place of one kept in Neon because .env is missing
 if (scratchAt < 0) {
   const { missingConfig } = await import("./launch-guard.mjs");
   const why = missingConfig({
-    dataDir: process.env.PIVOT_DATA_DIR ? path.resolve(process.env.PIVOT_DATA_DIR) : dataDir,
+    dataDir: resolveDataDir(),
     env: process.env,
     envFile: path.join(root, ".env"),
   });
@@ -156,6 +149,15 @@ if (!dev) {
     run("pnpm", ["--filter", "web", "exec", "next", "build"]);
   }
 }
+
+// so the design skill's scripts, wherever Claude Code installed them, can find this checkout's Playwright
+writeInstallInfo({
+  dataDir: resolveDataDir(),
+  kind: "checkout",
+  root,
+  requireFrom: path.join(root, "packages/core/package.json"),
+  version: JSON.parse(fs.readFileSync(path.join(root, "apps/cli/package.json"), "utf8")).version,
+});
 
 const url = `http://127.0.0.1:${port}`;
 console.log(`› PIVOT ${dev ? "(dev) " : ""}→ ${url}`);

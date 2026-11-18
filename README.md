@@ -16,6 +16,16 @@ npm start
 
 Installs dependencies and Playwright's Chromium if missing, rebuilds when the code changed, serves on <http://127.0.0.1:4321> and opens the browser. `npm run dev` runs the Next.js dev server with the same settings.
 
+### Without cloning the repo (npm)
+
+The same app ships as the npm package [`pivot-ui`](apps/cli/README.md):
+
+```bash
+npx pivot-ui
+```
+
+Data goes to `~/.pivot`; settings such as `DATABASE_URL` go in `~/.pivot/.env`. `npx pivot-ui doctor` checks the machine, `npx pivot-ui passphrase` sets the owner passphrase and `npx pivot-ui extension` prepares the Chrome extension. The package isn't published yet; until it is, run it from a checkout as above.
+
 ## Configuration (`.env` at the repo root)
 
 | Variable                                                                 | Default            |                                                                                                                                                       |
@@ -187,12 +197,13 @@ To pick up earlier work, say "continue the Ledgerly pricing session". Claude rea
 apps/web            Next.js app (UI + API routes)
 apps/extension      Chrome extension (Manifest V3, Vite + React)
 apps/mcp            stdio MCP server for Claude Code
+apps/cli            the npm package pivot-ui: CLI, and the build that packs the app into it
 packages/core       Database schema, migrations and all library logic
 packages/mcp-tools  MCP tool definitions, independent of the transport
 .claude-plugin      the marketplace that lists the plugin
 plugin             the Claude Code plugin: skills design and redesign (+ the shared specialists.md policy),
                    the specialist agent, the bundled MCP server and the session-start hook
-scripts/start.mjs
+scripts/start.mjs  npm start / npm run dev in a checkout
 ```
 
 ```bash
@@ -202,6 +213,7 @@ pnpm lint
 pnpm db:generate   # after editing packages/core/src/db/schema.ts
 pnpm mcp:build     # build the MCP server into apps/mcp/dist and plugin/server
 pnpm plugin:validate # Claude Code's validator on the plugin and the marketplace
+pnpm cli:build     # pack the app (standalone server, migrations, scripts, extension) into apps/cli/dist
 ```
 
 ## Security
