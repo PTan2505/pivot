@@ -1,15 +1,17 @@
 "use client";
 
-import { ExternalLink, FolderSync, Layers, Link2, Search, Settings, Trash2 } from "lucide-react";
+import { Eye, ExternalLink, FolderSync, Layers, Link2, Search, Settings, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   externalPageFor,
-  RESOURCE_TYPES,
-  SECTIONS,
+  isOtherType,
+  OTHER_TYPES,
   sourceSearchUrl,
   TYPE_DEFS,
+  visibleSections,
+  visibleTypes,
   type SearchScope,
 } from "@pivot/core/types";
 import { useCreateOfType } from "@/components/add-menu";
@@ -30,7 +32,15 @@ import {
 import { useUi } from "@/components/ui-store";
 import { useCopyResource } from "@/hooks/use-copy-resource";
 import { sectionHref } from "@/hooks/use-library-params";
-import { api, useCollections, useExternalSearch, useInvalidate, useResources } from "@/lib/api";
+import {
+  api,
+  useCollections,
+  useExternalSearch,
+  useInvalidate,
+  useResources,
+  useSetShowOther,
+  useShowOther,
+} from "@/lib/api";
 
 export function CommandPalette() {
   const { paletteOpen, setPaletteOpen, openAddUrl } = useUi();
@@ -43,6 +53,9 @@ export function CommandPalette() {
   const createOfType = useCreateOfType();
   const invalidate = useInvalidate();
   const { data: collections = [] } = useCollections();
+  const showOther = useShowOther();
+  const setShowOther = useSetShowOther();
+  const types = visibleTypes(showOther);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search), 150);
@@ -70,7 +83,10 @@ export function CommandPalette() {
     { q: debounced },
     { enabled: paletteOpen && scope !== "external" },
   );
-  const shown = scope === "external" ? [] : results.slice(0, debounced ? 20 : 8);
+  // the types outside design stay out of the results while hidden; a search that matches some says so (see below)
+  const visible = showOther ? results : results.filter((r) => !isOtherType(r.type));
+  const hiddenMatches = debounced && scope !== "external" ? results.length - visible.length : 0;
+  const shown = scope === "external" ? [] : visible.slice(0, debounced ? 20 : 8);
   const external = useExternalSearch(debounced, { enabled: paletteOpen && scope !== "library", limit: 3 });
   // only results that answer what is typed now; the previous query's stay out while the new one loads
   const direct = scope === "library" ? [] : (externalPageFor(external.data, debounced)?.providers ?? []);
@@ -132,6 +148,26 @@ export function CommandPalette() {
               ))}
             </CommandGroup>
           )}
+          {hiddenMatches > 0 && (
+            <CommandGroup heading="Hidden types">
+              <CommandItem
+                value={`Show ${hiddenMatches} hidden matches`}
+                keywords={[debounced]}
+                onSelect={() =>
+                  setShowOther.mutate(true, {
+                    onSuccess: () => toast.success("Knowledge and Skills added to the navigation"),
+                    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not show them"),
+                  })
+                }
+              >
+                <Eye className="text-muted-foreground" />
+                <span className="truncate">
+                  {hiddenMatches} {hiddenMatches === 1 ? "match" : "matches"} in hidden types
+                </span>
+                <CommandShortcut>Show</CommandShortcut>
+              </CommandItem>
+            </CommandGroup>
+          )}
           {direct.map(
             (p) =>
               p.results.length > 0 && (
@@ -176,38 +212,59 @@ export function CommandPalette() {
             <CommandItem onSelect={() => run(() => openAddUrl())}>
               <Link2 /> Add from URL…
             </CommandItem>
-            {RESOURCE_TYPES.filter((t) => TYPE_DEFS[t].url !== "primary").map((t) => (
-              <CommandItem key={t} value={`New ${TYPE_DEFS[t].label}`} onSelect={() => run(() => createOfType(t))}>
-                <TypeIcon type={t} /> New {TYPE_DEFS[t].label.toLowerCase()}
+            {types
+              .filter((t) => TYPE_DEFS[t].url !== "primary")
+              .map((t) => (
+                <CommandItem key={t} value={`New ${TYPE_DEFS[t].label}`} onSelect={() => run(() => createOfType(t))}>
+                  <TypeIcon type={t} /> New {TYPE_DEFS[t].label.toLowerCase()}
+                </CommandItem>
+              ))}
+            {showOther ? (
+              <CommandItem
+                onSelect={() =>
+                  run(async () => {
+                    const r = await api<{ created: number; updated: number; total: number }>("/api/skills/sync", {
+                      method: "POST",
+                    }).catch((e) => {
+                      toast.error(e.message);
+                      return null;
+                    });
+                    if (r) {
+                      invalidate();
+                      toast.success(`Synced ${r.total} skills · ${r.created} imported · ${r.updated} updated`);
+                    }
+                  })
+                }
+              >
+                <FolderSync /> Sync skills from disk
               </CommandItem>
-            ))}
-            <CommandItem
-              onSelect={() =>
-                run(async () => {
-                  const r = await api<{ created: number; updated: number; total: number }>("/api/skills/sync", {
-                    method: "POST",
-                  }).catch((e) => {
-                    toast.error(e.message);
-                    return null;
-                  });
-                  if (r) {
-                    invalidate();
-                    toast.success(`Synced ${r.total} skills · ${r.created} imported · ${r.updated} updated`);
-                  }
-                })
-              }
-            >
-              <FolderSync /> Sync skills from disk
-            </CommandItem>
+            ) : (
+              // always reachable from the keyboard, so the hidden types can be found again
+              <CommandItem
+                // found by what it brings back, not only by its own words
+                keywords={[
+                  "knowledge",
+                  "skills",
+                  "export",
+                  "share package",
+                  ...OTHER_TYPES.map((t) => `new ${TYPE_DEFS[t].label}`),
+                ]}
+                onSelect={() => run(() => router.push("/settings#other-types"))}
+              >
+                <Eye /> Show other resource types…
+              </CommandItem>
+            )}
           </CommandGroup>
           <CommandSeparator />
           <CommandGroup heading="Go to">
-            {SECTIONS.filter((s) => s.types.length > 1).map((s) => (
-              <CommandItem key={s.id} value={`Go ${s.label}`} onSelect={() => run(() => router.push(sectionHref(s)))}>
-                <Layers /> {s.label}
-              </CommandItem>
-            ))}
-            {RESOURCE_TYPES.map((t) => (
+            {visibleSections(showOther)
+              .filter((s) => s.types.length > 1)
+              .map((s) => (
+                <CommandItem key={s.id} value={`Go ${s.label}`} onSelect={() => run(() => router.push(sectionHref(s)))}>
+                  <Layers /> {s.label}
+                </CommandItem>
+              ))}
+            {types.map((t) => (
               <CommandItem
                 key={t}
                 value={`Go ${TYPE_DEFS[t].plural}`}

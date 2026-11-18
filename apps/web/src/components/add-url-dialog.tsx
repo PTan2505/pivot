@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { RESOURCE_TYPES, TYPE_DEFS, type ResourceDTO, type ResourceType } from "@pivot/core/types";
+import { TYPE_DEFS, visibleTypes, type ResourceDTO, type ResourceType } from "@pivot/core/types";
 import { TagsEditor } from "@/components/tags-editor";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -23,9 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useUi } from "@/components/ui-store";
-import { api, useInvalidate, type TagInput } from "@/lib/api";
-
-const URL_TYPES = RESOURCE_TYPES.filter((t) => t !== "skill");
+import { api, useInvalidate, useShowOther, type TagInput } from "@/lib/api";
 
 interface MetadataResponse {
   url: string;
@@ -66,6 +64,11 @@ function AddUrlForm({
   const invalidate = useInvalidate();
   const [text, setText] = useState(initialUrls.join("\n"));
   const [type, setType] = useState<ResourceType>(initialType && initialType !== "skill" ? initialType : "reference");
+  // skills come from disk, not from a URL; the types outside design show only with "Other resource types" (the chosen
+  // type stays listed either way)
+  const showOther = useShowOther();
+  const urlTypes = visibleTypes(showOther).filter((t) => t !== "skill" || type === t);
+  if (!urlTypes.includes(type)) urlTypes.push(type);
   // null = untouched, so fetched metadata can fill it in.
   const [title, setTitle] = useState<string | null>(null);
   const [description, setDescription] = useState<string | null>(null);
@@ -177,7 +180,7 @@ function AddUrlForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {URL_TYPES.map((t) => (
+                {urlTypes.map((t) => (
                   <SelectItem key={t} value={t}>
                     {TYPE_DEFS[t].label}
                   </SelectItem>

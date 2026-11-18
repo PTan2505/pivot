@@ -31,6 +31,7 @@ import {
   isSectionId,
   SECTIONS,
   sectionOf,
+  visibleSections,
   SOURCE_CATEGORIES,
   TYPE_DEFS,
   type Section,
@@ -40,7 +41,7 @@ import {
 import { clip, clipTo, eases, reducedMotion, useIndicator } from "@/components/nav-motion";
 import { TypeIcon } from "@/components/type-icon";
 import { sectionHref } from "@/hooks/use-library-params";
-import { useCounts, useResources } from "@/lib/api";
+import { useCounts, useResources, useShowOther } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export const SECTION_ICONS: Record<SectionId, LucideIcon> = {
@@ -76,6 +77,7 @@ export function useOptimisticSection(active: SectionId | null, routeKey: string)
   return [shown, (id: SectionId) => setPending({ id, from: routeKey })] as const;
 }
 
+const sectionById = (id: SectionId): Section => SECTIONS.find((s) => s.id === id)!;
 const hasPanel = (s: Section) => s.types.length > 1 || s.id === "sources";
 type PanelKey = SectionId;
 
@@ -84,13 +86,16 @@ const item =
 const focus = "outline-none focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-text";
 
 /**
- * Library · Knowledge · Sources · Skills in the top bar's capsule. The name opens the section; the chevron (or ↓ on
+ * Library · Sources (plus Knowledge and Skills when "Other resource types" is on) in the top bar's capsule. The name
+ * opens the section; the chevron (or ↓ on
  * the name) opens a panel of its types, or of the source categories. Once a panel is open, pointing at another
  * section moves it there. An inverse copy of the list, clipped to the current section, slides between them (M1).
  */
 export function SectionNav() {
   const { active, currentType, currentCategory, routeKey } = useActiveSection();
   const [shown, select] = useOptimisticSection(active, routeKey);
+  const showOther = useShowOther();
+  const sections = visibleSections(showOther);
   const listRef = useRef<HTMLUListElement>(null);
   const indRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
@@ -234,7 +239,7 @@ export function SectionNav() {
   };
 
   const items = (copy: boolean) =>
-    SECTIONS.map((s) => {
+    sections.map((s) => {
       const panel = hasPanel(s);
       const current = active === s.id && (panel && s.types.length > 1 ? !currentType : !currentCategory);
       if (copy)
@@ -341,11 +346,13 @@ export function SectionNav() {
         {mounted && (
           <>
             <PanelContent for="library" label="Library types">
-              <TypePanel section={SECTIONS[0]} currentType={currentType} onPick={() => setOpen(null)} />
+              <TypePanel section={sectionById("library")} currentType={currentType} onPick={() => setOpen(null)} />
             </PanelContent>
-            <PanelContent for="knowledge" label="Knowledge types">
-              <TypePanel section={SECTIONS[1]} currentType={currentType} onPick={() => setOpen(null)} />
-            </PanelContent>
+            {showOther && (
+              <PanelContent for="knowledge" label="Knowledge types">
+                <TypePanel section={sectionById("knowledge")} currentType={currentType} onPick={() => setOpen(null)} />
+              </PanelContent>
+            )}
             <PanelContent for="sources" label="Source categories">
               <SourcePanel currentCategory={currentCategory} onPick={() => setOpen(null)} />
             </PanelContent>

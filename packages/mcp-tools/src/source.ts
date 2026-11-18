@@ -1,4 +1,5 @@
 import type {
+  UiSettings,
   DesignCandidateDTO,
   CollectionDTO,
   DesignDecisionKind,
@@ -48,6 +49,11 @@ export interface PivotSource {
     /** Only catalogs and search links of this kind. */
     category?: SourceCategory;
   }): Promise<ExternalSearchPage | null>;
+  /**
+   * App-wide display settings: whether the types outside design (Knowledge, Skills) are shown. Optional; a source
+   * without it (or an app that predates the setting) shows everything.
+   */
+  uiSettings?(): Promise<UiSettings>;
 }
 
 /**
