@@ -231,6 +231,37 @@ try { window.open("about:blank"); } catch {}
     expect(events.some((e) => e.event === "chosen")).toBe(false);
   });
 
+  it("fills the window with the version; the quick bar steps through versions and toggles the controls drawer", async () => {
+    await page.click("[data-tab='0']");
+    const win = await page.evaluate(() => ({ w: innerWidth, h: innerHeight }));
+    const box = await page.locator("iframe").boundingBox();
+    expect([box.x, box.y, box.width, box.height]).toEqual([0, 0, win.w, win.h]);
+    expect(await page.textContent("#pos-sr")).toBe("Version 1 of 2: Static");
+    await page.click("#next");
+    expect(await page.getAttribute("[data-tab='1']", "aria-selected")).toBe("true");
+    await page.click("#prev");
+    expect(await page.getAttribute("[data-tab='0']", "aria-selected")).toBe("true");
+    // the drawer starts open (a first visit), and closes with the toggle or Esc, focus returning to the toggle
+    expect(await page.getAttribute("#drawer", "data-state")).toBe("open");
+    await page.click("#toggle");
+    expect(await page.getAttribute("#drawer", "data-state")).toBe("closed");
+    expect(await page.getAttribute("#toggle", "aria-expanded")).toBe("false");
+    expect(await page.evaluate(() => document.getElementById("drawer").inert)).toBe(true);
+    await page.click("#toggle");
+    // focus moves to the selected version on the next frame
+    await page.waitForFunction(() => document.activeElement?.getAttribute("aria-selected") === "true");
+    await page.keyboard.press("Escape");
+    expect(await page.getAttribute("#drawer", "data-state")).toBe("closed");
+    expect(await page.evaluate(() => document.activeElement?.id)).toBe("toggle");
+    // the bar folds into a dot and comes back
+    await page.click("#toggle");
+    await page.click("[data-place='dot']");
+    expect(await page.getAttribute("#bar-place", "class")).toBe("bar-place dot");
+    expect(await page.textContent("#dot")).toBe("1/2");
+    await page.click("[data-place='bottom']");
+    expect(await page.getAttribute("#bar-place", "class")).toBe("bar-place bottom");
+  });
+
   it("compares versions side by side and replays", async () => {
     await page.click("#compare");
     expect(await page.locator("iframe").count()).toBe(2);

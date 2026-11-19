@@ -1,6 +1,6 @@
 {
   "name": "pivot-studio",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "PIVOT: your own library of UI references, and design sessions with Claude Code. Runs locally.",
   "license": "MIT",
   "repository": {
