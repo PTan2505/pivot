@@ -34,6 +34,8 @@ You need [Node.js 22+](https://nodejs.org) and [Claude Code](https://code.claude
    claude plugin install pivot --marketplace PTan2505/pivot
    ```
 
+   To update it later: `claude plugin marketplace update pivot`, then `claude plugin update pivot@pivot`, and start a new session.
+
 4. **Check everything:**
 
    ```bash
