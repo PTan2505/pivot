@@ -46,7 +46,8 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-          cache: pnpm
+          # nothing is installed on a pull request into dev, and saving an empty pnpm cache fails the job
+          cache: ${{ github.base_ref != 'dev' && 'pnpm' || '' }}
       - name: Is this version on npm?
         id: version
         run: |
