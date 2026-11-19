@@ -37294,6 +37294,16 @@ var KNOWN_SOURCES = [
     description: "Copy-paste React components and page blocks built on Radix and Tailwind."
   },
   {
+    host: "shadcn.io",
+    name: "shadcn.io",
+    url: "https://www.shadcn.io/",
+    category: "components",
+    searchUrl: null,
+    pricing: "freemium",
+    platforms: ["web"],
+    description: "Independent shadcn/ui library: blocks, charts, templates and components for React, Vue, Svelte and Solid (Pro for all blocks)."
+  },
+  {
     host: "tympanus.net",
     name: "Codrops",
     url: "https://tympanus.net/codrops/",
