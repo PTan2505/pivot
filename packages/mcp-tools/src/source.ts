@@ -155,6 +155,8 @@ export type ToolErrorCode =
   | "invalid_input"
   | "invalid_cursor"
   | "app_unreachable"
+  /** The app answers but is older than this MCP server: it lacks a feature the tools need. */
+  | "app_outdated"
   | "no_images"
   | "read_only"
   | "unauthorized"
