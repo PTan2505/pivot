@@ -144,6 +144,7 @@ describe("UI layouts and components", () => {
     expect(cands.inferCategory({ url: "https://reactbits.dev/components/animated-list" })).toBe("component");
     expect(cands.inferCategory({ url: "https://www.ui.shadcn.com/docs/components/table" })).toBe("component");
     expect(cands.inferCategory({ url: "https://magicui.design/docs/components/marquee" })).toBe("component");
+    expect(cands.inferCategory({ url: "https://www.shadcn.io/blocks/sidebar-ai-assistant" })).toBe("component");
     expect(cands.inferCategory({ url: "https://land-book.com/websites/1" })).toBe("layout");
     expect(cands.inferCategory({ url: "https://notreactbits.dev/x" })).toBe("layout");
     expect(cands.inferCategory({ url: null })).toBe("layout");
