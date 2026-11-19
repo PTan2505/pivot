@@ -408,6 +408,12 @@ const MOTION_BUDGET_MS = 300_000;
 /** The whole recording capture: opening the page, the frames (MOTION_BUDGET_MS) and finishing the video. */
 const MOTION_TIMEOUT_MS = MOTION_BUDGET_MS + 90_000;
 const MAX_KEYFRAMES = 8;
+/**
+ * VP9 quality (lower is better and larger). 35 keeps small text and thin lines as they were at 28 while making the
+ * file about 40% smaller (measured on apple.com/airpods-pro: SSIM 0.9960 against 0.9975); 38 starts to wash out thin
+ * coloured lines on dark backgrounds, and a smaller frame size softens text more than a higher CRF does.
+ */
+const MOTION_CRF = 35;
 
 /** Scrolls to a position; returns where the page is and how far it can scroll (up to the recording's cap). */
 const scrollAndMeasure = (y: number) => `(() => {
@@ -453,7 +459,8 @@ async function startEncoder(file: string) {
     /*turbopackIgnore: true*/ await ffmpegPath(),
     [
       ...["-loglevel", "error", "-f", "image2pipe", "-c:v", "mjpeg", "-framerate", String(MOTION_FPS), "-i", "pipe:0"],
-      ...["-c:v", "libvpx-vp9", "-crf", "28", "-b:v", "0", "-deadline", "good", "-cpu-used", "5", "-row-mt", "1"],
+      ...["-c:v", "libvpx-vp9", "-crf", String(MOTION_CRF), "-b:v", "0"],
+      ...["-deadline", "good", "-cpu-used", "5", "-row-mt", "1"],
       ...["-pix_fmt", "yuv420p", "-an", "-y", file],
     ],
     { stdio: ["pipe", "ignore", "pipe"] },
