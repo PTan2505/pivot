@@ -1,10 +1,11 @@
 # Publishes the npm package pivot-studio (apps/cli) when a pull request is merged into main.
 #
-# - A pull request into main runs the "plan" job only: it builds and tests the package and writes in the run summary
-#   whether merging will publish (the version in apps/cli/package.json is not on npm yet) or skip it (that version is
-#   already published). Nothing is published from a pull request. It fails when the pull request changes files that go
-#   into the package (apps/cli/release-check.mjs decides which) while the version is already on npm, so a release can't
-#   forget the bump; the "no-npm-release" label lets it through on purpose.
+# - A pull request into dev or main runs the "plan" job only, and never publishes. It writes in the run summary whether
+#   reaching main will publish (the version in apps/cli/package.json is not on npm yet) or not (that version is already
+#   published), and it fails when the pull request changes files that go into the package (apps/cli/release-check.mjs
+#   decides which) while the version is already on npm, so no change to the package can forget the bump. A version
+#   raised by an earlier pull request and not released yet covers the next ones. The "no-npm-release" label lets a pull
+#   request through on purpose. Into main it also builds, tests and packs the package; into dev it only checks.
 # - A push to main (the merge of that pull request) publishes the version when it is new, with provenance, then tags
 #   the merge commit v<version> and opens a GitHub release with generated notes. A version that is already on npm is
 #   skipped, so merges that don't raise the version publish nothing.
@@ -17,7 +18,7 @@ name: Publish pivot-studio
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, dev]
     types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches: [main]
@@ -39,7 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2 # on a pull request HEAD is the merge commit; HEAD^1 is the tip of main
+          fetch-depth: 2 # on a pull request HEAD is the merge commit; HEAD^1 is the base branch's tip
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -54,10 +55,10 @@ jobs:
           # Exit 0: the version exists. E404: it doesn't. Anything else (network, registry): fail rather than guess.
           if out=$(npm view "pivot-studio@$version" version --json 2>&1); then
             echo "publish=false" >> "$GITHUB_OUTPUT"
-            echo "pivot-studio $version is already on npm: merging into main publishes nothing. Raise the version in apps/cli/package.json to release." >> "$GITHUB_STEP_SUMMARY"
+            echo "pivot-studio $version is already on npm: reaching main publishes nothing. Raise the version in apps/cli/package.json to release." >> "$GITHUB_STEP_SUMMARY"
           elif grep -q '"E404"' <<< "$out"; then
             echo "publish=true" >> "$GITHUB_OUTPUT"
-            echo "pivot-studio $version is not on npm yet: merging into main publishes it and tags v$version." >> "$GITHUB_STEP_SUMMARY"
+            echo "pivot-studio $version is not on npm yet: reaching main publishes it and tags v$version." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "$out"
             echo "::error::Could not ask npm whether pivot-studio@$version exists."
@@ -85,10 +86,15 @@ jobs:
           echo "Raise the version in apps/cli/package.json, or add the no-npm-release label to merge without publishing." >> "$GITHUB_STEP_SUMMARY"
           echo "::error::The npm package changes but its version ($VERSION) is already published. Raise apps/cli/package.json's version, or label the pull request no-npm-release."
           exit 1
+      # building the package takes minutes: pull requests into dev only get the checks above
       - run: pnpm install --frozen-lockfile
+        if: github.base_ref != 'dev'
       - run: pnpm --filter pivot-studio test
+        if: github.base_ref != 'dev'
       - run: pnpm cli:build
+        if: github.base_ref != 'dev'
       - name: Pack (dry run)
+        if: github.base_ref != 'dev'
         run: npm pack --dry-run
         working-directory: apps/cli
 

@@ -31,16 +31,11 @@ The reference-first plan ([docs/reference-first-plan.md](docs/reference-first-pl
 
 ## Decide the npm release in every PR
 
-Merging into `main` publishes the npm package `pivot-studio` when `apps/cli/package.json` holds a version npm doesn't have yet ([docs/SPEC.md](docs/SPEC.md) §20). So every PR, into `dev` or `main`, decides whether it needs a release, before it is opened:
+Merging into `main` publishes the npm package `pivot-studio` when `apps/cli/package.json` holds a version npm doesn't have yet ([docs/SPEC.md](docs/SPEC.md) §20). CI checks the mechanical part on every PR into `dev` or `main`: it fails when the PR changes files that go into the package (`apps/cli/release-check.mjs`) while the version is already on npm. What CI can't decide is yours, before opening the PR:
 
-1. List the changed files that go into the package: `git diff --name-only origin/dev...HEAD | node apps/cli/release-check.mjs` (use `origin/main` as the base for a PR into `main`). Nothing printed means the package doesn't change.
-2. Compare the version on the branch with npm's: `npm view pivot-studio version`.
-3. Decide:
-   - **The package changes and the branch's version is already on npm:** raise it in this PR: patch for fixes, minor for new features or options, major for a breaking change.
-   - **The package changes and the branch's version is already newer than npm's** (an earlier PR raised it, not released yet): that bump covers this PR. Raise it further only when this PR needs a bigger step (a feature after a pending patch: patch → minor).
-   - **The package doesn't change:** no bump.
-4. Write the verdict in the PR description, in one line: `npm: publishes 0.1.2 (fixes the capture timeout)`, `npm: covered by the pending 0.1.2` or `npm: no release (docs only)`, and tell the user.
-5. A release PR into `main` that changes the package without a new version fails its `plan` check. Add the `no-npm-release` label only when the user decides not to release.
+- **How big the bump is**, when the package changes: patch for fixes, minor for new features or options, major for a breaking change. A version an earlier PR raised and not yet released covers this PR, unless it needs a bigger step (a feature after a pending patch: patch → minor). To see where things stand: `git diff --name-only origin/dev...HEAD | node apps/cli/release-check.mjs` and `npm view pivot-studio version`.
+- **The verdict, in one line of the PR description**, and told to the user: `npm: publishes 0.1.2 (fixes the capture timeout)`, `npm: covered by the pending 0.1.2` or `npm: no release (docs only)`.
+- The `no-npm-release` label only when the user decides a package change shouldn't be released.
 
 Changes to `plugin/` follow the same idea with the plugin's own version in `plugin/.claude-plugin/plugin.json`, which `claude plugin update` compares (CONTRIBUTING.md, step 4).
 
