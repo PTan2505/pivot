@@ -16,6 +16,7 @@ import { linkExternals } from "../lib/externals.mjs";
 import { writeInstallInfo } from "../lib/install-info.mjs";
 import { dist, resolveDataDir } from "../lib/paths.mjs";
 import { serverEnv } from "../lib/start.mjs";
+import { packageFiles } from "../release-check.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const bin = path.resolve(here, "../bin/pivot-studio.mjs");
@@ -256,5 +257,58 @@ it("records the install for the design skill's scripts", () => {
     app: "pivot",
     kind: "npm",
     requireFrom: "/r/package.json",
+  });
+});
+
+describe("release check", () => {
+  it("names the changed files that end up in the npm package, and nothing else", () => {
+    const inPackage = [
+      "apps/web/src/app/api/ping/route.ts",
+      "apps/web/public/icon.svg",
+      "apps/web/next.config.ts",
+      "packages/core/src/capture.ts",
+      "packages/core/src/db/migrations/0042_x.sql",
+      "apps/extension/src/popup.tsx",
+      "apps/extension/popup.html",
+      "apps/cli/lib/start.mjs",
+      "apps/cli/build.mjs",
+      "apps/cli/package.json",
+      "plugin/skills/design/scripts/motion-qa.mjs",
+      "plugin/skills/design/scripts/preview.mjs",
+      "THIRD_PARTY_NOTICES.md",
+      "pnpm-lock.yaml",
+    ];
+    const outside = [
+      "docs/SPEC.md",
+      "README.md",
+      "plugin/.claude-plugin/plugin.json",
+      "plugin/server/server.js",
+      "plugin/skills/design/SKILL.md",
+      "plugin/skills/design/scripts/wait-for-decision.mjs",
+      "plugin/skills/design/viewer/make-viewer.mjs",
+      "packages/mcp-tools/src/tools.ts",
+      "packages/core/test/capture-flow.test.ts",
+      "apps/web/src/lib/format.test.ts",
+      "apps/extension/test/popup.test.ts",
+      "apps/cli/test/cli.test.mjs",
+      "apps/cli/release-check.mjs",
+      ".github/workflows/publish-cli.yml",
+    ];
+    expect(packageFiles([...outside, ...inPackage, ""])).toEqual(inPackage);
+  });
+
+  it("reads the changed files from stdin and prints the packaged ones", async () => {
+    const run = (input) =>
+      new Promise((resolve) => {
+        const child = execFile(process.execPath, [path.resolve(here, "../release-check.mjs")], (err, stdout) =>
+          resolve({ code: err ? 1 : 0, out: stdout }),
+        );
+        child.stdin.end(input);
+      });
+    expect(await run("docs/SPEC.md\npackages/core/src/capture.ts\n")).toEqual({
+      code: 0,
+      out: "packages/core/src/capture.ts\n",
+    });
+    expect(await run("docs/SPEC.md\n")).toEqual({ code: 0, out: "" });
   });
 });
