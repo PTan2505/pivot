@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { dataDir, databaseMode, paths } from "../config";
+import { NEON_POOL } from "./connection";
 import * as schema from "./schema";
 
 export type DB = PgDatabase<PgQueryResultHKT, typeof schema>;
@@ -66,7 +67,8 @@ async function open(): Promise<DB> {
     // postgres.js negotiates SCRAM itself and would forward unknown URL params to the server as settings.
     const url = new URL(process.env.DATABASE_URL!);
     url.searchParams.delete("channel_binding");
-    const client = postgres(url.toString(), { max: 5, onnotice: () => {} });
+    // idle connections close and old ones are replaced, so a laptop waking up rarely meets a dead one (./connection.ts)
+    const client = postgres(url.toString(), { ...NEON_POOL, onnotice: () => {} });
     const db = drizzle(client, { schema });
     await migrate(db, { migrationsFolder });
     state.close = () => client.end();
