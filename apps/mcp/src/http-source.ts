@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { appOutdated, missingAppFeatures, REQUIRED_APP_FEATURES } from "@pivot/mcp-tools/app-compat";
 import type { ImagePart, PageSlices } from "@pivot/mcp-tools/images";
 import { ToolError, type PivotSource, type PivotWriter } from "@pivot/mcp-tools/source";
 import type {
@@ -46,7 +47,38 @@ export class HttpSource implements PivotSource, PivotWriter {
     return this.base;
   }
 
+  private unreachable() {
+    return new ToolError(
+      "app_unreachable",
+      `PIVOT isn't answering at ${this.base}. Start it with \`npx pivot-studio\` (or \`npm start\` in a PIVOT checkout), then try again.`,
+    );
+  }
+
+  /** Set once the app has shown every feature the tools need; checked again after a failure, so an update is seen. */
+  private compatible = false;
+
+  /**
+   * Refuses to call an app older than this server (`app_outdated`), instead of letting its missing routes look like
+   * missing items. An answer that isn't clear (a server error) doesn't block the call.
+   */
+  private async checkApp() {
+    if (this.compatible) return;
+    let res: Response;
+    try {
+      res = await fetch(`${this.base}/api/capabilities`, { signal: AbortSignal.timeout(5_000) });
+    } catch {
+      throw this.unreachable();
+    }
+    // every PIVOT that has the features this server needs has /api/capabilities
+    if (res.status === 404) throw appOutdated(this.base, REQUIRED_APP_FEATURES);
+    if (!res.ok) return;
+    const missing = missingAppFeatures(await res.json().catch(() => null));
+    if (missing.length) throw appOutdated(this.base, missing);
+    this.compatible = true;
+  }
+
   private async call(pathAndQuery: string, init: RequestInit = {}): Promise<Response | null> {
+    await this.checkApp();
     let res: Response;
     try {
       res = await fetch(`${this.base}${pathAndQuery}`, {
@@ -55,10 +87,7 @@ export class HttpSource implements PivotSource, PivotWriter {
         signal: AbortSignal.timeout(20_000),
       });
     } catch {
-      throw new ToolError(
-        "app_unreachable",
-        `PIVOT isn't answering at ${this.base}. Start it with \`npx pivot-studio\` (or \`npm start\` in a PIVOT checkout), then try again.`,
-      );
+      throw this.unreachable();
     }
     if (res.status === 403) {
       throw new ToolError(
