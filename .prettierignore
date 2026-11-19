@@ -13,3 +13,9 @@ docs/requirements-v0.1.md
 
 # The plugin's MCP server: built by `pnpm mcp:build`, committed as is.
 plugin/server
+
+# Local state the impeccable hook writes. The hook ignores these through
+# .git/info/exclude, which Prettier doesn't read (only .gitignore and this file).
+**/.impeccable/hook.cache.json
+**/.impeccable/hook.pending.json
+**/.impeccable/config.local.json
