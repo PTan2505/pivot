@@ -28,6 +28,7 @@ afterAll(async () => {
 describe("source matching", () => {
   it("knows sites and matches hosts", () => {
     expect(knownSourceFor("https://www.dribbble.com/shots/1")?.name).toBe("Dribbble");
+    expect(knownSourceFor("https://www.shadcn.io/blocks/sidebar-ai-assistant")?.category).toBe("components");
     expect(matchHost("styles.refero.design", ["refero.design", "styles.refero.design"])).toBe("styles.refero.design");
     expect(matchHost("cdn.dribbble.com", ["dribbble.com"])).toBe("dribbble.com");
     expect(matchHost("notdribbble.com", ["dribbble.com"])).toBeNull();
