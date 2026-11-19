@@ -1,0 +1,4 @@
+{
+  "description": "The /api/capabilities features the PIVOT MCP server and the plugin's SessionStart hook need from the app. Add one when a tool starts depending on a route or option an older app lacks (and add that feature to packages/core/src/capabilities.ts in the same change). settings.ui is the newest feature npm's pivot-studio 0.1.0 lists; it stands for the routes added before it without a feature name of their own (design candidates, chat approval, QA). pnpm mcp:build copies this file to plugin/hooks/.",
+  "features": ["design", "suggestions", "settings.ui"]
+}

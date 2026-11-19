@@ -38836,6 +38836,58 @@ var WRITE_TOOLS = [
 import fs2 from "node:fs";
 import os from "node:os";
 import path2 from "node:path";
+
+// ../../packages/core/src/capabilities.ts
+var API_FEATURES = [
+  "clip",
+  /** `/api/clip` answers a repeated `clientRequestId` with the first result. */
+  "clip.client-request-id",
+  /** `/api/clip` takes `expandContent` for the server capture. */
+  "clip.expand-content",
+  /** `POST /api/resources/[id]/capture` takes `{ expandContent?, theme? }`; DELETE cancels. */
+  "capture.options",
+  "capture.cancel",
+  "capture.history",
+  /** `GET /api/visibility?url=`: is the page private without your login? */
+  "visibility",
+  /** `/api/clip` takes `section` (a part of the page as its own reference). */
+  "clip.section",
+  /** `/api/resources/[id]/links` and `/api/links/[id]`. */
+  "links",
+  /** Design sessions, brief snapshots and decisions (`/api/design/*`). */
+  "design",
+  /** Agent suggestions (`/api/resources/[id]/suggestions`, `/api/suggestions`) and notes (`/annotate`). */
+  "suggestions",
+  /** Hybrid search: `GET /api/search/external` (free direct catalogs plus link-outs). */
+  "search.external",
+  /** `GET|PATCH /api/settings/ui`: `{ showOtherTypes }`, whether the types outside design are shown. */
+  "settings.ui"
+];
+
+// ../../packages/mcp-tools/src/required-app-features.json
+var required_app_features_default = {
+  description: "The /api/capabilities features the PIVOT MCP server and the plugin's SessionStart hook need from the app. Add one when a tool starts depending on a route or option an older app lacks (and add that feature to packages/core/src/capabilities.ts in the same change). settings.ui is the newest feature npm's pivot-studio 0.1.0 lists; it stands for the routes added before it without a feature name of their own (design candidates, chat approval, QA). pnpm mcp:build copies this file to plugin/hooks/.",
+  features: ["design", "suggestions", "settings.ui"]
+};
+
+// ../../packages/mcp-tools/src/app-compat.ts
+var REQUIRED_APP_FEATURES = required_app_features_default.features;
+for (const f of REQUIRED_APP_FEATURES)
+  if (!API_FEATURES.includes(f)) throw new Error(`Unknown app feature required: ${f}`);
+function missingAppFeatures(capabilities) {
+  const listed = capabilities?.features;
+  const have = new Set(Array.isArray(listed) ? listed.filter((f) => typeof f === "string") : []);
+  return REQUIRED_APP_FEATURES.filter((f) => !have.has(f));
+}
+var UPDATE_APP = "Update it: stop PIVOT, then start it again with `npx pivot-studio@latest` (or `git pull` and `npm start` in a PIVOT checkout).";
+function appOutdated(base, missing) {
+  return new ToolError(
+    "app_outdated",
+    `The PIVOT app at ${base} is older than this plugin: it lacks ${missing.join(", ")}. ${UPDATE_APP} Then try again.`
+  );
+}
+
+// src/http-source.ts
 function readToken() {
   if (process.env.PIVOT_TOKEN) return process.env.PIVOT_TOKEN.trim();
   const dir = process.env.PIVOT_DATA_DIR?.replace(/^~(?=$|\/)/, os.homedir()) || path2.join(os.homedir(), ".pivot");
@@ -38853,7 +38905,34 @@ var HttpSource = class {
   get appUrl() {
     return this.base;
   }
+  unreachable() {
+    return new ToolError(
+      "app_unreachable",
+      `PIVOT isn't answering at ${this.base}. Start it with \`npx pivot-studio\` (or \`npm start\` in a PIVOT checkout), then try again.`
+    );
+  }
+  /** Set once the app has shown every feature the tools need; checked again after a failure, so an update is seen. */
+  compatible = false;
+  /**
+   * Refuses to call an app older than this server (`app_outdated`), instead of letting its missing routes look like
+   * missing items. An answer that isn't clear (a server error) doesn't block the call.
+   */
+  async checkApp() {
+    if (this.compatible) return;
+    let res;
+    try {
+      res = await fetch(`${this.base}/api/capabilities`, { signal: AbortSignal.timeout(5e3) });
+    } catch {
+      throw this.unreachable();
+    }
+    if (res.status === 404) throw appOutdated(this.base, REQUIRED_APP_FEATURES);
+    if (!res.ok) return;
+    const missing = missingAppFeatures(await res.json().catch(() => null));
+    if (missing.length) throw appOutdated(this.base, missing);
+    this.compatible = true;
+  }
   async call(pathAndQuery, init = {}) {
+    await this.checkApp();
     let res;
     try {
       res = await fetch(`${this.base}${pathAndQuery}`, {
@@ -38862,10 +38941,7 @@ var HttpSource = class {
         signal: AbortSignal.timeout(2e4)
       });
     } catch {
-      throw new ToolError(
-        "app_unreachable",
-        `PIVOT isn't answering at ${this.base}. Start it with \`npx pivot-studio\` (or \`npm start\` in a PIVOT checkout), then try again.`
-      );
+      throw this.unreachable();
     }
     if (res.status === 403) {
       throw new ToolError(

@@ -1,6 +1,6 @@
 // The Claude Code plugin (plugin/ and .claude-plugin/marketplace.json): its manifests agree with each other, the agent
 // only gets read tools that exist, the committed MCP bundle matches the source, and the SessionStart hook speaks only
-// when PIVOT is down. `pnpm plugin:validate` runs Claude Code's own validator on top of this.
+// when PIVOT is down or older than the plugin. `pnpm plugin:validate` runs Claude Code's own validator on top of this.
 import { execFile } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
@@ -9,6 +9,8 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
+import { API_FEATURES } from "@pivot/core/capabilities";
+import { UPDATE_APP } from "../src/app-compat";
 import { EXTERNAL_TOOLS } from "../src/external-tools";
 import { TOOLS } from "../src/tools";
 import { WRITE_TOOLS } from "../src/write-tools";
@@ -98,6 +100,10 @@ describe("the committed MCP bundle", () => {
     const { bundle } = await import(pathToFileURL(P("apps/mcp/build.mjs")).href);
     expect((await bundle()) === read("plugin/server/server.js")).toBe(true);
   }, 60_000);
+
+  it("ships the hook a copy of the features it needs from the app (run pnpm mcp:build when this fails)", () => {
+    expect(read("plugin/hooks/required-features.json")).toBe(read("packages/mcp-tools/src/required-app-features.json"));
+  });
 });
 
 describe("the SessionStart hook", () => {
@@ -112,18 +118,31 @@ describe("the SessionStart hook", () => {
     expect(fs.existsSync(script)).toBe(true);
   });
 
-  it("says nothing when PIVOT answers", async () => {
+  /** Runs the hook against a fake app whose /api/capabilities lists `features`. */
+  async function hookAgainst(features: readonly string[]) {
     const server = http.createServer((_req, res) => {
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ app: "pivot", apiVersion: 1, features: [] }));
+      res.end(JSON.stringify({ app: "pivot", apiVersion: 4, features }));
     });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     try {
-      const { stdout } = await hook(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
-      expect(stdout).toBe("");
+      return { url, stdout: (await hook(url)).stdout };
     } finally {
       server.close();
     }
+  }
+
+  it("says nothing when PIVOT answers with every feature the plugin needs", async () => {
+    expect((await hookAgainst(API_FEATURES)).stdout).toBe("");
+  });
+
+  it("tells Claude and the user to update PIVOT when it lacks a feature the plugin needs", async () => {
+    const { url, stdout } = await hookAgainst(API_FEATURES.filter((f) => f !== "settings.ui"));
+    const out = JSON.parse(stdout);
+    expect(out.systemMessage).toContain(`The PIVOT app at ${url} is older than the pivot plugin: it lacks settings.ui`);
+    expect(out.systemMessage).toContain(UPDATE_APP.replace(/^Update it: /, ""));
+    expect(out.hookSpecificOutput).toEqual({ hookEventName: "SessionStart", additionalContext: out.systemMessage });
   });
 
   it("tells Claude and the user how to start PIVOT when nothing answers", async () => {

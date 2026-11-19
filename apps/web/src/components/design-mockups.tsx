@@ -1,6 +1,7 @@
 "use client";
 
-import { AppWindow, Check, ExternalLink, Info, Loader2, RotateCcw, X } from "lucide-react";
+import Link from "next/link";
+import { AppWindow, Check, ExternalLink, Info, Loader2, Maximize2, RotateCcw, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -22,12 +23,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const WIDTHS = { desktop: 1440, tablet: 834, phone: 390 } as const;
-type Width = keyof typeof WIDTHS;
-const WIDTH_LABEL: Record<Width, string> = { desktop: "Desktop", tablet: "Tablet", phone: "Phone" };
+export const WIDTHS = { desktop: 1440, tablet: 834, phone: 390 } as const;
+export type Width = keyof typeof WIDTHS;
+export const WIDTH_LABEL: Record<Width, string> = { desktop: "Desktop", tablet: "Tablet", phone: "Phone" };
 
 /** The direction an approval of this version records (the same words as the app's owner approvals). */
-const directionOf = (m: DesignMockupDTO) => `Version ${m.n}: ${m.title} (round ${m.round})`;
+export const directionOf = (m: DesignMockupDTO) => `Version ${m.n}: ${m.title} (round ${m.round})`;
 
 function Pill({ active, className, ...props }: React.ComponentProps<"button"> & { active: boolean }) {
   return (
@@ -45,7 +46,7 @@ function Pill({ active, className, ...props }: React.ComponentProps<"button"> & 
 
 const REDUCE = "(prefers-reduced-motion: reduce)";
 /** The browser's own reduced-motion setting, live (null before hydration). Never overridden: mockups follow it. */
-function useReducedMotion() {
+export function useReducedMotion() {
   return useSyncExternalStore(
     (onChange) => {
       const mq = matchMedia(REDUCE);
@@ -97,7 +98,7 @@ function Frame({ mockup, width, run }: { mockup: DesignMockupDTO; width: Width; 
 }
 
 /** Approve one version with an optional note for the build. The dialog keeps a stray click from approving. */
-function ApproveDialog({
+export function ApproveDialog({
   mockup,
   sessionId,
   open,
@@ -239,13 +240,13 @@ function ApproveDialog({
 }
 
 /**
- * The session's mockup rounds: version tabs (1–9, ←/→), a width switch, the sandboxed mockup, "Open alone", and while
- * the session is exploring, "Approve this version". The latest round shows first; `?round=` picks another.
+ * Which round and version are shown, the approval state, the interactive preview window and its pending pick, and the
+ * version keys (1–9, ←/→): shared by the session page's Mockups section and the full-screen view.
  */
-export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO }) {
+export function useMockupNav(s: DesignSessionDetailDTO, asked: { round?: number; n?: number } = {}) {
   const rounds = [...new Set(s.mockups.map((m) => m.round))].sort((a, b) => a - b);
   const latest = rounds.at(-1) ?? 0;
-  const asked = Number(useSearchParams().get("round"));
+  const askedRound = asked.round !== undefined && rounds.includes(asked.round) ? asked.round : undefined;
   const approvals = s.decisions.filter((d) => d.kind === "approval");
   // the approval that counts now: none after a reopen or a major change, even if older ones exist
   const lastApproval = approvals.find((d) => d.id === s.currentApprovalId);
@@ -254,13 +255,9 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
     lastApproval?.binding ? lastApproval.binding.mockupId === m.id : lastApproval?.direction === directionOf(m);
   // after an approval the page opens on the approved version; `?round=` still picks a round
   const approvedMockup = s.status !== "exploring" ? s.mockups.find(isApproved) : undefined;
-  const [round, setRound] = useState(rounds.includes(asked) ? asked : (approvedMockup?.round ?? latest));
-  const [n, setN] = useState(approvedMockup && !rounds.includes(asked) ? approvedMockup.n : 1);
-  const [aboutMotion, setAboutMotion] = useState(false);
-  const [width, setWidth] = useState<Width>("desktop");
+  const [round, setRound] = useState(askedRound ?? approvedMockup?.round ?? latest);
+  const [n, setN] = useState(askedRound !== undefined ? (asked.n ?? 1) : approvedMockup ? approvedMockup.n : 1);
   const [approving, setApproving] = useState(false);
-  const [run, setRun] = useState(0);
-  const reduce = useReducedMotion();
   const qc = useQueryClient();
   const canApprove = s.status === "exploring";
 
@@ -341,6 +338,71 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [versions.length, approving, n]);
+
+  /** The next or previous version in the round, wrapping around. */
+  const step = (by: 1 | -1) => {
+    const count = versions.length;
+    if (count > 1) setN(((n - 1 + by + count) % count) + 1);
+  };
+
+  return {
+    rounds,
+    latest,
+    round,
+    setRound,
+    n,
+    setN,
+    step,
+    versions,
+    current,
+    isApproved,
+    canApprove,
+    approving,
+    setApproving,
+    preview,
+    pick,
+    opening,
+    openPreview,
+    dismissPick,
+    interactiveCount,
+    mixed,
+    brokenBinding,
+  };
+}
+
+/**
+ * The session's mockup rounds: version tabs (1–9, ←/→), a width switch, the sandboxed mockup, "Open alone", "Open full
+ * screen", and while the session is exploring, "Approve this version". The latest round shows first; `?round=` picks
+ * another.
+ */
+export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO }) {
+  const asked = Number(useSearchParams().get("round"));
+  const nav = useMockupNav(s, { round: asked || undefined });
+  const {
+    rounds,
+    latest,
+    round,
+    setRound,
+    setN,
+    versions,
+    current,
+    isApproved,
+    canApprove,
+    approving,
+    setApproving,
+    preview,
+    pick,
+    opening,
+    openPreview,
+    dismissPick,
+    interactiveCount,
+    mixed,
+    brokenBinding,
+  } = nav;
+  const [aboutMotion, setAboutMotion] = useState(false);
+  const [width, setWidth] = useState<Width>("desktop");
+  const [run, setRun] = useState(0);
+  const reduce = useReducedMotion();
 
   if (!current) return null;
 
@@ -423,6 +485,11 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
             <a href={`/api/design/mockups/${current.id}`} target="_blank" rel="noopener noreferrer">
               Open alone <ExternalLink />
             </a>
+          </Button>
+          <Button size="sm" variant="secondary" asChild>
+            <Link href={`/design/${s.id}/mockups?round=${round}&v=${current.n}`}>
+              <Maximize2 /> Open full screen
+            </Link>
           </Button>
           <Button size="sm" variant="secondary" disabled={opening} onClick={openPreview}>
             {opening ? <Loader2 className="animate-spin" /> : <AppWindow />}

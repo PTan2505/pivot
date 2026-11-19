@@ -1,20 +1,112 @@
-# Publishes the npm package pivot-studio (apps/cli) when a tag v<version> is pushed, e.g. v0.1.0 for version 0.1.0.
-# Needs the repository secret NPM_TOKEN (an npm automation token). The "npm" environment can be given required
-# reviewers in the repository settings, so every publish waits for the owner's approval.
+# Publishes the npm package pivot-studio (apps/cli) when a pull request is merged into main.
+#
+# - A pull request into dev or main runs the "plan" job only, and never publishes. It writes in the run summary whether
+#   reaching main will publish (the version in apps/cli/package.json is not on npm yet) or not (that version is already
+#   published), and it fails when the pull request changes files that go into the package (apps/cli/release-check.mjs
+#   decides which) while the version is already on npm, so no change to the package can forget the bump. A version
+#   raised by an earlier pull request and not released yet covers the next ones. The "no-npm-release" label lets a pull
+#   request through on purpose. Into main it also builds, tests and packs the package; into dev it only checks.
+# - A push to main (the merge of that pull request) publishes the version when it is new, with provenance, then tags
+#   the merge commit v<version> and opens a GitHub release with generated notes. A version that is already on npm is
+#   skipped, so merges that don't raise the version publish nothing.
+# - "Run workflow" (workflow_dispatch) on main does the same as a push, to retry a failed publish.
+#
+# To release a new version: raise "version" in apps/cli/package.json on dev, then merge dev into main.
+# Needs the repository secret NPM_TOKEN (an npm automation token that does not require 2FA). The "npm" environment can
+# be given required reviewers in the repository settings, so every publish waits for the owner's approval.
 name: Publish pivot-studio
 
 on:
+  pull_request:
+    branches: [main, dev]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
-    tags: ["v*.*.*"]
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write # npm provenance
+
+concurrency:
+  group: publish-cli-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # on a pull request HEAD is the merge commit; HEAD^1 is the base branch's tip
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          # nothing is installed on a pull request into dev, and saving an empty pnpm cache fails the job
+          cache: ${{ github.base_ref != 'dev' && 'pnpm' || '' }}
+      - name: Is this version on npm?
+        id: version
+        run: |
+          version=$(node -p "require('./apps/cli/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # Exit 0: the version exists. E404: it doesn't. Anything else (network, registry): fail rather than guess.
+          if out=$(npm view "pivot-studio@$version" version --json 2>&1); then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "pivot-studio $version is already on npm: reaching main publishes nothing. Raise the version in apps/cli/package.json to release." >> "$GITHUB_STEP_SUMMARY"
+          elif grep -q '"E404"' <<< "$out"; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "pivot-studio $version is not on npm yet: reaching main publishes it and tags v$version." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "$out"
+            echo "::error::Could not ask npm whether pivot-studio@$version exists."
+            exit 1
+          fi
+      - name: Does the package change without a new version?
+        if: github.event_name == 'pull_request'
+        env:
+          PUBLISH: ${{ steps.version.outputs.publish }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SKIP: ${{ contains(github.event.pull_request.labels.*.name, 'no-npm-release') }}
+        run: |
+          changed=$(git diff --name-only HEAD^1 HEAD | node apps/cli/release-check.mjs)
+          if [ -z "$changed" ] || [ "$PUBLISH" = "true" ]; then exit 0; fi
+          {
+            echo "This pull request changes files that go into the npm package, but pivot-studio $VERSION is already on npm:"
+            echo '```'
+            echo "$changed"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$SKIP" = "true" ]; then
+            echo "Not publishing, as the no-npm-release label asks." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "Raise the version in apps/cli/package.json, or add the no-npm-release label to merge without publishing." >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::The npm package changes but its version ($VERSION) is already published. Raise apps/cli/package.json's version, or label the pull request no-npm-release."
+          exit 1
+      # building the package takes minutes: pull requests into dev only get the checks above
+      - run: pnpm install --frozen-lockfile
+        if: github.base_ref != 'dev'
+      - run: pnpm --filter pivot-studio test
+        if: github.base_ref != 'dev'
+      - run: pnpm cli:build
+        if: github.base_ref != 'dev'
+      - name: Pack (dry run)
+        if: github.base_ref != 'dev'
+        run: npm pack --dry-run
+        working-directory: apps/cli
+
   publish:
+    needs: plan
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     environment: npm
+    permissions:
+      contents: write # the v<version> tag and the GitHub release
+      id-token: write # npm provenance
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -24,11 +116,19 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: The tag matches the package version
-        run: test "v$(node -p "require('./apps/cli/package.json').version")" = "$GITHUB_REF_NAME"
-      - run: pnpm --filter pivot-studio test
       - run: pnpm cli:build
       - run: npm publish --provenance --access public
         working-directory: apps/cli
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Tag and release v${{ needs.plan.outputs.version }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ needs.plan.outputs.version }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+            echo "$TAG already exists; not tagging again." >> "$GITHUB_STEP_SUMMARY"
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "pivot-studio $TAG" --generate-notes
+          fi
+          echo "Published pivot-studio ${{ needs.plan.outputs.version }}: https://www.npmjs.com/package/pivot-studio" >> "$GITHUB_STEP_SUMMARY"

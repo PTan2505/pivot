@@ -29,6 +29,16 @@ The reference-first plan ([docs/reference-first-plan.md](docs/reference-first-pl
 - Commit, push and open PRs only when the user asks. Never force-push `main` or `dev`.
 - Before committing, check that no secrets are staged: `.env` (Neon URL, R2 keys) and the extension's `*.pem` signing key are gitignored and must stay out of git.
 
+## Decide the npm release in every PR
+
+Merging into `main` publishes the npm package `pivot-studio` when `apps/cli/package.json` holds a version npm doesn't have yet ([docs/SPEC.md](docs/SPEC.md) §20). CI checks the mechanical part on every PR into `dev` or `main`: it fails when the PR changes files that go into the package (`apps/cli/release-check.mjs`) while the version is already on npm. What CI can't decide is yours, before opening the PR:
+
+- **How big the bump is**, when the package changes: patch for fixes, minor for new features or options, major for a breaking change. A version an earlier PR raised and not yet released covers this PR, unless it needs a bigger step (a feature after a pending patch: patch → minor). To see where things stand: `git diff --name-only origin/dev...HEAD | node apps/cli/release-check.mjs` and `npm view pivot-studio version`.
+- **The verdict, in one line of the PR description**, and told to the user: `npm: publishes 0.1.2 (fixes the capture timeout)`, `npm: covered by the pending 0.1.2` or `npm: no release (docs only)`.
+- The `no-npm-release` label only when the user decides a package change shouldn't be released.
+
+Changes to `plugin/` follow the same idea with the plugin's own version in `plugin/.claude-plugin/plugin.json`, which `claude plugin update` compares (CONTRIBUTING.md, step 4).
+
 ## Keep the spec current
 
 [docs/SPEC.md](docs/SPEC.md) is the source of truth for what PIVOT does. **Every change that adds or alters a feature, behaviour or piece of logic updates the spec in the same branch and PR as the code** — new or changed resource types, API routes, database or storage behaviour, settings, security rules, extension capabilities, and anything removed.
