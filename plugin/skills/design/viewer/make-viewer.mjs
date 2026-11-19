@@ -355,7 +355,9 @@ export function buildViewer(dir, { title = null, interactive = [] } = {}) {
   };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+// realpath: when the path it is run by goes through a symlink (a linked skill or plugin folder, a symlinked home or
+// temp directory), argv[1] is that path while import.meta.url is the real one; preview.mjs and motion-qa.mjs do the same.
+if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(path.resolve(process.argv[1]))).href) {
   const args = process.argv.slice(2);
   const opt = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
   const dir = args.find((a, i) => !a.startsWith("--") && !/^--(title|interactive)$/.test(args[i - 1] ?? ""));
