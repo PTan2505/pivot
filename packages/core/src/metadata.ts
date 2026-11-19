@@ -12,7 +12,11 @@ export interface UrlMetadata {
 
 export async function fetchUrlMetadata(input: string): Promise<UrlMetadata> {
   const url = normalizeUrl(input);
-  const { url: finalUrl, response, body } = await safeFetch(url, {
+  const {
+    url: finalUrl,
+    response,
+    body,
+  } = await safeFetch(url, {
     accept: "text/html,application/xhtml+xml",
     maxBytes: 2 * 1024 * 1024,
   });
