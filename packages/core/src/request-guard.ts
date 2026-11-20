@@ -42,6 +42,8 @@ const SIDE_EFFECT_READS = [
   /^\/api\/metadata$/, // fetches the given URL
   /^\/api\/visibility$/, // fetches the given URL
   /^\/api\/resources\/[^/]+\/compare(\/image)?$/, // decodes and diffs full-size images
+  /^\/api\/design\/mockups\/[^/]+\/render$/, // renders a mockup version in Chromium and stores the picture
+  /^\/api\/design\/feedback\/[^/]+\/pins\/[^/]+$/, // may render a version, and crops the picture
 ];
 
 /** The host of an Origin or Referer value, or null when it is missing, `null` (sandboxed frames, files) or not a URL. */

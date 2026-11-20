@@ -92,6 +92,13 @@
       "when": 1794738156420,
       "tag": "0012_known_tarot",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795148178841,
+      "tag": "0013_robust_caretaker",
+      "breakpoints": true
     }
   ]
 }

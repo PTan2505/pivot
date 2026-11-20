@@ -28,6 +28,11 @@ export const API_FEATURES = [
   "search.external",
   /** `GET|PATCH /api/settings/ui`: `{ showOtherTypes }`, whether the types outside design are shown. */
   "settings.ui",
+  /**
+   * The owner's feedback on mockups (`/api/design/sessions/[id]/feedback`, renders and pin crops), rounds that answer it
+   * and propose a DESIGN.md change (`addressesFeedback`, `designSystemChange` when saving mockups).
+   */
+  "design.feedback",
 ] as const;
 
 export type ApiFeature = (typeof API_FEATURES)[number];
