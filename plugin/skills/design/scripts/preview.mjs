@@ -555,8 +555,9 @@ function shellHtml({ session, pivotPage }) {
 <div id="cshield" hidden></div>
 <div id="ov"><div id="hl" hidden><span id="chip"></span></div></div>
 <div id="ctool" class="ctool glass" role="toolbar" aria-label="Comment on the page" hidden>${tools("ctools")}
-  <span id="chint" role="status">Commenting · page paused · Esc to use it</span>
+  <span id="chint">Commenting · page paused · Esc to use it</span>
   <button id="centre" class="sec">${icon(I.plus, 14)}<span id="centre-label">Comment at centre</span></button><button id="done" class="inv">Done</button></div>
+<p id="cmsg" class="cmsg" role="status" aria-live="polite"></p>
 <div id="pop" class="pop glass" role="dialog" aria-labelledby="pop-label" hidden><p id="pop-label"></p>
   <textarea id="pop-text" maxlength="${NOTE_LIMITS.text}" rows="3" placeholder="What should change here?" aria-labelledby="pop-label"></textarea>
   <div class="pfoot"><span>Captured as you see it</span><button id="pop-del">${icon(I.trash, 13)}Delete</button></div></div>
@@ -573,7 +574,7 @@ function shellHtml({ session, pivotPage }) {
     <button id="close" class="icon raised" aria-label="Close preview controls">${icon('<path d="M18 6 6 18M6 6l12 12"/>')}</button></div>
   <div class="body">
     <section><h3>Versions <span class="hint">· keys 1–9, ← →</span></h3><nav id="tabs" role="tablist" aria-orientation="vertical" aria-label="Versions"></nav>
-      <p id="paused" class="muted small" role="status" hidden>Shortcuts paused while the mockup has focus (⌥C still switches to Comment). Press Tab to leave it.</p></section>
+      <p id="paused" class="muted small" role="status" hidden>Shortcuts paused while the mockup has focus: ⌥C switches to Comment, or click outside the mockup to leave it.</p></section>
     <section><h3>View</h3>
       <div class="group" role="group" aria-label="Width"><button data-width="desktop" aria-pressed="true">Desktop</button><button data-width="tablet" aria-pressed="false">Tablet</button><button data-width="phone" aria-pressed="false">Phone</button></div>
       <p id="scaled" class="muted small" hidden></p>
@@ -670,7 +671,7 @@ textarea:focus-visible{outline:2px solid var(--accent-text);outline-offset:3px}t
 .seg{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:var(--surface);flex:none}
 .seg button{height:30px;padding:0 10px;display:inline-flex;align-items:center;gap:6px;background:transparent}
 .seg button[aria-checked=true]{background:var(--ink);color:var(--canvas)}
-kbd{font:500 11px/1 "Geist Mono",ui-monospace,monospace;border:1px solid currentColor;border-radius:5px;padding:2px 4px;opacity:.7}
+kbd{font:500 12px/1 "Geist Mono",ui-monospace,monospace;border:1px solid currentColor;border-radius:5px;padding:2px 4px;opacity:.7}
 button.inv{background:var(--ink);color:var(--canvas)}button.inv:hover{background:color-mix(in srgb,var(--ink) 88%,transparent);color:var(--canvas)}
 button.sec{background:var(--raised);color:var(--ink);display:inline-flex;align-items:center;gap:6px}
 button.wide{width:100%;height:36px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px}
@@ -699,13 +700,16 @@ button.wide{width:100%;height:36px;display:flex;align-items:center;justify-conte
 .ctool[hidden]{display:none}body.bar-top .ctool{top:calc(68px + env(safe-area-inset-top))}
 body.ready .ctool{transition:transform 250ms var(--drawer)}@media (min-width:640px){body.open .ctool{transform:translateX(calc(-50% - 192px))}}
 #chint{color:var(--muted);padding:0 4px}
+.cmsg{position:fixed;z-index:42;top:calc(64px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);margin:0;max-width:calc(100vw - 32px);padding:8px 14px;border-radius:999px;background:var(--raised);color:var(--ink);font-size:13px;box-shadow:0 24px 64px rgb(0 0 0/.6),0 2px 8px rgb(0 0 0/.35);pointer-events:none}
+.cmsg:empty{opacity:0;padding:0;box-shadow:none}body.bar-top .cmsg{top:calc(120px + env(safe-area-inset-top))}
+@media (min-width:640px){body.open .cmsg{transform:translateX(calc(-50% - 192px))}}
 @media (max-width:900px){#chint{display:none}}
 .pop{position:fixed;z-index:45;width:300px;border-radius:14px;padding:12px;font-size:13px}.pop[hidden]{display:none}
 #pop-label{margin:0 0 6px;font-size:12px;color:var(--muted);overflow-wrap:anywhere}#pop-text{min-height:72px}
 .pfoot{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px;color:var(--muted)}
 #pop-del{height:28px;background:transparent;display:inline-flex;align-items:center;gap:6px;padding:0 8px}
 /* a note's crop is taken from the page itself: nothing of the preview's own is in it */
-body.capturing #drawer,body.capturing #bar-place,body.capturing #ov,body.capturing #ctool,body.capturing #pop{visibility:hidden!important;transition:none!important}
+body.capturing #drawer,body.capturing #bar-place,body.capturing #ov,body.capturing #ctool,body.capturing #cmsg,body.capturing #pop{visibility:hidden!important;transition:none!important}
 @media (pointer:coarse){button{height:44px}button.icon{width:44px;height:44px}[role=tab]{min-height:44px}.bar{height:52px}}
 @media (prefers-reduced-motion:reduce){body.ready .ctool{transition:none!important}}`;
 
@@ -852,9 +856,15 @@ function geo() {
 }
 const toFrame = (x, y, g) => ({ x: (x - g.r.left) / g.s, y: (y - g.r.top) / g.s });
 const toPage = (x, y, g) => ({ x: g.r.left + x * g.s, y: g.r.top + y * g.s });
+// the toolbar's hint (hidden on a narrow window) says what is going on; a problem also goes to #cmsg, a status line
+// under the toolbar that shows at every width and is announced
 function say(text, ms) {
   $("chint").textContent = text;
   clearTimeout(say.t); if (ms) say.t = setTimeout(() => ($("chint").textContent = HINT), ms);
+}
+function problem(text) {
+  say(text, 4000); $("cmsg").textContent = text;
+  clearTimeout(problem.t); problem.t = setTimeout(() => ($("cmsg").textContent = ""), 4000);
 }
 function showMode() {
   const can = !comparing && !paused && versions.length > 0;
@@ -863,6 +873,9 @@ function showMode() {
   const on = mode === "comment";
   document.body.classList.toggle("commenting", on); document.body.classList.toggle("tool-pin", tool === "pin");
   $("ctool").hidden = !on; $("dtools-row").hidden = !on; $("comment-off").hidden = can;
+  // while commenting the version is out of the tab order too (the shield already takes the pointer), so Tab and
+  // Shift+Tab move between the preview's own controls and never into the paused page
+  const box = document.querySelector("#stage .frame"); if (box) box.inert = on;
   $("centre-label").textContent = tool === "pin" ? "Add pin at centre" : "Comment at centre";
   placeShield();
 }
@@ -875,10 +888,10 @@ async function setMode(next, focus = true) {
   if (next === "comment" && (comparing || paused || !versions.length)) return;
   if (next === mode) return;
   mode = next;
-  if (mode === "use") { closePop(); hideOutline(); say(HINT); }
+  if (mode === "use") { closePop(); hideOutline(); say(HINT); $("cmsg").textContent = ""; }
   showMode(); drawNotes(); renderNotes();
   // the shield is up first; then the process pauses the page's own keys and clicks (and lets them go again)
-  if (mode === "comment" && focus) document.querySelector("#ctools [aria-checked=true]")?.focus();
+  if (mode === "comment" && (focus || document.activeElement?.tagName === "IFRAME")) document.querySelector("#ctools [aria-checked=true]")?.focus();
   const look = await window.pivotPreview({ mode }).catch(() => null);
   if (mode === "comment" && look && look.scroll) setScroll(look.scroll);
 }
@@ -954,12 +967,12 @@ $("cshield").addEventListener("click", (e) => {
 async function addNote(p) {
   if (picking) return;
   const v = versions[current], d = draft(), f = iframe();
-  if (d.notes.length >= MAX_NOTES) return say("At most " + MAX_NOTES + " notes at a time: send these first.", 4000);
+  if (d.notes.length >= MAX_NOTES) return problem("At most " + MAX_NOTES + " notes at a time: send these first.");
   picking = true; hideOutline(); say("Capturing…");
   let r = null;
   try { r = await window.pivotPreview({ pick: { x: p.x, y: p.y, tool, n: v.n } }); } catch {}
   picking = false;
-  if (!r || r.error) return say(r && r.error ? r.error : "Couldn’t read the page there. Try again.", 4000);
+  if (!r || r.error) return problem(r && r.error ? r.error : "Couldn’t read the page there. Try again.");
   say(HINT);
   // the version or its frame changed meanwhile: the note isn't on what is shown
   if (versions[current] !== v || iframe() !== f || mode !== "comment") { window.pivotPreview({ drop: r.key }); return; }

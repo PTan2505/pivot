@@ -34,7 +34,7 @@ import {
   type CommentTool,
 } from "@/components/mockup-feedback";
 import { Button } from "@/components/ui/button";
-import { frameDocument } from "@/lib/element-map";
+import { frameDocument, keepLinkInPage } from "@/lib/element-map";
 import { cn } from "@/lib/utils";
 
 /**
@@ -140,6 +140,11 @@ function FullFrame({
     };
   }, [mockup.id, run, onFrame]);
   const srcDoc = html?.id === mockup.id ? frameDocument(html.text) : null;
+  // read by the frame's link guard, added once per document: while commenting a link click makes a note, not a scroll
+  const commentingRef = useRef(commenting);
+  useEffect(() => {
+    commentingRef.current = commenting;
+  }, [commenting]);
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   useLayoutEffect(() => {
@@ -165,12 +170,11 @@ function FullFrame({
           tabIndex={commenting ? -1 : undefined}
           onLoad={(e) => {
             const frame = e.currentTarget;
-            // links stay on the page: a `#…` link scrolls it, anything else would load another document
+            // links stay on the page: a `#…` link scrolls it (by hand: a srcdoc resolves it against PIVOT's address)
             frame.contentDocument?.addEventListener(
               "click",
               (ev) => {
-                const a = (ev.target as Element | null)?.closest?.("a[href]");
-                if (a && !(a.getAttribute("href") ?? "").startsWith("#")) ev.preventDefault();
+                keepLinkInPage(ev, { scroll: !commentingRef.current });
               },
               true,
             );
@@ -447,6 +451,7 @@ export function MockupStage({
           // the drawer floats over the right of the page: the layer keeps its toolbar and notes clear of it
           inset={open ? DRAWER_SPACE : 0}
           onHidePanel={() => setDrawer(false, { focus: false })}
+          viewLabel={WIDTH_LABEL[width]}
           barOnTop={bar === "top"}
           draft={draft}
           onChange={(fn) => drafts.update(current.id, fn)}

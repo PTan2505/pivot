@@ -31,10 +31,13 @@ const short = (v: string | null | undefined) => {
   return t ? t.slice(0, 80) : undefined;
 };
 
-/** Reads the elements of `doc` (a same-origin frame's document). */
-export function mapDocument(doc: Document): MapElement[] {
+/**
+ * Reads the elements of `doc` (a same-origin frame's document), with the DOM node of each (same order), so the layer
+ * can hit-test and measure the live page instead of a snapshot.
+ */
+export function mapDocument(doc: Document): { els: MapElement[]; nodes: Element[] } {
   const win = doc.defaultView;
-  if (!doc.body || !win) return [];
+  if (!doc.body || !win) return { els: [], nodes: [] };
   const esc = (v: string) => win.CSS.escape(v);
   const maxW = doc.documentElement.clientWidth;
   const maxH = Math.min(MAX_HEIGHT, doc.documentElement.scrollHeight);
@@ -70,6 +73,7 @@ export function mapDocument(doc: Document): MapElement[] {
     return sel;
   };
   const raw: (Omit<MapElement, "i" | "p"> & { parent: number; depth: number })[] = [];
+  const found: Element[] = [];
   const walk = (e: Element, parent: number, depth: number) => {
     for (const c of e.children) {
       if (SKIP.has(c.tagName)) continue;
@@ -95,6 +99,7 @@ export function mapDocument(doc: Document): MapElement[] {
             c.getAttribute("title"),
         );
         const cls = [...c.classList].slice(0, 3).map((k) => k.slice(0, 60));
+        found.push(c);
         raw.push({
           parent,
           depth,
@@ -122,11 +127,21 @@ export function mapDocument(doc: Document): MapElement[] {
       .slice(0, MAX_ELEMENTS)
       .sort((a, b) => a - b);
   const renumber = new Map(keep.map((old, i) => [old, i]));
-  return keep.map((old, i) => {
+  const els = keep.map((old, i) => {
     const { parent, ...e } = raw[old];
     delete (e as { depth?: number }).depth;
     return { i, p: parent >= 0 ? (renumber.get(parent) ?? -1) : -1, ...e };
   });
+  return { els, nodes: keep.map((old) => found[old]) };
+}
+
+/** An element's box now, in its document's pixels (scroll included): fixed and sticky elements move with the scroll. */
+export function liveBox(node: Element) {
+  const win = node.ownerDocument.defaultView;
+  const r = node.getBoundingClientRect();
+  const sx = win?.scrollX ?? 0;
+  const sy = win?.scrollY ?? 0;
+  return { x: Math.round(r.left + sx), y: Math.round(r.top + sy), w: Math.round(r.width), h: Math.round(r.height) };
 }
 
 /** The deepest element at a point: the smallest box holding it (a later one wins a tie, being nested deeper). */
@@ -149,6 +164,43 @@ export function hitAt(els: MapElement[], x: number, y: number) {
 export function frameDocument(html: string) {
   const csp =
     "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; form-action 'none'; base-uri 'none'";
-  const body = html.replace(/<meta[^>]+http-equiv\s*=\s*["']?refresh["']?[^>]*>/gi, "");
-  return `<!doctype html><meta http-equiv="Content-Security-Policy" content="${csp}">${body.replace(/^\s*<!doctype[^>]*>/i, "")}`;
+  // parsed, not pattern-matched, so an escaped "refresh" can't slip through
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  for (const m of doc.querySelectorAll("meta[http-equiv]"))
+    if ((m.getAttribute("http-equiv") ?? "").trim().toLowerCase() === "refresh") m.remove();
+  return `<!doctype html><meta http-equiv="Content-Security-Policy" content="${csp}">${doc.documentElement.outerHTML}`;
+}
+
+/**
+ * Keeps a click on a link inside the page. A srcdoc page resolves even `#…` against PIVOT's own address, so following
+ * any link would load another document into the frame: every `<a>` / `<area>` (HTML or SVG, `href` or `xlink:href`)
+ * on the click's path is cancelled, and a `#…` link scrolls the page to its target instead, as on the real site.
+ * While commenting (`scroll: false`) a link only stays put: the click makes a note instead. Returns whether the click
+ * was on a link.
+ */
+export function keepLinkInPage(ev: Event, { scroll = true }: { scroll?: boolean } = {}): boolean {
+  for (const node of ev.composedPath()) {
+    const el = node as Element;
+    if (!el || typeof el.getAttribute !== "function") continue;
+    const tag = el.localName;
+    if (tag !== "a" && tag !== "area") continue;
+    const href = el.getAttribute("href") ?? el.getAttributeNS("http://www.w3.org/1999/xlink", "href");
+    if (href === null) continue;
+    ev.preventDefault();
+    const hash = href.trim();
+    if (scroll && hash.startsWith("#")) {
+      const doc = el.ownerDocument;
+      let id = hash.slice(1);
+      try {
+        id = decodeURIComponent(id);
+      } catch {
+        /* keep it as written */
+      }
+      const target = id ? (doc.getElementById(id) ?? doc.getElementsByName(id)[0]) : null;
+      if (target) target.scrollIntoView();
+      else if (!id || id.toLowerCase() === "top") doc.defaultView?.scrollTo(0, 0);
+    }
+    return true;
+  }
+  return false;
 }

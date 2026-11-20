@@ -905,6 +905,59 @@ describe("comment mode in the preview window", () => {
     expect(pv.notes.size).toBe(0);
     await page.click("#done");
   }, 30_000);
+  it("keeps the keyboard out of the paused version: Tab and Shift+Tab never land in it", async () => {
+    const { page } = c;
+    await page.click("[data-tab='0']");
+    await loaded(page);
+    const f = page.frameLocator("iframe");
+    // focus in the mockup, then ⌥C: focus comes out to the toolbar, and the version leaves the tab order
+    await f.locator("#q").focus();
+    await page.keyboard.press("Alt+KeyC");
+    await page.waitForFunction(() => document.body.classList.contains("commenting"));
+    expect(await page.evaluate(() => document.querySelector("#stage .frame").inert)).toBe(true);
+    expect(await page.evaluate(() => document.activeElement?.dataset.tool)).toBe("select");
+    const seen = [];
+    for (const key of [...Array(12).fill("Shift+Tab"), ...Array(40).fill("Tab")]) {
+      await page.keyboard.press(key);
+      seen.push(await page.evaluate(() => document.activeElement?.tagName));
+    }
+    expect(seen).not.toContain("IFRAME");
+    expect(new Set(seen).size).toBeGreaterThan(3); // it did move through the preview's controls
+    await page.click("#done");
+    expect(await page.evaluate(() => document.querySelector("#stage .frame").inert)).toBe(false);
+    // in Use the version is reachable again
+    await f.locator("#q").focus();
+    expect(await page.evaluate(() => document.activeElement?.tagName)).toBe("IFRAME");
+    await page.locator("#toggle").focus();
+  }, 30_000);
+
+  it("shows and announces a problem at every width, also where the toolbar's hint is hidden", async () => {
+    const { page } = c;
+    await page.setViewportSize({ width: 300, height: 700 });
+    try {
+      await page.waitForFunction(() => innerWidth === 300);
+      await loaded(page);
+      // the quick bar hides while the drawer is a bottom sheet: the drawer's switch
+      await page.click("#dmode [data-mode=comment]");
+      await page.waitForFunction(() => document.body.classList.contains("commenting"));
+      expect(await page.isHidden("#chint")).toBe(true);
+      // a 300px page can't take notes (PIVOT takes 320 to 2560): the reason is shown, and announced
+      await page.mouse.click(150, 120);
+      await page.waitForFunction(() => document.getElementById("cmsg")?.textContent !== "");
+      expect(await page.textContent("#cmsg")).toBe("Notes need a page 320 to 2560 px wide.");
+      expect(await page.getAttribute("#cmsg", "role")).toBe("status");
+      expect(await page.isVisible("#cmsg")).toBe(true);
+      const box = await page.locator("#cmsg").boundingBox();
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(300);
+      expect(await page.locator("#notes li").count()).toBe(0);
+    } finally {
+      await page.evaluate(() => window.pivotPreviewKey("escape"));
+      await page.setViewportSize({ width: 1500, height: 950 });
+    }
+    expect(await commenting(page)).toBe(false);
+    expect(await page.textContent("#cmsg")).toBe("");
+  }, 30_000);
 });
 
 describe("comment mode on full Chromium (the version's frame out of process, as in the window)", () => {
