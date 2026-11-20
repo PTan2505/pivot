@@ -10,7 +10,14 @@ const input = z.object({
   text: z.string().max(FEEDBACK_LIMITS.text).optional(),
   width: z.number().int().nullish(),
   pins: z
-    .array(z.object({ x: z.number(), y: z.number(), text: z.string().max(FEEDBACK_LIMITS.pinText) }))
+    .array(
+      z.object({
+        x: z.number(),
+        y: z.number(),
+        text: z.string().max(FEEDBACK_LIMITS.pinText),
+        n: z.number().int().min(1).max(999).optional(),
+      }),
+    )
     .max(FEEDBACK_LIMITS.pins)
     .optional(),
 });

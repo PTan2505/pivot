@@ -7,7 +7,8 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { PreviewState } from "@pivot/core/preview-launcher";
-import type { DesignMockupDTO, DesignSessionDetailDTO } from "@pivot/core/types";
+import type { DesignMockupDTO, DesignRoundDTO, DesignSessionDetailDTO } from "@pivot/core/types";
+import { DesignSystemBox, DesignSystemDialog } from "@/components/mockup-feedback";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -104,6 +105,8 @@ export function ApproveDialog({
   open,
   onOpenChange,
   initialNote = "",
+  round,
+  project,
 }: {
   mockup: DesignMockupDTO;
   sessionId: string;
@@ -111,7 +114,12 @@ export function ApproveDialog({
   onOpenChange: (open: boolean) => void;
   /** The note written when the version was chosen in the preview. */
   initialNote?: string;
+  /** The version's round: when it proposes a DESIGN.md change, approving also writes that change into the project. */
+  round?: DesignRoundDTO;
+  /** The target project, to name where the change is written. */
+  project?: string;
 }) {
+  const [viewChange, setViewChange] = useState(false);
   const qc = useQueryClient();
   const [note, setNote] = useState(initialNote);
   const [lastInitial, setLastInitial] = useState(initialNote);
@@ -192,6 +200,20 @@ export function ApproveDialog({
             others; the note is kept word for word.
           </DialogDescription>
         </DialogHeader>
+        {round?.designSystemChange && (
+          <p className="rounded-xl bg-surface-raised px-3 py-2.5 text-[13px] text-ink-secondary">
+            Approving also writes this round&rsquo;s DESIGN.md change into {project || "the project"}:{" "}
+            <span className="text-ink">{round.designSystemChange.summary}</span>.{" "}
+            <button
+              type="button"
+              onClick={() => setViewChange(true)}
+              className="font-medium text-accent-text outline-none hover:underline focus-visible:outline-2 focus-visible:outline-accent-text focus-visible:outline-solid"
+            >
+              View change
+            </button>
+            <DesignSystemDialog round={round} open={viewChange} onOpenChange={setViewChange} />
+          </p>
+        )}
         <div className="space-y-1.5">
           <Label htmlFor="approve-note">Note for the build (optional)</Label>
           <Textarea
@@ -414,6 +436,10 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
         </h2>
         <p className="text-sm text-ink-muted">
           Round {round} · {versions.length} version{versions.length === 1 ? "" : "s"}
+          {(() => {
+            const answers = s.rounds?.find((r) => r.round === round)?.addressesFeedback.length ?? 0;
+            return answers ? ` · answers ${answers} feedback` : "";
+          })()}
         </p>
       </div>
 
@@ -509,6 +535,9 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
         </div>
       </div>
 
+      {canApprove && (
+        <DesignSystemBox round={s.rounds?.find((r) => r.round === round)} id="design-system-change-page" />
+      )}
       {brokenBinding && (
         <p role="alert" className="text-[13px] text-danger">
           The approved version{" "}
@@ -583,6 +612,8 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
         open={approving}
         onOpenChange={setApproving}
         initialNote={pick && pick.mockupId === current.id ? pick.note : ""}
+        round={s.rounds?.find((r) => r.round === round)}
+        project={s.targetProject}
       />
     </section>
   );

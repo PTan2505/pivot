@@ -861,6 +861,11 @@ export interface DesignFeedbackPin {
   x: number;
   y: number;
   text: string;
+  /**
+   * The pin's number as the owner saw it (stable in a draft, gaps allowed, so "pin 3" in the text still names it).
+   * Missing on older feedback: the pin's position in the list, from 1.
+   */
+  n?: number;
 }
 
 /** The owner's feedback on a round, sent from PIVOT; the agent answers it with a new round. Never an approval. */

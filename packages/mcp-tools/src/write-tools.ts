@@ -660,7 +660,7 @@ function sessionText(s: DesignSessionDetailDTO) {
         (f) =>
           `- ${f.status === "open" ? "OPEN" : `answered by round ${f.addressedRound}`} · id ${f.id} · round ${f.round}, ${version(f.mockupId)}${f.width ? ` at ${f.width}px` : ""}: ${f.text ? `"${f.text}"` : "(no text)"}${
             f.pins.length
-              ? ` Pins: ${f.pins.map((p, i) => `${i + 1}. at (${p.x}, ${p.y}) "${p.text}"`).join("; ")}`
+              ? ` Pins: ${f.pins.map((p, i) => `${p.n ?? i + 1}. at (${p.x}, ${p.y}) "${p.text}"`).join("; ")}`
               : ""
           }`,
       ),
@@ -744,7 +744,7 @@ const getFeedbackImages: PivotTool<typeof feedbackImagesInput> = {
       const p = fb.pins[i];
       content.push(
         text(
-          `Pin ${i + 1} at (${p.x}, ${p.y}): "${p.text}"${img ? ` (shows x ${img.region.left}–${img.region.left + img.region.width}, y ${img.region.top}–${img.region.top + img.region.height})` : " (its picture is missing)"}`,
+          `Pin ${p.n ?? i + 1} at (${p.x}, ${p.y}): "${p.text}"${img ? ` (shows x ${img.region.left}–${img.region.left + img.region.width}, y ${img.region.top}–${img.region.top + img.region.height})` : " (its picture is missing)"}`,
         ),
       );
       if (img) content.push({ type: "image", data: img.data.toString("base64"), mimeType: img.mimeType });

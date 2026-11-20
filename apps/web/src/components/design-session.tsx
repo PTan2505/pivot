@@ -5,7 +5,13 @@ import { ArrowLeft, ArrowRight, Check, ChevronDown, Ellipsis, Loader2 } from "lu
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { DesignDecisionDTO, DesignSessionDetailDTO, DesignSnapshotDTO, DesignStatus } from "@pivot/core/types";
+import type {
+  DesignDecisionDTO,
+  DesignFeedbackDTO,
+  DesignSessionDetailDTO,
+  DesignSnapshotDTO,
+  DesignStatus,
+} from "@pivot/core/types";
 import { DesignCandidates } from "@/components/design-candidates";
 import { DesignMockups } from "@/components/design-mockups";
 import { Markdown } from "@/components/markdown";
@@ -372,7 +378,27 @@ export function DesignSessionView({ id }: { id: string }) {
   const history = [
     ...s.snapshots.filter((x) => x.id !== brief?.id).map((x) => ({ at: x.createdAt, kind: "snapshot" as const, x })),
     ...s.decisions.map((d) => ({ at: d.createdAt, kind: "decision" as const, d })),
+    ...(s.feedback ?? []).map((f) => ({ at: f.createdAt, kind: "feedback" as const, f })),
   ].sort((a, b) => b.at.localeCompare(a.at));
+  const versionOf = (id: string | null) => {
+    const m = id ? s.mockups.find((x) => x.id === id) : undefined;
+    return m ? `version ${m.n} (round ${m.round})` : null;
+  };
+  const feedbackLine = (f: DesignFeedbackDTO) =>
+    [
+      f.text ? `“${f.text}”` : "",
+      f.pins.length ? `${f.pins.length} pin${f.pins.length === 1 ? "" : "s"}` : "",
+      versionOf(f.mockupId) ? `on ${versionOf(f.mockupId)}` : `whole round ${f.round}`,
+      f.status === "open" ? "open" : `answered in round ${f.addressedRound}`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  const label = (item: (typeof history)[number]) =>
+    item.kind === "decision"
+      ? decisionLabel(item.d)
+      : item.kind === "feedback"
+        ? "Feedback"
+        : MILESTONE_LABEL[item.x.milestone];
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 pt-8 pb-16 md:px-10">
@@ -435,26 +461,53 @@ export function DesignSessionView({ id }: { id: string }) {
           </div>
           <ol ref={historyRef} className="space-y-0.5">
             {history.map((item) => {
-              const key = item.kind === "decision" ? `decision-${item.d.id}` : `brief-${item.x.id}`;
+              const key =
+                item.kind === "decision"
+                  ? `decision-${item.d.id}`
+                  : item.kind === "feedback"
+                    ? `feedback-${item.f.id}`
+                    : `brief-${item.x.id}`;
               return (
                 <li key={key}>
                   <details id={key} onToggle={syncExpanded} className="group scroll-mt-28 rounded-xl bg-surface">
                     <summary className="flex cursor-pointer list-none items-start gap-3 rounded-xl px-3.5 py-2.5 text-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text focus-visible:outline-solid sm:grid sm:grid-cols-[150px_120px_1fr_16px] [&::-webkit-details-marker]:hidden">
-                      <span className="font-medium text-ink-secondary max-sm:hidden">
-                        {item.kind === "decision" ? decisionLabel(item.d) : MILESTONE_LABEL[item.x.milestone]}
-                      </span>
+                      <span className="font-medium text-ink-secondary max-sm:hidden">{label(item)}</span>
                       <span className="text-[13px] text-ink-muted max-sm:hidden">{dateTime(item.at)}</span>
                       <span className="min-w-0 flex-1 text-ink group-open:whitespace-normal sm:truncate">
-                        <span className="text-ink-secondary sm:hidden">
-                          {item.kind === "decision" ? decisionLabel(item.d) : MILESTONE_LABEL[item.x.milestone]} ·{" "}
-                        </span>
-                        {item.kind === "decision" ? item.d.summary : snapshotLine(item.x)}
+                        <span className="text-ink-secondary sm:hidden">{label(item)} · </span>
+                        {item.kind === "decision"
+                          ? item.d.summary
+                          : item.kind === "feedback"
+                            ? feedbackLine(item.f)
+                            : snapshotLine(item.x)}
                       </span>
                       <span className="mt-0.5">{chevron}</span>
                     </summary>
                     <div className="space-y-2 px-3.5 pb-3.5 text-sm text-ink-secondary">
                       <p className="text-[13px] text-ink-muted sm:hidden">{dateTime(item.at)}</p>
-                      {item.kind === "decision" ? (
+                      {item.kind === "feedback" ? (
+                        <>
+                          {item.f.text && <p className="whitespace-pre-wrap text-ink">{item.f.text}</p>}
+                          {item.f.pins.length > 0 && (
+                            <ol className="space-y-1">
+                              {item.f.pins.map((p, i) => (
+                                <li key={i}>
+                                  <span className="font-mono text-ink-muted">{p.n ?? i + 1}.</span>{" "}
+                                  {p.text || "(no note)"}{" "}
+                                  <span className="text-[12px] text-ink-muted">
+                                    at {p.x}, {p.y} on the {item.f.width}px render
+                                  </span>
+                                </li>
+                              ))}
+                            </ol>
+                          )}
+                          <p className="text-[13px] text-ink-muted">
+                            {item.f.status === "open"
+                              ? "Open: Claude answers it with a new round."
+                              : `Answered in round ${item.f.addressedRound}.`}
+                          </p>
+                        </>
+                      ) : item.kind === "decision" ? (
                         <>
                           {item.d.direction && <p>Direction: {item.d.direction}</p>}
                           {item.d.details && <Markdown>{item.d.details}</Markdown>}
