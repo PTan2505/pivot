@@ -835,6 +835,55 @@ export interface DesignApprovalBindingDTO {
   mockupId: string;
   digest: string;
   status: "bound" | "changed" | "missing";
+  /** The digest of the DESIGN.md change the version's round proposed, when it proposed one: what was approved with it. */
+  designSystemDigest?: string | null;
+}
+
+/** A change to the target project's DESIGN.md that a round proposes, written only after the owner approves the round. */
+export interface DesignSystemChange {
+  /** One line: what changes in the project's style. */
+  summary: string;
+  /** The change as Markdown: the new text of the sections it touches, or a diff. */
+  markdown: string;
+}
+
+/** What an agent said about a round when it saved it. */
+export interface DesignRoundDTO {
+  round: number;
+  /** The owner's feedback this round answers. */
+  addressesFeedback: string[];
+  designSystemChange: (DesignSystemChange & { digest: string }) | null;
+  createdAt: string;
+}
+
+export interface DesignFeedbackPin {
+  /** Where on the version's full-page render at the feedback's `width`, in its pixels. */
+  x: number;
+  y: number;
+  text: string;
+  /**
+   * The pin's number as the owner saw it (stable in a draft, gaps allowed, so "pin 3" in the text still names it).
+   * Missing on older feedback: the pin's position in the list, from 1.
+   */
+  n?: number;
+}
+
+/** The owner's feedback on a round, sent from PIVOT; the agent answers it with a new round. Never an approval. */
+export interface DesignFeedbackDTO {
+  id: string;
+  sessionId: string;
+  round: number;
+  /** The version it is about (and its digest when sent), or null for the whole round. */
+  mockupId: string | null;
+  mockupDigest: string | null;
+  text: string;
+  /** The render width the pins sit on, or null without pins. */
+  width: number | null;
+  pins: DesignFeedbackPin[];
+  status: "open" | "addressed";
+  /** The round that answered it. */
+  addressedRound: number | null;
+  createdAt: string;
 }
 
 export interface DesignDecisionDTO {
@@ -904,6 +953,10 @@ export interface DesignSessionDetailDTO extends DesignSessionDTO {
   mockups: DesignMockupDTO[];
   /** The references proposed for the user to pick from (gate 1), by number. */
   candidates: DesignCandidateDTO[];
+  /** The owner's feedback, oldest first: `open` until a round answers it. */
+  feedback: DesignFeedbackDTO[];
+  /** What the agent said about each round it saved with feedback answered or a DESIGN.md change; oldest first. */
+  rounds: DesignRoundDTO[];
 }
 
 export const SUGGESTION_KINDS = ["facet", "collection", "title", "description"] as const;

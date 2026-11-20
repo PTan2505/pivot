@@ -398,3 +398,18 @@ body:has([data-selection-bar]) [data-dock] {
     }
   }
 }
+
+/* Mockup feedback (components/mockup-feedback.tsx): a pin scales in where it was dropped, its note opens from it.
+   Used through motion-safe:, so nothing moves with reduced motion. */
+@keyframes pin-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}

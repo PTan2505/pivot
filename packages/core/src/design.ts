@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "./db/client";
-import { designDecisions, designMockups, designSessions, designSnapshots } from "./db/schema";
+import { designDecisions, designMockups, designRounds, designSessions, designSnapshots } from "./db/schema";
 import { authorizeOwner } from "./owner-approval";
 import {
   DESIGN_QA_DETECTOR,
@@ -15,7 +15,9 @@ import {
   type DesignRecordKind,
   type DesignMilestone,
   type DesignMockupDTO,
+  type DesignRoundDTO,
   type DesignSessionDetailDTO,
+  type DesignSystemChange,
   type DesignSessionDTO,
   type DesignSnapshotDTO,
   type DesignStatus,
@@ -31,6 +33,19 @@ export function mockupDigest(html: string, interactive = false) {
   return crypto
     .createHash("sha256")
     .update(`pivot-mockup:v1:${interactive ? "interactive" : "static"}:${html}`)
+    .digest("hex");
+}
+
+export const DESIGN_SYSTEM_LIMITS = { summary: 300, markdown: 100_000 } as const;
+
+/**
+ * A proposed DESIGN.md change's identity: an approval of a version from its round stores it, so the agent writes into
+ * the project exactly the change the owner saw.
+ */
+export function designSystemDigest(change: DesignSystemChange) {
+  return crypto
+    .createHash("sha256")
+    .update(`pivot-design-system:v1:${JSON.stringify([change.summary.trim(), change.markdown])}`)
     .digest("hex");
 }
 
@@ -80,6 +95,7 @@ function decisionDTO(
             mockupId: r.mockupId,
             digest: r.mockupDigest,
             status: current === undefined ? "missing" : current === r.mockupDigest ? "bound" : "changed",
+            ...(r.designSystemDigest ? { designSystemDigest: r.designSystemDigest } : {}),
           }
         : null,
     createdAt: r.createdAt.toISOString(),
@@ -368,6 +384,20 @@ export async function recordDesignDecision(input: {
       );
   }
   const bound = input.mockupId ? await verifiedDigest(input.sessionId, input.mockupId, input.mockupDigest) : null;
+  // an approved version brings its round's proposed DESIGN.md change with it: keep the digest of the one approved
+  let designSystem: string | null = null;
+  if (input.kind === "approval" && input.mockupId) {
+    const [r] = await db
+      .select({ digest: designRounds.designSystemDigest })
+      .from(designRounds)
+      .innerJoin(
+        designMockups,
+        and(eq(designMockups.sessionId, designRounds.sessionId), eq(designMockups.round, designRounds.round)),
+      )
+      .where(eq(designMockups.id, input.mockupId))
+      .limit(1);
+    designSystem = r?.digest ?? null;
+  }
   const [row] = await db
     .insert(designDecisions)
     .values({
@@ -379,6 +409,7 @@ export async function recordDesignDecision(input: {
       source: input.source ?? "agent",
       mockupId: input.mockupId ?? null,
       mockupDigest: bound,
+      designSystemDigest: designSystem,
       ...(input.kind === "approval" ? { createdAt: approvalMoment(input.sessionId) } : {}),
     })
     .returning({ id: designDecisions.id });
@@ -557,8 +588,24 @@ export async function getDesignSession(id: string): Promise<DesignSessionDetailD
     snapshots: snapshots.map(snapshotDTO),
     decisions: decisions.map((d) => decisionDTO(d, digests)),
     mockups: mockups.map(mockupDTO),
-    // loaded lazily: design-candidates imports this module
+    // loaded lazily: design-candidates and design-feedback import this module
     candidates: await (await import("./design-candidates")).listCandidates(id),
+    feedback: await (await import("./design-feedback")).listFeedback(id),
+    rounds: (
+      await db.select().from(designRounds).where(eq(designRounds.sessionId, id)).orderBy(asc(designRounds.round))
+    ).map(roundDTO),
+  };
+}
+
+function roundDTO(r: typeof designRounds.$inferSelect): DesignRoundDTO {
+  return {
+    round: r.round,
+    addressesFeedback: r.addressesFeedback ?? [],
+    designSystemChange:
+      r.designSystemMarkdown != null && r.designSystemDigest
+        ? { summary: r.designSystemSummary ?? "", markdown: r.designSystemMarkdown, digest: r.designSystemDigest }
+        : null,
+    createdAt: r.createdAt.toISOString(),
   };
 }
 
@@ -574,8 +621,25 @@ export async function saveDesignMockups(input: {
   snapshotId?: string;
   /** `interactive` marks a prototype that runs its own scripts, only ever in the separate preview browser. */
   mockups: { title: string; html: string; interactive?: boolean }[];
+  /** The owner's feedback this round answers: marked addressed once the round is saved. */
+  addressesFeedback?: string[];
+  /** A change to the target project's DESIGN.md the round proposes, written only after the owner approves a version. */
+  designSystemChange?: DesignSystemChange | null;
 }): Promise<{ round: number; ids: string[]; created: boolean }> {
   const { mockups } = input;
+  const addresses = [...(input.addressesFeedback ?? [])];
+  const change = input.designSystemChange
+    ? {
+        summary: String(input.designSystemChange.summary ?? "").trim(),
+        markdown: String(input.designSystemChange.markdown ?? ""),
+      }
+    : null;
+  if (change) {
+    if (!change.summary || change.summary.length > DESIGN_SYSTEM_LIMITS.summary)
+      throw new DesignError(`designSystemChange needs a summary of 1 to ${DESIGN_SYSTEM_LIMITS.summary} characters.`);
+    if (!change.markdown.trim() || change.markdown.length > DESIGN_SYSTEM_LIMITS.markdown)
+      throw new DesignError(`designSystemChange needs Markdown of 1 to ${DESIGN_SYSTEM_LIMITS.markdown} characters.`);
+  }
   if (mockups.length < 1 || mockups.length > MOCKUP_LIMITS.versions)
     throw new DesignError(`Save 1 to ${MOCKUP_LIMITS.versions} mockup versions at a time.`);
   for (const [i, m] of mockups.entries()) {
@@ -587,12 +651,15 @@ export async function saveDesignMockups(input: {
   const db = await getDb();
   const [s] = await db.select().from(designSessions).where(eq(designSessions.id, input.sessionId)).limit(1);
   if (!s) throw new DesignError(`No design session ${input.sessionId}.`);
+  const changeDigest = change ? designSystemDigest(change) : null;
   const digest = crypto
     .createHash("sha256")
     // static versions hash as before, so re-saving an existing static round still finds it
     .update(
       JSON.stringify(mockups.map((m) => (m.interactive ? [m.title.trim(), m.html, true] : [m.title.trim(), m.html]))),
     )
+    // what the round answers and proposes is part of it too, only when there is any (older rounds hash as before)
+    .update(addresses.length || changeDigest ? JSON.stringify({ addresses: [...addresses].sort(), changeDigest }) : "")
     .digest("hex");
   const same = await db
     .select({ id: designMockups.id, round: designMockups.round })
@@ -611,6 +678,8 @@ export async function saveDesignMockups(input: {
     .orderBy(desc(designMockups.round))
     .limit(1);
   const round = (last?.round ?? 0) + 1;
+  const feedback = await import("./design-feedback");
+  await feedback.checkFeedbackIds(input.sessionId, addresses);
   let snapshotId = input.snapshotId ?? null;
   if (!snapshotId) {
     const [snap] = await db
@@ -637,6 +706,17 @@ export async function saveDesignMockups(input: {
       })),
     )
     .returning({ id: designMockups.id });
+  if (addresses.length || change) {
+    await db.insert(designRounds).values({
+      sessionId: input.sessionId,
+      round,
+      addressesFeedback: addresses,
+      designSystemSummary: change?.summary ?? null,
+      designSystemMarkdown: change?.markdown ?? null,
+      designSystemDigest: changeDigest,
+    });
+    await feedback.markFeedbackAddressed(input.sessionId, addresses, round);
+  }
   await touch(input.sessionId);
   return { round, ids: rows.map((r) => r.id), created: true };
 }

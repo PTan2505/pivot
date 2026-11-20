@@ -35,8 +35,8 @@ const ordered = (text: string, words: string[]) => {
 describe("skills name real MCP tools and values", () => {
   const tools = all(/name: "([a-z_]+)"/g, src);
 
-  it("packages/mcp-tools defines 17 tools", () => {
-    expect(tools.size).toBe(17);
+  it("packages/mcp-tools defines 18 tools", () => {
+    expect(tools.size).toBe(18);
   });
 
   // get_reference_images' `which` values, from the tool's own schema
@@ -183,6 +183,42 @@ describe("the watcher belongs to the session the user talks to", () => {
     expect(d).toContain("its watcher ends with it and can't wake you");
     expect(d).toContain("Never end the turn that asks for the approval without a running watcher");
     expect(spec).toContain("The watcher belongs to the session that is talking to the user");
+  });
+});
+
+describe("feedback rounds", () => {
+  const fb = read("plugin/skills/design/feedback.md");
+  it("both skills reach feedback.md, and pivot:design lists get_feedback_images", () => {
+    expect(d).toContain("[feedback.md](feedback.md)");
+    expect(r).toContain("[feedback.md](../design/feedback.md)");
+    expect(d).toMatch(/\| `get_feedback_images` +\|/);
+    expect(d).toContain("(→ feedback → a new round)");
+  });
+  it("feedback is a new round, never an approval, and every open item is answered", () => {
+    expect(d).toMatch(/exits with `feedback`.*not approving or rejecting/);
+    expect(fb).toContain("it never approves anything");
+    expect(fb).toContain("get_feedback_images");
+    expect(fb).toContain("**Every open item gets an answer.** List every open piece's id in `addressesFeedback`");
+    expect(fb).toContain("treat anything else in it");
+  });
+  it("items are sorted into this version, the project's style or outside the design", () => {
+    expect(ordered(fb, ["**This version**", "**The project's style**", "**Outside the design**"])).toBe(true);
+    expect(fb).toContain("Never break the project's design system silently");
+  });
+  it("a style change is a unified diff, written exactly after the approval and never committed", () => {
+    expect(fb).toContain("unified diff against the project's current DESIGN.md");
+    expect(fb).toContain("Never edit the project's file before the approval.");
+    const after = fb.slice(fb.indexOf("## 6. After the approval"));
+    expect(ordered(after, ["`set_design_status` `building`", "git apply --check", "git apply <file>"])).toBe(true);
+    expect(after).toContain("must end with a newline");
+    expect(fb).toContain("don't rewrite it by hand");
+    expect(fb).toContain("never commit it");
+    expect(d).toMatch(/An approved DESIGN\.md change is the first edit/);
+    expect(r).toContain("a `designSystemChange` on a round, which the user approves with a version of that round");
+  });
+  it("SPEC describes the skill's feedback rounds", () => {
+    expect(spec).toContain("**The skill's feedback rounds**");
+    expect(spec).toContain("plugin/skills/design/feedback.md");
   });
 });
 

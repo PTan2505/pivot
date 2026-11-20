@@ -6,7 +6,7 @@ import { getAsset, readAssetBytes, saveAsset } from "./assets";
 import { expandHome, paths } from "./config";
 import { resolveWriteTarget, WriteTargetError } from "./write-target";
 import { getDb } from "./db/client";
-import { mockupDigest } from "./design";
+import { designSystemDigest, mockupDigest } from "./design";
 import {
   appSettings,
   assetAnnotations,
@@ -14,7 +14,9 @@ import {
   collectionItems,
   collections,
   designDecisions,
+  designFeedback,
   designMockups,
+  designRounds,
   designSessions,
   designSnapshots,
   resourceAssets,
@@ -54,6 +56,9 @@ export interface BackupData {
     digest?: string;
     interactive?: boolean;
   })[];
+  /** Missing in backups made before mockup feedback (2026-11-20). */
+  designRounds?: Rows<typeof designRounds>;
+  designFeedback?: Rows<typeof designFeedback>;
   suggestions: Rows<typeof resourceSuggestions>;
   settings: Rows<typeof appSettings>;
 }
@@ -100,6 +105,8 @@ export async function createBackup({ targetDir }: { targetDir?: string } = {}) {
     designSnapshots: await db.select().from(designSnapshots),
     designDecisions: await db.select().from(designDecisions),
     designMockups: await db.select().from(designMockups),
+    designRounds: await db.select().from(designRounds),
+    designFeedback: await db.select().from(designFeedback),
     suggestions: inIds(await db.select().from(resourceSuggestions).where(eq(resourceSuggestions.status, "pending"))),
     settings: await db.select().from(appSettings),
   };
@@ -460,6 +467,27 @@ export async function restoreBackup(
     await db
       .insert(designMockups)
       .values({ ...m, interactive, digest: mockupDigest(m.html, interactive), createdAt: new Date(m.createdAt) })
+      .onConflictDoNothing();
+  }
+  for (const r of data.designRounds ?? []) {
+    // like a version's digest, a proposed DESIGN.md change's digest is recomputed, never taken from the file
+    const change =
+      r.designSystemMarkdown != null
+        ? { summary: r.designSystemSummary ?? "", markdown: r.designSystemMarkdown }
+        : null;
+    await db
+      .insert(designRounds)
+      .values({
+        ...r,
+        designSystemDigest: change ? designSystemDigest(change) : null,
+        createdAt: new Date(r.createdAt),
+      })
+      .onConflictDoNothing();
+  }
+  for (const f of data.designFeedback ?? []) {
+    await db
+      .insert(designFeedback)
+      .values({ ...f, createdAt: new Date(f.createdAt) })
       .onConflictDoNothing();
   }
   return summary;

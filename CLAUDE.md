@@ -8,6 +8,7 @@ The reference-first plan ([docs/reference-first-plan.md](docs/reference-first-pl
 
 - In scope: references, sources, collections, search and filters, capture, the extension, MCP, the Claude Code plugin (`plugin/`) and its `pivot:design` and `pivot:redesign` skills. Skill packs, prompts, snippets, rules and checklists are frozen: keep them working, don't extend them.
 - Go phase by phase: audit → gaps → implement → test → report. Tick a decision as it is verified, not when it's written.
+- Also approved (2026-11-20): [docs/mockup-feedback-plan.md](docs/mockup-feedback-plan.md), feedback and pins on mockups in PIVOT, and a DESIGN.md drafted for projects that have none. Its phases are logged in that file.
 - Log each phase in [docs/decisions-progress.md](docs/decisions-progress.md) using the plan's report format.
 - Design workflow: no implementation before the user explicitly approves a design direction. Design briefs, decisions and session notes go into PIVOT, never into a target project's repo. Write-tool names and schemas wait for the approved proposal (plan Phase 5a).
 - Never delete or migrate away existing data, routes or APIs to simplify; stop and ask before destructive migrations, big architectural changes, or anything that conflicts with SPEC.

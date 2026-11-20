@@ -62,7 +62,7 @@ function writerSource() {
 }
 
 describe("PIVOT MCP write tools", () => {
-  it("are the twelve design and library writes, and the design ones say briefs stay out of the repo", () => {
+  it("are the design and library tools of the writer (twelve writes, two reads), and the design ones say briefs stay out of the repo", () => {
     expect(WRITE_TOOLS.map((t) => t.name)).toEqual([
       "save_design_brief",
       "record_design_decision",
@@ -71,6 +71,7 @@ describe("PIVOT MCP write tools", () => {
       "record_chat_approval",
       "set_design_status",
       "get_design_session",
+      "get_feedback_images",
       "propose_references",
       "select_references",
       "suggest_metadata",

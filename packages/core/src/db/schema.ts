@@ -287,6 +287,11 @@ export const designDecisions = pgTable(
     /** The mockup version an approval is bound to, and its digest when approved; null for approvals made before. */
     mockupId: text("mockup_id"),
     mockupDigest: text("mockup_digest"),
+    /**
+     * An approval of a version whose round proposed a DESIGN.md change: that change's digest when approved, so the
+     * agent writes exactly what the owner saw. Null otherwise.
+     */
+    designSystemDigest: text("design_system_digest"),
     createdAt: createdAt(),
   },
   (t) => [index("design_decisions_session_idx").on(t.sessionId, t.createdAt)],
@@ -320,6 +325,62 @@ export const designMockups = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("design_mockups_version_idx").on(t.sessionId, t.round, t.n)],
+);
+
+/**
+ * What an agent said about a round when it saved it: the owner's feedback it answers, and the change to the target
+ * project's DESIGN.md it proposes (written into the project only after the owner approves a version of the round).
+ * Saved once with the round, never edited.
+ */
+export const designRounds = pgTable(
+  "design_rounds",
+  {
+    id: id(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => designSessions.id, { onDelete: "cascade" }),
+    round: integer("round").notNull(),
+    /** Ids of the feedback this round answers. */
+    addressesFeedback: jsonb("addresses_feedback").$type<string[]>().notNull().default([]),
+    /** The proposed DESIGN.md change: one line, and the change as Markdown (the new text or a diff). */
+    designSystemSummary: text("design_system_summary"),
+    designSystemMarkdown: text("design_system_markdown"),
+    /** sha256 of the summary and Markdown: what an approval of this round's versions binds. */
+    designSystemDigest: text("design_system_digest"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("design_rounds_round_idx").on(t.sessionId, t.round)],
+);
+
+/**
+ * The owner's feedback on a round, written in PIVOT and sent to the agent, which answers it with a new round. Text, and
+ * pins on a version's full-page render at one width. It never approves anything.
+ */
+export const designFeedback = pgTable(
+  "design_feedback",
+  {
+    id: id(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => designSessions.id, { onDelete: "cascade" }),
+    round: integer("round").notNull(),
+    /** The version it is about, and its digest when sent; null for feedback on the whole round. */
+    mockupId: text("mockup_id"),
+    mockupDigest: text("mockup_digest"),
+    text: text("text").notNull().default(""),
+    /** The render width the pins were placed on (1440, 834 or 390); null without pins. */
+    width: integer("width"),
+    /** Pins on the version's full-page render at `width`, in its pixels. */
+    pins: jsonb("pins").$type<{ x: number; y: number; text: string; n?: number }[]>().notNull().default([]),
+    /** open | addressed */
+    status: text("status").notNull().default("open"),
+    /** The round that answered it. */
+    addressedRound: integer("addressed_round"),
+    /** owner: only PIVOT's own page can send feedback. */
+    source: text("source").notNull().default("owner"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("design_feedback_session_idx").on(t.sessionId, t.createdAt)],
 );
 
 /**

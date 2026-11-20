@@ -17,7 +17,9 @@ const server = new McpServer(
 );
 
 const source = new HttpSource();
-const readOnly = new Set([...TOOLS, ...EXTERNAL_TOOLS].map((t) => t.name).concat("get_design_session"));
+const readOnly = new Set(
+  [...TOOLS, ...EXTERNAL_TOOLS].map((t) => t.name).concat("get_design_session", "get_feedback_images"),
+);
 // Setting a status it already has, or saving the same mockups again, changes nothing.
 const idempotent = new Set(["set_design_status", "save_design_mockups"]);
 // Tools whose results come from outside the user's own library.

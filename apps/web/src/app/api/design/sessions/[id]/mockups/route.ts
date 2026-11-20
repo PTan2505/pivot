@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { DesignError, getDesignSession, MOCKUP_LIMITS, saveDesignMockups } from "@pivot/core/design";
+import {
+  DESIGN_SYSTEM_LIMITS,
+  DesignError,
+  getDesignSession,
+  MOCKUP_LIMITS,
+  saveDesignMockups,
+} from "@pivot/core/design";
 import { body, HttpError, json, route, type IdParams } from "@/lib/server/http";
 
 const input = z.object({
@@ -14,9 +20,21 @@ const input = z.object({
     )
     .min(1)
     .max(MOCKUP_LIMITS.versions),
+  /** The owner's feedback this round answers. */
+  addressesFeedback: z.array(z.string().uuid()).max(100).optional(),
+  /** A DESIGN.md change the round proposes, written into the project only after the owner approves a version. */
+  designSystemChange: z
+    .object({
+      summary: z.string().min(1).max(DESIGN_SYSTEM_LIMITS.summary),
+      markdown: z.string().min(1).max(DESIGN_SYSTEM_LIMITS.markdown),
+    })
+    .optional(),
 });
 
-/** Saves a round of mockup versions (self-contained HTML) for a session that is exploring. 409 once it is approved. */
+/**
+ * Saves a round of mockup versions (self-contained HTML) for a session that is exploring, with the feedback it answers
+ * and the DESIGN.md change it proposes, if any. 409 once it is approved.
+ */
 export const POST = route(async (req: Request, { params }: IdParams) => {
   const { id } = await params;
   const parsed = input.parse(await body(req));

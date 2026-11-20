@@ -1,5 +1,6 @@
 import type {
   UiSettings,
+  DesignFeedbackDTO,
   DesignCandidateDTO,
   CollectionDTO,
   DesignDecisionKind,
@@ -90,11 +91,30 @@ export interface PivotWriter {
       mockupDigest?: string;
     },
   ): Promise<{ id: string }>;
-  /** Stores a round of self-contained mockup versions; the app refuses it unless the session is exploring. */
+  /**
+   * Stores a round of self-contained mockup versions; the app refuses it unless the session is exploring. The round may
+   * name the owner's feedback it answers and propose a change to the project's DESIGN.md (an app before mockup feedback
+   * refuses those fields).
+   */
   saveDesignMockups(
     sessionId: string,
-    input: { snapshotId?: string; mockups: { title: string; html: string; interactive?: boolean }[] },
+    input: {
+      snapshotId?: string;
+      mockups: { title: string; html: string; interactive?: boolean }[];
+      addressesFeedback?: string[];
+      designSystemChange?: { summary: string; markdown: string };
+    },
   ): Promise<{ round: number; ids: string[]; created: boolean }>;
+  /**
+   * The area around one of the owner's feedback pins on the version's render, its number drawn on the spot, prepared by
+   * the app. Null when there is no such pin. Optional: an app before mockup feedback makes the tool say so.
+   */
+  feedbackPinImage?(
+    feedbackId: string,
+    index: number,
+  ): Promise<(ImagePart & { region: { left: number; top: number; width: number; height: number } }) | null>;
+  /** One piece of the owner's feedback. Optional, like feedbackPinImage. */
+  getFeedback?(id: string): Promise<DesignFeedbackDTO | null>;
   /**
    * Gate 1: proposes references for a session (library ones by id, external pages by URL; PIVOT captures a preview of
    * each external page in the background). Optional, so an older app makes the tool say so.

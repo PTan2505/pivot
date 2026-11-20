@@ -6,6 +6,7 @@ import type { ImagePart, PageSlices } from "@pivot/mcp-tools/images";
 import { ToolError, type PivotSource, type PivotWriter } from "@pivot/mcp-tools/source";
 import type {
   DesignCandidateDTO,
+  DesignFeedbackDTO,
   CollectionDTO,
   DesignSessionDetailDTO,
   DesignQaInput,
@@ -282,6 +283,23 @@ export class HttpSource implements PivotSource, PivotWriter {
   }
 
   /** The app shrinks the screenshot; an app from before that route answers 404. */
+  getFeedback(id: string) {
+    return this.json<DesignFeedbackDTO>(`/api/design/feedback/${encodeURIComponent(id)}`);
+  }
+
+  async feedbackPinImage(feedbackId: string, index: number) {
+    const res = await this.call(`/api/design/feedback/${encodeURIComponent(feedbackId)}/pins/${index}`);
+    if (!res) return null;
+    const [left, top, width, height] = (res.headers.get("x-region") ?? "0,0,0,0").split(",").map(Number);
+    return {
+      data: Buffer.from(await res.arrayBuffer()),
+      mimeType: "image/jpeg" as const,
+      width: Number(res.headers.get("x-image-width")) || 0,
+      height: Number(res.headers.get("x-image-height")) || 0,
+      region: { left, top, width, height },
+    };
+  }
+
   async agentImage(assetId: string): Promise<ImagePart> {
     const res = await this.call(`/api/assets/${encodeURIComponent(assetId)}/agent`);
     if (!res) throw missingImage();
