@@ -61,7 +61,7 @@ If it's unclear which component or page to match ("make it look like the rest of
 
 ## 1. Before you start
 
-1. **Design system:** read `DESIGN.md`, `CLAUDE.md`, the token or theme files and the components the target uses.
+1. **Design system:** read `DESIGN.md`, `CLAUDE.md`, the token or theme files and the components the target uses. With no `DESIGN.md` (and no other design-system document), draft one from the code and write it only on the user's yes, as `pivot:design`'s [design-md.md](../design/design-md.md) says (not for a small fix).
 2. **Impact analysis:**
    - Find what the change touches: the target's own files, the shared components and styles it uses, and every consumer of those (search imports and usages; list the pages and routes).
    - Prefer a **scoped** change: a variant, a prop or local styles at this call site, rather than editing a shared component everyone gets.
