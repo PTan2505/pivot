@@ -1,19 +1,20 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { MAX_EDGE } from "./agent-images";
-import { MAX_FULL_PAGE_HEIGHT, renderHtml } from "./capture";
+import { elementsHtml, MAX_FULL_PAGE_HEIGHT, renderHtml, type RenderedElement } from "./capture";
 import { getDb } from "./db/client";
 import { designFeedback, designMockups, designSessions } from "./db/schema";
 import { DesignError } from "./design";
 import { OwnerAuthError } from "./owner-approval";
 import { storeFor, writeStore, type StorageKind } from "./storage";
-import type { DesignFeedbackDTO, DesignFeedbackPin } from "./types";
+import type { DesignFeedbackDTO, DesignFeedbackElement, DesignFeedbackPin } from "./types";
 
 /**
  * The owner's feedback on a mockup round, written in PIVOT and sent to the agent (docs/mockup-feedback-plan.md). Text,
  * and pins on a version's full-page render: a sandboxed mockup frame can't report where it was clicked or scrolled,
  * so pins sit on PIVOT's own picture of the version, at one of the session page's widths. Feedback never approves
  * anything, so it needs no passphrase, but only PIVOT's own page sends it: a request with the API token (an agent's)
- * is refused.
+ * is refused. A pin may name an element the owner selected (the Select tool): PIVOT finds it in its own element map
+ * of the same render, so the agent gets the element's selector, box and HTML rather than a spot.
  */
 
 export const FEEDBACK_LIMITS = { text: 5000, pins: 30, pinText: 1000 } as const;
@@ -65,7 +66,8 @@ export async function addFeedback(input: {
   mockupId?: string | null;
   text?: string;
   width?: number | null;
-  pins?: DesignFeedbackPin[];
+  /** A pin's `element` needs only its `selector`: the rest comes from PIVOT's element map. */
+  pins?: (Omit<DesignFeedbackPin, "element"> & { element?: { selector: string } })[];
   /** The request's Authorization header: any value is an agent's request. */
   bearer?: string | null;
 }): Promise<DesignFeedbackDTO> {
@@ -85,6 +87,7 @@ export async function addFeedback(input: {
     y: p.y,
     text: String(p.text ?? "").trim(),
     n: given[i] ?? ++free,
+    selector: typeof p.element?.selector === "string" ? p.element.selector : null,
   }));
   if (text.length > FEEDBACK_LIMITS.text)
     throw new DesignError(`Feedback is at most ${FEEDBACK_LIMITS.text} characters.`);
@@ -122,6 +125,40 @@ export async function addFeedback(input: {
         throw new DesignError(`Pin ${i + 1} is outside the page.`);
       if (p.text.length > FEEDBACK_LIMITS.pinText)
         throw new DesignError(`Pin ${i + 1}'s note is over ${FEEDBACK_LIMITS.pinText} characters.`);
+      if (p.selector !== null && (!p.selector || p.selector.length > 1000))
+        throw new DesignError(`Pin ${i + 1}'s element has no usable selector.`);
+    }
+  }
+  // the elements the owner selected, as PIVOT's own map of that render describes them
+  const elements = new Map<number, DesignFeedbackElement>();
+  const withElement = pins.flatMap((p, i) => (p.selector ? [i] : []));
+  if (withElement.length && version && width) {
+    const map = await mockupElements(version.id, width);
+    const html = await versionHtml(version.id);
+    if (!map || html === null) throw new DesignError("That version is gone.");
+    const bySelector = new Map(map.map((e) => [e.sel, e]));
+    const found = withElement.map((i) => {
+      const e = bySelector.get(pins[i].selector!);
+      if (!e) throw new DesignError(`Pin ${i + 1}'s element isn't on this version at ${width}px.`);
+      return e;
+    });
+    const snippets = await elementsHtml(
+      html,
+      found.map((e) => e.sel),
+      { width },
+    );
+    for (const [k, i] of withElement.entries()) {
+      const e = found[k];
+      elements.set(i, {
+        selector: e.sel,
+        tag: e.tag,
+        ...(e.id ? { id: e.id } : {}),
+        ...(e.cls ? { classes: e.cls } : {}),
+        ...(e.text ? { text: e.text } : {}),
+        ...(e.label ? { label: e.label } : {}),
+        box: { x: e.x, y: e.y, w: e.w, h: e.h },
+        ...(snippets[k] ? { html: snippets[k]! } : {}),
+      });
     }
   }
   const [row] = await db
@@ -133,7 +170,19 @@ export async function addFeedback(input: {
       mockupDigest: version?.digest ?? null,
       text,
       width,
-      pins: pins.map((p) => ({ n: p.n, x: Math.round(p.x), y: Math.round(p.y), text: p.text })),
+      pins: pins.map((p, i) => {
+        const element = elements.get(i);
+        // an element pin sits on its element: a point outside the box moves to the box's centre
+        const b = element?.box;
+        const inside = !b || (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h);
+        return {
+          n: p.n,
+          x: Math.round(inside ? p.x : b.x + b.w / 2),
+          y: Math.round(inside ? p.y : b.y + b.h / 2),
+          text: p.text,
+          ...(element ? { element } : {}),
+        };
+      }),
       source: "owner",
     })
     .returning();
@@ -173,6 +222,35 @@ export async function checkFeedbackIds(sessionId: string, ids: string[]) {
 }
 
 const renderKey = (digest: string, width: number) => `design-renders/${digest}-${width}.jpg`;
+const elementsKey = (digest: string, width: number) => `design-renders/${digest}-${width}.elements.json`;
+
+const checkWidth = (width: number) => {
+  if (!RENDER_WIDTHS.includes(width as (typeof RENDER_WIDTHS)[number]))
+    throw new DesignError(`Renders are made at ${RENDER_WIDTHS.join(", ")} px wide.`);
+};
+
+async function versionRow(mockupId: string) {
+  const db = await getDb();
+  const [m] = await db
+    .select({ html: designMockups.html, digest: designMockups.digest })
+    .from(designMockups)
+    .where(eq(designMockups.id, mockupId))
+    .limit(1);
+  return m ?? null;
+}
+
+async function versionHtml(mockupId: string) {
+  return (await versionRow(mockupId))?.html ?? null;
+}
+
+/** Renders a version with its element map and keeps both, so a picture and its map always come from one layout. */
+async function renderAndStore(m: { html: string; digest: string }, width: number) {
+  const shot = await renderHtml(m.html, { width, elements: true });
+  const store = writeStore();
+  await store.put(renderKey(m.digest, width), shot.data, "image/jpeg");
+  await store.put(elementsKey(m.digest, width), Buffer.from(JSON.stringify(shot.elements ?? [])), "application/json");
+  return shot;
+}
 
 /**
  * A version's full-page render at one of the page's widths (JPEG), made once per content digest and width and kept in
@@ -182,26 +260,35 @@ export async function renderMockup(
   mockupId: string,
   width: number,
 ): Promise<{ data: Buffer; width: number; height: number } | null> {
-  if (!RENDER_WIDTHS.includes(width as (typeof RENDER_WIDTHS)[number]))
-    throw new DesignError(`Renders are made at ${RENDER_WIDTHS.join(", ")} px wide.`);
-  const db = await getDb();
-  const [m] = await db
-    .select({ html: designMockups.html, digest: designMockups.digest })
-    .from(designMockups)
-    .where(eq(designMockups.id, mockupId))
-    .limit(1);
+  checkWidth(width);
+  const m = await versionRow(mockupId);
   if (!m) return null;
-  const key = renderKey(m.digest, width);
-  const store = writeStore();
-  const cached = await store.get(key).catch(() => null);
-  const sharp = (await import("sharp")).default;
+  const cached = await writeStore()
+    .get(renderKey(m.digest, width))
+    .catch(() => null);
   if (cached) {
+    const sharp = (await import("sharp")).default;
     const meta = await sharp(cached, { limitInputPixels: false }).metadata();
     return { data: cached, width: meta.width ?? width, height: meta.height ?? 0 };
   }
-  const shot = await renderHtml(m.html, { width });
-  await store.put(key, shot.data, "image/jpeg");
-  return shot;
+  const shot = await renderAndStore(m, width);
+  return { data: shot.data, width: shot.width, height: shot.height };
+}
+
+/**
+ * The element map of a version's render at one of the page's widths (`RenderedElement`s, document order, at most
+ * `MAX_RENDER_ELEMENTS`): what the owner's Select tool hovers and picks. Kept with the render; a render made before
+ * maps existed is made again, with its map.
+ */
+export async function mockupElements(mockupId: string, width: number): Promise<RenderedElement[] | null> {
+  checkWidth(width);
+  const m = await versionRow(mockupId);
+  if (!m) return null;
+  const cached = await writeStore()
+    .get(elementsKey(m.digest, width))
+    .catch(() => null);
+  if (cached) return JSON.parse(cached.toString("utf8")) as RenderedElement[];
+  return (await renderAndStore(m, width)).elements ?? [];
 }
 
 /** The pin's number in a round marker, drawn over the crop. */
@@ -210,6 +297,14 @@ const marker = (n: number, cx: number, cy: number, w: number, h: number) =>
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">` +
       `<circle cx="${cx}" cy="${cy}" r="15" fill="#ff6a13" stroke="#0c0806" stroke-width="3"/>` +
       `<text x="${cx}" y="${cy + 5}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0c0806">${n}</text></svg>`,
+  );
+
+/** An outline around the selected element, drawn over the crop. */
+const outline = (x: number, y: number, bw: number, bh: number, w: number, h: number) =>
+  Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">` +
+      `<rect x="${x - 2}" y="${y - 2}" width="${bw + 4}" height="${bh + 4}" fill="none" stroke="#0c0806" stroke-width="5"/>` +
+      `<rect x="${x - 2}" y="${y - 2}" width="${bw + 4}" height="${bh + 4}" fill="none" stroke="#ff6a13" stroke-width="3"/></svg>`,
   );
 
 export interface PinImage {
@@ -225,7 +320,9 @@ export interface PinImage {
 
 /**
  * What the agent looks at for one pin: the area around it on the version's render (up to 960 × 720 page pixels, the
- * pin kept inside), with the pin's number drawn on its spot. Null when the feedback, pin or version is gone.
+ * pin kept inside), with the pin's number drawn on its spot. For an element pin, the element whole (up to 1600 × 1200,
+ * its top kept when it is taller), outlined, with the number on its corner. Null when the feedback, pin or version is
+ * gone.
  */
 export async function pinImage(feedbackId: string, index: number): Promise<PinImage | null> {
   const fb = await getFeedback(feedbackId);
@@ -233,16 +330,25 @@ export async function pinImage(feedbackId: string, index: number): Promise<PinIm
   if (!fb || !pin || !fb.mockupId || !fb.width) return null;
   const render = await renderMockup(fb.mockupId, fb.width);
   if (!render) return null;
-  const w = Math.min(render.width, 960);
-  const h = Math.min(render.height, 720);
-  const left = Math.max(0, Math.min(render.width - w, Math.round(pin.x - w / 2)));
-  const top = Math.max(0, Math.min(render.height - h, Math.round(pin.y - h / 2)));
-  const cx = Math.min(w - 16, Math.max(16, Math.round(pin.x - left)));
-  const cy = Math.min(h - 16, Math.max(16, Math.round(pin.y - top)));
+  const box = pin.element?.box;
+  // an element is shown whole with some room around it (up to 1600 × 1200 page pixels); a spot, at its centre
+  const w = Math.min(render.width, box ? Math.min(1600, Math.max(960, box.w + 96)) : 960);
+  const h = Math.min(render.height, box ? Math.min(1200, Math.max(720, box.h + 96)) : 720);
+  const cxPage = box ? box.x + box.w / 2 : pin.x;
+  const cyPage = box ? (box.h + 96 > h ? box.y + h / 2 - 48 : box.y + box.h / 2) : pin.y;
+  const left = Math.max(0, Math.min(render.width - w, Math.round(cxPage - w / 2)));
+  const top = Math.max(0, Math.min(render.height - h, Math.round(cyPage - h / 2)));
+  // the number sits on the pin, or on the element's top-left corner
+  const cx = Math.min(w - 16, Math.max(16, Math.round((box ? box.x : pin.x) - left)));
+  const cy = Math.min(h - 16, Math.max(16, Math.round((box ? box.y : pin.y) - top)));
   const sharp = (await import("sharp")).default;
+  const overlays = [
+    ...(box ? [{ input: outline(box.x - left, box.y - top, box.w, box.h, w, h), left: 0, top: 0 }] : []),
+    { input: marker(pin.n ?? index + 1, cx, cy, w, h), left: 0, top: 0 },
+  ];
   const { data, info } = await sharp(render.data, { limitInputPixels: false })
     .extract({ left, top, width: w, height: h })
-    .composite([{ input: marker(pin.n ?? index + 1, cx, cy, w, h), left: 0, top: 0 }])
+    .composite(overlays)
     .resize(MAX_EDGE, MAX_EDGE, { fit: "inside", withoutEnlargement: true })
     .jpeg({ quality: 82, mozjpeg: true })
     .toBuffer({ resolveWithObject: true });
@@ -259,4 +365,5 @@ export async function pinImage(feedbackId: string, index: number): Promise<PinIm
 
 /** For tests: where a render of this version at this width is cached. */
 export const renderStoreKey = renderKey;
+export const elementsStoreKey = elementsKey;
 export const renderStore = (kind?: StorageKind) => (kind ? storeFor(kind) : writeStore());

@@ -106,6 +106,7 @@ describe("guardApiRequest", () => {
       "/api/resources/r1/compare/image",
       "/api/settings/token",
       "/api/design/mockups/m1/render",
+      "/api/design/mockups/m1/elements",
       "/api/design/feedback/f1/pins/0",
     ];
     const APP = `http://${HOST}`;

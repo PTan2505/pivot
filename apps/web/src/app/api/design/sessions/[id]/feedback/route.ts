@@ -16,6 +16,8 @@ const input = z.object({
         y: z.number(),
         text: z.string().max(FEEDBACK_LIMITS.pinText),
         n: z.number().int().min(1).max(999).optional(),
+        /** The element the owner selected: PIVOT finds it in its own map of the render and stores the rest. */
+        element: z.object({ selector: z.string().min(1).max(1000) }).optional(),
       }),
     )
     .max(FEEDBACK_LIMITS.pins)
@@ -31,7 +33,7 @@ export const GET = route(async (_req: Request, { params }: IdParams) => {
 
 /**
  * The owner sends feedback on a round from PIVOT's page: text, and pins on a version's render at one of the page's
- * widths. A waiting agent answers it with a new round. Refused with the API token (only the owner's page sends it);
+ * widths, each on a spot or on an element (`element.selector`, from the version's element map). A waiting agent answers it with a new round. Refused with the API token (only the owner's page sends it);
  * 409 unless the session is exploring.
  */
 export const POST = route(async (req: Request, { params }: IdParams) => {

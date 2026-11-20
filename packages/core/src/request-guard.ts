@@ -43,6 +43,7 @@ const SIDE_EFFECT_READS = [
   /^\/api\/visibility$/, // fetches the given URL
   /^\/api\/resources\/[^/]+\/compare(\/image)?$/, // decodes and diffs full-size images
   /^\/api\/design\/mockups\/[^/]+\/render$/, // renders a mockup version in Chromium and stores the picture
+  /^\/api\/design\/mockups\/[^/]+\/elements$/, // may render a version, and stores its element map
   /^\/api\/design\/feedback\/[^/]+\/pins\/[^/]+$/, // may render a version, and crops the picture
 ];
 
