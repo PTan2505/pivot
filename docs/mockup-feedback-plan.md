@@ -81,3 +81,10 @@ Approved by the owner on 2026-11-20. Each phase is its own branch from `dev` and
   - the note stays inside the layer at 700px;
   - the DESIGN.md dialog has one close control.
 - **Left as is:** the detector's 13px advisories (13px is the drawer's helper size); the pre-existing axe findings.
+
+### Phase 4: feedback rounds in the skill (2026-11-20)
+
+- **Audit:** `pivot:design` §7 started the watcher and §8 read only approvals; nothing told the agent what to do with the watcher's `feedback` event, how to tell a version change from a style change, or how to write an approved DESIGN.md change. `pivot:redesign` §5 asked for a separate approval for any design-system change. `get_feedback_images` was missing from the skill's tool table.
+- **Gaps:** reading feedback and pins, sorting items, the next round (`addressesFeedback`, item-by-item changes), the DESIGN.md change's format, and writing it exactly on approval.
+- **Implemented:** `plugin/skills/design/feedback.md` (when feedback arrives, read it with the pin crops, sort each item into this version / the project's style / outside the design, revise the versions it is about, answer every open item, a unified diff against the current DESIGN.md as the `designSystemChange`, and after the approval apply it with `git apply` as the first edit, stopping if it no longer applies, never committing). `pivot:design`: the tool table, the flow line, §7 (the watcher's feedback exit, Send to Claude in the turn's last line), §8 (feedback is a new round; an approval with a DESIGN.md change covers both) and §9 (the change is the first edit). `pivot:redesign` §4 and §5 point to it. SPEC §15.
+- **Tested:** `skills.test.ts` checks the new guidance and that both skills reach `feedback.md`; `pnpm plugin:validate`. The diff and `git apply` steps were run on a scratch repository: the diff applies, `--check` refuses it once the lines it touches have changed, and a copy without its final newline is refused as corrupt (hence the rule to keep `design-md.diff` and end the file with a newline). The behaviour is skill guidance: it is exercised in the next real design session that gets feedback from PIVOT (not yet run).
