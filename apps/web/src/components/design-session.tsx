@@ -15,6 +15,7 @@ import type {
 import { DesignCandidates } from "@/components/design-candidates";
 import { DesignMockups } from "@/components/design-mockups";
 import { Markdown } from "@/components/markdown";
+import { elementName } from "@/components/mockup-feedback";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -387,7 +388,7 @@ export function DesignSessionView({ id }: { id: string }) {
   const feedbackLine = (f: DesignFeedbackDTO) =>
     [
       f.text ? `“${f.text}”` : "",
-      f.pins.length ? `${f.pins.length} pin${f.pins.length === 1 ? "" : "s"}` : "",
+      f.pins.length ? `${f.pins.length} note${f.pins.length === 1 ? "" : "s"}` : "",
       versionOf(f.mockupId) ? `on ${versionOf(f.mockupId)}` : `whole round ${f.round}`,
       f.status === "open" ? "open" : `answered in round ${f.addressedRound}`,
     ]
@@ -492,11 +493,16 @@ export function DesignSessionView({ id }: { id: string }) {
                             <ol className="space-y-1">
                               {item.f.pins.map((p, i) => (
                                 <li key={i}>
-                                  <span className="font-mono text-ink-muted">{p.n ?? i + 1}.</span>{" "}
-                                  {p.text || "(no note)"}{" "}
-                                  <span className="text-[12px] text-ink-muted">
-                                    at {p.x}, {p.y} on the {item.f.width}px render
-                                  </span>
+                                  <span className="font-mono text-ink-muted">{p.n ?? i + 1}</span> ·{" "}
+                                  {p.element ? (
+                                    <span className="font-mono text-ink">{elementName(p.element)}</span>
+                                  ) : (
+                                    <span className="text-ink-muted">
+                                      Spot at {p.x}, {p.y}
+                                    </span>
+                                  )}{" "}
+                                  — {p.text || "(no text)"}{" "}
+                                  <span className="text-[12px] text-ink-muted">({item.f.width}px render)</span>
                                 </li>
                               ))}
                             </ol>

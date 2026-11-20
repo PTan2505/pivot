@@ -42,3 +42,24 @@ Approved by the owner on 2026-11-20, following [mockup-feedback-plan.md](mockup-
   - MCP `get_design_session` and `get_feedback_images` name the element and give its HTML; the watcher counts element pins; capability `design.feedback.elements`.
   - pivot-studio 0.4.0, plugin 0.5.0. No migration (`pnpm db:generate`: no schema changes).
 - **Tested:** core `design-feedback.test.ts` (the map: selectors each find one element, scripts never run, svg insides, hidden and tiny elements left out, duplicated ids, same-tag siblings, the stored map and a re-render without one; element pins from the map, the moved point, trimmed HTML, a selector not in the map refused, the outlined crop; the trimming of large maps), the request guard, MCP `feedback-tools.test.ts` and the watcher test; over HTTP on a scratch PIVOT.
+
+### Phase 6: Select tool in the full-screen view (2026-11-20)
+
+- **Audit:** pin mode (`PinLayer`) had one tool; the quick bar's Pin button and the P key opened it; the drawer and History named pins by position only.
+- **Design:** through `pivot:redesign` (path A, Major), design session `29471a8b`: one direction, "Select and Pin", approved by the owner in PIVOT with no note. `ui-ux-pro-max` reviewed the brief (partially adopted: shortcuts only inside the mode, the keyboard walk's details, chip and marker placement, honest states, dropped empty notes, one naming rule).
+- **Implemented:** comment mode with Select and Pin in `mockup-feedback.tsx` (element map fetch, hit test, hover outline and chip, keyboard walk with a live region, element notes with a breadcrumb, element names), the Comment button, the remembered tool and V/P in `mockup-stage.tsx`, the notes in History in `design-session.tsx`; DESIGN.md and SPEC §15.
+- **Tested:** real-input e2e on a scratch PIVOT (hover and chip, click to comment, breadcrumb move with focus kept and announced, Esc, an empty element note dropped, re-opening a noted element, P/V switching and not while typing, the drawer rows and button name, the remembered tool, Tab to the page and the arrow walk with its announcements, Enter, Send with selectors only and PIVOT storing the elements, the unavailable state, History).
+- **QA audit (`impeccable`), fixed and checked with real input:**
+  - a fresh layer per version and width, with guarded indices (an old index crashed after a switch);
+  - a pointer press no longer starts the keyboard walk (a click could land on another element);
+  - the page is `role="application"`, so screen readers pass the arrows to it;
+  - empty element notes are dropped however the mode ends (the quick bar, sending, Show);
+  - an unavailable Select stays reachable by the arrows, with its reason;
+  - failures, tool changes and repeated edge messages are announced;
+  - the key hints are hidden from the radios' names, and the radios take ↑ ↓ too;
+  - the chip stays on the page at the right edge;
+  - the walk keeps clear of a bottom quick bar;
+  - the breadcrumb is a group with the current element marked;
+  - the scroll position updates once a frame.
+- **Measured:** key hints and the chip's size text at 5.16–7.41:1 contrast (Python); no sideways scroll at 1440, 390 and 320; reduced motion stops the marker animation.
+- **Left as is:** the detector's 13px advisories and the Geist font note (the design system's); axe `region` on a dialog header (pre-existing) and `page-has-heading-one` while the frame is inert (since Phase 3); limiting the P key that opens the mode (a follow-up).
