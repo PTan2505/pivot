@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Info,
   Loader2,
+  MapPin,
   PanelRight,
   RotateCcw,
   X,
@@ -25,6 +26,7 @@ import {
   type Width,
 } from "@/components/design-mockups";
 import { DESIGN_STATUS_LABEL } from "@/components/design-session";
+import { DesignSystemBox, FeedbackSection, PinLayer, useFeedbackDrafts } from "@/components/mockup-feedback";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -184,6 +186,10 @@ export function MockupStage({
     return b === "top" || b === "dot" ? b : "bottom";
   });
   const [ready, setReady] = useState(false);
+  // feedback: drafts by version, pin mode, and a pin the drawer asked to show
+  const drafts = useFeedbackDrafts(s.id);
+  const [pinMode, setPinMode] = useState(false);
+  const [focusPin, setFocusPin] = useState<number | null>(null);
   useEffect(() => {
     const raf = requestAnimationFrame(() => setReady(true));
     return () => cancelAnimationFrame(raf);
@@ -235,7 +241,7 @@ export function MockupStage({
   // Esc closes the drawer (a dialog on top closes first, on its own)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || !open || approving) return;
+      if (e.key !== "Escape" || !open || approving || pinMode) return;
       if ((e.target as HTMLElement | null)?.closest("[role=dialog]")) return;
       e.preventDefault();
       setDrawer(false);
@@ -243,6 +249,23 @@ export function MockupStage({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
+
+  // P toggles pin mode, unless the key is typed into a field (keys in the mockup's frame never reach the page)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== "p" || e.metaKey || e.ctrlKey || e.altKey || approving) return;
+      if (phone || s.status !== "exploring") return;
+      if ((e.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable], [role=dialog]"))
+        return;
+      e.preventDefault();
+      setFocusPin(null);
+      setPinMode(!pinMode);
+      // leaving: the focus goes back to the pin button instead of falling to the page
+      if (pinMode) requestAnimationFrame(() => document.getElementById("pin-mode-button")?.focus());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [approving, phone, s.status, pinMode]);
 
   // Dragging the bar (past a few pixels, so a click stays a click) moves it to the top or bottom edge.
   const barBox = useRef<HTMLDivElement>(null);
@@ -304,6 +327,15 @@ export function MockupStage({
 
   if (!current) return null;
   const count = versions.length;
+  const draft = drafts.get(current.id);
+  const renderWidth = width === "desktop" ? WIDTHS.desktop : WIDTHS[width];
+  const pinCount = draft.pins.length;
+  const thisRound = s.rounds?.find((r) => r.round === round);
+  const enterPins = (show: number | null = null) => {
+    if (phone || s.status !== "exploring") return;
+    setFocusPin(show);
+    setPinMode(true);
+  };
   const position = `Version ${current.n} of ${count}: ${current.title}`;
   // on a phone the sheet covers the bar's place: the bar hides (and leaves the tab order) while it is open
   const barHidden = phone && open;
@@ -347,7 +379,28 @@ export function MockupStage({
 
   return (
     <div>
-      <FullFrame mockup={current} width={width} run={run} onScale={setScale} />
+      {/* under the pin layer, the mockup's frame leaves the tab order */}
+      <div inert={pinMode && !phone}>
+        <FullFrame mockup={current} width={width} run={run} onScale={setScale} />
+      </div>
+      {pinMode && !phone && (
+        <PinLayer
+          mockup={current}
+          renderWidth={renderWidth}
+          // up to the drawer's left edge (its width and right inset), so nothing of the frame shows in between
+          inset={open ? DRAWER_SPACE - 12 : 0}
+          barOnTop={bar === "top"}
+          draft={draft}
+          onChange={(fn) => drafts.update(current.id, fn)}
+          onExit={() => {
+            setPinMode(false);
+            setFocusPin(null);
+            requestAnimationFrame(() => document.getElementById("pin-mode-button")?.focus());
+          }}
+          focusPin={focusPin}
+          reduce={reduce}
+        />
+      )}
 
       {/* the quick bar comes right after the frame, so one Tab leaves the mockup */}
       <div
@@ -415,6 +468,23 @@ export function MockupStage({
                 <ChevronRight className="size-4" aria-hidden />
               </button>
               <span aria-hidden className="mx-1 h-5 w-px bg-divider" />
+              {!phone && s.status === "exploring" && (
+                <button
+                  id="pin-mode-button"
+                  type="button"
+                  aria-pressed={pinMode}
+                  aria-keyshortcuts="P"
+                  aria-label={`Pin mode${pinCount ? `, ${pinCount} draft pin${pinCount === 1 ? "" : "s"}` : ""}`}
+                  onClick={() => (pinMode ? setPinMode(false) : enterPins())}
+                  className={cn(
+                    "flex h-9 items-center gap-1 rounded-full px-2.5 text-ink-secondary outline-none hover:bg-surface-raised hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-text focus-visible:outline-solid [@media(pointer:coarse)]:h-11",
+                    pinMode && "bg-inverse text-on-inverse hover:bg-inverse/90 hover:text-on-inverse",
+                  )}
+                >
+                  <MapPin className="size-4" aria-hidden />
+                  {pinCount > 0 && <span className="font-mono text-[12px] tabular-nums">{pinCount}</span>}
+                </button>
+              )}
             </>
           )}
           {toggleButton}
@@ -604,6 +674,27 @@ export function MockupStage({
             </p>
           </section>
 
+          <FeedbackSection
+            key={current.id}
+            session={s}
+            round={round}
+            mockup={current}
+            draft={draft}
+            onChange={(fn) => drafts.update(current.id, fn)}
+            onSent={() => {
+              drafts.clear(current.id);
+              setPinMode(false);
+            }}
+            phone={phone}
+            pinMode={pinMode}
+            onPinMode={() => enterPins()}
+            onShowPin={(pin) => enterPins(pin)}
+            onOpenRound={(r) => {
+              setRound(r);
+              setN(1);
+            }}
+          />
+
           <section aria-labelledby="stage-tools">
             <Heading id="stage-tools">Tools</Heading>
             <div className="flex flex-wrap gap-1.5">
@@ -653,9 +744,15 @@ export function MockupStage({
               </Button>
             </div>
           )}
+          <DesignSystemBox round={thisRound} />
           {canApprove ? (
             <>
-              <Button className="h-10 w-full" data-approve-trigger onClick={() => setApproving(true)}>
+              <Button
+                className="h-10 w-full"
+                data-approve-trigger
+                aria-describedby={thisRound?.designSystemChange ? "design-system-change" : undefined}
+                onClick={() => setApproving(true)}
+              >
                 <Check /> Approve version {current.n}
               </Button>
               <p className="text-center text-[12px] text-ink-muted">
@@ -680,6 +777,8 @@ export function MockupStage({
         open={approving}
         onOpenChange={setApproving}
         initialNote={pick && pick.mockupId === current.id ? pick.note : ""}
+        round={thisRound}
+        project={s.targetProject}
       />
     </div>
   );

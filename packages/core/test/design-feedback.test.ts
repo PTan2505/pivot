@@ -94,6 +94,34 @@ describe("feedback", () => {
     expect(s?.feedback.map((f) => f.id)).toEqual([round.id, pinned.id]);
   });
 
+  it("keeps each pin's number as the owner saw it, gaps included, and refuses two pins with one number", async () => {
+    const { sessionId, ids } = await sessionWithRound("Pin numbers");
+    const fb = await feedback.addFeedback({
+      sessionId,
+      round: 1,
+      mockupId: ids[0],
+      width: 1440,
+      pins: [
+        { n: 1, x: 10, y: 10, text: "a" },
+        { n: 3, x: 20, y: 20, text: "c" },
+        { x: 30, y: 30, text: "no number: its place" },
+      ],
+    });
+    expect(fb.pins.map((p) => p.n)).toEqual([1, 3, 4]);
+    await expect(
+      feedback.addFeedback({
+        sessionId,
+        round: 1,
+        mockupId: ids[0],
+        width: 1440,
+        pins: [
+          { n: 2, x: 1, y: 1, text: "a" },
+          { n: 2, x: 2, y: 2, text: "b" },
+        ],
+      }),
+    ).rejects.toThrow(/same number/);
+  });
+
   it("is answered by a round that names it, and a proposed DESIGN.md change binds to an approval of that round", async () => {
     const { sessionId } = await sessionWithRound("Answered");
     const fb = await feedback.addFeedback({ sessionId, round: 1, text: "Use the brand orange everywhere" });

@@ -27,8 +27,10 @@
 // the preview prints {"event":"chosen",…} with the version's id and digest, as checked here, and closes, which wakes
 // the agent. A pick is not an approval: the agent then asks the user to approve that version in the chat or in PIVOT.
 //
-// Prints one JSON line when ready ({"event":"ready",…}), one for a pick ({"event":"chosen",…}) and one when the window
-// closes ({"event":"closed"}).
+// Prints one JSON line when ready ({"event":"ready",…}), one for a pick ({"event":"chosen",…}), one for feedback the user
+// sent from the window's "Feedback for Claude" ({"event":"feedback",…}: this process posts it to PIVOT as feedback from
+// PIVOT's page, so the window stays open and an agent's watcher wakes on it) and one when the window closes
+// ({"event":"closed"}).
 // Exits 2 when a version doesn't match its digest, 1 on other errors.
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -151,6 +153,9 @@ function shellHtml({ session, pivotPage }) {
     <span id="confirm" hidden>Send <b id="chosen"></b> to Claude as your choice? This window closes, and Claude asks you to approve it.
     <input id="note" maxlength="2000" placeholder="Note for the build (optional)" aria-label="Note for the build (optional)">
     <span class="group"><button id="send" class="primary">Send to Claude</button><button id="cancel">Cancel</button></span></span></div>
+    <div class="fb"><label for="fb-text" class="small muted">Feedback for Claude</label>
+    <textarea id="fb-text" maxlength="5000" rows="3" placeholder="What should change? Claude answers with a new round."></textarea>
+    <button id="fb-send" disabled>Send feedback</button><span id="fb-status" class="small muted" role="status"></span></div>
     <div class="approve muted small">Or approve it yourself: open the session in PIVOT and press <b>Approve this version</b> on the same version (PIVOT shows the same digest).
     <span class="group"><input id="pivot" readonly value="${esc(pivotPage)}" aria-label="PIVOT session page"><button id="copy">Copy link</button></span></div></div>
 </aside>
@@ -219,7 +224,9 @@ section .group+.group,section .group+p,section p+.group{margin-top:8px}section p
 .foot{border-top:1px solid var(--divider);padding:12px 16px 16px;display:flex;flex-direction:column;gap:10px}
 #identity{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
 .choose{display:flex;flex-direction:column;gap:8px}#confirm{display:flex;flex-direction:column;gap:8px;font-size:13px}#confirm[hidden]{display:none}
-#send{width:auto;flex:1}.approve{line-height:1.5}.approve .group{margin-top:6px;flex-wrap:nowrap}#copy{flex:none;white-space:nowrap}#pivot{font:12px "Geist Mono",ui-monospace,monospace;height:32px}
+#send{width:auto;flex:1}
+.fb{display:flex;flex-direction:column;gap:6px}#fb-text{font:inherit;font-size:14px;background:var(--surface);color:var(--ink);border:0;border-radius:14px;padding:8px 12px;resize:vertical;min-height:64px}
+#fb-text:focus-visible{outline:2px solid var(--accent-text);outline-offset:3px}.approve{line-height:1.5}.approve .group{margin-top:6px;flex-wrap:nowrap}#copy{flex:none;white-space:nowrap}#pivot{font:12px "Geist Mono",ui-monospace,monospace;height:32px}
 @media (pointer:coarse){button{height:44px}button.icon{width:44px;height:44px}[role=tab]{min-height:44px}.bar{height:52px}}`;
 
 /** The preview page's behaviour (served as /shell.js). It reads /versions.json, the checked versions' metadata. */
@@ -350,15 +357,23 @@ document.addEventListener("click", async (e) => {
     $("chosen").textContent = "version " + v.n + " · " + v.title + " (digest " + v.digest.slice(0, 12) + ")";
     $("confirm").hidden = false; $("note").focus();
   } else if (b.id === "cancel") { $("confirm").hidden = true; $("choose").focus(); }
+  else if (b.id === "fb-send") {
+    const text = $("fb-text").value.trim(); if (!text) return;
+    b.disabled = true; $("fb-status").textContent = "Sending…";
+    const ok = await window.pivotPreview({ feedback: text, n: versions[current].n });
+    if (ok) { $("fb-text").value = ""; $("fb-status").textContent = "Sent · Claude answers with a new round"; }
+    else { b.disabled = false; $("fb-status").textContent = "Not sent: PIVOT didn't take it. Try again, or write it in PIVOT."; }
+  }
   else if (b.id === "send") {
     b.disabled = true;
     const ok = await window.pivotPreview({ choose: versions[current].n, note: $("note").value });
     if (!ok) { b.disabled = false; $("chosen").textContent += " — not sent, try again"; }
   }
 });
+$("fb-text").addEventListener("input", () => { $("fb-send").disabled = !$("fb-text").value.trim(); $("fb-status").textContent = ""; });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && open && !e.target.closest?.("input")) { e.preventDefault(); setOpen(false, true); return; }
-  if (e.metaKey || e.ctrlKey || e.altKey || (e.target.closest && e.target.closest("input, [role=radiogroup], [role=group]"))) return;
+  if (e.key === "Escape" && open && !e.target.closest?.("input, textarea")) { e.preventDefault(); setOpen(false, true); return; }
+  if (e.metaKey || e.ctrlKey || e.altKey || (e.target.closest && e.target.closest("input, textarea, [role=radiogroup], [role=group]"))) return;
   const n = Number(e.key);
   if (n >= 1 && n <= versions.length) show(n - 1);
   else if (e.key === "ArrowRight" || (e.key === "ArrowDown" && e.target.getAttribute?.("role") === "tab")) show(current + 1);
@@ -442,6 +457,22 @@ export async function startServer({ session, versions, pivotPage, policy = versi
 }
 
 /**
+ * Sends the user's feedback to PIVOT as its own page would (same origin, no API token: PIVOT refuses feedback that
+ * carries one). Returns the stored feedback.
+ */
+export async function postFeedback({ pivotPage, sessionId, round, mockupId, text }) {
+  const origin = new URL(pivotPage).origin;
+  const res = await fetch(`${origin}/api/design/sessions/${encodeURIComponent(sessionId)}/feedback`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin, "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors" },
+    body: JSON.stringify({ round, mockupId, text }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `PIVOT answered ${res.status}`);
+  return res.json();
+}
+
+/**
  * Opens the preview: its server, the gate (only the preview's origin), and a Chromium launched through it with motion
  * QA's switches and WebRTC guard. `headless`, `playwright` and `policy` are for tests (`policy` replaces the versions'
  * CSP, so a test can show the gate holds without it); the CLI never sets them. Returns handles and a `closed` promise.
@@ -454,6 +485,7 @@ export async function startPreview({
   playwright = null,
   policy = versionPolicy,
   onEvent = () => {},
+  sendFeedback = postFeedback,
 }) {
   const { chromium } = playwright ?? loadPlaywright();
   const site = await startServer({ session, versions, pivotPage, policy });
@@ -486,6 +518,21 @@ export async function startPreview({
       await source.page.emulateMedia({ reducedMotion: cmd.reducedMotion ? "reduce" : "no-preference" });
       onEvent({ event: "motion", reduced: cmd.reducedMotion });
       return true;
+    }
+    if (cmd && typeof cmd.feedback === "string") {
+      // The user's feedback, typed in this window's own controls: this process (not the locked browser) sends it to
+      // PIVOT as feedback from PIVOT's page, so a waiting agent's watcher wakes on it, whoever opened the window.
+      const v = versions.find((x) => x.n === cmd.n);
+      const text = cmd.feedback.trim().slice(0, 5000);
+      if (!v || !text) return false;
+      try {
+        const fb = await sendFeedback({ pivotPage, sessionId: session.id, round: v.round, mockupId: v.id, text });
+        onEvent({ event: "feedback", round: v.round, n: v.n, id: v.id, feedbackId: fb?.id ?? null });
+        return true;
+      } catch (err) {
+        onEvent({ event: "feedback-failed", n: v.n, error: err instanceof Error ? err.message : String(err) });
+        return false;
+      }
     }
     if (cmd && "choose" in cmd) {
       const v = versions.find((x) => x.n === cmd.choose);

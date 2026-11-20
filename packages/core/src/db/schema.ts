@@ -371,7 +371,7 @@ export const designFeedback = pgTable(
     /** The render width the pins were placed on (1440, 834 or 390); null without pins. */
     width: integer("width"),
     /** Pins on the version's full-page render at `width`, in its pixels. */
-    pins: jsonb("pins").$type<{ x: number; y: number; text: string }[]>().notNull().default([]),
+    pins: jsonb("pins").$type<{ x: number; y: number; text: string; n?: number }[]>().notNull().default([]),
     /** open | addressed */
     status: text("status").notNull().default("open"),
     /** The round that answered it. */

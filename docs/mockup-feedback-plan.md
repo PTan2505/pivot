@@ -49,3 +49,35 @@ Approved by the owner on 2026-11-20. Each phase is its own branch from `dev` and
   - the request guard;
   - MCP `feedback-tools.test.ts` and the watcher `wait-for-decision.test.ts`.
 - **Not yet:** the page's controls (Phase 3) and the skill's use of all this (Phase 4). Until then feedback is sent only through the API.
+
+### Phase 3: feedback UI (2026-11-20)
+
+- **Design:** session `10688691` (Major redesign, path A, the full-screen view as the consistency target).
+  - Specialists on the brief: `ui-ux-pro-max` (adopted: pin mode signals, P, layered Esc, keyboard pins, a single editor, the drawer order, the DESIGN.md dialog, text-only on phones) and `animate` (adopted: the decoded fade-in, the pin scale-in, no motion on drag or keys; its inline diff expansion was not used, because `ui-ux-pro-max` owns the structure and chose a dialog).
+  - Two directions; the owner approved version 1 "Pins on the page" in PIVOT, with no note.
+- **Implemented:**
+  - `components/mockup-feedback.tsx`: pin layer, Feedback section, DESIGN.md box and dialog, drafts per version.
+  - The quick bar's pin button and the P key in `mockup-stage.tsx`.
+  - The approve dialog's DESIGN.md line, the session page's box, and the round header in `design-mockups.tsx`.
+  - Feedback rows in History (`design-session.tsx`).
+  - The preview window's "Feedback for Claude", posted by its own process (`postFeedback`), with a `feedback` event.
+- **Tested:**
+  - `preview.test.mjs`: feedback from the preview window, and typing in the box doesn't switch versions.
+  - Real input on a scratch PIVOT: P, a click drops a pin with its note focused, Esc in layers, arrow nudges stored, Send, the stored width and coordinates, round 3's DESIGN.md box and dialog, the approve dialog's line, History rows, the round header.
+- **Fixed during QA:**
+  - a new pin stole focus from its own note;
+  - a Markdown list item ("- h1") showed as a removed line;
+  - "Sent" stayed shown after switching version.
+- **QA audit (`impeccable`, 14/20), fixed and checked with real input:**
+  - Enter and Space open a focused pin's note;
+  - a click at another width no longer drops the draft's pins;
+  - focus goes to the next pin or the pin button after a delete or leaving pin mode;
+  - the frame is inert while pinning;
+  - pin drags handle cancel;
+  - pins keep their numbers through the API (`n`), MCP and History;
+  - a failed send doesn't duplicate round text;
+  - a render that fails shows a message;
+  - the banner sits below a top quick bar, and its live region is the text only;
+  - the note stays inside the layer at 700px;
+  - the DESIGN.md dialog has one close control.
+- **Left as is:** the detector's 13px advisories (13px is the drawer's helper size); the pre-existing axe findings.

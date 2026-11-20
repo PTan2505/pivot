@@ -144,6 +144,7 @@ describe("the preview browser", () => {
   const secretFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "preview-secret-")), "secret.txt");
   const SECRET = "PREVIEW-SYNTHETIC-SECRET-7b1d";
   const events = [];
+  const feedbackSent = [];
 
   const toggle = version(
     2,
@@ -180,6 +181,10 @@ try { window.open("about:blank"); } catch {}
       pivotPage: `http://127.0.0.1:4321/design/${SID}`,
       headless: true,
       onEvent: (e) => events.push(e),
+      sendFeedback: async (fb) => {
+        feedbackSent.push(fb);
+        return { id: "fb-1" };
+      },
     });
     page = preview.page();
     await page.waitForSelector("body[data-ready=true]");
@@ -260,6 +265,30 @@ try { window.open("about:blank"); } catch {}
     expect(await page.textContent("#dot")).toBe("1/2");
     await page.click("[data-place='bottom']");
     expect(await page.getAttribute("#bar-place", "class")).toBe("bar-place bottom");
+  });
+
+  it("sends the user's feedback for the version shown to PIVOT, and keeps the window open", async () => {
+    await page.click("[data-tab='1']");
+    expect(await page.isDisabled("#fb-send")).toBe(true);
+    await page.fill("#fb-text", "  The toggle should be larger  ");
+    await page.click("#fb-send");
+    await page.waitForFunction(() => document.getElementById("fb-status")?.textContent?.startsWith("Sent"));
+    expect(feedbackSent.at(-1)).toEqual({
+      pivotPage: `http://127.0.0.1:4321/design/${SID}`,
+      sessionId: SID,
+      round: toggle.round,
+      mockupId: toggle.id,
+      text: "The toggle should be larger",
+    });
+    expect(events.at(-1)).toMatchObject({ event: "feedback", n: 2, id: toggle.id, feedbackId: "fb-1" });
+    expect(await page.inputValue("#fb-text")).toBe("");
+    // typing digits in the box doesn't switch versions
+    await page.fill("#fb-text", "");
+    await page.focus("#fb-text");
+    await page.keyboard.type("1");
+    expect(await page.getAttribute("[data-tab='1']", "aria-selected")).toBe("true");
+    await page.fill("#fb-text", "");
+    expect(preview.context.pages()).toHaveLength(1);
   });
 
   it("compares versions side by side and replays", async () => {

@@ -75,7 +75,17 @@ export async function addFeedback(input: {
       403,
     );
   const text = String(input.text ?? "").trim();
-  const pins = (input.pins ?? []).map((p) => ({ x: p.x, y: p.y, text: String(p.text ?? "").trim() }));
+  // the number the owner saw; a pin without one gets the next number no pin uses
+  const given = (input.pins ?? []).map((p) => (Number.isInteger(p.n) && p.n! >= 1 && p.n! <= 999 ? p.n! : null));
+  const numbered = given.filter((n): n is number => n !== null);
+  if (new Set(numbered).size !== numbered.length) throw new DesignError("Two pins have the same number.");
+  let free = Math.max(0, ...numbered);
+  const pins = (input.pins ?? []).map((p, i) => ({
+    x: p.x,
+    y: p.y,
+    text: String(p.text ?? "").trim(),
+    n: given[i] ?? ++free,
+  }));
   if (text.length > FEEDBACK_LIMITS.text)
     throw new DesignError(`Feedback is at most ${FEEDBACK_LIMITS.text} characters.`);
   if (pins.length > FEEDBACK_LIMITS.pins) throw new DesignError(`At most ${FEEDBACK_LIMITS.pins} pins at a time.`);
@@ -123,7 +133,7 @@ export async function addFeedback(input: {
       mockupDigest: version?.digest ?? null,
       text,
       width,
-      pins: pins.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y), text: p.text })),
+      pins: pins.map((p) => ({ n: p.n, x: Math.round(p.x), y: Math.round(p.y), text: p.text })),
       source: "owner",
     })
     .returning();
@@ -232,7 +242,7 @@ export async function pinImage(feedbackId: string, index: number): Promise<PinIm
   const sharp = (await import("sharp")).default;
   const { data, info } = await sharp(render.data, { limitInputPixels: false })
     .extract({ left, top, width: w, height: h })
-    .composite([{ input: marker(index + 1, cx, cy, w, h), left: 0, top: 0 }])
+    .composite([{ input: marker(pin.n ?? index + 1, cx, cy, w, h), left: 0, top: 0 }])
     .resize(MAX_EDGE, MAX_EDGE, { fit: "inside", withoutEnlargement: true })
     .jpeg({ quality: 82, mozjpeg: true })
     .toBuffer({ resolveWithObject: true });
