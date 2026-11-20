@@ -38,7 +38,7 @@ The flow is **understand (the user answers the options) → search → inspect �
 
 **Small, explicit fixes skip the flow.** When the request already says what to change and there is nothing to explore (fix a misaligned icon, raise a contrast, rename a label, tighten one gap, match a button to its neighbours), don't search the library, write a brief or open a design session: make the fix in the project's design system and verify it. Use the full flow when the request leaves the design open: a new screen or component, a restyle, a layout or hierarchy change, "make this better", or when the user asks for references. If it's unclear which one a request is, ask.
 
-**Design documents live in PIVOT, never in the target project.** Briefs, decisions and session notes are not written into the project's repository, not even as a fallback. Only the implementation (source code and the files the project itself needs) goes there. If PIVOT can't store them yet (see §6), say so.
+**Design documents live in PIVOT, never in the target project.** Briefs, decisions and session notes are not written into the project's repository, not even as a fallback. Only the implementation (source code and the files the project itself needs) goes there. If PIVOT can't store them yet (see §6), say so. The project's own `DESIGN.md` is one of the files the project needs, not a session document: when it has none, you draft one and write it only on the user's yes ([design-md.md](design-md.md)).
 
 **Specialists review the work, by risk.** Other installed skills advise at set steps; they never approve anything:
 
@@ -84,6 +84,7 @@ How to run them:
 - **Paths and address:** this skill's folder is `${CLAUDE_SKILL_DIR}`; in [motion.md](motion.md) it is written `<skill>`. PIVOT runs at `${user_config.pivot_url}`: pass it as `--url` to this skill's scripts.
 - If the `pivot` tools aren't available, or a call returns `app_unreachable`, tell the user PIVOT isn't running (`npx pivot-studio`, or `npm start` in a PIVOT checkout) and ask whether to wait or continue **without references**. If they continue, say plainly that nothing below comes from their library.
 - Read the **target project's** design system first: `DESIGN.md`, `CLAUDE.md`, token or theme files, existing components. References inform structure and hierarchy; the project's own tokens, type and components decide how it looks.
+- **No `DESIGN.md`, and no other design-system document?** Draft one from the code, show it, and write it into the project only if the user says yes: [design-md.md](design-md.md). Not for a small fix, and at most once per session.
 
 ## 1. Understand the request
 
