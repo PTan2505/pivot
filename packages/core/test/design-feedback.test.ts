@@ -522,6 +522,33 @@ describe.skipIf(!(await (await import("../src/capture")).playwrightStatus()).ins
     expect(b).toBeLessThan(80);
   }, 60_000);
 
+  it("renders at the owner's viewport height (100vh) and in standards mode, and keeps that height on a note", async () => {
+    const VH = `<html><body style="margin:0"><section id="hero" style="height:100vh;background:#123">Hero</section><p id="after">After</p></body></html>`;
+    expect(feedback.withDoctype(VH).startsWith("<!doctype html>")).toBe(true);
+    expect(feedback.withDoctype("<!DOCTYPE html><p>x</p>")).toBe("<!DOCTYPE html><p>x</p>");
+    const { sessionId } = await design.saveDesignBrief({ title: "Viewport", milestone: "initial", markdown: "# V" });
+    const { ids } = await design.saveDesignMockups({ sessionId, mockups: [{ title: "One", html: VH }] });
+    const at900 = (await feedback.mockupElements(ids[0], 1280))!.find((e) => e.id === "hero")!;
+    const at600 = (await feedback.mockupElements(ids[0], 1280, 600))!.find((e) => e.id === "hero")!;
+    expect(at900.h).toBe(900);
+    expect(at600.h).toBe(600);
+    expect((await feedback.renderMockup(ids[0], 1280, 600))!.height).toBeLessThan(
+      (await feedback.renderMockup(ids[0], 1280))!.height,
+    );
+    await expect(feedback.mockupElements(ids[0], 1280, 100)).rejects.toThrow(/from 200 to 4000/);
+    const fb = await feedback.addFeedback({
+      sessionId,
+      round: 1,
+      mockupId: ids[0],
+      width: 1280,
+      height: 600,
+      pins: [{ x: 10, y: 10, text: "the hero", element: { selector: "#hero" } }],
+    });
+    expect(fb.pins[0]).toMatchObject({ vh: 600, element: { box: { h: 600 } } });
+    const crop = (await feedback.pinImage(fb.id, 0))!;
+    expect(crop.region.height).toBeLessThanOrEqual(1200);
+  }, 60_000);
+
   it("keeps the shallowest elements of a page with too many, parents renumbered", () => {
     const raw = [
       { parent: -1, depth: 0, tag: "main", x: 0, y: 0, w: 10, h: 10, sel: "main" },

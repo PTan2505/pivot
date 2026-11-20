@@ -41,3 +41,12 @@ Approved by the owner on 2026-11-20, following [element-feedback-plan.md](elemen
   - backups carry and restore the crops, checked by sha256; capability `design.feedback.live`;
   - pivot-studio 0.5.0, plugin 0.6.0. No migration.
 - **Tested:** core `design-feedback.test.ts` (any width and its limits; a live note with its element cut to limits and its crop; refusals: no picture, not an image, too big, too large a side, an unusable tag; the backup round trip of a crop); MCP `feedback-tools.test.ts`.
+
+### Phase 9: comment on the live page in the full-screen view (2026-11-20)
+
+- **Design:** through `pivot:redesign`, design session `3ae676b1`, version 1 "Comment on the live page", approved by the owner in PIVOT with no note. `ui-ux-pro-max` reviewed the brief (adopted: named modes in the preview, keys only while commenting, freeze inside the page, "Hide panel" hint, widths in notes, crops before overlays, one send). Two spikes, run by subagents in the scratchpad, measured the full-screen frame (overlay error ≤ 0.02 px, client selectors identical to the server's) and the preview window (isolated-world reading, shield).
+- **Implemented:**
+  - the full-screen frame is a script-free same-origin copy (`sandbox="allow-same-origin"`, `srcdoc` with a doctype and a CSP, no meta refresh, a link guard), kept across comment mode;
+  - comment mode draws over the live frame (outline, chip, markers, clipped to the frame; the note away from the drawer), reads elements in the browser (`lib/element-map.ts`, the server's rules), stops the page's presses and clicks inside it, keeps its scroll and size; a "Hide panel" hint for elements under the drawer; notes carry the page's width and viewport height;
+  - the server renders and maps at a viewport height (`height`, 200–4000, default 900) and adds a doctype when a page has none; notes keep a height other than 900 (`vh`).
+- **Tested:** real-input e2e on a scratch PIVOT (the frame's sandbox and srcdoc, comment mode keeping scroll 200 and width 1440, hover chip, a click making a note without following the link, Pin, drawer rows with widths, Tab to the picker, the keyboard walk to an element under the drawer and Hide panel, leaving keeps the scroll, Send with width and height, no request leaving PIVOT, no console errors).

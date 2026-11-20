@@ -9,6 +9,8 @@ const input = z.object({
   mockupId: z.string().uuid().nullish(),
   text: z.string().max(FEEDBACK_LIMITS.text).optional(),
   width: z.number().int().nullish(),
+  /** The frame's viewport height when the pins were made there (default 900). */
+  height: z.number().int().nullish(),
   pins: z
     .array(
       z.object({
