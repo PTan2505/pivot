@@ -272,7 +272,8 @@ try { window.open("about:blank"); } catch {}
     expect(await page.isDisabled("#fb-send")).toBe(true);
     await page.fill("#fb-text", "  The toggle should be larger  ");
     await page.click("#fb-send");
-    await page.waitForFunction(() => document.getElementById("fb-status")?.textContent?.startsWith("Sent"));
+    await page.waitForFunction(() => document.getElementById("fb-status")?.textContent === "Sent · waiting for Claude");
+    expect(await page.textContent("#fb-send")).toBe("Send to Claude");
     expect(feedbackSent.at(-1)).toEqual({
       pivotPage: `http://127.0.0.1:4321/design/${SID}`,
       sessionId: SID,
@@ -280,7 +281,7 @@ try { window.open("about:blank"); } catch {}
       mockupId: toggle.id,
       text: "The toggle should be larger",
     });
-    expect(events.at(-1)).toMatchObject({ event: "feedback", n: 2, id: toggle.id, feedbackId: "fb-1" });
+    expect(events.at(-1)).toMatchObject({ event: "feedback", n: 2, id: toggle.id, feedbackId: "fb-1", notes: 0 });
     expect(await page.inputValue("#fb-text")).toBe("");
     // typing digits in the box doesn't switch versions
     await page.fill("#fb-text", "");
@@ -493,6 +494,523 @@ setTimeout(() => { location.href = "file://${secretFile}"; }, 900);
       expect([...open.blocked].join(" ")).toMatch(/127\.0\.0\.1:4321 \(PIVOT\)/);
     }, 60_000);
   });
+});
+
+// Comment mode (live feedback, live-feedback-plan.md Phase 10): the shield, the element read in the version frame's
+// isolated world, the crops, the notes sent with the text, and what a hostile mockup can't do.
+const LIVE_PAGE = `<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;font:16px system-ui;color:#111}header{display:flex;gap:16px;align-items:center;padding:12px 16px;background:#eee;position:sticky;top:0;z-index:2}
+.menu{position:fixed;top:60px;left:16px;background:#fff;box-shadow:0 8px 24px #0003;padding:8px;width:200px;display:flex;flex-direction:column;gap:4px;z-index:3}
+.item{display:block;padding:6px 8px;color:#111;background:#f6f6f6}.sec{min-height:700px;padding:24px}
+.card{width:300px;height:120px;background:#cde;margin:12px;display:grid;place-items:center}</style></head><body>
+<header><button id="open" class="btn primary">Menu</button><a href="#pricing" class="nav-link">Pricing</a><input id="q" placeholder="Search"></header>
+<section class="sec" id="hero"><h1 class="title">Hero title</h1><div class="card" id="c1">Card A</div></section>
+<section class="sec"><div class="card" id="c2">Card B</div></section><section class="sec"><div class="card" id="deep">Deep card</div></section>
+<script>
+const d = document.body.dataset;
+const bump = (k) => (d[k] = String(Number(d[k] || 0) + 1));
+for (const t of ["click", "pointerdown", "mousedown", "submit"]) addEventListener(t, () => bump(t), true);
+document.getElementById("open").addEventListener("click", () => {
+  const m = document.createElement("div"); m.className = "menu"; m.setAttribute("role", "menu");
+  m.innerHTML = '<a href="#a" class="item">Profile</a><a href="#b" class="item">Settings</a>';
+  document.body.appendChild(m);
+});
+// hostile: the privileged binding (read, note, send, mode), the isolated world's key binding, a made-up ⌥C, and an
+// elementFromPoint that lies to anything reading the page from its own world
+const tries = [{ hover: { x: 40, y: 30 } }, { pick: { x: 40, y: 30, tool: "select", n: 1 } }, { feedback: "from the mockup", n: 1 }, { mode: "comment" }, { drop: "x" }];
+Promise.all(tries.map((c) => { try { return window.pivotPreview ? window.pivotPreview(c).then((r) => String(r), () => "threw") : "absent"; } catch { return "sync-throw"; } })).then((r) => (d.evil = r.join(",")));
+d.keyBinding = typeof window.__pivotPreviewKey;
+setTimeout(() => dispatchEvent(new KeyboardEvent("keydown", { code: "KeyC", key: "ç", altKey: true, bubbles: true })), 300);
+document.elementFromPoint = () => document.getElementById("deep");
+</script></body></html>`;
+const STATIC_PAGE = `<!doctype html><style>body{margin:0;font:16px system-ui}h1{margin:40px}</style><h1 id="t" class="title big">Hello static</h1><p class="lead" style="margin:40px">Plain text</p><script>document.getElementById("t").textContent = "SCRIPT RAN"</script>`;
+// a page whose crops can't stay small at full quality: noise on a canvas
+const NOISE_PAGE = `<!doctype html><style>body{margin:0}canvas{display:block}</style><canvas id="c"></canvas><script>
+const c = document.getElementById("c"); c.width = innerWidth; c.height = 2400; c.style.width = innerWidth + "px"; c.style.height = "2400px";
+const x = c.getContext("2d"), im = x.createImageData(c.width, c.height);
+for (let i = 0; i < im.data.length; i += 4) { im.data[i] = Math.random() * 255; im.data[i + 1] = Math.random() * 255; im.data[i + 2] = Math.random() * 255; im.data[i + 3] = 255; }
+x.putImageData(im, 0, 0);</script>`;
+
+/** Starts a preview of the comment fixtures, recording what it would post to PIVOT. */
+async function commentPreview(extra = {}) {
+  const sent = [];
+  const events = [];
+  const versions = [
+    version(1, "Live", true, LIVE_PAGE),
+    version(2, "Static", false, STATIC_PAGE),
+    version(3, "Noise", true, NOISE_PAGE),
+  ];
+  const pv = await startPreview({
+    session,
+    versions,
+    pivotPage: `http://127.0.0.1:4321/design/${SID}`,
+    headless: true,
+    onEvent: (e) => events.push(e),
+    sendFeedback: async (body) => {
+      sent.push(body);
+      return { id: `fb-${sent.length}` };
+    },
+    ...extra,
+  });
+  const page = pv.page();
+  await page.waitForSelector("body[data-ready=true]");
+  await loaded(page);
+  return { pv, page, sent, events, versions };
+}
+/** The version's frame has run its own scripts (the live fixture marks its body when it has). */
+async function loaded(page) {
+  for (let i = 0; i < 100; i++) {
+    const done = await versionFrame(page)
+      ?.evaluate(
+        () => document.readyState === "complete" && (!document.getElementById("open") || !!document.body.dataset.evil),
+      )
+      .catch(() => false);
+    if (done) return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error("the version's frame didn't load");
+}
+const versionFrame = (page) => page.frames().find((f) => f.parentFrame() === page.mainFrame());
+const commenting = (page) => page.evaluate(() => document.body.classList.contains("commenting"));
+/** The centre of an element of the version, in the window (the frame is unscaled at Desktop). */
+async function centreOf(page, sel) {
+  const b = await page.frameLocator("iframe").locator(sel).first().boundingBox();
+  return { x: b.x + Math.min(b.width / 2, 40), y: b.y + b.height / 2 };
+}
+async function hoverChip(page, sel) {
+  const p = await centreOf(page, sel);
+  await page.mouse.move(p.x - 1, p.y);
+  await page.mouse.move(p.x, p.y);
+  await page.waitForFunction(() => !document.getElementById("hl").hidden);
+  return page.textContent("#chip");
+}
+
+describe("comment mode in the preview window", () => {
+  let c;
+  beforeAll(async () => {
+    c = await commentPreview();
+  }, 60_000);
+  afterAll(async () => {
+    await c?.pv.close();
+  });
+
+  it("switches between Use and Comment: the shield covers the version, the tools show only in Comment", async () => {
+    const { page } = c;
+    expect(await commenting(page)).toBe(false);
+    expect(await page.isVisible("#cshield")).toBe(false);
+    expect(await page.isVisible("#ctool")).toBe(false);
+    expect(await page.isVisible("#dtools-row")).toBe(false);
+    expect(await page.textContent("#notes-empty")).toBe(
+      "Use the page first: open the menu or tab you want, then switch to Comment.",
+    );
+    await page.click("#qmode [data-mode=comment]");
+    expect(await commenting(page)).toBe(true);
+    expect(await page.getAttribute("#dmode [data-mode=comment]", "aria-checked")).toBe("true");
+    expect(await page.textContent("#chint")).toBe("Commenting · page paused · Esc to use it");
+    // the shield covers exactly the version's box, under the drawer and the bars
+    const shield = await page.locator("#cshield").boundingBox();
+    const frame = await page.locator("#stage .frame").boundingBox();
+    expect(shield).toEqual(frame);
+    // focus moved to the preview's page, on the current tool
+    expect(await page.evaluate(() => document.activeElement?.dataset.tool)).toBe("select");
+    // V and P pick the tool; never while typing in a field
+    await page.keyboard.press("p");
+    expect(await page.getAttribute("#ctools [data-tool=pin]", "aria-checked")).toBe("true");
+    expect(await page.textContent("#centre-label")).toBe("Add pin at centre");
+    await page.focus("#fb-text");
+    await page.keyboard.type("v");
+    expect(await page.getAttribute("#ctools [data-tool=pin]", "aria-checked")).toBe("true");
+    await page.keyboard.press("Escape"); // typing: Esc stays in the field
+    expect(await commenting(page)).toBe(true);
+    await page.fill("#fb-text", "");
+    await page.locator("#done").focus();
+    await page.keyboard.press("v");
+    expect(await page.getAttribute("#ctools [data-tool=select]", "aria-checked")).toBe("true");
+    // Esc goes back to Use; ⌥C switches both ways
+    await page.keyboard.press("Escape");
+    expect(await commenting(page)).toBe(false);
+    expect(await page.isVisible("#cshield")).toBe(false);
+    expect(await page.getAttribute("#drawer", "data-state")).toBe("open");
+    await page.keyboard.press("Alt+KeyC");
+    expect(await commenting(page)).toBe(true);
+    await page.keyboard.press("Alt+KeyC");
+    expect(await commenting(page)).toBe(false);
+    // V and P do nothing in Use
+    await page
+      .locator("#done")
+      .focus()
+      .catch(() => {});
+    await page.keyboard.press("p");
+    expect(await page.getAttribute("#ctools [data-tool=select]", "aria-checked")).toBe("true");
+  }, 30_000);
+
+  it("reads the element under the pointer in its own world, on a static version (no scripts)", async () => {
+    const { page } = c;
+    await page.click("[data-tab='1']");
+    await loaded(page);
+    expect(await page.frameLocator("iframe").locator("#t").textContent()).toBe("Hello static");
+    await page.click("#qmode [data-mode=comment]");
+    const chip = await hoverChip(page, "#t");
+    expect(chip).toMatch(/^h1#t “Hello static” · \d+×\d+$/);
+    expect(await hoverChip(page, "p.lead")).toMatch(/^p\.lead “Plain text” · \d+×\d+$/);
+    await page.click("#qmode [data-mode=use]");
+  }, 30_000);
+
+  it("comments on what a script opened: a menu opened in Use, commented on in Comment, clicks never reaching it", async () => {
+    const { page, pv } = c;
+    await page.click("[data-tab='0']");
+    await loaded(page);
+    const f = page.frameLocator("iframe");
+    // a link within the page first (a same-document navigation: the guard stays single, ⌥C switches once)
+    await f.locator("a.nav-link").click();
+    await f.locator("#open").click();
+    expect(await f.locator(".menu").count()).toBe(1);
+    const before = await versionFrame(page).evaluate(() => ({ ...document.body.dataset, hash: location.hash }));
+    expect(before.hash).toBe("#pricing");
+    // focus is in the mockup: ⌥C is caught there and switches to Comment (and types nothing)
+    await f.locator("#q").focus();
+    await page.keyboard.press("Alt+KeyC");
+    await page.waitForFunction(() => document.body.classList.contains("commenting"));
+    await page.waitForTimeout(200);
+    expect(await commenting(page)).toBe(true); // switched once
+    expect(await f.locator("#q").inputValue()).toBe("");
+    // the mockup's elementFromPoint lies (it always answers #deep): the read happens in another world
+    expect(await hoverChip(page, ".menu a.item:nth-of-type(2)")).toMatch(/^a\.item “Settings” · 200×\d+$/);
+    const p = await centreOf(page, ".menu a.item:nth-of-type(2)");
+    await page.mouse.click(p.x, p.y);
+    await page.waitForSelector("#pop:not([hidden])");
+    expect(await page.textContent("#pop-label")).toBe("Note on a.item “Settings”");
+    expect(await page.evaluate(() => document.activeElement?.id)).toBe("pop-text");
+    await page.keyboard.type("Make this one bold");
+    await page.keyboard.press("Escape"); // closes the note, stays in Comment
+    expect(await page.isHidden("#pop")).toBe(true);
+    expect(await commenting(page)).toBe(true);
+    // a marker just outside the element's top-left corner, and the row in the drawer
+    const marker = page.locator(".mk");
+    expect(await marker.getAttribute("aria-label")).toBe("Note 1 on a.item “Settings”: Make this one bold");
+    const mb = await marker.boundingBox();
+    const eb = await f.locator(".menu a.item:nth-of-type(2)").boundingBox();
+    // (kept whole inside the frame: the element is 24px from its left edge)
+    expect([Math.round(mb.x + mb.width / 2), Math.round(mb.y + mb.height / 2)]).toEqual([
+      Math.round(Math.max(14, eb.x - 14)),
+      Math.round(eb.y - 14),
+    ]);
+    expect(mb.width).toBe(28);
+    expect(await page.locator("#notes li").count()).toBe(1);
+    expect(await page.textContent("#notes li small")).toBe("a.item “Settings” · Desktop 1500 · live");
+    expect(await page.textContent("#qcount")).toBe("1 note");
+    expect(pv.notes.size).toBe(1);
+    // nothing reached the mockup: no click, no pointerdown, the menu still open, no link followed
+    const after = await versionFrame(page).evaluate(() => ({ ...document.body.dataset, hash: location.hash }));
+    expect(after.click).toBe(before.click);
+    expect(after.pointerdown).toBe(before.pointerdown);
+    expect(after.mousedown).toBe(before.mousedown);
+    expect(after.hash).toBe("#pricing");
+    expect(await f.locator(".menu").count()).toBe(1);
+    // the page's own keys are paused while commenting: typing in its field does nothing, Esc there returns to Use
+    await f.locator("#q").focus();
+    await page.keyboard.type("abc");
+    expect(await f.locator("#q").inputValue()).toBe("");
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => !document.body.classList.contains("commenting"));
+    // and come back in Use
+    await page.keyboard.type("ok");
+    expect(await f.locator("#q").inputValue()).toBe("ok");
+  }, 30_000);
+
+  it("can't be driven by the mockup: no binding call, no key binding, no made-up ⌥C", async () => {
+    const { page, events } = c;
+    const d = await versionFrame(page).evaluate(() => ({ ...document.body.dataset }));
+    expect(d.evil).toBe("false,false,false,false,false");
+    expect(d.keyBinding).toBe("undefined");
+    expect(await page.evaluate(() => typeof window.__pivotPreviewKey)).toBe("undefined");
+    expect(events.filter((e) => e.event === "feedback")).toEqual([]);
+    // reading the page is refused outside Comment, even to the preview's own page
+    expect(await page.evaluate(() => window.pivotPreview({ hover: { x: 40, y: 30 } }))).toBe(null);
+    expect(await page.evaluate(() => window.pivotPreview({ pick: { x: 40, y: 30, tool: "pin", n: 1 } }))).toBe(null);
+    // keys and clicks the mockup makes up count for nothing: no ⌥C into Comment, no Esc out of it
+    await versionFrame(page).evaluate(() =>
+      dispatchEvent(new KeyboardEvent("keydown", { code: "KeyC", key: "ç", altKey: true, bubbles: true })),
+    );
+    await page.waitForTimeout(150);
+    expect(await commenting(page)).toBe(false);
+    await page.click("#qmode [data-mode=comment]");
+    await versionFrame(page).evaluate(() => {
+      for (const code of ["Escape", "KeyP"])
+        dispatchEvent(new KeyboardEvent("keydown", { code, key: code === "Escape" ? code : "p", bubbles: true }));
+    });
+    await page.waitForTimeout(150);
+    expect(await commenting(page)).toBe(true);
+    expect(await page.getAttribute("#ctools [data-tool=select]", "aria-checked")).toBe("true");
+    await page.click("#done");
+    expect(await commenting(page)).toBe(false);
+  }, 30_000);
+
+  it("sends the notes and the text together with one Send to Claude, crops and all", async () => {
+    const { page, pv, sent, events } = c;
+    await page.click("#dmode [data-mode=comment]");
+    // a spot with Pin, after scrolling the version with the wheel over the shield
+    await page.keyboard.press("p");
+    await page.mouse.move(500, 500);
+    await page.mouse.wheel(0, 600);
+    await page.waitForFunction(async () => true);
+    await expect.poll(() => versionFrame(page).evaluate(() => scrollY)).toBeGreaterThan(500);
+    const sy = await versionFrame(page).evaluate(() => scrollY);
+    await page.mouse.click(500, 400);
+    await page.waitForSelector("#pop:not([hidden])");
+    expect(await page.textContent("#pop-label")).toBe("Note for spot 2");
+    await page.keyboard.type("Too much space here");
+    await page.click("#cshield", { position: { x: 900, y: 20 } }); // a click elsewhere closes the note
+    expect(await page.isHidden("#pop")).toBe(true);
+    // a note closed without text is dropped, here and in the process
+    await page.click("#centre");
+    await page.waitForSelector("#pop:not([hidden])");
+    expect(pv.notes.size).toBe(3);
+    await page.keyboard.press("Escape");
+    expect(pv.notes.size).toBe(2);
+    expect(await page.locator("#notes li").count()).toBe(2);
+    await page.fill("#fb-text", "  And the header feels heavy  ");
+    expect(await page.textContent("#fb-send")).toBe("Send to Claude");
+    await page.click("#fb-send");
+    await page.waitForFunction(() => document.getElementById("fb-status")?.textContent === "Sent · waiting for Claude");
+    const body = sent.at(-1);
+    expect(body).toMatchObject({
+      pivotPage: `http://127.0.0.1:4321/design/${SID}`,
+      sessionId: SID,
+      round: 1,
+      mockupId: c.versions[0].id,
+      text: "And the header feels heavy",
+      width: 1500,
+      height: 950,
+    });
+    expect(body.pins).toHaveLength(2);
+    const [menu, spot] = body.pins;
+    expect(menu).toMatchObject({
+      n: 1,
+      text: "Make this one bold",
+      live: true,
+      element: {
+        selector: "body > div.menu > a.item:nth-of-type(2)",
+        tag: "a",
+        classes: ["item"],
+        text: "Settings",
+        html: '<a href="#b" class="item">Settings</a>',
+      },
+    });
+    expect(spot).toMatchObject({ n: 2, text: "Too much space here", live: true, x: 500 });
+    expect(spot.element).toBeUndefined();
+    expect(spot.y).toBe(400 + sy);
+    for (const pin of body.pins) {
+      const img = Buffer.from(pin.capture.image, "base64");
+      expect([img[0], img[1]]).toEqual([0xff, 0xd8]);
+      const dim = P.jpegSize(img);
+      expect(dim.w).toBeLessThanOrEqual(2400);
+      expect(img.length).toBeLessThanOrEqual(P.NOTE_LIMITS.cropBytes);
+      // the region is in the version's document: it holds the note's point
+      const r = pin.capture.region;
+      expect(pin.x).toBeGreaterThanOrEqual(r.left);
+      expect(pin.x).toBeLessThanOrEqual(r.left + r.width);
+      expect(pin.y).toBeGreaterThanOrEqual(r.top);
+      expect(pin.y).toBeLessThanOrEqual(r.top + r.height);
+    }
+    // the spot's crop is the 160px square around it, plus a margin
+    expect(spot.capture.region).toEqual({ left: 404, top: 304 + sy, width: 192, height: 192 });
+    // the crop is the page as seen: the menu's item, not the drawer or an outline
+    const sharp = (await import("sharp")).default;
+    const { data, info } = await sharp(Buffer.from(menu.capture.image, "base64"))
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    let dark = 0;
+    for (let i = 0; i < data.length; i += info.channels)
+      if (data[i] < 60 && data[i + 1] < 60 && data[i + 2] < 60) dark++;
+    expect(dark / (info.width * info.height)).toBeLessThan(0.2); // the menu's light box, not the dark outline or chrome
+    expect(events.at(-1)).toMatchObject({
+      event: "feedback",
+      n: 1,
+      id: c.versions[0].id,
+      feedbackId: "fb-1",
+      notes: 2,
+      width: 1500,
+    });
+    // the notes left the draft, here and in the process
+    expect(await page.locator("#notes li").count()).toBe(0);
+    expect(await page.locator(".mk").count()).toBe(0);
+    expect(pv.notes.size).toBe(0);
+    expect(await page.inputValue("#fb-text")).toBe("");
+    expect(await page.isDisabled("#fb-send")).toBe(true);
+  }, 30_000);
+
+  it("keeps notes made at another width, saying so, and sends each width as its own piece", async () => {
+    const { page, sent, events } = c;
+    await page.keyboard.press("v");
+    await page.mouse.move(10, 10);
+    const p = await centreOf(page, "#open");
+    await page
+      .frameLocator("iframe")
+      .locator("#open")
+      .scrollIntoViewIfNeeded()
+      .catch(() => {});
+    await page.mouse.click(p.x, p.y);
+    await page.waitForSelector("#pop:not([hidden])");
+    await page.keyboard.type("Desktop note");
+    await page.keyboard.press("Escape");
+    await page.click("[data-width='phone']");
+    expect(await commenting(page)).toBe(true);
+    expect(await page.textContent("#notes li small")).toBe("button#open “Menu” · made at Desktop 1500 · live");
+    expect(await page.locator(".mk").count()).toBe(0);
+    await page.click("#centre");
+    await page.waitForSelector("#pop:not([hidden])");
+    await page.keyboard.type("Phone note");
+    await page.keyboard.press("Escape");
+    expect(await page.locator("#notes li small").nth(1).textContent()).toMatch(/ · Phone 390 · live$/);
+    expect(await page.locator(".mk").count()).toBe(1);
+    const n = sent.length;
+    await page.click("#fb-send");
+    await page.waitForFunction(() => document.getElementById("fb-status")?.textContent === "Sent · waiting for Claude");
+    expect(sent.slice(n).map((b) => [b.width, b.pins.map((x) => x.text), b.text])).toEqual([
+      [1500, ["Desktop note"], ""],
+      [390, ["Phone note"], ""],
+    ]);
+    expect(events.slice(-2).map((e) => [e.notes, e.width])).toEqual([
+      [1, 1500],
+      [1, 390],
+    ]);
+    await page.click("[data-width='desktop']");
+  }, 30_000);
+
+  it("keeps every crop under PIVOT's limits, even of a page that can't compress", async () => {
+    const { page, pv } = c;
+    await page.click("[data-tab='2']");
+    await loaded(page);
+    expect(await commenting(page)).toBe(true);
+    await page.waitForFunction(() => true);
+    await expect.poll(() => versionFrame(page).evaluate(() => document.getElementById("c")?.height ?? 0)).toBe(2400);
+    await page.keyboard.press("v");
+    await page.mouse.move(300, 300);
+    await page.mouse.click(300, 300);
+    await page.waitForSelector("#pop:not([hidden])");
+    expect(await page.textContent("#pop-label")).toMatch(/^Note on canvas#c · 1500×2400$/);
+    const [kept] = [...pv.notes.values()];
+    const img = Buffer.from(kept.image, "base64");
+    expect(img.length).toBeLessThanOrEqual(P.NOTE_LIMITS.cropBytes);
+    const sharp = (await import("sharp")).default;
+    const meta = await sharp(img).metadata();
+    expect(meta.format).toBe("jpeg");
+    expect(Math.max(meta.width, meta.height)).toBeLessThanOrEqual(2400);
+    // noise doesn't compress: the crop was made smaller than the window's 1500 px to fit
+    expect(meta.width).toBeLessThan(1500);
+    // the visible part of the canvas: the whole window's width, cut at the window's bottom
+    expect(kept.region).toMatchObject({ left: 0, top: 0, width: 1500, height: 950 });
+    await page.click("#pop-del");
+    expect(pv.notes.size).toBe(0);
+    await page.click("#done");
+  }, 30_000);
+  it("keeps the keyboard out of the paused version: Tab and Shift+Tab never land in it", async () => {
+    const { page } = c;
+    await page.click("[data-tab='0']");
+    await loaded(page);
+    const f = page.frameLocator("iframe");
+    // focus in the mockup, then ⌥C: focus comes out to the toolbar, and the version leaves the tab order
+    await f.locator("#q").focus();
+    await page.keyboard.press("Alt+KeyC");
+    await page.waitForFunction(() => document.body.classList.contains("commenting"));
+    expect(await page.evaluate(() => document.querySelector("#stage .frame").inert)).toBe(true);
+    expect(await page.evaluate(() => document.activeElement?.dataset.tool)).toBe("select");
+    const seen = [];
+    for (const key of [...Array(12).fill("Shift+Tab"), ...Array(40).fill("Tab")]) {
+      await page.keyboard.press(key);
+      seen.push(await page.evaluate(() => document.activeElement?.tagName));
+    }
+    expect(seen).not.toContain("IFRAME");
+    expect(new Set(seen).size).toBeGreaterThan(3); // it did move through the preview's controls
+    await page.click("#done");
+    expect(await page.evaluate(() => document.querySelector("#stage .frame").inert)).toBe(false);
+    // in Use the version is reachable again
+    await f.locator("#q").focus();
+    expect(await page.evaluate(() => document.activeElement?.tagName)).toBe("IFRAME");
+    await page.locator("#toggle").focus();
+  }, 30_000);
+
+  it("shows and announces a problem at every width, also where the toolbar's hint is hidden", async () => {
+    const { page } = c;
+    await page.setViewportSize({ width: 300, height: 700 });
+    try {
+      await page.waitForFunction(() => innerWidth === 300);
+      await loaded(page);
+      // the quick bar hides while the drawer is a bottom sheet: the drawer's switch
+      await page.click("#dmode [data-mode=comment]");
+      await page.waitForFunction(() => document.body.classList.contains("commenting"));
+      expect(await page.isHidden("#chint")).toBe(true);
+      // a 300px page can't take notes (PIVOT takes 320 to 2560): the reason is shown, and announced
+      await page.mouse.click(150, 120);
+      await page.waitForFunction(() => document.getElementById("cmsg")?.textContent !== "");
+      expect(await page.textContent("#cmsg")).toBe("Notes need a page 320 to 2560 px wide.");
+      expect(await page.getAttribute("#cmsg", "role")).toBe("status");
+      expect(await page.isVisible("#cmsg")).toBe(true);
+      const box = await page.locator("#cmsg").boundingBox();
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(300);
+      expect(await page.locator("#notes li").count()).toBe(0);
+    } finally {
+      await page.evaluate(() => window.pivotPreviewKey("escape"));
+      await page.setViewportSize({ width: 1500, height: 950 });
+    }
+    expect(await commenting(page)).toBe(false);
+    expect(await page.textContent("#cmsg")).toBe("");
+  }, 30_000);
+});
+
+describe("comment mode on full Chromium (the version's frame out of process, as in the window)", () => {
+  let c;
+  let why = "";
+  beforeAll(async () => {
+    try {
+      c = await commentPreview({ channel: "chromium" });
+    } catch (err) {
+      why = err instanceof Error ? err.message : String(err);
+    }
+  }, 60_000);
+  afterAll(async () => {
+    await c?.pv.close();
+  });
+
+  it("reads, crops and sends a note on a script-made element through the frame's own session", async (ctx) => {
+    if (!c) return ctx.skip(`full Chromium isn't available: ${why}`);
+    const { page, pv, sent } = c;
+    // the frame runs in its own process here: it has its own CDP session
+    const session = await pv.context.newCDPSession(versionFrame(page));
+    await session.detach();
+    const f = page.frameLocator("iframe");
+    // an out-of-process frame takes the mouse only once it has painted: click until the menu opens
+    for (let i = 0; i < 20 && !(await f.locator(".menu").count()); i++) {
+      await f.locator("#open").click();
+      await page.waitForTimeout(100);
+    }
+    // a same-document navigation (a link within the page) keeps one guard: ⌥C switches once, not twice
+    await f.locator("a.nav-link").click();
+    expect(await versionFrame(page).evaluate(() => location.hash)).toBe("#pricing");
+    await f.locator("#q").focus();
+    await page.keyboard.press("Alt+KeyC");
+    await page.waitForFunction(() => document.body.classList.contains("commenting"));
+    await page.waitForTimeout(200);
+    expect(await commenting(page)).toBe(true);
+    expect(await hoverChip(page, ".menu a.item:nth-of-type(1)")).toMatch(/^a\.item “Profile” · 200×\d+$/);
+    const before = await versionFrame(page).evaluate(() => document.body.dataset.click);
+    const p = await centreOf(page, ".menu a.item:nth-of-type(1)");
+    await page.mouse.click(p.x, p.y);
+    await page.waitForSelector("#pop:not([hidden])");
+    await page.keyboard.type("Rename");
+    await page.keyboard.press("Escape");
+    expect(await versionFrame(page).evaluate(() => document.body.dataset.click)).toBe(before);
+    await page.click("#fb-send");
+    await page.waitForFunction(() => document.getElementById("fb-status")?.textContent === "Sent · waiting for Claude");
+    const pin = sent.at(-1).pins[0];
+    expect(pin.element.selector).toBe("body > div.menu > a.item:nth-of-type(1)");
+    expect(Buffer.from(pin.capture.image, "base64").length).toBeGreaterThan(500);
+    const d = await versionFrame(page).evaluate(() => ({ ...document.body.dataset }));
+    expect(d.evil).toBe("false,false,false,false,false");
+    expect(d.keyBinding).toBe("undefined");
+  }, 60_000);
 });
 
 describe("the preview script", () => {
