@@ -63,3 +63,9 @@ Approved by the owner on 2026-11-20, following [mockup-feedback-plan.md](mockup-
   - the scroll position updates once a frame.
 - **Measured:** key hints and the chip's size text at 5.16–7.41:1 contrast (Python); no sideways scroll at 1440, 390 and 320; reduced motion stops the marker animation.
 - **Left as is:** the detector's 13px advisories and the Geist font note (the design system's); axe `region` on a dialog header (pre-existing) and `page-has-heading-one` while the frame is inert (since Phase 3); limiting the P key that opens the mode (a follow-up).
+
+### Phase 7: the skill uses the element (2026-11-20)
+
+- **Audit:** `feedback.md` §2 read pins as spots and crops only; nothing told the agent what an element note's selector and HTML are for, how to treat a shared class, or how to carry the element into the build.
+- **Implemented:** `feedback.md` §2 (spots and element notes; find the element by its selector in the saved version and change exactly it; a shared class is this one unless the text says all), §4 (name the element in the list of changes; keep its tag and classes so the next note finds it), §6 (find the component in the project's code from its classes, text and HTML, scoped when shared); `pivot:design`'s tool table; SPEC §15.
+- **Tested:** `skills.test.ts` checks the new guidance; `pnpm plugin:validate`. The behaviour is skill guidance: it is exercised in the next real design session with element notes from PIVOT.
