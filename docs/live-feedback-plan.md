@@ -50,3 +50,8 @@ Approved by the owner on 2026-11-20, following [element-feedback-plan.md](elemen
   - comment mode draws over the live frame (outline, chip, markers, clipped to the frame; the note away from the drawer), reads elements in the browser (`lib/element-map.ts`, the server's rules), stops the page's presses and clicks inside it, keeps its scroll and size; a "Hide panel" hint for elements under the drawer; notes carry the page's width and viewport height;
   - the server renders and maps at a viewport height (`height`, 200–4000, default 900) and adds a doctype when a page has none; notes keep a height other than 900 (`vh`).
 - **Tested:** real-input e2e on a scratch PIVOT (the frame's sandbox and srcdoc, comment mode keeping scroll 200 and width 1440, hover chip, a click making a note without following the link, Pin, drawer rows with widths, Tab to the picker, the keyboard walk to an element under the drawer and Hide panel, leaving keeps the scroll, Send with width and height, no request leaving PIVOT, no console errors).
+
+### Phase 11: the skill reads live notes (2026-11-20)
+
+- **Implemented:** `feedback.md` §2: a live note is found by its crop and HTML (its selector may exist only after a script ran) and its state is the one to change; every note is read at its own width (the full-screen Desktop is the user's window width) and height. SPEC §15.
+- **Tested:** `skills.test.ts` checks the guidance; `pnpm plugin:validate`. The behaviour is skill guidance, exercised in the next real session with live notes.
