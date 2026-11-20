@@ -10,7 +10,7 @@ import {
   ExternalLink,
   Info,
   Loader2,
-  MapPin,
+  MessageSquarePlus,
   PanelRight,
   RotateCcw,
   X,
@@ -26,7 +26,13 @@ import {
   type Width,
 } from "@/components/design-mockups";
 import { DESIGN_STATUS_LABEL } from "@/components/design-session";
-import { DesignSystemBox, FeedbackSection, PinLayer, useFeedbackDrafts } from "@/components/mockup-feedback";
+import {
+  DesignSystemBox,
+  FeedbackSection,
+  PinLayer,
+  useFeedbackDrafts,
+  type CommentTool,
+} from "@/components/mockup-feedback";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +44,8 @@ import { cn } from "@/lib/utils";
 
 const DRAWER_KEY = "pivot.mockups.drawer";
 const BAR_KEY = "pivot.mockups.bar";
+/** Comment mode's last tool (Select or Pin), so the mode opens on it. */
+const TOOL_KEY = "pivot.feedback.tool";
 type BarPlace = "bottom" | "top" | "dot";
 const BAR_LABEL: Record<BarPlace, string> = { bottom: "Bottom", top: "Top", dot: "Dot" };
 /** The drawer's width plus its 12px inset on both sides: the quick bar centres itself in what is left. */
@@ -190,6 +198,11 @@ export function MockupStage({
   const drafts = useFeedbackDrafts(s.id);
   const [pinMode, setPinMode] = useState(false);
   const [focusPin, setFocusPin] = useState<number | null>(null);
+  const [tool, setToolState] = useState<CommentTool>(() => (stored(TOOL_KEY) === "pin" ? "pin" : "select"));
+  const setTool = (t: CommentTool) => {
+    setToolState(t);
+    store(TOOL_KEY, t);
+  };
   useEffect(() => {
     const raf = requestAnimationFrame(() => setReady(true));
     return () => cancelAnimationFrame(raf);
@@ -250,18 +263,19 @@ export function MockupStage({
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  // P toggles pin mode, unless the key is typed into a field (keys in the mockup's frame never reach the page)
+  // P opens comment mode, never while typing in a field (keys in the mockup's frame never reach the page).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() !== "p" || e.metaKey || e.ctrlKey || e.altKey || approving) return;
+      const key = e.key.toLowerCase();
+      if ((key !== "p" && key !== "v") || e.metaKey || e.ctrlKey || e.altKey || approving) return;
       if (phone || s.status !== "exploring") return;
       if ((e.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable], [role=dialog]"))
         return;
+      // inside the mode the layer handles V and P itself (it knows when Select can't work, and says so)
+      if (pinMode || key !== "p") return;
       e.preventDefault();
       setFocusPin(null);
-      setPinMode(!pinMode);
-      // leaving: the focus goes back to the pin button instead of falling to the page
-      if (pinMode) requestAnimationFrame(() => document.getElementById("pin-mode-button")?.focus());
+      setPinMode(true);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -385,6 +399,8 @@ export function MockupStage({
       </div>
       {pinMode && !phone && (
         <PinLayer
+          // a new version or width starts a fresh layer: no hover, selection or note carried over
+          key={`${current.id}:${renderWidth}`}
           mockup={current}
           renderWidth={renderWidth}
           // up to the drawer's left edge (its width and right inset), so nothing of the frame shows in between
@@ -399,6 +415,8 @@ export function MockupStage({
           }}
           focusPin={focusPin}
           reduce={reduce}
+          tool={tool}
+          onTool={setTool}
         />
       )}
 
@@ -474,14 +492,14 @@ export function MockupStage({
                   type="button"
                   aria-pressed={pinMode}
                   aria-keyshortcuts="P"
-                  aria-label={`Pin mode${pinCount ? `, ${pinCount} draft pin${pinCount === 1 ? "" : "s"}` : ""}`}
+                  aria-label={`Comment${pinCount ? `, ${pinCount} note${pinCount === 1 ? "" : "s"}` : ""}`}
                   onClick={() => (pinMode ? setPinMode(false) : enterPins())}
                   className={cn(
                     "flex h-9 items-center gap-1 rounded-full px-2.5 text-ink-secondary outline-none hover:bg-surface-raised hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-text focus-visible:outline-solid [@media(pointer:coarse)]:h-11",
                     pinMode && "bg-inverse text-on-inverse hover:bg-inverse/90 hover:text-on-inverse",
                   )}
                 >
-                  <MapPin className="size-4" aria-hidden />
+                  <MessageSquarePlus className="size-4" aria-hidden />
                   {pinCount > 0 && <span className="font-mono text-[12px] tabular-nums">{pinCount}</span>}
                 </button>
               )}
