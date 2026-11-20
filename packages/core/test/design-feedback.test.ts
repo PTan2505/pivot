@@ -69,8 +69,8 @@ describe("feedback", () => {
       feedback.addFeedback({ sessionId, round: 1, width: 1440, pins: [{ x: 1, y: 1, text: "a" }] }),
     ).rejects.toThrow(/say which/);
     await expect(
-      feedback.addFeedback({ sessionId, round: 1, mockupId: ids[0], width: 1000, pins: [{ x: 1, y: 1, text: "a" }] }),
-    ).rejects.toThrow(/1440, 834, 390/);
+      feedback.addFeedback({ sessionId, round: 1, mockupId: ids[0], width: 319, pins: [{ x: 1, y: 1, text: "a" }] }),
+    ).rejects.toThrow(/from 320 to 2560/);
     await expect(
       feedback.addFeedback({ sessionId, round: 1, mockupId: ids[0], width: 390, pins: [{ x: 500, y: 1, text: "a" }] }),
     ).rejects.toThrow(/outside the page/);
@@ -218,6 +218,154 @@ describe("feedback", () => {
   });
 });
 
+describe("live notes from the interactive preview", () => {
+  const png = async (w: number, h: number, rgb: [number, number, number]) =>
+    (
+      await (
+        await import("sharp")
+      )
+        .default({ create: { width: w, height: h, channels: 3, background: { r: rgb[0], g: rgb[1], b: rgb[2] } } })
+        .png()
+        .toBuffer()
+    ).toString("base64");
+
+  it("keeps what the preview saw: the element as reported (cut to limits) and its crop as a JPEG", async () => {
+    const { sessionId, ids } = await sessionWithRound("Live");
+    const image = await png(320, 200, [200, 30, 30]);
+    const fb = await feedback.addFeedback({
+      sessionId,
+      round: 1,
+      mockupId: ids[0],
+      width: 1512,
+      pins: [
+        {
+          n: 1,
+          x: 300,
+          y: 2400,
+          text: "this menu, once open",
+          live: true,
+          element: {
+            selector: "nav > ul.menu",
+            tag: "UL",
+            classes: ["menu", "open", "x", "y"],
+            text: "  Pricing   Docs  " + "z".repeat(200),
+            box: { x: 280.4, y: 2380, w: 240, h: 300 },
+            html: '<ul class="menu open">…</ul>',
+          },
+          capture: { image, region: { left: 100, top: 2200, width: 640, height: 400 } },
+        },
+        {
+          n: 2,
+          x: 50,
+          y: 60,
+          text: "a live spot",
+          live: true,
+          capture: { image, region: { left: 0, top: 0, width: 640, height: 400 } },
+        },
+      ],
+    });
+    expect(fb.width).toBe(1512);
+    const [p1, p2] = fb.pins;
+    expect(p1).toMatchObject({
+      live: true,
+      element: {
+        selector: "nav > ul.menu",
+        tag: "ul",
+        classes: ["menu", "open", "x"],
+        box: { x: 280, y: 2380, w: 240, h: 300 },
+      },
+    });
+    expect(p1.element!.text!.length).toBe(80);
+    expect(p1.capture!.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(p1.capture!.region).toEqual({ left: 100, top: 2200, width: 640, height: 400 });
+    expect(p2).toMatchObject({ live: true, x: 50, y: 60 });
+    expect(p2.element).toBeUndefined();
+    // the agent sees the preview's crop, never PIVOT's render
+    const img = (await feedback.pinImage(fb.id, 0))!;
+    expect(img.region).toEqual(p1.capture!.region);
+    const { data, info } = await (await import("sharp")).default(img.data).raw().toBuffer({ resolveWithObject: true });
+    expect(info.width).toBe(320);
+    expect(data[0]).toBeGreaterThan(170);
+    expect(data[1]).toBeLessThan(70);
+  });
+
+  it("refuses a live note without a picture, a picture that isn't one, and one too big", async () => {
+    const { sessionId, ids } = await sessionWithRound("Live refusals");
+    const base = { sessionId, round: 1, mockupId: ids[0], width: 1440 };
+    const region = { left: 0, top: 0, width: 10, height: 10 };
+    await expect(feedback.addFeedback({ ...base, pins: [{ x: 1, y: 1, text: "a", live: true }] })).rejects.toThrow(
+      /no picture/,
+    );
+    await expect(
+      feedback.addFeedback({
+        ...base,
+        pins: [
+          { x: 1, y: 1, text: "a", live: true, capture: { image: Buffer.from("<svg/>").toString("base64"), region } },
+        ],
+      }),
+    ).rejects.toThrow(/isn't a JPEG or PNG/);
+    await expect(
+      feedback.addFeedback({
+        ...base,
+        pins: [{ x: 1, y: 1, text: "a", live: true, capture: { image: "A".repeat(600_000), region } }],
+      }),
+    ).rejects.toThrow(/over 400 kB/);
+    await expect(
+      feedback.addFeedback({
+        ...base,
+        pins: [{ x: 1, y: 1, text: "a", live: true, capture: { image: await png(2500, 10, [0, 0, 0]), region } }],
+      }),
+    ).rejects.toThrow(/over 2400px/);
+    await expect(
+      feedback.addFeedback({
+        ...base,
+        pins: [
+          {
+            x: 1,
+            y: 1,
+            text: "a",
+            live: true,
+            element: { selector: "x", tag: "<script>" },
+            capture: { image: await png(10, 10, [0, 0, 0]), region },
+          },
+        ],
+      }),
+    ).rejects.toThrow(/element isn't usable/);
+  });
+
+  it("goes with a backup and comes back on restore, checked by its sha256", async () => {
+    const { sessionId, ids } = await sessionWithRound("Live backup");
+    const fb = await feedback.addFeedback({
+      sessionId,
+      round: 1,
+      mockupId: ids[0],
+      width: 834,
+      pins: [
+        {
+          x: 5,
+          y: 5,
+          text: "kept",
+          live: true,
+          capture: { image: await png(40, 30, [10, 120, 10]), region: { left: 0, top: 0, width: 40, height: 30 } },
+        },
+      ],
+    });
+    const sha = fb.pins[0].capture!.sha256;
+    const made = await backup.createBackup({ targetDir: path.join(tmp, "backup-live") });
+    const kept = await fs.readFile(path.join(made.path, "captures", `${sha}.jpg`));
+    expect(kept.length).toBeGreaterThan(0);
+    expect(JSON.parse(await fs.readFile(path.join(made.path, "data.json"), "utf8")).designCaptures).toContain(sha);
+    const store = feedback.renderStore();
+    await store.delete(feedback.captureStoreKey(sha));
+    const { designSessions } = await import("../src/db/schema");
+    const { eq } = await import("drizzle-orm");
+    await (await db.getDb()).delete(designSessions).where(eq(designSessions.id, sessionId));
+    await backup.restoreBackup(made.path);
+    expect((await store.get(feedback.captureStoreKey(sha)))?.equals(kept)).toBe(true);
+    expect((await feedback.pinImage(fb.id, 0))?.region).toEqual({ left: 0, top: 0, width: 40, height: 30 });
+  });
+});
+
 describe.skipIf(!(await (await import("../src/capture")).playwrightStatus()).installed)("renders and pin crops", () => {
   it("renders a version at a page width once, and crops around a pin with its number drawn", async () => {
     const { sessionId, ids } = await sessionWithRound("Rendered");
@@ -229,7 +377,10 @@ describe.skipIf(!(await (await import("../src/capture")).playwrightStatus()).ins
     // cached by digest and width: the second call reads the stored image
     const again = await feedback.renderMockup(ids[0], 390);
     expect(again!.data.equals(first!.data)).toBe(true);
-    await expect(feedback.renderMockup(ids[0], 1000)).rejects.toThrow(/1440, 834, 390/);
+    for (const bad of [319, 2561, 1000.5])
+      await expect(feedback.renderMockup(ids[0], bad)).rejects.toThrow(/from 320 to 2560/);
+    // any whole width in the range: the full-screen view's Desktop is the window's own width
+    expect(await feedback.renderMockup(ids[0], 1000)).toMatchObject({ width: 1000 });
 
     const fb = await feedback.addFeedback({
       sessionId,
@@ -304,7 +455,7 @@ describe.skipIf(!(await (await import("../src/capture")).playwrightStatus()).ins
     expect(await store.get(feedback.elementsStoreKey(digest, 1440))).toBeTruthy();
     await store.delete(feedback.elementsStoreKey(digest, 1440));
     expect((await feedback.mockupElements(ids[0], 1440))!.length).toBe(map.length);
-    await expect(feedback.mockupElements(ids[0], 1000)).rejects.toThrow(/1440, 834, 390/);
+    await expect(feedback.mockupElements(ids[0], 2561)).rejects.toThrow(/from 320 to 2560/);
     expect(await feedback.mockupElements("00000000-0000-4000-8000-000000000000", 1440)).toBeNull();
   }, 60_000);
 
