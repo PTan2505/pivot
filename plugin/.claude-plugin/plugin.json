@@ -1,6 +1,6 @@
 {
   "name": "pivot",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Design and redesign UI with Claude from your own PIVOT reference library: MCP tools, the design and redesign skills (/pivot:design, /pivot:redesign) and the read-only specialist agent. Needs the PIVOT app running locally.",
   "author": { "name": "Phuc Tan", "url": "https://github.com/PTan2505" },
   "homepage": "https://github.com/PTan2505/pivot",

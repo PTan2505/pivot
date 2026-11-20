@@ -1558,3 +1558,53 @@ export async function playwrightStatus(): Promise<{ installed: boolean; path?: s
     return { installed: false };
   }
 }
+
+/**
+ * A full-page picture of PIVOT's own HTML (a stored mockup version), for the owner's feedback pins and the agent's
+ * crops around them: the page at `width`, JavaScript off and no request leaving the page (inlined CSS, fonts and images
+ * still show), cut at `maxHeight`. JPEG.
+ */
+export async function renderHtml(
+  html: string,
+  {
+    width,
+    maxHeight = MAX_FULL_PAGE_HEIGHT,
+    timeoutMs = 30_000,
+  }: { width: number; maxHeight?: number; timeoutMs?: number },
+): Promise<{ data: Buffer; width: number; height: number }> {
+  clearTimeout(state.idleTimer);
+  const b = await browser();
+  const context = await b.newContext({
+    viewport: { width, height: 900 },
+    deviceScaleFactor: 1,
+    javaScriptEnabled: false,
+    serviceWorkers: "block",
+  });
+  // nothing leaves the page: what isn't inlined in the HTML doesn't load
+  await context.route("**/*", (route) => route.abort("blockedbyclient").catch(() => {}));
+  const deadline = setTimeout(() => void context.close().catch(() => {}), timeoutMs);
+  state.inUse = (state.inUse ?? 0) + 1;
+  try {
+    const page = await context.newPage();
+    await page.setContent(html, { waitUntil: "load", timeout: timeoutMs });
+    const shot = await page.screenshot({ fullPage: true, type: "jpeg", quality: 85, timeout: timeoutMs });
+    const { default: sharp } = await import("sharp");
+    const meta = await sharp(shot, { limitInputPixels: false }).metadata();
+    // pins are placed on exactly `width` pixels: a page that overflows sideways is cut to it, like the frame shows it
+    const w = Math.min(meta.width ?? width, width);
+    const height = Math.min(meta.height ?? 0, maxHeight);
+    const data =
+      w !== meta.width || height !== meta.height
+        ? await sharp(shot, { limitInputPixels: false })
+            .extract({ left: 0, top: 0, width: w, height })
+            .jpeg({ quality: 85 })
+            .toBuffer()
+        : shot;
+    return { data, width: w, height };
+  } finally {
+    clearTimeout(deadline);
+    await context.close().catch(() => {});
+    state.inUse = Math.max(0, (state.inUse ?? 1) - 1);
+    scheduleIdleClose();
+  }
+}

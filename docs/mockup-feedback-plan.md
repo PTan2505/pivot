@@ -31,3 +31,21 @@ Approved by the owner on 2026-11-20. Each phase is its own branch from `dev` and
 - **Gaps:** no guidance on drafting a design system from code, on where it goes, or on asking first.
 - **Implemented:** `plugin/skills/design/design-md.md` (when, what to gather, the draft's structure, show and ask, write only on yes, never commit, never rewrite an existing one, once per session, not for small fixes); `pivot:design` §0 and the top rule, `pivot:redesign` §1 point to it; SPEC §10 describes it.
 - **Tested:** plugin and skill tests; `pnpm plugin:validate`. The behaviour itself is skill guidance: it is exercised in the next real design session on a project without DESIGN.md (not yet run).
+
+### Phase 2: feedback API (2026-11-20)
+
+- **Audit:** mockups, approvals (bound to a version's digest), the owner check (`authorizeOwner` refuses the API token), the capture browser, the agent image helpers, the watcher and the MCP write tools. A sandboxed mockup frame can't report clicks or scroll, so pins need PIVOT's own render of the version.
+- **Gaps:** nowhere to store feedback; no render of a version; no way for a round to say what it answers or to propose a DESIGN.md change; the watcher woke only on status changes.
+- **Implemented:**
+  - Tables `design_feedback` and `design_rounds`, and `design_decisions.design_system_digest` (migration 0013, additive).
+  - `packages/core/src/design-feedback.ts`: add, list and get feedback; mark it addressed; render a version (`renderHtml` in `capture.ts`, JavaScript off, every request blocked, cached by digest and width); crop around a pin with its number.
+  - Routes: feedback (`POST` refuses the API token), render, one feedback, pin images. The proxy treats the render and pin routes as reads with side effects.
+  - `save_design_mockups` takes `addressesFeedback` and `designSystemChange`; an approval stores the round's DESIGN.md digest.
+  - `get_design_session` shows feedback and rounds; new read tool `get_feedback_images`.
+  - The watcher's `feedback` event; the `design.feedback` capability; backup and restore of rounds and feedback.
+  - `pivot-studio` 0.3.0, plugin 0.4.0.
+- **Tested:**
+  - core `design-feedback.test.ts`: the rules, rounds and binding, the backup round trip, and the render and pin crops with Chromium;
+  - the request guard;
+  - MCP `feedback-tools.test.ts` and the watcher `wait-for-decision.test.ts`.
+- **Not yet:** the page's controls (Phase 3) and the skill's use of all this (Phase 4). Until then feedback is sent only through the API.
