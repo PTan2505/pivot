@@ -227,6 +227,12 @@ describe("feedback rounds", () => {
     );
     expect(spec).toContain("an element note gives the element's selector and HTML");
   });
+  it("a live note is found by its crop and HTML, and every note is read at its own width", () => {
+    expect(fb).toContain("**A live note** (`[live: seen in the preview with scripts running]`)");
+    expect(fb).toContain("its selector may find nothing in the saved HTML");
+    expect(fb).toContain("**Every note has a width**");
+    expect(spec).toContain("a live note, made in the preview with scripts running, is found by its crop and HTML");
+  });
   it("SPEC describes the skill's feedback rounds", () => {
     expect(spec).toContain("**The skill's feedback rounds**");
     expect(spec).toContain("plugin/skills/design/feedback.md");
