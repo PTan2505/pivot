@@ -33,6 +33,11 @@ export const API_FEATURES = [
    * and propose a DESIGN.md change (`addressesFeedback`, `designSystemChange` when saving mockups).
    */
   "design.feedback",
+  /**
+   * Feedback on an element (the Select tool): `GET /api/design/mockups/[id]/elements?width=` (a render's element map),
+   * and a pin's `element: { selector }`, stored with the element's tag, box and HTML.
+   */
+  "design.feedback.elements",
 ] as const;
 
 export type ApiFeature = (typeof API_FEATURES)[number];

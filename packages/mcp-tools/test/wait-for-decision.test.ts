@@ -34,7 +34,14 @@ const base = {
   mockups: [{ id: "m2", round: 1, n: 2, title: "Two" }],
   feedback: [] as object[],
 };
-const fb = (id: string, status = "open") => ({ id, round: 1, mockupId: "m2", text: `note ${id}`, pins: [{}], status });
+const fb = (id: string, status = "open") => ({
+  id,
+  round: 1,
+  mockupId: "m2",
+  text: `note ${id}`,
+  pins: [{}, { element: { selector: "#cta" } }],
+  status,
+});
 
 const watch = async (url: string, extra: string[] = []) => {
   const { stdout } = await run(process.execPath, [script, SID, "--url", url, "--interval-s", "1", ...extra], {
@@ -49,7 +56,7 @@ describe("wait-for-decision", () => {
     expect(await watch(url, ["--settle-s", "0"])).toEqual({
       sessionId: SID,
       event: "feedback",
-      feedback: [{ id: "f1", round: 1, version: "2. Two", text: "note f1", pins: 1 }],
+      feedback: [{ id: "f1", round: 1, version: "2. Two", text: "note f1", pins: 2, elements: 1 }],
     });
   });
 
