@@ -216,6 +216,17 @@ describe("feedback rounds", () => {
     expect(d).toMatch(/An approved DESIGN\.md change is the first edit/);
     expect(r).toContain("a `designSystemChange` on a round, which the user approves with a version of that round");
   });
+  it("an element note names one element: found by its selector, changed exactly, kept findable, carried into the build", () => {
+    expect(fb).toContain("**An element note names exactly one element.**");
+    expect(fb).toContain("Find it in the version's HTML by its selector");
+    expect(fb).toContain("the note is about this one unless the text says all of them");
+    expect(fb).toContain("**Keep an element findable:**");
+    expect(fb).toContain("**Element notes guide the build too:**");
+    expect(d).toMatch(
+      /\| `get_feedback_images` +\| .*an element note gives the element outlined, its selector and its HTML/,
+    );
+    expect(spec).toContain("an element note gives the element's selector and HTML");
+  });
   it("SPEC describes the skill's feedback rounds", () => {
     expect(spec).toContain("**The skill's feedback rounds**");
     expect(spec).toContain("plugin/skills/design/feedback.md");
