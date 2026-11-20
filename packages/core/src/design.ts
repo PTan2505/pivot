@@ -95,7 +95,7 @@ function decisionDTO(
             mockupId: r.mockupId,
             digest: r.mockupDigest,
             status: current === undefined ? "missing" : current === r.mockupDigest ? "bound" : "changed",
-            designSystemDigest: r.designSystemDigest,
+            ...(r.designSystemDigest ? { designSystemDigest: r.designSystemDigest } : {}),
           }
         : null,
     createdAt: r.createdAt.toISOString(),
