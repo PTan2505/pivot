@@ -876,6 +876,8 @@ export interface DesignFeedbackPin {
    * captured (scripts may have made them), not PIVOT's render.
    */
   live?: boolean;
+  /** The viewport height of the frame the note was made in, when it wasn't 900 (`100vh` depends on it). */
+  vh?: number;
   /** A live note's crop, kept in the blob store by its sha256 (JPEG), and the part of the page it shows. */
   capture?: { sha256: string; region: { left: number; top: number; width: number; height: number } };
 }

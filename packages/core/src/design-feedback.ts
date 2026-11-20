@@ -155,6 +155,8 @@ export async function addFeedback(input: {
   mockupId?: string | null;
   text?: string;
   width?: number | null;
+  /** The height of the owner's frame when the pins were made (`100vh`), 900 when not given. */
+  height?: number | null;
   /**
    * A pin's `element` needs only its `selector`: the rest comes from PIVOT's element map. A live pin (the interactive
    * preview) carries the element as the preview saw it and its `capture`: a JPEG or PNG crop, base64.
@@ -206,6 +208,7 @@ export async function addFeedback(input: {
     if (!version) throw new DesignError("Pins are placed on one version: say which (mockupId).");
     checkWidth(input.width ?? NaN);
     width = input.width!;
+    if (input.height != null) checkHeight(input.height);
     for (const [i, p] of pins.entries()) {
       if (
         !Number.isFinite(p.x) ||
@@ -240,11 +243,12 @@ export async function addFeedback(input: {
       throw new DesignError(`Pin ${i + 1}'s picture has no usable region.`);
     captures.set(i, { sha256: await storeCapture(p.raw.capture.image, i), region });
   }
+  const vh = input.height ?? DEFAULT_VIEWPORT_HEIGHT;
   // the elements the owner selected, as PIVOT's own map of that render describes them
   const elements = new Map<number, DesignFeedbackElement>();
   const withElement = pins.flatMap((p, i) => (p.selector ? [i] : []));
   if (withElement.length && version && width) {
-    const map = await mockupElements(version.id, width);
+    const map = await mockupElements(version.id, width, vh);
     const html = await versionHtml(version.id);
     if (!map || html === null) throw new DesignError("That version is gone.");
     const bySelector = new Map(map.map((e) => [e.sel, e]));
@@ -254,9 +258,9 @@ export async function addFeedback(input: {
       return e;
     });
     const snippets = await elementsHtml(
-      html,
+      withDoctype(html),
       found.map((e) => e.sel),
-      { width },
+      { width, viewportHeight: vh },
     );
     for (const [k, i] of withElement.entries()) {
       const e = found[k];
@@ -304,6 +308,8 @@ export async function addFeedback(input: {
           y: Math.round(inside ? p.y : b.y + b.h / 2),
           text: p.text,
           ...(element ? { element } : {}),
+          // the frame's height, when it wasn't the default: the crop is rendered the same way
+          ...(vh !== DEFAULT_VIEWPORT_HEIGHT ? { vh } : {}),
         };
       }),
       source: "owner",
@@ -344,8 +350,20 @@ export async function checkFeedbackIds(sessionId: string, ids: string[]) {
   if (found.length !== ids.length) throw new DesignError("addressesFeedback names feedback this session doesn't have.");
 }
 
-const renderKey = (digest: string, width: number) => `design-renders/${digest}-${width}.jpg`;
-const elementsKey = (digest: string, width: number) => `design-renders/${digest}-${width}.elements.json`;
+/** The viewport height renders use unless the owner's frame said otherwise (`100vh` resolves against it). */
+export const DEFAULT_VIEWPORT_HEIGHT = 900;
+const sized = (width: number, height: number) =>
+  height === DEFAULT_VIEWPORT_HEIGHT ? `${width}` : `${width}x${height}`;
+const renderKey = (digest: string, width: number, height = DEFAULT_VIEWPORT_HEIGHT) =>
+  `design-renders/${digest}-${sized(width, height)}.jpg`;
+const elementsKey = (digest: string, width: number, height = DEFAULT_VIEWPORT_HEIGHT) =>
+  `design-renders/${digest}-${sized(width, height)}.elements.json`;
+/** A page with no doctype renders in standards mode, like the frame PIVOT shows it in (a srcdoc is always one). */
+export const withDoctype = (html: string) => (/^\s*<!doctype/i.test(html) ? html : `<!doctype html>\n${html}`);
+const checkHeight = (height: number) => {
+  if (!Number.isInteger(height) || height < 200 || height > 4000)
+    throw new DesignError("Viewport heights are whole pixels from 200 to 4000.");
+};
 
 const checkWidth = (width: number) => {
   if (!Number.isInteger(width) || width < RENDER_WIDTH.min || width > RENDER_WIDTH.max)
@@ -367,11 +385,15 @@ async function versionHtml(mockupId: string) {
 }
 
 /** Renders a version with its element map and keeps both, so a picture and its map always come from one layout. */
-async function renderAndStore(m: { html: string; digest: string }, width: number) {
-  const shot = await renderHtml(m.html, { width, elements: true });
+async function renderAndStore(m: { html: string; digest: string }, width: number, height = DEFAULT_VIEWPORT_HEIGHT) {
+  const shot = await renderHtml(withDoctype(m.html), { width, elements: true, viewportHeight: height });
   const store = writeStore();
-  await store.put(renderKey(m.digest, width), shot.data, "image/jpeg");
-  await store.put(elementsKey(m.digest, width), Buffer.from(JSON.stringify(shot.elements ?? [])), "application/json");
+  await store.put(renderKey(m.digest, width, height), shot.data, "image/jpeg");
+  await store.put(
+    elementsKey(m.digest, width, height),
+    Buffer.from(JSON.stringify(shot.elements ?? [])),
+    "application/json",
+  );
   return shot;
 }
 
@@ -382,19 +404,21 @@ async function renderAndStore(m: { html: string; digest: string }, width: number
 export async function renderMockup(
   mockupId: string,
   width: number,
+  viewportHeight = DEFAULT_VIEWPORT_HEIGHT,
 ): Promise<{ data: Buffer; width: number; height: number } | null> {
   checkWidth(width);
+  checkHeight(viewportHeight);
   const m = await versionRow(mockupId);
   if (!m) return null;
   const cached = await writeStore()
-    .get(renderKey(m.digest, width))
+    .get(renderKey(m.digest, width, viewportHeight))
     .catch(() => null);
   if (cached) {
     const sharp = (await import("sharp")).default;
     const meta = await sharp(cached, { limitInputPixels: false }).metadata();
     return { data: cached, width: meta.width ?? width, height: meta.height ?? 0 };
   }
-  const shot = await renderAndStore(m, width);
+  const shot = await renderAndStore(m, width, viewportHeight);
   return { data: shot.data, width: shot.width, height: shot.height };
 }
 
@@ -403,15 +427,20 @@ export async function renderMockup(
  * `MAX_RENDER_ELEMENTS`): what the owner's Select tool hovers and picks. Kept with the render; a render made before
  * maps existed is made again, with its map.
  */
-export async function mockupElements(mockupId: string, width: number): Promise<RenderedElement[] | null> {
+export async function mockupElements(
+  mockupId: string,
+  width: number,
+  viewportHeight = DEFAULT_VIEWPORT_HEIGHT,
+): Promise<RenderedElement[] | null> {
   checkWidth(width);
+  checkHeight(viewportHeight);
   const m = await versionRow(mockupId);
   if (!m) return null;
   const cached = await writeStore()
-    .get(elementsKey(m.digest, width))
+    .get(elementsKey(m.digest, width, viewportHeight))
     .catch(() => null);
   if (cached) return JSON.parse(cached.toString("utf8")) as RenderedElement[];
-  return (await renderAndStore(m, width)).elements ?? [];
+  return (await renderAndStore(m, width, viewportHeight)).elements ?? [];
 }
 
 /** The pin's number in a round marker, drawn over the crop. */
@@ -472,7 +501,7 @@ export async function pinImage(feedbackId: string, index: number): Promise<PinIm
       region: pin.capture.region,
     };
   }
-  const render = await renderMockup(fb.mockupId, fb.width);
+  const render = await renderMockup(fb.mockupId, fb.width, pin.vh ?? DEFAULT_VIEWPORT_HEIGHT);
   if (!render) return null;
   const box = pin.element?.box;
   // an element is shown whole with some room around it (up to 1600 × 1200 page pixels); a spot, at its centre

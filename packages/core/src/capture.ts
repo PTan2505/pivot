@@ -1684,12 +1684,14 @@ export async function renderHtml(
     maxHeight = MAX_FULL_PAGE_HEIGHT,
     timeoutMs = 30_000,
     elements = false,
-  }: { width: number; maxHeight?: number; timeoutMs?: number; elements?: boolean },
+    viewportHeight = 900,
+  }: { width: number; maxHeight?: number; timeoutMs?: number; elements?: boolean; viewportHeight?: number },
 ): Promise<{ data: Buffer; width: number; height: number; elements?: RenderedElement[] }> {
   clearTimeout(state.idleTimer);
   const b = await browser();
   const context = await b.newContext({
-    viewport: { width, height: 900 },
+    // the height `100vh` resolves against: the owner's frame height when a note was made there
+    viewport: { width, height: viewportHeight },
     deviceScaleFactor: 1,
     javaScriptEnabled: false,
     serviceWorkers: "block",
@@ -1749,7 +1751,12 @@ const ELEMENTS_HTML = `(sels, max) => sels.map((sel) => {
 export async function elementsHtml(
   html: string,
   selectors: string[],
-  { width, maxChars = 2000, timeoutMs = 30_000 }: { width: number; maxChars?: number; timeoutMs?: number },
+  {
+    width,
+    maxChars = 2000,
+    timeoutMs = 30_000,
+    viewportHeight = 900,
+  }: { width: number; maxChars?: number; timeoutMs?: number; viewportHeight?: number },
 ): Promise<(string | null)[]> {
   if (!selectors.length) return [];
   clearTimeout(state.idleTimer);
