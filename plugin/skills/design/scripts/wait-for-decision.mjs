@@ -7,7 +7,7 @@
 // printing one JSON line:
 //   {"event":"approved","source":"owner","direction":"Version 3: …","note":"…","approvedAt":"…"}  the user approved in PIVOT
 //   (source "chat": the user approved in the chat and the agent recorded it; note holds their words)
-//   {"event":"feedback","feedback":[{"id":"…","round":2,"version":"3. Title","text":"…","pins":2}]}  the user sent
+//   {"event":"feedback","feedback":[{"id":"…","round":2,"version":"3. Title","text":"…","pins":2,"elements":1}]}  the user sent
 //   feedback from PIVOT: answer it with a new round (it waits --settle-s after the first, to take in a burst of them)
 //   {"event":"abandoned"} | {"event":"status","status":"…"}   the user moved the session another way
 //   {"event":"timeout"}   nothing happened before --timeout-min
@@ -53,6 +53,8 @@ const openFeedback = (s) =>
         version: m ? `${m.n}. ${m.title}` : "the whole round",
         text: f.text,
         pins: f.pins.length,
+        // pins on an element the user selected (get_feedback_images gives its selector and HTML)
+        elements: f.pins.filter((p) => p.element).length,
       };
     });
 

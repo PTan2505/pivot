@@ -866,6 +866,27 @@ export interface DesignFeedbackPin {
    * Missing on older feedback: the pin's position in the list, from 1.
    */
   n?: number;
+  /** The element the owner selected for this note (the Select tool), as PIVOT measured it on the same render. */
+  element?: DesignFeedbackElement;
+}
+
+/**
+ * An element of a mockup version the owner selected: found by `selector` in the version's HTML, described from PIVOT's
+ * own element map of the render at the feedback's `width` (never from what the page sent), with its HTML trimmed.
+ */
+export interface DesignFeedbackElement {
+  selector: string;
+  tag: string;
+  id?: string;
+  classes?: string[];
+  /** Its own text, up to 80 characters. */
+  text?: string;
+  /** aria-label, alt, placeholder or title. */
+  label?: string;
+  /** Where it is on the render, in its pixels. */
+  box: { x: number; y: number; w: number; h: number };
+  /** Its HTML, trimmed (long attributes and data: URIs shortened, svg insides left out, 2,000 characters). */
+  html?: string;
 }
 
 /** The owner's feedback on a round, sent from PIVOT; the agent answers it with a new round. Never an approval. */

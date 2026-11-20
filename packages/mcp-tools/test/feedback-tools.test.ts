@@ -204,4 +204,37 @@ describe("mockup feedback over MCP", () => {
     const old = await runTool(tool("get_feedback_images"), source().src, { feedbackId: FID });
     expect(textOf(old)).toMatch(/predates mockup feedback/);
   });
+
+  it("names an element pin by its tag, text and selector, and gives its HTML with the crop", async () => {
+    const element = {
+      selector: "main > section.hero > a.btn.primary",
+      tag: "a",
+      classes: ["btn", "primary"],
+      text: "Start free",
+      box: { x: 120, y: 480, w: 160, h: 48 },
+      html: '<a class="btn primary" href="#">Start free</a>',
+    };
+    const withElement: DesignFeedbackDTO = {
+      ...feedback,
+      pins: [{ x: 200, y: 500, text: "make this the outline style", n: 3, element }],
+    };
+    const { src } = source({
+      getDesignSession: async () => ({ ...session, feedback: [withElement] }),
+      getFeedback: async () => withElement,
+      feedbackPinImage: async () => ({
+        data: Buffer.from("jpg"),
+        mimeType: "image/jpeg",
+        width: 960,
+        height: 720,
+        region: { left: 0, top: 120, width: 960, height: 720 },
+      }),
+    });
+    const place =
+      'on element a.btn.primary "Start free" (selector `main > section.hero > a.btn.primary`, box 120,480 160×48)';
+    const out = textOf(await runTool(tool("get_design_session"), src, { sessionId: SID }));
+    expect(out).toContain(`3. ${place} "make this the outline style"`);
+    const images = textOf(await runTool(tool("get_feedback_images"), src, { feedbackId: FID }));
+    expect(images).toContain(`Pin 3 ${place}: "make this the outline style"`);
+    expect(images).toContain('```html\n<a class="btn primary" href="#">Start free</a>\n```');
+  });
 });

@@ -260,4 +260,128 @@ describe.skipIf(!(await (await import("../src/capture")).playwrightStatus()).ins
     expect((await feedback.pinImage(fb.id, 1))?.region).toMatchObject({ left: 0, top: 0 });
     expect(await feedback.pinImage(fb.id, 5)).toBeNull();
   }, 60_000);
+
+  // A page with what the Select tool must handle: ids (one duplicated), same-tag siblings, an svg, hidden and tiny
+  // elements, a long attribute and a script that must not run.
+  const EL_PAGE = `<!doctype html><html><body style="margin:0;font:16px sans-serif">
+<header class="top"><nav><a href="#" title="${"t".repeat(300)}">Home</a><button id="cta">Sign up</button></nav></header>
+<main><section class="hero"><h1>Hello</h1><p id="dup">One</p><p id="dup">Two</p>
+<a class="btn primary" href="#">First</a><a class="btn primary" href="#" style="display:inline-block;margin-left:400px;padding:20px">Second</a>
+<svg width="40" height="40"><path d="M0 0L40 40"/></svg>
+<div style="visibility:hidden;height:30px">hidden</div><span style="display:inline-block;width:2px;height:2px"></span>
+</section></main>
+<script>const d = document.createElement("div"); d.id = "injected"; d.style.height = "50px"; document.body.append(d);</script>
+</body></html>`;
+
+  it("maps a version's elements with selectors that find exactly them, and keeps the map with the render", async () => {
+    const { sessionId } = await design.saveDesignBrief({ title: "Elements", milestone: "initial", markdown: "# E" });
+    const { ids } = await design.saveDesignMockups({ sessionId, mockups: [{ title: "One", html: EL_PAGE }] });
+    const map = (await feedback.mockupElements(ids[0], 1440))!;
+    const tags = map.map((e) => e.tag);
+    expect(tags).toEqual(expect.arrayContaining(["header", "nav", "a", "button", "main", "section", "h1", "p", "svg"]));
+    expect(tags).not.toContain("path"); // nothing inside an svg
+    expect(tags).not.toContain("script");
+    expect(map.find((e) => e.id === "injected")).toBeUndefined(); // the page's script never ran
+    expect(map.find((e) => e.text === "hidden")).toBeUndefined();
+    expect(map.every((e) => e.w >= 4 && e.h >= 4 && e.x + e.w <= 1440)).toBe(true);
+    const cta = map.find((e) => e.id === "cta")!;
+    expect(cta).toMatchObject({ tag: "button", sel: "#cta", text: "Sign up" });
+    expect(map[cta.p].tag).toBe("nav");
+    // a duplicated id isn't a selector; same-tag siblings are told apart
+    const second = map.find((e) => e.text === "Second")!;
+    expect(second.sel).toMatch(/a\.btn\.primary:nth-of-type\(2\)$/);
+    expect(map.find((e) => e.text === "Two")!.sel).not.toMatch(/#dup/);
+    // every selector finds exactly one element in the version's HTML
+    const htmls = await capture.elementsHtml(
+      EL_PAGE,
+      map.map((e) => e.sel),
+      { width: 1440 },
+    );
+    expect(htmls.every((h) => h !== null)).toBe(true);
+    // kept next to the render; a render made before maps existed is made again with its map
+    const store = feedback.renderStore();
+    const { digest } = (await design.getDesignSession(sessionId))!.mockups[0];
+    expect(await store.get(feedback.elementsStoreKey(digest, 1440))).toBeTruthy();
+    await store.delete(feedback.elementsStoreKey(digest, 1440));
+    expect((await feedback.mockupElements(ids[0], 1440))!.length).toBe(map.length);
+    await expect(feedback.mockupElements(ids[0], 1000)).rejects.toThrow(/1440, 834, 390/);
+    expect(await feedback.mockupElements("00000000-0000-4000-8000-000000000000", 1440)).toBeNull();
+  }, 60_000);
+
+  it("stores an element pin from PIVOT's own map, with its HTML trimmed, and crops it outlined", async () => {
+    const { sessionId } = await design.saveDesignBrief({ title: "Element pin", milestone: "initial", markdown: "# P" });
+    const { ids } = await design.saveDesignMockups({ sessionId, mockups: [{ title: "One", html: EL_PAGE }] });
+    const map = (await feedback.mockupElements(ids[0], 1440))!;
+    const second = map.find((e) => e.text === "Second")!;
+    const home = map.find((e) => e.text === "Home")!;
+    const svg = map.find((e) => e.tag === "svg")!;
+    const fb = await feedback.addFeedback({
+      sessionId,
+      round: 1,
+      mockupId: ids[0],
+      width: 1440,
+      pins: [
+        // a point outside the element moves to its centre
+        { x: 1, y: 1, text: "outline style", n: 2, element: { selector: second.sel } },
+        { x: home.x + 2, y: home.y + 2, text: "rename", element: { selector: home.sel } },
+        { x: svg.x + 1, y: svg.y + 1, text: "bigger icon", element: { selector: svg.sel } },
+        { x: 10, y: 10, text: "a plain spot" },
+      ],
+    });
+    const [p2, pHome, pSvg, plain] = fb.pins;
+    expect(p2).toMatchObject({
+      n: 2,
+      x: Math.round(second.x + second.w / 2),
+      y: Math.round(second.y + second.h / 2),
+      element: { selector: second.sel, tag: "a", classes: ["btn", "primary"], text: "Second" },
+    });
+    expect(p2.element!.box).toEqual({ x: second.x, y: second.y, w: second.w, h: second.h });
+    expect(p2.element!.html).toMatch(/^<a class="btn primary"[^>]*>Second<\/a>$/);
+    expect(pHome).toMatchObject({ x: home.x + 2, y: home.y + 2 });
+    expect(pHome.element!.html).toContain(`title="${"t".repeat(120)}…"`); // a long attribute is cut
+    expect(pSvg.element!.html).toBe('<svg width="40" height="40">…</svg>');
+    expect(plain.element).toBeUndefined();
+    // the page never says what the element is: only a selector PIVOT's map has is accepted
+    await expect(
+      feedback.addFeedback({
+        sessionId,
+        round: 1,
+        mockupId: ids[0],
+        width: 1440,
+        pins: [{ x: 5, y: 5, text: "x", element: { selector: "body > div.nope" } }],
+      }),
+    ).rejects.toThrow(/Pin 1's element isn't on this version at 1440px/);
+
+    // the crop shows the whole element outlined in ember, with room around it
+    const crop = (await feedback.pinImage(fb.id, 0))!;
+    const { left, top, width, height } = crop.region;
+    expect(second.x >= left && second.x + second.w <= left + width).toBe(true);
+    expect(second.y >= top && second.y + second.h <= top + height).toBe(true);
+    const sharp = (await import("sharp")).default;
+    const { data, info } = await sharp(crop.data).raw().toBuffer({ resolveWithObject: true });
+    const scale = info.width / width;
+    const at = (x: number, y: number) => {
+      const i = (Math.round((y - top) * scale) * info.width + Math.round((x - left) * scale)) * info.channels;
+      return [data[i], data[i + 1], data[i + 2]];
+    };
+    const [r, g, b] = at(second.x + second.w + 2, second.y + second.h / 2 + 10); // on the right edge's outline
+    expect(r).toBeGreaterThan(200);
+    expect(g).toBeGreaterThan(60);
+    expect(g).toBeLessThan(160);
+    expect(b).toBeLessThan(80);
+  }, 60_000);
+
+  it("keeps the shallowest elements of a page with too many, parents renumbered", () => {
+    const raw = [
+      { parent: -1, depth: 0, tag: "main", x: 0, y: 0, w: 10, h: 10, sel: "main" },
+      { parent: 0, depth: 1, tag: "div", x: 0, y: 0, w: 10, h: 10, sel: "main > div" },
+      { parent: 1, depth: 2, tag: "span", x: 0, y: 0, w: 10, h: 10, sel: "main > div > span" },
+      { parent: -1, depth: 0, tag: "footer", x: 0, y: 0, w: 10, h: 10, sel: "footer" },
+    ];
+    expect(capture.trimMap(raw, 3).map((e) => [e.i, e.p, e.tag])).toEqual([
+      [0, -1, "main"],
+      [1, 0, "div"],
+      [2, -1, "footer"],
+    ]);
+  });
 });

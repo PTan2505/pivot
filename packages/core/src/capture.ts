@@ -1559,10 +1559,123 @@ export async function playwrightStatus(): Promise<{ installed: boolean; path?: s
   }
 }
 
+/** At most this many elements in a render's element map: the deepest are dropped first. */
+export const MAX_RENDER_ELEMENTS = 5000;
+
+/**
+ * One element of a rendered page, as the owner's Select tool and the agent see it: where it is on the render (in its
+ * pixels, cut to the page), what it is, and a CSS selector that finds exactly it in the version's HTML.
+ */
+export interface RenderedElement {
+  /** Its position in the map (document order). */
+  i: number;
+  /** The nearest ancestor in the map, or -1. */
+  p: number;
+  tag: string;
+  id?: string;
+  /** Up to 3 classes. */
+  cls?: string[];
+  /** Its own text (not its children's), up to 80 characters. */
+  text?: string;
+  /** aria-label, alt, placeholder or title, up to 80 characters. */
+  label?: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  sel: string;
+}
+
+type RawElement = Omit<RenderedElement, "i" | "p"> & { parent: number; depth: number };
+
+/**
+ * Runs in the rendered page (Playwright's evaluate works while the page's own scripts are off): every element inside
+ * the cut page that is at least 4×4 and visible, in document order, as `RawElement`s. Nothing under an `<svg>` (the
+ * svg itself stays). Called as `(MAP_PAGE)(maxWidth, maxHeight)`.
+ */
+const MAP_PAGE = `(maxW, maxH) => {
+  const skip = new Set(["HEAD", "SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "META", "LINK", "TITLE", "BR", "WBR"]);
+  const esc = (v) => CSS.escape(v);
+  const uniqueId = (e) => {
+    if (!e.id) return false;
+    try { return document.querySelectorAll("#" + esc(e.id)).length === 1; } catch { return false; }
+  };
+  const sels = new Map();
+  const selector = (e) => {
+    const known = sels.get(e);
+    if (known) return known;
+    let sel;
+    if (e === document.body) sel = "body";
+    else if (uniqueId(e)) sel = "#" + esc(e.id);
+    else {
+      let step = e.tagName.toLowerCase();
+      const cls = [...e.classList].filter((c) => /^-?[A-Za-z_][\\w-]*$/.test(c)).slice(0, 2);
+      step += cls.map((c) => "." + esc(c)).join("");
+      const parent = e.parentElement;
+      if (parent) {
+        const same = [...parent.children].filter((c) => c.tagName === e.tagName);
+        if (same.length > 1) step += ":nth-of-type(" + (same.indexOf(e) + 1) + ")";
+      }
+      sel = parent && parent !== document.documentElement ? selector(parent) + " > " + step : step;
+    }
+    sels.set(e, sel);
+    return sel;
+  };
+  const short = (v) => {
+    const t = (v || "").replace(/\\s+/g, " ").trim();
+    return t ? t.slice(0, 80) : undefined;
+  };
+  const out = [];
+  const walk = (e, parent, depth) => {
+    for (const c of e.children) {
+      if (skip.has(c.tagName)) continue;
+      const r = c.getBoundingClientRect();
+      const x = Math.max(0, r.left + scrollX);
+      const y = Math.max(0, r.top + scrollY);
+      const w = Math.min(maxW, r.right + scrollX) - x;
+      const h = Math.min(maxH, r.bottom + scrollY) - y;
+      const shown = w >= 4 && h >= 4 && getComputedStyle(c).visibility !== "hidden";
+      let me = parent;
+      if (shown) {
+        me = out.length;
+        const own = short([...c.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(" "));
+        const label = short(c.getAttribute("aria-label") || c.getAttribute("alt") || c.getAttribute("placeholder") || c.getAttribute("title"));
+        const cls = [...c.classList].slice(0, 3).map((k) => k.slice(0, 60));
+        const el = { parent, depth, tag: c.tagName.toLowerCase() };
+        if (c.id) el.id = c.id.slice(0, 80);
+        if (cls.length) el.cls = cls;
+        if (own) el.text = own;
+        if (label) el.label = label;
+        Object.assign(el, { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h), sel: selector(c) });
+        out.push(el);
+      }
+      if (c.tagName.toLowerCase() !== "svg") walk(c, me, shown ? depth + 1 : depth);
+    }
+  };
+  if (document.body) walk(document.body, -1, 0);
+  return out;
+}`;
+
+/** Keeps the shallowest `limit` elements, in document order, with their parents renumbered. */
+export function trimMap(raw: RawElement[], limit = MAX_RENDER_ELEMENTS): RenderedElement[] {
+  let keep = raw.map((_, i) => i);
+  if (raw.length > limit)
+    keep = keep
+      .sort((a, b) => raw[a].depth - raw[b].depth || a - b)
+      .slice(0, limit)
+      .sort((a, b) => a - b);
+  const renumber = new Map(keep.map((old, i) => [old, i]));
+  return keep.map((old, i) => {
+    const { parent, depth: _depth, ...e } = raw[old];
+    return { i, p: parent >= 0 ? (renumber.get(parent) ?? -1) : -1, ...e };
+  });
+}
+
 /**
  * A full-page picture of PIVOT's own HTML (a stored mockup version), for the owner's feedback pins and the agent's
  * crops around them: the page at `width`, JavaScript off and no request leaving the page (inlined CSS, fonts and images
- * still show), cut at `maxHeight`. JPEG.
+ * still show), cut at `maxHeight`. JPEG. With `elements`, also the page's element map (`RenderedElement`), measured on
+ * the same layout and cut the same way.
  */
 export async function renderHtml(
   html: string,
@@ -1570,8 +1683,9 @@ export async function renderHtml(
     width,
     maxHeight = MAX_FULL_PAGE_HEIGHT,
     timeoutMs = 30_000,
-  }: { width: number; maxHeight?: number; timeoutMs?: number },
-): Promise<{ data: Buffer; width: number; height: number }> {
+    elements = false,
+  }: { width: number; maxHeight?: number; timeoutMs?: number; elements?: boolean },
+): Promise<{ data: Buffer; width: number; height: number; elements?: RenderedElement[] }> {
   clearTimeout(state.idleTimer);
   const b = await browser();
   const context = await b.newContext({
@@ -1600,7 +1714,58 @@ export async function renderHtml(
             .jpeg({ quality: 85 })
             .toBuffer()
         : shot;
-    return { data, width: w, height };
+    const map = elements ? trimMap((await page.evaluate(`(${MAP_PAGE})(${w}, ${height})`)) as RawElement[]) : undefined;
+    return { data, width: w, height, ...(map ? { elements: map } : {}) };
+  } finally {
+    clearTimeout(deadline);
+    await context.close().catch(() => {});
+    state.inUse = Math.max(0, (state.inUse ?? 1) - 1);
+    scheduleIdleClose();
+  }
+}
+
+/** Runs in the page: the trimmed HTML of the element each selector finds alone, or null. See `elementsHtml`. */
+const ELEMENTS_HTML = `(sels, max) => sels.map((sel) => {
+  let found;
+  try { found = document.querySelectorAll(sel); } catch { return null; }
+  if (found.length !== 1) return null;
+  const copy = found[0].cloneNode(true);
+  for (const e of [copy, ...copy.querySelectorAll("*")]) {
+    if (e.tagName.toLowerCase() === "svg") e.innerHTML = "…";
+    for (const a of [...e.attributes]) {
+      if (/^data:/i.test(a.value)) e.setAttribute(a.name, a.value.slice(0, (a.value.indexOf(",") + 1) || 30) + "…");
+      else if (a.value.length > 120) e.setAttribute(a.name, a.value.slice(0, 120) + "…");
+    }
+  }
+  const out = copy.outerHTML.replace(/\\s{2,}/g, " ");
+  return out.length > max ? out.slice(0, max) + "…" : out;
+})`;
+
+/**
+ * The HTML of elements of PIVOT's own HTML (a stored mockup version), found by selector at `width` with JavaScript off,
+ * trimmed for an agent to read: long attribute values and `data:` URIs shortened, an `<svg>`'s inside left out, and
+ * the whole cut at `maxChars`. Null for a selector that doesn't find exactly one element.
+ */
+export async function elementsHtml(
+  html: string,
+  selectors: string[],
+  { width, maxChars = 2000, timeoutMs = 30_000 }: { width: number; maxChars?: number; timeoutMs?: number },
+): Promise<(string | null)[]> {
+  if (!selectors.length) return [];
+  clearTimeout(state.idleTimer);
+  const b = await browser();
+  const context = await b.newContext({
+    viewport: { width, height: 900 },
+    javaScriptEnabled: false,
+    serviceWorkers: "block",
+  });
+  await context.route("**/*", (route) => route.abort("blockedbyclient").catch(() => {}));
+  const deadline = setTimeout(() => void context.close().catch(() => {}), timeoutMs);
+  state.inUse = (state.inUse ?? 0) + 1;
+  try {
+    const page = await context.newPage();
+    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: timeoutMs });
+    return (await page.evaluate(`(${ELEMENTS_HTML})(${JSON.stringify(selectors)}, ${maxChars})`)) as (string | null)[];
   } finally {
     clearTimeout(deadline);
     await context.close().catch(() => {});

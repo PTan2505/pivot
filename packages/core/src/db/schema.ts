@@ -11,6 +11,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import type { DesignFeedbackPin } from "../types";
 
 const id = () =>
   text("id")
@@ -370,8 +371,8 @@ export const designFeedback = pgTable(
     text: text("text").notNull().default(""),
     /** The render width the pins were placed on (1440, 834 or 390); null without pins. */
     width: integer("width"),
-    /** Pins on the version's full-page render at `width`, in its pixels. */
-    pins: jsonb("pins").$type<{ x: number; y: number; text: string; n?: number }[]>().notNull().default([]),
+    /** Pins on the version's full-page render at `width`, in its pixels; a pin may name the element it is about. */
+    pins: jsonb("pins").$type<DesignFeedbackPin[]>().notNull().default([]),
     /** open | addressed */
     status: text("status").notNull().default("open"),
     /** The round that answered it. */
