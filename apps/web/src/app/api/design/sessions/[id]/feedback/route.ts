@@ -16,8 +16,31 @@ const input = z.object({
         y: z.number(),
         text: z.string().max(FEEDBACK_LIMITS.pinText),
         n: z.number().int().min(1).max(999).optional(),
-        /** The element the owner selected: PIVOT finds it in its own map of the render and stores the rest. */
-        element: z.object({ selector: z.string().min(1).max(1000) }).optional(),
+        /**
+         * The element the owner selected: PIVOT finds it in its own map of the render and stores the rest. A live note
+         * (the interactive preview) sends the element as it saw it; PIVOT cuts it to its limits.
+         */
+        element: z
+          .object({
+            selector: z.string().min(1).max(1000),
+            tag: z.string().max(40).optional(),
+            id: z.string().max(200).optional(),
+            classes: z.array(z.string().max(200)).max(20).optional(),
+            text: z.string().max(2000).optional(),
+            label: z.string().max(2000).optional(),
+            box: z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() }).optional(),
+            html: z.string().max(20_000).optional(),
+          })
+          .optional(),
+        /** Seen in the interactive preview with the version's scripts running. */
+        live: z.boolean().optional(),
+        /** A live note's crop (JPEG or PNG, base64) and the part of the page it shows. */
+        capture: z
+          .object({
+            image: z.string().max(600_000),
+            region: z.object({ left: z.number(), top: z.number(), width: z.number(), height: z.number() }),
+          })
+          .optional(),
       }),
     )
     .max(FEEDBACK_LIMITS.pins)

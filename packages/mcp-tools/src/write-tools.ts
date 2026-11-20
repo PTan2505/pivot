@@ -714,10 +714,12 @@ const getDesignSession: PivotTool<typeof sessionInput> = {
 /** Where a pin is: a spot, or the element the user selected (its tag, id, classes, text and the selector finding it). */
 export function pinPlace(p: DesignFeedbackPin): string {
   const e = p.element;
-  if (!e) return `at (${p.x}, ${p.y})`;
+  // a live note was made in the interactive preview, on the version with its scripts running
+  const live = p.live ? " [live: seen in the preview with scripts running]" : "";
+  if (!e) return `at (${p.x}, ${p.y})${live}`;
   const name = `${e.tag}${e.id ? `#${e.id}` : ""}${(e.classes ?? []).map((c) => `.${c}`).join("")}`;
   const words = e.text ?? e.label;
-  return `on element ${name}${words ? ` "${words}"` : ""} (selector \`${e.selector}\`, box ${e.box.x},${e.box.y} ${e.box.w}×${e.box.h})`;
+  return `on element ${name}${words ? ` "${words}"` : ""} (selector \`${e.selector}\`, box ${e.box.x},${e.box.y} ${e.box.w}×${e.box.h})${live}`;
 }
 
 const feedbackImagesInput = {
@@ -730,7 +732,7 @@ const getFeedbackImages: PivotTool<typeof feedbackImagesInput> = {
   name: "get_feedback_images",
   title: "Look at the user's feedback pins",
   description:
-    "Shows where the user pinned feedback on a mockup version: for each pin, the area around it on the version's full-page render at the width they were looking at, with the pin's number drawn on the spot, and the note they wrote. A pin on an element the user selected shows that element outlined, with its selector and its HTML (trimmed), so you can find the exact component. Use it before answering pinned feedback with a new round. Each image costs about 2,000 tokens.",
+    "Shows where the user pinned feedback on a mockup version: for each pin, the area around it on the version's full-page render at the width they were looking at, with the pin's number drawn on the spot, and the note they wrote. A pin on an element the user selected shows that element outlined, with its selector and its HTML (trimmed), so you can find the exact component. A live note (made in the interactive preview, with the version's scripts running) shows the preview's own crop of what the user saw; its element may exist only once scripts have run. Use it before answering pinned feedback with a new round. Each image costs about 2,000 tokens.",
   inputSchema: feedbackImagesInput,
   async run(source, { feedbackId, fromPin = 0, maxImages = 3 }) {
     const w = writer(source);

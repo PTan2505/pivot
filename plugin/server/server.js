@@ -38774,10 +38774,11 @@ var getDesignSession = {
 };
 function pinPlace(p) {
   const e = p.element;
-  if (!e) return `at (${p.x}, ${p.y})`;
+  const live = p.live ? " [live: seen in the preview with scripts running]" : "";
+  if (!e) return `at (${p.x}, ${p.y})${live}`;
   const name = `${e.tag}${e.id ? `#${e.id}` : ""}${(e.classes ?? []).map((c) => `.${c}`).join("")}`;
   const words = e.text ?? e.label;
-  return `on element ${name}${words ? ` "${words}"` : ""} (selector \`${e.selector}\`, box ${e.box.x},${e.box.y} ${e.box.w}\xD7${e.box.h})`;
+  return `on element ${name}${words ? ` "${words}"` : ""} (selector \`${e.selector}\`, box ${e.box.x},${e.box.y} ${e.box.w}\xD7${e.box.h})${live}`;
 }
 var feedbackImagesInput = {
   feedbackId: external_exports.string().regex(UUID2).describe("The feedback's id, from get_design_session."),
@@ -38787,7 +38788,7 @@ var feedbackImagesInput = {
 var getFeedbackImages = {
   name: "get_feedback_images",
   title: "Look at the user's feedback pins",
-  description: "Shows where the user pinned feedback on a mockup version: for each pin, the area around it on the version's full-page render at the width they were looking at, with the pin's number drawn on the spot, and the note they wrote. A pin on an element the user selected shows that element outlined, with its selector and its HTML (trimmed), so you can find the exact component. Use it before answering pinned feedback with a new round. Each image costs about 2,000 tokens.",
+  description: "Shows where the user pinned feedback on a mockup version: for each pin, the area around it on the version's full-page render at the width they were looking at, with the pin's number drawn on the spot, and the note they wrote. A pin on an element the user selected shows that element outlined, with its selector and its HTML (trimmed), so you can find the exact component. A live note (made in the interactive preview, with the version's scripts running) shows the preview's own crop of what the user saw; its element may exist only once scripts have run. Use it before answering pinned feedback with a new round. Each image costs about 2,000 tokens.",
   inputSchema: feedbackImagesInput,
   async run(source2, { feedbackId, fromPin = 0, maxImages = 3 }) {
     const w = writer(source2);
@@ -38962,7 +38963,12 @@ var API_FEATURES = [
    * Feedback on an element (the Select tool): `GET /api/design/mockups/[id]/elements?width=` (a render's element map),
    * and a pin's `element: { selector }`, stored with the element's tag, box and HTML.
    */
-  "design.feedback.elements"
+  "design.feedback.elements",
+  /**
+   * Renders, element maps and feedback at any width from 320 to 2560, and live notes from the interactive preview: a
+   * pin's `live: true` with the element as the preview saw it and its `capture` (a crop, kept by its sha256).
+   */
+  "design.feedback.live"
 ];
 
 // ../../packages/mcp-tools/src/required-app-features.json

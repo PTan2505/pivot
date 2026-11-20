@@ -866,8 +866,18 @@ export interface DesignFeedbackPin {
    * Missing on older feedback: the pin's position in the list, from 1.
    */
   n?: number;
-  /** The element the owner selected for this note (the Select tool), as PIVOT measured it on the same render. */
+  /**
+   * The element the owner selected for this note (the Select tool): measured by PIVOT on the same render, or, for a
+   * live note, as the interactive preview saw it.
+   */
   element?: DesignFeedbackElement;
+  /**
+   * Seen in the interactive preview with the version's scripts running: the element and the crop are what the preview
+   * captured (scripts may have made them), not PIVOT's render.
+   */
+  live?: boolean;
+  /** A live note's crop, kept in the blob store by its sha256 (JPEG), and the part of the page it shows. */
+  capture?: { sha256: string; region: { left: number; top: number; width: number; height: number } };
 }
 
 /**
