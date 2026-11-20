@@ -35,8 +35,8 @@ const ordered = (text: string, words: string[]) => {
 describe("skills name real MCP tools and values", () => {
   const tools = all(/name: "([a-z_]+)"/g, src);
 
-  it("packages/mcp-tools defines 17 tools", () => {
-    expect(tools.size).toBe(17);
+  it("packages/mcp-tools defines 18 tools", () => {
+    expect(tools.size).toBe(18);
   });
 
   // get_reference_images' `which` values, from the tool's own schema

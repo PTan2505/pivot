@@ -138,6 +138,7 @@ The design skills get a second opinion from other Claude Code skills when you ha
 | `get_reference_images`   | read  | Look at it: the cover, the full page in ~2,000-token slices, motion keyframes or interaction states         |
 | `search_external`        | read  | Free public component catalogs (Magic UI, React Bits, shadcn/ui), only when the library falls short         |
 | `get_design_session`     | read  | Read a session to continue earlier work, or the approval you made in PIVOT                                  |
+| `get_feedback_images`    | read  | Look at the pins you placed on a mockup: the area around each one, with your note                           |
 | `propose_references`     | write | Put the 6–10 recommended references on the session's page, numbered, for you to pick from                   |
 | `select_references`      | write | Record which of them you picked, in your own words                                                          |
 | `save_design_brief`      | write | Store the brief at a milestone: `initial` (opens a design session), `approved`, `major_change`              |
