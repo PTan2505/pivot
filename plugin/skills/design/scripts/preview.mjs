@@ -35,6 +35,9 @@
 // neither see that world nor replace its DOM functions), scrolls the frame for forwarded wheel events, and takes the
 // note's crop from the page itself when the note is made, with the preview's own chrome hidden for the shot. Crops stay
 // in this process until the notes are sent; the page only ever gets text it shows with textContent.
+// Select works from the keyboard too: arrows walk the elements from the hovered one (↑ parent, ↓ first child, ← →
+// siblings; from the middle of the view when nothing is outlined), Enter or Space comments on the outlined one, and a
+// strip under the toolbar shows its path (each ancestor walks there). The walk is kept in the same isolated world.
 //
 // Prints one JSON line when ready ({"event":"ready",…}), one for a pick ({"event":"chosen",…}), one for each piece of
 // feedback the user sent with "Send to Claude" ({"event":"feedback",…,"notes":N}: this process posts the text and the
@@ -135,10 +138,19 @@ const GUARD = String.raw`((paused) => {
 
 /**
  * Runs in the isolated world: the element under a point of the frame's viewport, named and placed as PIVOT's element
- * map does (packages/core/src/capture.ts MAP_PAGE: selector, own text, label; ELEMENTS_HTML: the trimmed HTML). It
- * takes its DOM functions from its own world, which the mockup's scripts can't replace.
+ * map does (packages/core/src/capture.ts MAP_PAGE: selector, own text, label; ELEMENTS_HTML: the trimmed HTML), with
+ * its path (up to 3 ancestors, then itself). It takes its DOM functions from its own world, which the mockup's
+ * scripts can't replace, and keeps the keyboard walk's element there too (`__pivotWalk`, out of the mockup's sight).
+ *
+ * - `read("point", {x, y})`: the element under the point (none for the page itself).
+ * - `read("walk", {dir, x?, y?, steps?})`: the keyboard walk. With a point, the walk starts from the element under it
+ *   (the hovered one, or the centre's); `start` stays there, `up` / `down` / `prev` / `next` move from it (`steps`
+ *   times up, for the breadcrumb) and scroll it into view. Up and down skip elements with the same box (±1px), and
+ *   hidden or empty elements are passed through; the walk never goes above `body`'s children. A step that can't
+ *   move answers the current element with `limit`: top, child, first or last.
+ * - `read("walked")`: the walk's element, for a note on it.
  */
-const PROBE = String.raw`((x, y, max) => {
+const READ = String.raw`((op, a, max) => {
   const esc = (v) => CSS.escape(v);
   const uniqueId = (e) => { if (!e.id) return false; try { return document.querySelectorAll("#" + esc(e.id)).length === 1; } catch { return false; } };
   const selector = (e) => {
@@ -164,21 +176,72 @@ const PROBE = String.raw`((x, y, max) => {
     const out = copy.outerHTML.replace(/\s{2,}/g, " ");
     return out.length > max ? out.slice(0, max) + "…" : out;
   };
-  const sc = { x: scrollX, y: scrollY }, vp = { w: innerWidth, h: innerHeight };
-  const doc = { x: Math.round(x + sc.x), y: Math.round(y + sc.y) };
-  const el = document.elementFromPoint(x, y);
-  if (!el || el === document.documentElement || el === document.body) return { scroll: sc, viewport: vp, doc };
-  const r = el.getBoundingClientRect();
-  return {
-    scroll: sc, viewport: vp, doc,
-    selector: selector(el), tag: el.tagName.toLowerCase(), id: el.id ? el.id.slice(0, 80) : undefined,
-    classes: [...el.classList].slice(0, 3).map((k) => k.slice(0, 60)),
-    text: short([...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(" ")),
-    label: short(el.getAttribute("aria-label") || el.getAttribute("alt") || el.getAttribute("placeholder") || el.getAttribute("title")),
-    box: { x: r.left + sc.x, y: r.top + sc.y, w: r.width, h: r.height },
-    client: { x: r.left, y: r.top, w: r.width, h: r.height },
-    html: trimmed(el),
+  const SKIP = new Set(["HEAD", "SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "META", "LINK", "TITLE", "BR", "WBR"]);
+  const rootish = (e) => !e || e === document.body || e === document.documentElement;
+  const shown = (e) => {
+    if (SKIP.has(e.tagName)) return false;
+    const r = e.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) return false;
+    const cs = getComputedStyle(e);
+    return cs.display !== "none" && cs.visibility !== "hidden";
   };
+  const near = (p, q) => Math.abs(p - q) <= 1;
+  const sameBox = (x, y) => { const r = x.getBoundingClientRect(), s = y.getBoundingClientRect(); return near(r.left, s.left) && near(r.top, s.top) && near(r.width, s.width) && near(r.height, s.height); };
+  // the nearest shown ancestor under body (null at the top), and the walk's parent: past the ones with the same box
+  const above = (e) => { let p = e.parentElement; while (p && !rootish(p) && !shown(p)) p = p.parentElement; return rootish(p) ? null : p; };
+  const parentOf = (e) => { let p = above(e); while (p && sameBox(p, e)) p = above(p); return p; };
+  // shown children, through hidden or empty wrappers (display: contents too)
+  const kids = (e) => {
+    const out = [];
+    const go = (n) => { for (const c of n.children) { if (SKIP.has(c.tagName)) continue; if (shown(c)) out.push(c); else go(c); } };
+    go(e);
+    return out;
+  };
+  const childOf = (e) => { let c = kids(e)[0]; while (c && sameBox(c, e)) c = kids(c)[0]; return c || null; };
+  const siblings = (e) => kids(above(e) || document.body);
+  const part = (e) => ({ tag: e.tagName.toLowerCase(), id: e.id ? e.id.slice(0, 80) : undefined, cls: e.classList[0] ? e.classList[0].slice(0, 60) : undefined });
+  const path = (e) => { const ps = [e]; for (let p = parentOf(e); p && ps.length < 4; p = parentOf(p)) ps.unshift(p); return ps.map(part); };
+  const sc = { x: scrollX, y: scrollY }, vp = { w: innerWidth, h: innerHeight };
+  const describe = (el, at) => {
+    const r = el.getBoundingClientRect();
+    // a walked element's point is the middle of its visible part
+    const pt = at || { x: (Math.max(r.left, 0) + Math.min(r.right, vp.w)) / 2, y: (Math.max(r.top, 0) + Math.min(r.bottom, vp.h)) / 2 };
+    return {
+      scroll: sc, viewport: vp, doc: { x: Math.round(pt.x + sc.x), y: Math.round(pt.y + sc.y) },
+      selector: selector(el), tag: el.tagName.toLowerCase(), id: el.id ? el.id.slice(0, 80) : undefined,
+      classes: [...el.classList].slice(0, 3).map((k) => k.slice(0, 60)),
+      text: short([...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(" ")),
+      label: short(el.getAttribute("aria-label") || el.getAttribute("alt") || el.getAttribute("placeholder") || el.getAttribute("title")),
+      box: { x: r.left + sc.x, y: r.top + sc.y, w: r.width, h: r.height },
+      client: { x: r.left, y: r.top, w: r.width, h: r.height },
+      html: trimmed(el), path: path(el),
+    };
+  };
+  const nothing = (at) => ({ scroll: sc, viewport: vp, doc: at ? { x: Math.round(at.x + sc.x), y: Math.round(at.y + sc.y) } : undefined });
+  const hitAt = (x, y) => { const el = document.elementFromPoint(x, y); return rootish(el) ? null : el; };
+  if (op === "point") { const el = hitAt(a.x, a.y); return el ? describe(el, a) : nothing(a); }
+  const st = (globalThis.__pivotWalk ??= { el: null });
+  const alive = (e) => !!e && e.isConnected && !rootish(e) && shown(e);
+  if (op === "walked") return alive(st.el) ? describe(st.el) : null;
+  // op === "walk"
+  let el = typeof a.x === "number" ? hitAt(a.x, a.y) : st.el;
+  if (!alive(el)) el = hitAt(vp.w / 2, vp.h / 2);
+  if (!el) el = kids(document.body)[0] || null;
+  if (!el) { st.el = null; return nothing(); }
+  let limit, to = el;
+  if (a.dir === "up") {
+    for (let i = 0; i < (a.steps || 1); i++) { const p = parentOf(to); if (!p) break; to = p; }
+    if (to === el) limit = "top";
+  } else if (a.dir === "down") {
+    to = childOf(el) || el; if (to === el) limit = "child";
+  } else if (a.dir === "prev" || a.dir === "next") {
+    const sib = siblings(el), k = sib.indexOf(el);
+    to = (a.dir === "prev" ? sib[k - 1] : k >= 0 ? sib[k + 1] : null) || el;
+    if (to === el) limit = a.dir === "prev" ? "first" : "last";
+  }
+  st.el = to;
+  if (to !== el) { to.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" }); sc.x = scrollX; sc.y = scrollY; }
+  return { ...describe(to), limit };
 })`;
 
 /** Runs in the isolated world: scrolls the nearest scrollable box under a point (else the page) by a wheel's delta. */
@@ -190,6 +253,9 @@ const SCROLL = String.raw`((x, y, dx, dy) => {
   if (target) target.scrollBy({ left: dx, top: dy, behavior: "instant" });
   return true;
 })`;
+
+const point = (x, y) => `${READ}("point", ${JSON.stringify({ x: num(x), y: num(y) })}, 2000)`;
+const walkRead = (a) => `${READ}("walk", ${JSON.stringify(a)}, 2000)`;
 
 const LOOK = "({ scroll: { x: scrollX, y: scrollY }, viewport: { w: innerWidth, h: innerHeight } })";
 
@@ -243,6 +309,43 @@ function noteElement(hit, width) {
 }
 /** What the preview's page may see of an element: what it names and places it with. Never its HTML. */
 const shown = (e) => e && { tag: e.tag, id: e.id, classes: e.classes, text: e.text, label: e.label, box: e.box };
+
+/** The keyboard walk's steps, and the limits a step can meet (the page says them in words). */
+const WALK_DIRS = new Set(["up", "down", "prev", "next", "start"]);
+const WALK_LIMITS = new Set(["top", "child", "first", "last"]);
+const TAG = /^[a-z][a-z0-9-]*$/;
+const rect = (b) => ({ x: num(b?.x), y: num(b?.y), w: Math.max(0, num(b?.w)), h: Math.max(0, num(b?.h)) });
+/**
+ * What the preview's page gets of a read (hover, wheel, walk), checked and cut as a note's element is: the frame's
+ * scroll, and the element's name, boxes and path when there is one. Never its HTML or selector.
+ */
+function forPage(hit) {
+  if (!hit || typeof hit !== "object") return null;
+  const out = { scroll: { x: num(hit.scroll?.x), y: num(hit.scroll?.y) } };
+  const tag = words(hit.tag, 40)?.toLowerCase();
+  if (tag && TAG.test(tag) && hit.box && hit.client) {
+    const classes = (Array.isArray(hit.classes) ? hit.classes : []).map((c) => words(c, 60)).filter(Boolean);
+    const path = (Array.isArray(hit.path) ? hit.path : []).slice(-4).flatMap((p) => {
+      const t = words(p?.tag, 40)?.toLowerCase();
+      if (!t || !TAG.test(t)) return [];
+      const id = words(p.id, 80);
+      const cls = words(p.cls, 60);
+      return [{ tag: t, ...(id ? { id } : {}), ...(cls ? { cls } : {}) }];
+    });
+    Object.assign(out, {
+      tag,
+      ...(words(hit.id, 80) ? { id: words(hit.id, 80) } : {}),
+      classes: classes.slice(0, 3),
+      ...(words(hit.text, 80) ? { text: words(hit.text, 80) } : {}),
+      ...(words(hit.label, 80) ? { label: words(hit.label, 80) } : {}),
+      box: rect(hit.box),
+      client: rect(hit.client),
+      path,
+    });
+  }
+  if (WALK_LIMITS.has(hit.limit)) out.limit = hit.limit;
+  return out;
+}
 
 /**
  * Comment mode's reading side, in this process: an isolated world in the version's frame (in the page's own CDP
@@ -453,14 +556,26 @@ function liveLayer({ context, onKey }) {
       await run(`${GUARD}(${comment})`).catch(() => {});
       return comment ? run(LOOK).catch(() => null) : true;
     },
-    hover: ({ x, y }) => run(`${PROBE}(${num(x)}, ${num(y)}, 2000)`),
-    async wheel({ x, y, dx, dy }) {
+    hover: async ({ x, y }) => forPage(await run(point(x, y))),
+    /** The wheel scrolls; then the element under the pointer, or the walk's element while walking. */
+    async wheel({ x, y, dx, dy, walking }) {
       await run(`${SCROLL}(${num(x)}, ${num(y)}, ${num(dx)}, ${num(dy)})`);
-      return run(`${PROBE}(${num(x)}, ${num(y)}, 2000)`);
+      return forPage(await run(walking ? walkRead({ dir: "start" }) : point(x, y)));
     },
-    /** A note on the element or spot at a point: read, cropped and kept here; the page gets its key and place. */
-    async pick({ x, y, tool }, v) {
-      const hit = await run(`${PROBE}(${num(x)}, ${num(y)}, 2000)`);
+    /** A step of the keyboard walk; a point (the hovered element's, or the centre's) starts a new walk there. */
+    async walk({ walk: dir, x, y, steps }) {
+      if (!WALK_DIRS.has(dir)) return null;
+      const from = typeof x === "number" && typeof y === "number" ? { x: num(x), y: num(y) } : {};
+      const n = dir === "up" && Number.isInteger(steps) ? Math.min(3, Math.max(1, steps)) : 1;
+      return forPage(await run(walkRead({ dir, ...from, steps: n })));
+    },
+    /**
+     * A note on the element or spot at a point, or on the walk's element (`walked`, anchored to that element, not
+     * the pointer): read, cropped and kept here; the page gets its key and place.
+     */
+    async pick({ x, y, tool, walked }, v) {
+      const hit = await run(walked ? `${READ}("walked", {}, 2000)` : point(x, y));
+      if (walked && !hit?.tag) return { error: "That element is gone from the page. Pick another one." };
       const width = Math.round(num(hit?.viewport?.w));
       const height = Math.round(num(hit?.viewport?.h));
       if (width < NOTE_LIMITS.width.min || width > NOTE_LIMITS.width.max)
@@ -552,12 +667,14 @@ function shellHtml({ session, pivotPage }) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Preview · ${esc(session.title)}</title><link rel="stylesheet" href="/shell.css"></head><body class="open">
 <main id="stage"></main>
-<div id="cshield" hidden></div>
+<div id="cshield" tabindex="0" role="application" aria-roledescription="element picker" aria-label="Version" aria-describedby="chint" hidden></div>
 <div id="ov"><div id="hl" hidden><span id="chip"></span></div></div>
 <div id="ctool" class="ctool glass" role="toolbar" aria-label="Comment on the page" hidden>${tools("ctools")}
   <span id="chint">Commenting · page paused · Esc to use it</span>
   <button id="centre" class="sec">${icon(I.plus, 14)}<span id="centre-label">Comment at centre</span></button><button id="done" class="inv">Done</button></div>
 <p id="cmsg" class="cmsg" role="status" aria-live="polite"></p>
+<nav id="crumb" class="crumb glass" aria-label="Element path" hidden></nav>
+<p id="walk-sr" class="sr" aria-live="polite"></p>
 <div id="pop" class="pop glass" role="dialog" aria-labelledby="pop-label" hidden><p id="pop-label"></p>
   <textarea id="pop-text" maxlength="${NOTE_LIMITS.text}" rows="3" placeholder="What should change here?" aria-labelledby="pop-label"></textarea>
   <div class="pfoot"><span>Captured as you see it</span><button id="pop-del">${icon(I.trash, 13)}Delete</button></div></div>
@@ -704,12 +821,18 @@ body.ready .ctool{transition:transform 250ms var(--drawer)}@media (min-width:640
 .cmsg:empty{opacity:0;padding:0;box-shadow:none}body.bar-top .cmsg{top:calc(120px + env(safe-area-inset-top))}
 @media (min-width:640px){body.open .cmsg{transform:translateX(calc(-50% - 192px))}}
 @media (max-width:900px){#chint{display:none}}
+#cshield:focus-visible{outline:2px solid var(--accent-text);outline-offset:-2px}
+/* the outlined element's path, under the toolbar (and under #cmsg when it shows); leading ancestors drop first */
+.crumb{position:fixed;z-index:42;top:calc(64px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:2px;min-height:30px;max-width:calc(100vw - 32px);padding:4px 8px;border-radius:999px;white-space:nowrap;overflow:hidden;font:12px/18px "Geist Mono",ui-monospace,monospace}
+.crumb[hidden]{display:none}@media (min-width:640px){body.open .crumb{transform:translateX(calc(-50% - 192px));max-width:calc(100vw - 416px)}}
+.crumb button{height:22px;padding:0 6px;border-radius:999px;background:transparent;color:var(--ink2);font:inherit;flex:none}.crumb button:hover{background:var(--raised);color:var(--ink)}
+.crumb .sep{color:var(--muted);flex:none}.crumb .cur{color:var(--ink);font-weight:500;padding:0 6px;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .pop{position:fixed;z-index:45;width:300px;border-radius:14px;padding:12px;font-size:13px}.pop[hidden]{display:none}
 #pop-label{margin:0 0 6px;font-size:12px;color:var(--muted);overflow-wrap:anywhere}#pop-text{min-height:72px}
 .pfoot{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px;color:var(--muted)}
 #pop-del{height:28px;background:transparent;display:inline-flex;align-items:center;gap:6px;padding:0 8px}
 /* a note's crop is taken from the page itself: nothing of the preview's own is in it */
-body.capturing #drawer,body.capturing #bar-place,body.capturing #ov,body.capturing #ctool,body.capturing #cmsg,body.capturing #pop{visibility:hidden!important;transition:none!important}
+body.capturing #drawer,body.capturing #bar-place,body.capturing #ov,body.capturing #ctool,body.capturing #cmsg,body.capturing #pop,body.capturing #crumb{visibility:hidden!important;transition:none!important}
 @media (pointer:coarse){button{height:44px}button.icon{width:44px;height:44px}[role=tab]{min-height:44px}.bar{height:52px}}
 @media (prefers-reduced-motion:reduce){body.ready .ctool{transition:none!important}}`;
 
@@ -718,6 +841,9 @@ const SHELL_JS = `(() => {
 const WIDTHS = ${JSON.stringify(WIDTHS)};
 const MAX_NOTES = ${NOTE_LIMITS.notes};
 const HINT = "Commenting · page paused · Esc to use it";
+const HOVER_HINT = "Click to comment · Arrows move · Esc to leave";
+const WALK_HINT = "Arrows move · Enter comments · Esc to leave";
+const LIMITS = { top: "Top element.", child: "No child elements.", first: "First element here.", last: "Last element here." };
 const WIDTH_NAMES = { desktop: "Desktop", tablet: "Tablet", phone: "Phone" };
 let versions = [], current = 0, width = "desktop", comparing = false, nonce = 0, frameW = 0;
 let paused = new URLSearchParams(location.search).has("crashed");
@@ -779,7 +905,7 @@ function render() {
   $("dot").textContent = v.n + "/" + versions.length;
   $("prev").disabled = $("next").disabled = versions.length < 2;
   // a new frame starts at the top, with nothing of the last one drawn over it
-  scroll = { x: 0, y: 0 }; hideOutline(); closePop(); placeShield(); showMode(); drawNotes(); renderNotes();
+  scroll = { x: 0, y: 0 }; walking = false; hideOutline(); closePop(); placeShield(); showMode(); drawNotes(); renderNotes();
 }
 const show = (i) => { current = (i + versions.length) % versions.length; comparing = false; paused = false; $("confirm").hidden = true; render(); };
 // drawer: open on a first visit, then as left; Esc or the toggle closes it and focus returns to the toggle
@@ -836,6 +962,9 @@ media.addEventListener("change", showMedia);
 // and keeps it until Send to Claude). Everything the process returns is shown with textContent only.
 let mode = "use", tool = stored("pivot.preview.tool") === "pin" ? "pin" : "select";
 let scroll = { x: 0, y: 0 }, openKey = null, picking = false, sending = false;
+// Select's outline: the element shown (by hover or by the keyboard walk) with its path, the frame point a hover read
+// it at, whether the keyboard walk has it, and where the pointer was at the walk's last step
+let shownHit = null, hitAt = null, walking = false, walkFrom = null, lastPtr = null;
 const drafts = new Map(); // version number -> { notes, next }: the notes stay with their version until sent
 const draft = () => {
   const n = versions[current]?.n;
@@ -858,13 +987,23 @@ const toFrame = (x, y, g) => ({ x: (x - g.r.left) / g.s, y: (y - g.r.top) / g.s 
 const toPage = (x, y, g) => ({ x: g.r.left + x * g.s, y: g.r.top + y * g.s });
 // the toolbar's hint (hidden on a narrow window) says what is going on; a problem also goes to #cmsg, a status line
 // under the toolbar that shows at every width and is announced
+// the hint for what Select is doing: walking, an element outlined, or nothing yet
+const hintNow = () => (mode === "comment" && tool === "select" && !picking ? (walking ? WALK_HINT : shownHit ? HOVER_HINT : HINT) : HINT);
 function say(text, ms) {
   $("chint").textContent = text;
-  clearTimeout(say.t); if (ms) say.t = setTimeout(() => ($("chint").textContent = HINT), ms);
+  clearTimeout(say.t); say.t = 0; if (ms) say.t = setTimeout(() => { say.t = 0; $("chint").textContent = hintNow(); }, ms);
 }
+const showHint = () => { if (!say.t) $("chint").textContent = hintNow(); };
+// a walk's limit message gives way as soon as the walk moves on or ends
+const resetHint = () => { clearTimeout(say.t); say.t = 0; showHint(); };
 function problem(text) {
-  say(text, 4000); $("cmsg").textContent = text;
-  clearTimeout(problem.t); problem.t = setTimeout(() => ($("cmsg").textContent = ""), 4000);
+  say(text, 4000); $("cmsg").textContent = text; placeCrumb();
+  clearTimeout(problem.t); problem.t = setTimeout(() => { $("cmsg").textContent = ""; placeCrumb(); }, 4000);
+}
+// a step of the walk (or its limit) is announced; a repeat of the same words still is
+function announce(text) {
+  const sr = $("walk-sr"); sr.textContent = "";
+  requestAnimationFrame(() => (sr.textContent = text));
 }
 function showMode() {
   const can = !comparing && !paused && versions.length > 0;
@@ -877,7 +1016,9 @@ function showMode() {
   // Shift+Tab move between the preview's own controls and never into the paused page
   const box = document.querySelector("#stage .frame"); if (box) box.inert = on;
   $("centre-label").textContent = tool === "pin" ? "Add pin at centre" : "Comment at centre";
-  placeShield();
+  const v = versions[current];
+  if (v) $("cshield").setAttribute("aria-label", "Version " + v.n + ": " + v.title);
+  placeShield(); renderCrumb(); showHint();
 }
 function placeShield() {
   const s = $("cshield"), g = mode === "comment" ? geo() : null;
@@ -888,7 +1029,7 @@ async function setMode(next, focus = true) {
   if (next === "comment" && (comparing || paused || !versions.length)) return;
   if (next === mode) return;
   mode = next;
-  if (mode === "use") { closePop(); hideOutline(); say(HINT); $("cmsg").textContent = ""; }
+  if (mode === "use") { closePop(); walking = false; at = null; hideOutline(); say(HINT); $("cmsg").textContent = ""; }
   showMode(); drawNotes(); renderNotes();
   // the shield is up first; then the process pauses the page's own keys and clicks (and lets them go again)
   if (mode === "comment" && (focus || document.activeElement?.tagName === "IFRAME")) document.querySelector("#ctools [aria-checked=true]")?.focus();
@@ -898,17 +1039,18 @@ async function setMode(next, focus = true) {
 const toggleMode = () => setMode(mode === "comment" ? "use" : "comment");
 function setTool(next) {
   tool = next; store("pivot.preview.tool", next);
-  if (tool === "pin") hideOutline();
+  if (tool === "pin") { walking = false; hideOutline(); }
   showMode();
 }
 function setScroll(s) {
   if (!s || (s.x === scroll.x && s.y === scroll.y)) return;
   scroll = { x: s.x, y: s.y }; drawNotes(); if (openKey) placePop();
 }
-function hideOutline() { $("hl").hidden = true; }
+function hideOutline() { $("hl").hidden = true; shownHit = null; renderCrumb(); showHint(); }
 function outline(hit) {
   const g = geo();
   if (!g || !hit || !hit.client || !hit.tag) return hideOutline();
+  shownHit = hit; renderCrumb(); showHint();
   const p = toPage(hit.client.x, hit.client.y, g), hl = $("hl");
   Object.assign(hl.style, { left: p.x + "px", top: p.y + "px", width: hit.client.w * g.s + "px", height: hit.client.h * g.s + "px" });
   hl.classList.toggle("below", p.y < 34);
@@ -920,25 +1062,50 @@ function outline(hit) {
 }
 // hover: one question in flight, at most one per frame; the latest point wins
 let at = null, asking = false;
+document.addEventListener("pointermove", (e) => { lastPtr = { x: e.clientX, y: e.clientY }; }, true);
 $("cshield").addEventListener("pointermove", (e) => {
   if (mode !== "comment" || tool !== "select" || picking) return;
   const g = geo(); if (!g) return;
   at = toFrame(e.clientX, e.clientY, g);
+  // after a key step the outline stays with the walk until the pointer really moves (~4px), then follows it again
+  if (walking) {
+    if (!walkFrom) walkFrom = { x: e.clientX, y: e.clientY };
+    if (Math.hypot(e.clientX - walkFrom.x, e.clientY - walkFrom.y) <= 4) return;
+    walking = false; resetHint();
+  }
   if (!asking) ask();
 });
+const onCrumb = () => $("crumb").matches(":hover");
 function ask() {
   asking = true;
   requestAnimationFrame(async () => {
     const p = at; let hit = null;
-    try { hit = await window.pivotPreview({ hover: p }); } catch {}
+    try { hit = p ? await window.pivotPreview({ hover: p }) : null; } catch {}
     asking = false;
-    if (mode !== "comment" || tool !== "select" || picking || !at) return hideOutline();
+    if (walking) return;
+    if (mode !== "comment" || tool !== "select" || picking) return hideOutline();
+    // the pointer left: the outline goes, unless it went to the path strip to use it
+    if (!at) { if (!onCrumb()) hideOutline(); return; }
     if (hit && hit.scroll) setScroll(hit.scroll);
-    outline(hit);
+    hitAt = p; outline(hit);
     if (at !== p) ask();
   });
 }
-$("cshield").addEventListener("pointerleave", () => { at = null; hideOutline(); });
+$("cshield").addEventListener("pointerleave", (e) => {
+  at = null;
+  if (!walking && !$("crumb").contains(e.relatedTarget)) hideOutline();
+});
+$("crumb").addEventListener("pointerleave", (e) => {
+  if (!walking && !at && !$("cshield").contains(e.relatedTarget)) hideOutline();
+});
+// the picker, focused from the keyboard (Tab), outlines the element in the middle of the view to walk from
+let ptrFocus = false;
+const toPicker = () => { const s = $("cshield"); if (document.activeElement !== s && !s.hidden) { ptrFocus = true; s.focus({ preventScroll: true }); } };
+$("cshield").addEventListener("pointerdown", () => { ptrFocus = true; });
+$("cshield").addEventListener("focus", () => {
+  if (ptrFocus) { ptrFocus = false; return; }
+  if (mode === "comment" && tool === "select" && !shownHit) step("start");
+});
 // the wheel scrolls the version (the process scrolls its nearest scrollable box)
 let wheelQ = null, wheeling = false;
 $("cshield").addEventListener("wheel", (e) => {
@@ -952,9 +1119,10 @@ async function pump() {
   wheeling = true;
   while (wheelQ) {
     const w = wheelQ; wheelQ = null; let hit = null;
-    try { hit = await window.pivotPreview({ wheel: w }); } catch {}
+    try { hit = await window.pivotPreview({ wheel: { ...w, walking } }); } catch {}
     if (hit && hit.scroll) setScroll(hit.scroll);
-    if (tool === "select" && at) outline(hit);
+    if (tool === "select" && walking) outline(hit);
+    else if (tool === "select" && at) { hitAt = { x: w.x, y: w.y }; outline(hit); }
   }
   wheeling = false;
 }
@@ -964,16 +1132,18 @@ $("cshield").addEventListener("click", (e) => {
   const g = geo(); if (g) addNote(toFrame(e.clientX, e.clientY, g));
 });
 // a note: the process reads the element (or the spot), takes the crop before anything is drawn, and keeps it
-async function addNote(p) {
+// (walked: on the keyboard walk's element, anchored to it, as a click on it would be)
+async function addNote(p, walked = false) {
   if (picking) return;
   const v = versions[current], d = draft(), f = iframe();
   if (d.notes.length >= MAX_NOTES) return problem("At most " + MAX_NOTES + " notes at a time: send these first.");
   picking = true; hideOutline(); say("Capturing…");
   let r = null;
-  try { r = await window.pivotPreview({ pick: { x: p.x, y: p.y, tool, n: v.n } }); } catch {}
+  const pick = walked ? { walked: true, tool: "select", n: v.n } : { x: p.x, y: p.y, tool, n: v.n };
+  try { r = await window.pivotPreview({ pick }); } catch {}
   picking = false;
-  if (!r || r.error) return problem(r && r.error ? r.error : "Couldn’t read the page there. Try again.");
-  say(HINT);
+  if (!r || r.error) { if (walked) refreshWalk(); return problem(r && r.error ? r.error : "Couldn’t read the page there. Try again."); }
+  say(hintNow());
   // the version or its frame changed meanwhile: the note isn't on what is shown
   if (versions[current] !== v || iframe() !== f || mode !== "comment") { window.pivotPreview({ drop: r.key }); return; }
   const note = { key: r.key, n: d.next++, text: "", element: r.element || null, x: r.x, y: r.y, width: r.width, label: WIDTH_NAMES[width] + " " + r.width };
@@ -1024,7 +1194,7 @@ function openPop(key) {
   openKey = key;
   $("pop-label").textContent = n.element ? "Note on " + elName(n.element) : "Note for spot " + n.n;
   $("pop-text").value = n.text;
-  $("pop").hidden = false; placePop(); drawNotes();
+  $("pop").hidden = false; placePop(); drawNotes(); renderCrumb();
   $("pop-text").focus();
 }
 // below the note (above when there is no room), on the side away from the drawer
@@ -1043,6 +1213,8 @@ function closePop() {
   const key = openKey, n = noteOf(key);
   openKey = null; $("pop").hidden = true;
   if (n && !n.text.trim()) removeNote(key); else { drawNotes(); renderNotes(); }
+  // back to where the walk was
+  if (walking) refreshWalk(); else renderCrumb();
 }
 $("pop-text").addEventListener("input", () => {
   const n = openKey && noteOf(openKey); if (!n) return;
@@ -1089,7 +1261,85 @@ window.pivotPreviewKey = (k) => {
 };
 function escape() {
   if (openKey) { const k = openKey; closePop(); document.querySelector('.mk[data-note="' + k + '"]')?.focus(); }
+  else if (walking) endWalk();
   else setMode("use");
+}
+
+// ---- Select from the keyboard: the element walk. The hovered element is its start (no click or Tab first); with
+// nothing outlined, the first arrow outlines the element in the middle of the view. The process walks in its own
+// world of the version's frame and keeps the walked element there.
+let walkQ = Promise.resolve(), queued = 0;
+function step(dir, steps) {
+  if (queued > 3) return;
+  queued++;
+  walkQ = walkQ.then(() => stepNow(dir, steps)).catch(() => {}).finally(() => queued--);
+}
+function centrePoint(g) {
+  const right = Math.min(g.box.right, innerWidth - (open && innerWidth >= 640 ? 372 : 0));
+  return toFrame((Math.max(g.box.left, 0) + right) / 2, (Math.max(g.box.top, 0) + Math.min(g.box.bottom, innerHeight)) / 2, g);
+}
+async function stepNow(dir, steps) {
+  if (mode !== "comment" || tool !== "select" || picking || openKey) return;
+  const g = geo(); if (!g) return;
+  let cmd;
+  if (walking) cmd = { walk: dir, steps };
+  else if (shownHit && hitAt) cmd = { walk: dir, x: hitAt.x, y: hitAt.y, steps };
+  else { const c = centrePoint(g); cmd = { walk: "start", x: c.x, y: c.y }; }
+  let r = null;
+  try { r = await window.pivotPreview(cmd); } catch {}
+  if (mode !== "comment" || tool !== "select" || picking || openKey) return;
+  if (!r || !r.tag) { announce("No element here."); return; }
+  walking = true; walkFrom = lastPtr;
+  if (r.scroll) setScroll(r.scroll);
+  outline(r);
+  announce(r.limit ? LIMITS[r.limit] : elName(r));
+  if (r.limit) say(LIMITS[r.limit], 2000); else resetHint();
+}
+// the walk's element again, where it is now (after a note, or a scroll)
+function refreshWalk() {
+  walkQ = walkQ.then(async () => {
+    if (!walking || mode !== "comment" || tool !== "select" || openKey) return;
+    let r = null;
+    try { r = await window.pivotPreview({ walk: "start" }); } catch {}
+    if (walking && r && r.tag) outline(r); else if (walking) endWalk();
+  }).catch(() => {});
+}
+function endWalk() {
+  walking = false; walkFrom = null;
+  if (at && !asking) ask(); else if (!at) hideOutline();
+  resetHint();
+}
+// Enter and Space comment on the outlined element only when focus is on the page itself, never on a control
+const onPage = (t) => t === document.body || t === document.documentElement || t === $("cshield");
+function commentOnOutlined() {
+  if (walking) addNote(null, true);
+  else if (shownHit && hitAt) addNote(hitAt);
+}
+// the path strip: up to 3 ancestors (each walks to that element), then the outlined element
+function renderCrumb() {
+  const nav = $("crumb"), hit = shownHit;
+  const on = !!hit && mode === "comment" && tool === "select" && !picking && !openKey && hit.path && hit.path.length > 0;
+  nav.hidden = !on;
+  if (!on) { nav.replaceChildren(); return; }
+  const name = (p) => p.tag + (p.id ? "#" + p.id : p.cls ? "." + p.cls : "");
+  const parts = hit.path.map((p, i) => {
+    const up = hit.path.length - 1 - i;
+    if (!up) { const s = document.createElement("span"); s.className = "cur"; s.setAttribute("aria-current", "true"); s.textContent = name(p); return [s]; }
+    const b = document.createElement("button"); b.dataset.crumb = String(up); b.textContent = name(p);
+    const sep = document.createElement("span"); sep.className = "sep"; sep.setAttribute("aria-hidden", "true"); sep.textContent = "›";
+    return [b, sep];
+  });
+  nav.replaceChildren(...parts.flat());
+  placeCrumb();
+  // too long: the leading ancestors go first, never a wrap
+  while (nav.scrollWidth > nav.clientWidth + 1 && nav.querySelector("button")) { nav.firstChild.remove(); nav.firstChild.remove(); }
+}
+// under the toolbar, and under the status line when it shows
+function placeCrumb() {
+  const nav = $("crumb"); if (nav.hidden) return;
+  const bar = $("ctool").getBoundingClientRect(), msg = $("cmsg");
+  const below = Math.max(bar.bottom, msg.textContent ? msg.getBoundingClientRect().bottom : 0);
+  nav.style.top = Math.round(below + 8) + "px";
 }
 
 document.addEventListener("click", async (e) => {
@@ -1102,6 +1352,7 @@ document.addEventListener("click", async (e) => {
   else if (b.dataset.note) { if (openKey === b.dataset.note) closePop(); else openPop(b.dataset.note); }
   else if (b.dataset.open) { await setMode("comment", false); openPop(b.dataset.open); }
   else if (b.dataset.del) removeNote(b.dataset.del);
+  else if (b.dataset.crumb) { step("up", Number(b.dataset.crumb)); toPicker(); }
   else if (b.dataset.motion) {
     await window.pivotPreview({ reducedMotion: b.dataset.motion === "reduce" });
     for (const m of document.querySelectorAll("[data-motion]")) m.setAttribute("aria-pressed", String(m === b));
@@ -1149,10 +1400,20 @@ document.addEventListener("keydown", (e) => {
   if (mode === "comment") {
     if (e.key === "Escape" && (!typing || e.target.id === "pop-text")) { e.preventDefault(); escape(); return; }
     if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.code === "KeyV" || e.code === "KeyP")) { e.preventDefault(); setTool(e.code === "KeyV" ? "select" : "pin"); return; }
+    // the element walk: arrows anywhere but a field, the note, the version tabs; Enter and Space on the page itself
+    if (tool === "select" && !openKey && !picking && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      const dir = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "prev", ArrowRight: "next" }[e.key];
+      const t = e.target, own = t.closest && (t.isContentEditable || t.closest("input, textarea, select, #pop, [role=tablist]"));
+      // the keys take the page: the focus moves onto the picker (quietly), so Enter then comments instead of pressing a button
+      if (dir && !own) { e.preventDefault(); step(dir); toPicker(); return; }
+      if ((e.key === "Enter" || e.key === " ") && onPage(t) && (walking || shownHit)) { e.preventDefault(); commentOnOutlined(); return; }
+    }
   }
   if (e.key === "Escape" && open && !typing && mode === "use") { e.preventDefault(); setOpen(false, true); return; }
   if (e.metaKey || e.ctrlKey || e.altKey || (e.target.closest && e.target.closest("input, textarea, [role=radiogroup], [role=group]"))) return;
   const n = Number(e.key);
+  // while commenting with Select the arrows belong to the element walk, with or without a modifier: never a version
+  if (mode === "comment" && tool === "select" && e.key.startsWith("Arrow") && e.target.getAttribute?.("role") !== "tab") return;
   if (n >= 1 && n <= versions.length) show(n - 1);
   else if (e.key === "ArrowRight" || (e.key === "ArrowDown" && e.target.getAttribute?.("role") === "tab")) show(current + 1);
   else if (e.key === "ArrowLeft" || (e.key === "ArrowUp" && e.target.getAttribute?.("role") === "tab")) show(current - 1);
@@ -1315,14 +1576,17 @@ export async function startPreview({
       return true;
     }
     if (cmd?.mode === "comment" || cmd?.mode === "use") return live.setMode(cmd.mode === "comment");
-    // reading the page, only while commenting: what is under the pointer, a forwarded wheel, a note
-    if (cmd?.hover || cmd?.wheel || cmd?.pick) {
+    // reading the page, only while commenting: what is under the pointer, a forwarded wheel, a step of the keyboard
+    // walk, a note
+    if (cmd?.hover || cmd?.wheel || cmd?.walk || cmd?.pick) {
       if (!live.commenting) return null;
       try {
         if (cmd.hover) return await live.hover(cmd.hover);
-        if (cmd.wheel) return await live.wheel(cmd.wheel);
+        if (cmd.wheel) return await live.wheel({ ...cmd.wheel, walking: cmd.wheel.walking === true });
+        if (cmd.walk) return await live.walk(cmd);
         const v = versions.find((x) => x.n === cmd.pick.n);
         if (!v) return null;
+        if (cmd.pick.walked === true) return await live.pick({ tool: "select", walked: true }, v);
         return await live.pick({ x: cmd.pick.x, y: cmd.pick.y, tool: cmd.pick.tool === "pin" ? "pin" : "select" }, v);
       } catch {
         return null;
