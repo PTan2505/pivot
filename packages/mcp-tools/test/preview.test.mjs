@@ -960,6 +960,225 @@ describe("comment mode in the preview window", () => {
   }, 30_000);
 });
 
+// the keyboard element walk: a nested page, a hidden sibling, a wrapper with its child's box, and a footer far below
+const WALK_PAGE = `<!doctype html><style>body{margin:0;font:16px system-ui}.wrap{padding:180px 40px 40px}
+.hero{padding:24px;background:#eee}.cards{display:flex;gap:16px;padding:16px;background:#ddd}
+.btn{display:block;width:160px;height:60px;background:#cde}.fill{display:block;width:100%;height:100%}.tall{height:2400px}</style>
+<div class="wrap"><section class="hero" id="hero"><div class="cards"><a class="btn" id="a1">One</a><a class="btn" id="a2">Two</a><a class="btn" id="gone" style="display:none">Gone</a><a class="btn" style="visibility:hidden">Ghost</a><i class="empty"></i><a class="btn" id="a3"><span class="fill">Three</span></a></div></section></div>
+<div class="tall"></div><footer id="foot"><p id="last">End</p></footer>`;
+
+describe("the keyboard element walk and the path strip in the preview window", () => {
+  let pv;
+  let page;
+  beforeAll(async () => {
+    pv = await startPreview({
+      session,
+      versions: [version(1, "Walk", false, WALK_PAGE)],
+      pivotPage: `http://127.0.0.1:4321/design/${SID}`,
+      headless: true,
+      sendFeedback: async () => ({ id: "fb" }),
+    });
+    page = pv.page();
+    await page.waitForSelector("body[data-ready=true]");
+    await loaded(page);
+  }, 60_000);
+  afterAll(async () => {
+    await pv?.close();
+  });
+
+  const f = () => page.frameLocator("iframe");
+  /** The outline's box against an element's box in the window (the frame is unscaled at Desktop), ±1px. */
+  async function outlined(sel) {
+    const want = await f().locator(sel).boundingBox();
+    await expect
+      .poll(async () => {
+        if (await page.isHidden("#hl")) return "hidden";
+        const b = await page.locator("#hl").boundingBox();
+        return ["x", "y", "width", "height"].every((k) => Math.abs(b[k] - want[k]) <= 1) ? sel : JSON.stringify(b);
+      })
+      .toBe(sel);
+  }
+  const said = () => expect.poll(() => page.textContent("#walk-sr"));
+  const crumb = () => page.locator("#crumb").evaluate((n) => [...n.children].map((c) => [c.tagName, c.textContent]));
+
+  it("walks from the hovered element with the arrows, announces each step and its limits, and Enter comments on it", async () => {
+    await page.click("#qmode [data-mode=comment]");
+    expect(await page.textContent("#chint")).toBe("Commenting · page paused · Esc to use it");
+    // hover: the element under the pointer is the walk's start; focus stays on the Select tool, as it was put there
+    expect(await hoverChip(page, "#a1")).toMatch(/^a#a1 “One” · 160×60$/);
+    expect(await page.textContent("#chint")).toBe("Click to comment · Arrows move · Esc to leave");
+    expect(await page.evaluate(() => document.activeElement?.dataset.tool)).toBe("select");
+    // ↑ goes straight to the parent
+    await page.keyboard.press("ArrowUp");
+    await outlined(".cards");
+    await said().toMatch(/^div\.cards · \d+×\d+$/);
+    expect(await page.textContent("#chint")).toBe("Arrows move · Enter comments · Esc to leave");
+    // ↓ to its first child, → to the next sibling, past hidden and empty ones, and the limits say so instead of moving
+    await page.keyboard.press("ArrowDown");
+    await outlined("#a1");
+    await said().toBe("a#a1 “One”");
+    await page.keyboard.press("ArrowRight");
+    await outlined("#a2");
+    await said().toBe("a#a2 “Two”");
+    await page.keyboard.press("ArrowRight");
+    await outlined("#a3");
+    await page.keyboard.press("ArrowRight");
+    await said().toBe("Last element here.");
+    await outlined("#a3");
+    // its only child has the same box: skipped, so there is no child to go to
+    await page.keyboard.press("ArrowDown");
+    await said().toBe("No child elements.");
+    await outlined("#a3");
+    // keys with a modifier are left alone
+    await page.keyboard.press("Shift+ArrowLeft");
+    await page.waitForTimeout(150);
+    await outlined("#a3");
+    // the arrows took the focus onto the page (it was on the Select tool), so Enter comments on the walked element
+    expect(await page.evaluate(() => document.activeElement?.id)).toBe("cshield");
+    await page.keyboard.press("Enter");
+    await page.waitForSelector("#pop:not([hidden])");
+    expect(await page.textContent("#pop-label")).toBe("Note on a#a3 · 160×60");
+    const [note] = [...pv.notes.values()];
+    expect(note.element).toMatchObject({ selector: "#a3", tag: "a", id: "a3" });
+    // anchored to the element (its middle), not to the pointer, which is still over #a1
+    const a3 = await f().locator("#a3").boundingBox();
+    expect([note.x, note.y]).toEqual([Math.round(a3.x + a3.width / 2), Math.round(a3.y + a3.height / 2)]);
+    expect(note.element.box).toEqual({ x: a3.x, y: a3.y, w: 160, h: 60 });
+    // Esc closes the (empty) note, and the walk is where it was
+    await page.keyboard.press("Escape");
+    expect(await page.isHidden("#pop")).toBe(true);
+    expect(pv.notes.size).toBe(0);
+    await outlined("#a3");
+    // Esc ends the walk: the outline goes back to the pointer, and the mode stays
+    await page.locator("#cshield").focus();
+    await page.keyboard.press("Escape");
+    await outlined("#a1");
+    expect(await commenting(page)).toBe(true);
+    expect(await page.textContent("#chint")).toBe("Click to comment · Arrows move · Esc to leave");
+  }, 30_000);
+
+  it("scrolls the walked element into view, and hands the outline back to the pointer when it moves", async () => {
+    await hoverChip(page, "#a2");
+    const p = await centreOf(page, "#a2");
+    for (const key of ["ArrowUp", "ArrowUp", "ArrowUp"]) await page.keyboard.press(key);
+    await outlined(".wrap");
+    // body's children are the top
+    await page.keyboard.press("ArrowUp");
+    await said().toBe("Top element.");
+    await page.keyboard.press("ArrowRight");
+    await outlined(".tall");
+    await page.keyboard.press("ArrowRight");
+    await expect.poll(() => versionFrame(page).evaluate(() => scrollY)).toBeGreaterThan(1000);
+    await outlined("#foot");
+    // a small tremor keeps the walk; a real move gives the outline back to the pointer
+    await page.mouse.move(p.x + 2, p.y + 1);
+    await page.waitForTimeout(150);
+    await outlined("#foot");
+    await page.mouse.move(p.x + 40, p.y + 1);
+    await expect.poll(() => page.textContent("#chint")).toBe("Click to comment · Arrows move · Esc to leave");
+    await expect.poll(() => page.textContent("#chip")).toMatch(/^div\.tall · /);
+  }, 30_000);
+
+  it("shows the outlined element's path under the toolbar; an ancestor walks there, without a note", async () => {
+    await versionFrame(page).evaluate(() => scrollTo(0, 0));
+    expect(await hoverChip(page, "#a2")).toMatch(/^a#a2/);
+    await expect.poll(crumb).toEqual([
+      ["BUTTON", "div.wrap"],
+      ["SPAN", "›"],
+      ["BUTTON", "section#hero"],
+      ["SPAN", "›"],
+      ["BUTTON", "div.cards"],
+      ["SPAN", "›"],
+      ["SPAN", "a#a2"],
+    ]);
+    expect(await page.getAttribute("#crumb", "aria-label")).toBe("Element path");
+    expect(await page.getAttribute("#crumb .cur", "aria-current")).toBe("true");
+    expect(await page.getAttribute("#crumb .sep", "aria-hidden")).toBe("true");
+    // centred under the toolbar, 8px below it
+    const bar = await page.locator("#ctool").boundingBox();
+    const strip = await page.locator("#crumb").boundingBox();
+    expect(Math.round(strip.y - (bar.y + bar.height))).toBe(8);
+    expect(Math.abs(strip.x + strip.width / 2 - (bar.x + bar.width / 2))).toBeLessThanOrEqual(1);
+    // the pointer goes up to the strip: the outline stays, and a click on an ancestor walks to it
+    const hero = page.locator("#crumb button", { hasText: "section#hero" });
+    const hb = await hero.boundingBox();
+    await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+    expect(await page.isVisible("#crumb")).toBe(true);
+    await page.mouse.click(hb.x + hb.width / 2, hb.y + hb.height / 2);
+    await outlined("#hero");
+    await said().toMatch(/^section#hero · \d+×\d+$/);
+    await expect.poll(crumb).toEqual([
+      ["BUTTON", "div.wrap"],
+      ["SPAN", "›"],
+      ["SPAN", "section#hero"],
+    ]);
+    expect(pv.notes.size).toBe(0);
+    expect(await page.isHidden("#pop")).toBe(true);
+    // the walk goes on from there with the keys
+    await page.keyboard.press("ArrowDown");
+    await outlined(".cards");
+    // Pin has no outline and no path; nor does Use
+    await page.keyboard.press("p");
+    expect(await page.isHidden("#crumb")).toBe(true);
+    expect(await page.isHidden("#hl")).toBe(true);
+    await page.keyboard.press("v");
+    await hoverChip(page, "#a1");
+    expect(await page.isVisible("#crumb")).toBe(true);
+    // never in a crop: it hides with the rest of the chrome while capturing
+    expect(
+      await page.evaluate(() => {
+        document.body.classList.add("capturing");
+        const v = getComputedStyle(document.getElementById("crumb")).visibility;
+        document.body.classList.remove("capturing");
+        return v;
+      }),
+    ).toBe("hidden");
+    // a status line pushes it down instead of being covered
+    await page.evaluate(() => (document.getElementById("cmsg").textContent = "A problem, said here."));
+    await hoverChip(page, "#a2");
+    const msg = await page.locator("#cmsg").boundingBox();
+    expect(Math.round((await page.locator("#crumb").boundingBox()).y - (msg.y + msg.height))).toBe(8);
+    await page.evaluate(() => (document.getElementById("cmsg").textContent = ""));
+    // too long for the window: the leading ancestors drop first, on one line
+    await page.setViewportSize({ width: 700, height: 950 });
+    try {
+      await page.waitForFunction(() => innerWidth === 700);
+      await page.mouse.move(5, 900);
+      await hoverChip(page, "#a2");
+      const parts = await crumb();
+      expect(parts.at(-1)).toEqual(["SPAN", "a#a2"]);
+      expect(parts[0]).not.toEqual(["BUTTON", "div.wrap"]);
+      expect(parts.length).toBeLessThan(7);
+      const box = await page.locator("#crumb").boundingBox();
+      expect(box.height).toBeLessThanOrEqual(32);
+      expect(box.x).toBeGreaterThanOrEqual(16);
+      expect(await page.locator("#crumb").evaluate((n) => n.scrollWidth <= n.clientWidth + 1)).toBe(true);
+    } finally {
+      await page.setViewportSize({ width: 1500, height: 950 });
+    }
+    await page.click("#done");
+    expect(await page.isHidden("#crumb")).toBe(true);
+  }, 30_000);
+
+  it("starts from the middle of the view when nothing is outlined, and Esc ends the walk before the mode", async () => {
+    await versionFrame(page).evaluate(() => scrollTo(0, 0));
+    await page.mouse.move(750, 940); // over the quick bar, off the version
+    await page.click("#qmode [data-mode=comment]");
+    expect(await page.isHidden("#hl")).toBe(true);
+    // the first arrow only outlines the element in the middle of the view (the tall block); the next one moves
+    await page.keyboard.press("ArrowUp");
+    await outlined(".tall");
+    await said().toMatch(/^div\.tall · 1500×2400$/);
+    await page.keyboard.press("ArrowLeft");
+    await outlined(".wrap");
+    await page.keyboard.press("Escape"); // ends the walk; the pointer is off the version, so no outline
+    await expect.poll(() => page.isHidden("#hl")).toBe(true);
+    expect(await commenting(page)).toBe(true);
+    await page.keyboard.press("Escape"); // and then leaves the mode
+    expect(await commenting(page)).toBe(false);
+  }, 30_000);
+});
+
 describe("comment mode on full Chromium (the version's frame out of process, as in the window)", () => {
   let c;
   let why = "";

@@ -29,6 +29,12 @@ Approved by the owner on 2026-11-20, following [element-feedback-plan.md](elemen
 
 11. **The skill reads live notes** (`feat/live-feedback-skill`): `feedback.md` §2 says a live note was seen with scripts running, its selector may not exist in the scripts-off HTML, and its crop and HTML show the state to change.
 
+12. **Choose the element with the keyboard** (`feat/keyboard-element-walk`, approved by the owner on 2026-11-22: both places, hover then arrows, a path strip while selecting):
+    - Full-screen view: the arrows walk from the element under the pointer (or the one the keys reached), with no click or Tab first; nothing outlined, the first arrow outlines the element in the middle of the view. Enter comments, Esc ends the walk, moving the pointer hands the outline back.
+    - A strip under the comment toolbar shows the outlined element's path (up to 3 ancestors, then the element); an ancestor outlines that element.
+    - The preview window gets the same walk, path strip and announcements, read in the process's isolated world of the version's frame, so the mockup's scripts don't see it. This closes the two deviations recorded for Phase 10 (no keyboard walk or breadcrumb in the preview; the keyboard only had "Comment at centre").
+    - No version change: pivot-studio 0.5.0 and plugin 0.6.0 are not released yet.
+
 ## Progress
 
 ### Phase 8: any width, and notes captured live (2026-11-20)
@@ -76,3 +82,11 @@ Approved by the owner on 2026-11-20, following [element-feedback-plan.md](elemen
 
 - **Implemented:** `feedback.md` §2: a live note is found by its crop and HTML (its selector may exist only after a script ran) and its state is the one to change; every note is read at its own width (the full-screen Desktop is the user's window width) and height. SPEC §15.
 - **Tested:** `skills.test.ts` checks the guidance; `pnpm plugin:validate`. The behaviour is skill guidance, exercised in the next real session with live notes.
+
+### Phase 12: choose the element with the keyboard (2026-11-22)
+
+- **Audit:** the full-screen view walked with the arrows only once its picker had keyboard focus (Tab first) and started at the middle of the view, not at the element pointed at; its breadcrumb showed only inside an open note. The preview window had no walk at all (the two deviations recorded in session `3ae676b1`).
+- **Gaps:** hover then arrows in both places; a path strip while selecting; Esc and pointer hand-back rules shared by both.
+- **Implemented:** `mockup-feedback.tsx` (`walkKey`, a window-level listener for the keys wherever the focus doesn't use them, the pointer hand-back after 4 px, Esc layers, the Select radio moving the focus to the picker quietly, the `Element path` strip); `preview.mjs` (the walk in the isolated world with `globalThis.__pivotWalk`, the `walk` request and `pick: {walked: true}`, `forPage()` capping what reaches the page, the shield as the picker, the strip and its live region).
+- **Tested:** `pnpm check` (format, lint, typecheck; tests 17 + 226 + 12 + 334, four new preview tests driving real keys and pointer). Full-screen by hand on a scratch PIVOT (the landing mockups): hover `a.btn`, ↑↑ to `div.hero-copy`, ↓ and →, a path part then Enter made a note on `div.wrap`, Esc ended the walk and kept the mode, a 4 px move handed the outline back, arrows walked with the focus on a drawer button and on an element note's marker, Select clicked with the pointer left no focus ring.
+- **Decided along the way:** in the preview the arrows walk even when the focus is on the tool switch (the preview's switches don't use arrows, and turning Comment on puts the focus there); arrows no longer switch versions while commenting with Select (1–9 and the tabs still do). No version change: `PREVIEW_VERSION` 1.2.0, pivot-studio 0.5.0 and plugin 0.6.0 are all unreleased.

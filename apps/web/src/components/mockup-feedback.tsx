@@ -186,13 +186,15 @@ function measure(frame: HTMLIFrameElement): Geo | null {
 /**
  * Comment mode on the live page: the version stays exactly as shown (its size, its scroll, its own hover styles) and
  * the layer draws over it, with two tools.
- * - Select: the element under the cursor is outlined with a chip naming it; a click comments on it. With the page
- *   focused (the picker, a tab stop after the toolbar), arrows walk the elements (↑ parent, ↓ first child, ← →
- *   siblings) and Enter comments.
+ * - Select: the element under the cursor is outlined with a chip naming it, and a strip under the toolbar shows its
+ *   path (each part jumps to that element); a click comments on it. Arrows walk the elements from the outlined one,
+ *   with no click or Tab first (↑ parent, ↓ first child, ← → siblings; from the middle of the view when nothing is
+ *   outlined) and Enter comments; moving the pointer hands the outline back to it. The picker (a tab stop after the
+ *   toolbar) starts a walk for keyboard users.
  * - Pin: a click drops a numbered note on that spot.
  * Clicks, presses and submits stop inside the page, before it sees them; scrolling and hover go on. Notes are buttons:
  * Tab between them, Enter opens the note, Delete removes it; a spot also moves with the arrows (Shift for 40px). Esc
- * closes the note, then leaves the mode.
+ * closes the note, then ends a walk, then leaves the mode.
  */
 export function PinLayer({
   mockup,
@@ -423,7 +425,15 @@ export function PinLayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when asked to show a pin
   }, [focusPin, !!geo]);
 
-  // Esc in layers: the open note first, then the mode
+  // ---- Select: hover, and the keyboard walk ----
+  const [hover, setHover] = useState(-1);
+  const [walk, setWalk] = useState<{ i: number; on: boolean }>({ i: -1, on: false });
+  const shown = active === "select" && els ? (walk.on ? walk.i : hover) : -1;
+  /** Where the pointer last was over the page, and where it was when the keys took the outline from it. */
+  const lastPt = useRef<{ x: number; y: number } | null>(null);
+  const walkPt = useRef<{ x: number; y: number } | null>(null);
+
+  // Esc in layers: the open note first, then a walk, then the mode
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || (e.target as HTMLElement | null)?.closest("[role=dialog]")) return;
@@ -432,24 +442,22 @@ export function PinLayer({
         const n = open;
         showNote(null);
         document.getElementById(`pin-${n}`)?.focus();
+      } else if (walk.on && active === "select") {
+        setWalk((w) => ({ ...w, on: false }));
+        announce("Back to the pointer.");
       } else exit();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  // ---- Select: hover, and the keyboard walk ----
-  const [hover, setHover] = useState(-1);
-  const [walk, setWalk] = useState<{ i: number; on: boolean }>({ i: -1, on: false });
-  const shown = active === "select" && els ? (walk.on ? walk.i : hover) : -1;
-
   // The page's own events, while commenting: presses, clicks and submits stop inside it before it sees them (they
   // make notes instead); the pointer is read for Select. Scrolling and the page's hover styles go on.
-  const live = useRef({ active, els, hover, commentOn, addAt, setHover, setWalk, index });
+  const live = useRef({ active, els, hover, walkOn: walk.on, commentOn, addAt, setHover, setWalk, index });
   // refreshed after every render on purpose: the page's listeners, added once, always call the latest handlers
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    live.current = { active, els, hover, commentOn, addAt, setHover, setWalk, index };
+    live.current = { active, els, hover, walkOn: walk.on, commentOn, addAt, setHover, setWalk, index };
   });
   useEffect(() => {
     const doc = frame?.contentDocument;
@@ -476,6 +484,14 @@ export function PinLayer({
     const onMove = (e: PointerEvent) => {
       const l = live.current;
       if (l.active !== "select" || !l.els) return;
+      lastPt.current = { x: e.clientX, y: e.clientY };
+      // after a key step the outline stays with the keys until the pointer really moves (a few pixels)
+      if (l.walkOn) {
+        const s = walkPt.current;
+        if (!s) walkPt.current = lastPt.current;
+        if (!s || Math.hypot(e.clientX - s.x, e.clientY - s.y) <= 4) return;
+        l.setWalk((w) => ({ ...w, on: false }));
+      }
       const i = pick(e.clientX, e.clientY);
       if (i !== l.hover) l.setHover(i);
     };
@@ -538,6 +554,7 @@ export function PinLayer({
     const e = els?.[i] && { ...els[i], ...boxOf(i)! };
     if (!e || !geo) return;
     setWalk({ i, on: true });
+    walkPt.current = lastPt.current;
     setBehindSel(isBehind(e) ? e.sel : null);
     announce(describe(i));
     const above = (toolbarSpace(barOnTop) + 32) / geo.scale;
@@ -557,14 +574,34 @@ export function PinLayer({
     while (c && sameBox(c, els![i])) c = kids(c.i)[0];
     return c?.i ?? -1;
   };
-  const onPickerKey = (e: React.KeyboardEvent) => {
-    if (e.target !== e.currentTarget || active !== "select" || !els?.length) return;
-    const i = els[walk.i] ? walk.i : 0;
+  /** The element in the middle of the view, else the first one. */
+  const centreEl = () => {
+    const c = centreOfView();
+    const i = els ? hitAt(els, c.x, c.y) : -1;
+    return i >= 0 ? i : 0;
+  };
+  /**
+   * The walk's keys, from the outlined element (walked to, or under the pointer): arrows move, Enter and Space comment
+   * (only where the focus is the page's: the picker or nothing, never on a control). True when the key was used.
+   */
+  const walkKey = (e: { key: string; preventDefault: () => void }, onPage: boolean) => {
+    if (active !== "select" || !els?.length || open !== null) return false;
+    const from = walk.on && els[walk.i] ? walk.i : hover >= 0 && els[hover] ? hover : -1;
     if (e.key === "Enter" || e.key === " ") {
+      if (!onPage) return false;
       e.preventDefault();
+      const i = from >= 0 ? from : centreEl();
       commentOn(i, els[i].x + els[i].w / 2, els[i].y + els[i].h / 2);
-      return;
+      return true;
     }
+    if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) return false;
+    e.preventDefault();
+    // nothing outlined: the first arrow outlines the element in the middle of the view
+    if (from < 0) {
+      walkTo(centreEl());
+      return true;
+    }
+    const i = from;
     const step: Record<string, () => number | string> = {
       ArrowUp: () => (parentOf(i) >= 0 ? parentOf(i) : "Top element."),
       ArrowDown: () => (childOf(i) >= 0 ? childOf(i) : "No child elements."),
@@ -579,12 +616,46 @@ export function PinLayer({
         return k >= 0 && k < sib.length - 1 ? sib[k + 1].i : "Last element here.";
       },
     };
-    if (!step[e.key]) return;
-    e.preventDefault();
     const to = step[e.key]();
     if (typeof to === "number") walkTo(to);
-    else announce(to);
+    else {
+      // at an edge the outline stays where it is, now held by the keys
+      if (!walk.on) walkTo(i);
+      announce(to);
+    }
+    return true;
   };
+  const onPickerKey = (e: React.KeyboardEvent) => {
+    if (e.target !== e.currentTarget || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    walkKey(e, true);
+  };
+  // the same keys anywhere else that doesn't use them itself: no click or Tab needed after pointing at an element
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      const t = e.target instanceof HTMLElement ? e.target : null;
+      if (t === picker.current) return;
+      if (
+        t?.closest(
+          "input, textarea, select, [contenteditable], [role=dialog], [role=radiogroup], [role=tablist], [role=listbox], [role=menu], [role=slider]",
+        )
+      )
+        return;
+      // the keys take the page: an arrow moves the focus onto the picker (quietly), so Enter then comments instead of
+      // pressing the button that had the focus
+      if (
+        walkKey(e, !t || t === document.body) &&
+        e.key.startsWith("Arrow") &&
+        picker.current &&
+        document.activeElement !== picker.current
+      ) {
+        pointerFocus.current = true;
+        picker.current.focus({ preventScroll: true });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   // dragging a spot, past a few pixels so a click stays a click (a note on an element stays on its element)
   const drag = useRef<{ n: number; sx: number; sy: number; moved: boolean } | null>(null);
@@ -693,6 +764,12 @@ export function PinLayer({
       top: Math.max(space, Math.min(y, window.innerHeight - 240)),
     };
   };
+  // the outlined element's path, under the toolbar: up to three ancestors (as the walk counts them), then the element
+  const path: MapElement[] = [];
+  if (hoverEl && open === null) {
+    for (let p = parentOf(shown); p >= 0 && path.length < 3; p = parentOf(p)) path.unshift(els![p]);
+    path.push(els![shown]);
+  }
   // an element the keyboard (or Show) reached under the drawer: offer to hide it
   const behind = behindSel && inset > 0 ? els?.find((e) => e.sel === behindSel) : undefined;
   const hint = noMap
@@ -703,7 +780,9 @@ export function PinLayer({
         ? "Reading the page’s elements…"
         : walk.on
           ? "Arrows move · Enter comments · Esc to leave"
-          : "Click an element to comment · Esc to leave";
+          : shown >= 0
+            ? "Click to comment · Arrows move · Esc to leave"
+            : "Click an element to comment · Esc to leave";
 
   return (
     <div className="pointer-events-none fixed inset-0 z-20">
@@ -740,7 +819,15 @@ export function PinLayer({
                 aria-checked={on}
                 aria-keyshortcuts={t === "select" ? "V" : "P"}
                 tabIndex={on ? 0 : -1}
-                onClick={() => chooseTool(t)}
+                onClick={(e) => {
+                  chooseTool(t);
+                  // picked with the pointer: the focus goes to the page (without starting a walk), so the arrows
+                  // walk from the element pointed at next instead of switching the tool back
+                  if (t === "select" && e.detail > 0 && picker.current) {
+                    pointerFocus.current = true;
+                    picker.current.focus();
+                  }
+                }}
                 className={cn(
                   "flex h-[30px] items-center gap-1.5 rounded-full px-2.5 font-medium outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text focus-visible:outline-solid",
                   on ? "bg-inverse text-on-inverse" : "text-ink-secondary hover:text-ink",
@@ -815,6 +902,44 @@ export function PinLayer({
           </span>
         </button>
       )}
+      {path.length > 0 && (
+        <nav
+          aria-label="Element path"
+          className="glass-strong pointer-events-auto fixed z-30 flex h-[30px] -translate-x-1/2 items-center justify-end overflow-hidden rounded-full px-1.5 whitespace-nowrap"
+          style={{
+            left: `calc((100vw - ${inset}px) / 2)`,
+            maxWidth: `calc(100vw - ${inset}px - 32px)`,
+            top: space + (other ? 36 : 0) + (behind ? 48 : 0),
+          }}
+        >
+          {path.map((c, k) =>
+            k === path.length - 1 ? (
+              <b key={c.i} aria-current="true" className="shrink-0 px-1.5 font-mono text-[12px] font-medium text-ink">
+                {tagName(c)}
+              </b>
+            ) : (
+              <span key={c.i} className="flex min-w-0 items-center">
+                <button
+                  type="button"
+                  title={`Outline ${tagName(c)}`}
+                  onClick={() => {
+                    walkTo(c.i);
+                    // back to the page's picker, quietly: Enter then comments on it, the arrows go on walking
+                    pointerFocus.current = true;
+                    picker.current?.focus();
+                  }}
+                  className="flex min-h-6 min-w-0 items-center truncate rounded-full px-1.5 font-mono text-[12px] text-ink-secondary outline-none hover:bg-surface-raised hover:text-ink focus-visible:outline-2 focus-visible:outline-accent-text focus-visible:outline-solid"
+                >
+                  {tagName(c)}
+                </button>
+                <span aria-hidden className="text-ink-muted">
+                  ›
+                </span>
+              </span>
+            ),
+          )}
+        </nav>
+      )}
       {geo && (
         <div
           // the picker: the page's stand-in in the tab order, for the keyboard walk (the pointer passes through it)
@@ -834,7 +959,7 @@ export function PinLayer({
               return;
             }
             const c = centreOfView();
-            const i = els[walk.i] ? walk.i : hitAt(els, c.x, c.y);
+            const i = hover >= 0 && els[hover] ? hover : els[walk.i] ? walk.i : hitAt(els, c.x, c.y);
             walkTo(i >= 0 ? i : 0);
           }}
           onBlur={(e) => e.target === e.currentTarget && setWalk((w) => ({ ...w, on: false }))}
