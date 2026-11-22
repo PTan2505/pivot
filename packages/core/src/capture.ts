@@ -560,6 +560,29 @@ const stepAnimations = (ms: number) => `(() => {
   }
 })()`;
 
+/**
+ * Pauses the page's fake clock where it is now. The clock keeps running while the call travels to the page, and on a
+ * busy page (WebGL, heavy scripts) it can pass the time asked for, which Playwright refuses ("Cannot fast-forward to
+ * the past"). Each try reads the time again and asks further ahead; moving the clock a little forward before the
+ * recording starts is harmless, as nothing has been filmed yet.
+ */
+export async function pauseClock(page: Pick<Page, "evaluate" | "clock">) {
+  let failure: unknown;
+  for (const ahead of PAUSE_AHEAD_MS) {
+    const now = await page.evaluate<number>("Date.now()");
+    try {
+      return await page.clock.pauseAt(now + ahead);
+    } catch (e) {
+      if (!/fast-forward to the past/i.test(String(e))) throw e;
+      failure = e;
+    }
+  }
+  throw failure;
+}
+
+/** How far ahead of the page's time each try of `pauseClock` asks, in milliseconds. */
+const PAUSE_AHEAD_MS = [1, 50, 250, 1_000, 4_000];
+
 /** `promise`, or nothing once `ms` has passed in real time (the page's own timers are frozen while recording). */
 const within = <T>(promise: Promise<T>, ms: number): Promise<T | undefined> =>
   Promise.race([
@@ -592,8 +615,7 @@ async function recordScroll(page: Page, file: string) {
   if (wheel) await page.mouse.move(vp.width - 3, Math.round(vp.height / 2));
 
   // From here on the page's time moves only when a frame is taken.
-  const now = await page.evaluate<number>("Date.now()");
-  await page.clock.pauseAt(now + 1);
+  await pauseClock(page);
   const frameMs = 1000 / MOTION_FPS;
   // whole milliseconds per step, carried over so 30 frames are exactly one second
   let clockMs = 0;
