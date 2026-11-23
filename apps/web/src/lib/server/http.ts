@@ -3,6 +3,7 @@ import { connection, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { AssetError } from "@pivot/core/assets";
 import { ComponentConflictError, ComponentError } from "@pivot/core/components";
+import { PreviewError } from "@pivot/core/component-preview";
 import { retryOnConnectionError } from "@pivot/core/db/connection";
 import { UnsafeUrlError } from "@pivot/core/net-guard";
 import { ResourceRuleError } from "@pivot/core/resources";
@@ -49,6 +50,7 @@ export function route<Args extends unknown[]>(fn: (...args: Args) => Promise<Res
         err instanceof UnsafeUrlError ||
         err instanceof AssetError ||
         err instanceof ComponentError ||
+        err instanceof PreviewError ||
         err instanceof ResourceRuleError
       )
         return json({ error: err.message }, { status: 400 });

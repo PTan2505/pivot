@@ -675,7 +675,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
             </section>
           )}
           {showGallery && <AssetGallery resource={resource} compact={!def.visual} />}
-          {component && <ComponentMain c={component} title={draft.title || resource.title} />}
+          {component && <ComponentMain c={component} id={resource.id} title={draft.title || resource.title} />}
           {def.content !== "none" && !component && (
             <ContentEditor
               draft={draft}

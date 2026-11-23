@@ -4,7 +4,7 @@
 // session 118304e2, version 3 "Today's layout, component stage", approved by the owner: the visual types' grid kept,
 // with a stage holding Preview / Code tabs and Install in the main column, and Review and Used in at the top of the
 // side panel. The code is read-only: PIVOT keeps it as fetched.
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Check,
@@ -12,8 +12,10 @@ import {
   ExternalLink,
   Eye,
   FileCode,
+  Hammer,
   Image as ImageIcon,
   ImageOff,
+  Loader2,
   Play,
   RotateCcw,
   ShieldCheck,
@@ -151,10 +153,13 @@ export function ComponentIdentity({ c }: { c: ComponentMeta }) {
 const STAGE_H = "h-[min(46vh,420px)]";
 
 /** PIVOT's own live preview when it has one (the preview origin), else 21st's image or video by link. */
-function Stage({ c, title, onShowCode }: { c: ComponentMeta; title: string; onShowCode: () => void }) {
-  const live = c.preview?.status === "ready" && c.preview.sha256 ? c.preview : null;
+function Stage({ c, id, title, onShowCode }: { c: ComponentMeta; id: string; title: string; onShowCode: () => void }) {
+  // the last good build keeps showing while a new one runs or after one fails
+  const live = c.preview?.sha256 ? c.preview : null;
   const has21st = !!(c.previewImageUrl || c.videoUrl);
   const [mode, setMode] = useState<"live" | "21st">("live");
+  const build = <BuildButton c={c} id={id} />;
+  const notes = <BuildNotes c={c} />;
   if (live && (mode === "live" || !has21st)) {
     return (
       <div>
@@ -162,11 +167,14 @@ function Stage({ c, title, onShowCode }: { c: ComponentMeta; title: string; onSh
           sha256={live.sha256!}
           title={title}
           extra={
-            has21st && (
-              <Button variant="secondary" size="xs" onClick={() => setMode("21st")}>
-                <ImageIcon /> Show 21st’s preview
-              </Button>
-            )
+            <>
+              {build}
+              {has21st && (
+                <Button variant="secondary" size="xs" onClick={() => setMode("21st")}>
+                  <ImageIcon /> Show 21st’s preview
+                </Button>
+              )}
+            </>
           }
           open={<OpenOn21st c={c} />}
         />
@@ -174,6 +182,7 @@ function Stage({ c, title, onShowCode }: { c: ComponentMeta; title: string; onSh
           PIVOT’s live preview, running on its own origin with no network.
           {live.builtFrom && live.builtFrom !== c.codeSha256 && " Built from earlier code."}
         </p>
+        {notes}
       </div>
     );
   }
@@ -184,21 +193,83 @@ function Stage({ c, title, onShowCode }: { c: ComponentMeta; title: string; onSh
         title={title}
         onShowCode={onShowCode}
         extra={
-          live && (
-            <Button variant="secondary" size="xs" onClick={() => setMode("live")}>
-              <Eye /> Show live preview
-            </Button>
-          )
+          <>
+            {build}
+            {live && (
+              <Button variant="secondary" size="xs" onClick={() => setMode("live")}>
+                <Eye /> Show live preview
+              </Button>
+            )}
+          </>
         }
       />
       {has21st && (
         <p className="mt-2 text-xs text-ink-subtle">
           Preview from 21st.dev, shown by its link.
-          {!live && " PIVOT’s own live preview replaces it once built."}
+          {!live && " Build preview makes PIVOT’s own live one."}
         </p>
       )}
+      {notes}
     </div>
   );
+}
+
+const rejectedNow = (c: ComponentMeta) => c.review?.verdict === "rejected" && c.review.codeSha256 === c.codeSha256;
+
+/**
+ * Build preview: installs the component's npm packages from registry.npmjs.org (install scripts off) and bundles it on
+ * this machine. Never offered for a rejected component; off while a build runs.
+ */
+function BuildButton({ c, id }: { c: ComponentMeta; id: string }) {
+  const qc = useQueryClient();
+  const [asking, setAsking] = useState(false);
+  if (rejectedNow(c)) return null;
+  const building = c.preview?.status === "building";
+  const start = async () => {
+    setAsking(true);
+    try {
+      await api(`/api/components/${id}/preview`, { method: "POST" });
+      await qc.invalidateQueries({ queryKey: ["resource", id] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "The build couldn’t start.");
+    } finally {
+      setAsking(false);
+    }
+  };
+  return (
+    <Button
+      variant="secondary"
+      size="xs"
+      onClick={start}
+      disabled={building || asking}
+      title="Installs its npm packages from registry.npmjs.org (install scripts off) and bundles it on this machine"
+    >
+      {building || asking ? <Loader2 className="animate-spin" /> : <Hammer />}
+      {building ? "Building…" : c.preview?.sha256 ? "Rebuild preview" : "Build preview"}
+    </Button>
+  );
+}
+
+function BuildNotes({ c }: { c: ComponentMeta }) {
+  const p = c.preview;
+  if (p?.status === "building")
+    return (
+      <p role="status" className="mt-1 text-xs text-ink-muted">
+        Building the preview: installing its npm packages from registry.npmjs.org with install scripts off, then
+        bundling it on this machine…
+      </p>
+    );
+  if (p?.status === "failed")
+    return (
+      <div role="status" className="mt-2 flex gap-2 rounded-[10px] bg-surface p-3 text-danger">
+        <XCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+        <p className="min-w-0 text-xs text-ink-secondary">
+          <span className="block font-medium text-danger">The preview build failed</span>
+          <span className="font-mono break-words whitespace-pre-wrap text-ink-muted">{p.error}</span>
+        </p>
+      </div>
+    );
+  return null;
 }
 
 function OpenOn21st({ c }: { c: ComponentMeta }) {
@@ -665,7 +736,7 @@ function RejectedBanner({ c }: { c: ComponentMeta }) {
 }
 
 /** The main column: Preview / Code over one stage, then Install. */
-export function ComponentMain({ c, title }: { c: ComponentMeta; title: string }) {
+export function ComponentMain({ c, id, title }: { c: ComponentMeta; id: string; title: string }) {
   const view = useComponentView(c);
   const rejected = c.review?.verdict === "rejected" && c.review.codeSha256 === c.codeSha256;
   return (
@@ -695,7 +766,7 @@ export function ComponentMain({ c, title }: { c: ComponentMeta; title: string })
           tabIndex={-1}
           className="motion-safe:animate-in motion-safe:duration-150 motion-safe:fade-in-0"
         >
-          <Stage c={c} title={title} onShowCode={() => view.go({ tab: "code" })} />
+          <Stage c={c} id={id} title={title} onShowCode={() => view.go({ tab: "code" })} />
         </TabsContent>
         <TabsContent
           value="code"

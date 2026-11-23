@@ -1029,7 +1029,7 @@ const saveComponent: PivotTool<typeof saveComponentInput> = {
           : `${resource.title} was already saved with this code (status ${c.status}); noted this use: ${url}`;
     const next =
       c.status === "built"
-        ? "Tell the user it is saved in PIVOT."
+        ? "Tell the user it is saved in PIVOT, and that its page there can build a live preview on their machine (Build preview): ask whether they want one; PIVOT never builds it on save."
         : c.review?.verdict === "rejected"
           ? "The user rejected it: don't build it."
           : 'Next: review the code and the flags before the first edit to the project (pivot:design §9), then build it and call save_component again with status "built", the review, the project and the support files.';

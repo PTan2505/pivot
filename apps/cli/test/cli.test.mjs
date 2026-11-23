@@ -136,12 +136,15 @@ describe("the native packages", () => {
       [
         "@aws-sdk/client-s3",
         "@electric-sql/pglite",
+        // the component preview build (packages/core/src/preview-build.ts)
+        "esbuild",
         "next",
         "playwright",
         "postgres",
         "react",
         "react-dom",
         "sharp",
+        "tailwindcss",
       ].sort(),
     );
   });

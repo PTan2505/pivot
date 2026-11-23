@@ -396,4 +396,40 @@ Each: audit → gaps → implement → test → report. Tests run only against a
   - Scratch PIVOT (4410, preview 4411):
     - the origin route; 200 `text/html` for the preview; the API 404 and a rebinding Host 403 on 4411; PIVOT's asset route still `text/plain`;
     - on the component page, the frame loads from 4411 with the sandbox and no `srcdoc`, the fixture's fetch to PIVOT's token route is blocked by the CSP (console and its own text), and the frame's DOM is unreadable from PIVOT.
-- **Not verified:** the CLI package end to end (`pnpm cli:build`, then the standalone server's preview port); Safari and Firefox.
+- **Not verified:** the CLI package end to end (`pnpm cli:build`, then the standalone server's preview port); Safari and Firefox. Committed as `48d070b`.
+
+### Phase 5: the local preview build (2026-11-23)
+
+- **Audit:**
+  - `@tailwindcss/node` would pull `lightningcss` and `oxide` (native, about 14 MB), but the pure-JS `tailwindcss` package exports `compile()` and its CSS files, with no dependencies.
+  - The CLI pins every runtime dependency to the version the web app was built with (`build.mjs`).
+  - Next must load `esbuild` and `tailwindcss` from `node_modules` (`serverExternalPackages`).
+  - npm refuses one file as both user and global config.
+- **Gaps:** nothing built a preview; no button, route or status; no packaging for the build tools.
+- **Implemented:**
+  - `preview-build.ts`:
+    - the build folder, the `package.json` and `.npmrc`;
+    - `runNpmInstall` (scripts off, registry.npmjs.org, the folder's config only, 3-minute limit);
+    - the entry, esbuild, Tailwind with shadcn's theme, one inlined HTML file;
+    - `startComponentPreviewBuild`: one at a time, never for a rejected component, the last good preview kept, the error kept on failure, the folder removed.
+  - `POST /api/components/[id]/preview`; `PreviewError` 400; the resource refetches every 2 s while a build runs.
+  - **Build preview / Rebuild preview** and the building and failed states on the stage; `save_component` tells the agent the owner can build one.
+  - `esbuild` 0.25.12 and `tailwindcss` 4.3.3 in core, web and the CLI package; Next server externals.
+  - SPEC #38, §20, §21; DESIGN.md.
+- **Package size** (Python, from this machine's install): +20.8 MB per `pivot-studio` install (esbuild's wrapper and copied binary 10.1 MB, the platform binary 9.9 MB, tailwindcss 0.8 MB). Using `tailwindcss` directly instead of `@tailwindcss/node` avoided another 13.8 MB of native packages.
+- **Tested:**
+  - core `preview-build.test.ts` (6), with fixture components and npm stubbed offline by React from this checkout and a fake package:
+    - the build: one HTML file, everything inline, Tailwind classes, the theme, the npm dependency bundled, the folder removed;
+    - a missing support file fails with the hint;
+    - a later failure keeps the last good preview and its error;
+    - rejected refused; one build at a time;
+    - candidates and Tailwind compile;
+    - the real npm on a local package with pre-, post- and install scripts: none ran (and the same fixture runs its script when scripts are allowed, so the test would catch it);
+    - in Chromium from the preview origin: the demo renders with its Tailwind size and weight, dark by default and light on request, with no request leaving the origin.
+  - On a scratch PIVOT (4410, previews 4411), with the real npm:
+    - **Rebuild preview** on a fixture component showed "Building…" with the status line while the last preview stayed;
+    - npm installed React, `clsx` and `tailwind-merge` from registry.npmjs.org; the build finished `ready` with a new file;
+    - the stage switched to it on 4411, and the build folder was removed;
+    - a rejected component shows no button, and the API answers 400.
+  - `pnpm check`.
+- **Not verified:** the CLI package end to end (`pnpm cli:build`, then a build from the standalone server, where `tailwindcss` resolves from the package's folder); Windows (`npm.cmd`).

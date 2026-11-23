@@ -19,3 +19,4 @@ PIVOT's own code is under the [MIT License](LICENSE). It depends on third-party 
 
 - **Chromium:** Playwright (Apache-2.0) downloads its own Chromium build the first time PIVOT captures a page. Chromium and the bundled ffmpeg come with their own licenses, which Playwright installs alongside them.
 - **sharp:** sharp (Apache-2.0) installs prebuilt libvips binaries, which are under the LGPL-3.0.
+- **Component previews** (added 2026-11-23): **Build preview** on a saved component installs that component's own npm packages (and React) from registry.npmjs.org into a temporary folder under the data folder, removed after the build. They keep their own licenses; PIVOT doesn't distribute them. The build itself uses esbuild (MIT) and tailwindcss (MIT), dependencies of `pivot-studio`.
