@@ -281,7 +281,13 @@ intended, what was observed running, what is inferred or unverified, and what de
    - `trigger`: `load`, `scroll` (`{ "type": "scroll", "to": "<selector>" }`), `hover`, `click` or `focus` (`"on"`
      names the element to act on when it isn't the one that moves), or `other` when no automatic input can start it.
    - `expect`: whether it moves, the properties that must change, the final computed values. `durationMs` and `easing`
-     only when the brief states them; they are compared exactly with what the running animation declares.
+     only when the brief states them; they are compared exactly with what the running animation declares, and when it
+     declares none (motion run by a script) with what is measured on screen, within one frame (33 ms) on the brief's
+     own curve.
+   - `expect.reference`, when the brief's Motion block cites a reference item for this motion (from PIVOT's motion
+     table): `{ "label": "Linear M3", "durationMs": 333, "easing": "cubic-bezier(.23,1,.32,1)", "source": "measured" }`,
+     its numbers copied from the table. The build is compared with it within one frame and by curve ("matches
+     reference"). Only when the brief means to match it; a deliberate difference is a decision, not a check.
    - `reduced`: what the brief's Reduced motion cell says: `animates: false`, or a briefed alternative
      (`animates: true`, `properties: ["opacity"]`, `notProperties: ["transform"]`), and where it ends. Without it the
      item can't pass: turning everything off isn't assumed to be right, and content must still reach its final state.
@@ -330,9 +336,13 @@ intended, what was observed running, what is inferred or unverified, and what de
    - **Not Verified** when anything couldn't run or be observed: the element wasn't found or was covered, the trigger
      can't be performed (`other`) or scrolling never reached it, the page never settled, the motion had already
      finished when watching began or didn't settle in the window, the element disappeared, the replay didn't run, the
-     brief gives no reduced-motion behaviour, or the motion declares no timing to compare.
-   - A final state alone never proves the trigger: the element must be seen moving after it. Timing is what the
-     animation declares, not measured on screen.
+     brief gives no reduced-motion behaviour, the motion declares no timing and couldn't be measured (it started before
+     watching, or nothing watched moved enough), or its easing has no single curve to compare (`steps()`, a spring).
+   - A final state alone never proves the trigger: the element must be seen moving after it.
+   - **Timing evidence** comes in two kinds, and the report counts both: `declared timing` is what the running
+     animation declares (exact), `measured timing` is what was measured on screen for motion that declares none (read
+     in every animation frame and fitted with PIVOT's own code, within one frame). Say which in the QA summary, with
+     what stayed Not Verified. Smoothness (dropped frames) isn't measured.
    - The **overall** status is Pass only when every essential item of the approved brief passed, with every brief item
      traced to a check. A failed detail item is listed but doesn't decide it.
    - If the script couldn't run (exit 3: no Playwright or Chromium), every item is Not Verified. Say so; never put

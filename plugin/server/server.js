@@ -37050,6 +37050,12 @@ var EASINGS = {
   "back.out": tabulate((x) => 1 + (BACK + 1) * (x - 1) ** 3 + BACK * (x - 1) ** 2),
   "cubic-bezier(.23,1,.32,1)": cubicBezier(0.23, 1, 0.32, 1)
 };
+var EXTRA = {
+  "power3.out": tabulate((x) => 1 - (1 - x) ** 4),
+  "power4.out": tabulate((x) => 1 - (1 - x) ** 5),
+  "sine.out": tabulate((x) => Math.sin(x * Math.PI / 2)),
+  "sine.inout": tabulate((x) => -(Math.cos(Math.PI * x) - 1) / 2)
+};
 
 // ../../packages/core/src/motion-track.ts
 var MOTION_TABLE_ITEMS = 24;

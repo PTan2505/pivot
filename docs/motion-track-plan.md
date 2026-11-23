@@ -192,3 +192,12 @@ Branch `feat/motion-interactions`.
 - **Real pages:** linear.app (16 items: the Product mega menu's 180 ms ease reveal, buttons, two menus on click), vercel.com (7), cal.com (24: the Products menu and the "Talk to sales" popover). Trying adds about 5–10 s per page.
 - **Fixed on the way:** ids made at run time (React `useId`, Base UI, Radix) are no longer used in selectors; a click on something that already opened on hover is skipped (it would only close it); a recording that starts mid-motion (a hover's first frame already moved) takes its start from one frame before its first.
 - **Not done here:** motion QA against tracks (M4).
+
+### M4: motion QA reads motion the same way (2026-11-23)
+
+Branch `feat/motion-qa-tracks`.
+
+- **Built:** `motion-qa.mjs` measures motion that declares no timing (run by a script): after a hover, click, focus or scroll trigger it reads the element in every animation frame of the page (a `requestAnimationFrame` loop installed just before the trigger), at load it polls; the samples are fitted with `motion-fit.mjs`, built from `packages/core/src/motion-fit.ts` by `pnpm mcp:build` and shipped beside the script (the plugin and pivot-studio carry both; a test fails when the copy is stale). A new `measured timing` check passes when the duration fitted on the brief's own curve is within one frame (33 ms) and the fit error is under 0.03; `curveOf` reads CSS and GSAP easing names, and `steps()` or a spring is Not Verified. A plan item can carry `expect.reference` (the cited reference item's numbers from the motion table) for a `matches reference` check. The report counts timing checks by kind.
+- **Measured:** a script-driven hover scale of 300 ms easeOutCubic read 304–307 ms, easeOutCubic, fit error ≤ 0.006, in five runs alongside another test run. Polling instead of animation frames had read it as 251 ms on the same curve (values and their times weren't from the same frame), which is why hover, click and scroll sample in the page's frames.
+- **Docs:** `motion.md` §9 (the plan's `expect.reference`, the two kinds of timing evidence), SPEC (motion QA).
+- **Done:** M0–M4 of this plan. Left out on purpose: viewing the video through MCP, recording on every save, re-recording a whole collection, pages behind a login.
