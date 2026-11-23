@@ -195,6 +195,8 @@ function Preview({ c }: { c: DesignCandidateDTO }) {
         </span>
       ) : c.previewStatus === "failed" ? (
         `No preview: ${c.previewError}`
+      ) : c.kind === "external" ? (
+        "Not captured. Open the page to review it."
       ) : (
         "No preview"
       )}

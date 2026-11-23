@@ -533,13 +533,14 @@ describe("gate 1: propose_references and select_references", () => {
       ...source,
       proposeReferences: async (...args: unknown[]) => {
         calls.push({ method: "proposeReferences", args });
-        return { candidates: [cand(1), cand(2)] };
+        return { candidates: [cand(1), cand(2), cand(3)] };
       },
       listCandidates: async () => {
         listed++;
         return [
           cand(1, { previewStatus: "ready", previewUrl: "/api/design/candidates/c1/preview" }),
           cand(2, { previewStatus: "failed", previewError: "HTTP 403" }),
+          cand(3, { previewStatus: "none" }),
         ];
       },
       getCandidatePreview: async (id: string) => ({ data: Buffer.from(`img-${id}`), mimeType: "image/webp" }),
@@ -549,12 +550,14 @@ describe("gate 1: propose_references and select_references", () => {
       candidates: [
         { url: "https://example.com/1", why: "fits 1" },
         { url: "https://example.com/2", why: "fits 2" },
+        { url: "https://21st.dev/@a/components/c", why: "fits 3" },
       ],
     });
     expect(listed).toBeGreaterThan(0);
     const out = r.content[0].type === "text" ? r.content[0].text : "";
     expect(out).toMatch(/1\. \[UI layout\] Site 1 — external, web search — https:\/\/example.com\/1/);
     expect(out).toMatch(/Preview: none \(HTTP 403\)/);
+    expect(out).toMatch(/3\. .*\n.*\n   Preview: not captured \(PIVOT never captures this site/);
     expect(out).toContain(`http://127.0.0.1:4321/design/${ID}#references`);
     expect(out).toMatch(/wait for their pick \(gate 1\)/);
     expect(r.content.filter((c) => c.type === "image")).toEqual([
