@@ -479,6 +479,11 @@ export type AssetRole =
   | "motion-keyframe"
   /** An interaction state (hover, open menu, error…) captured from the tab; `meta.state` names it. */
   | "state"
+  /**
+   * A component's preview: one self-contained HTML file, served only by the preview origin (preview-server.ts), never
+   * as a page on PIVOT's own origin (its file is stored as text/plain).
+   */
+  | "component-preview"
   | "attachment";
 /** `partial`: the first screen was saved but the full page wasn't. `cancelled`: stopped by the user. */
 export type CaptureStatus = "pending" | "done" | "partial" | "failed" | "cancelled";
@@ -1140,5 +1145,14 @@ export interface ComponentMeta {
   origins: ComponentOrigin[];
   scan: ComponentScan;
   review?: ComponentReview;
-  preview?: { status: "none" | "building" | "ready" | "failed"; assetId?: string; builtFrom?: string; error?: string };
+  /** PIVOT's own preview (a single HTML file on the preview origin, by its sha256). */
+  preview?: {
+    status: "none" | "building" | "ready" | "failed";
+    assetId?: string;
+    sha256?: string;
+    /** The code it was built from (`codeSha256`), so a refresh of the code shows it is out of date. */
+    builtFrom?: string;
+    builtAt?: string;
+    error?: string;
+  };
 }

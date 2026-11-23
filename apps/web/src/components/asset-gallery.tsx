@@ -49,6 +49,7 @@ const ROLE_LABEL: Record<AssetDTO["role"], string> = {
   "motion-video": "Motion",
   "motion-keyframe": "Keyframe",
   state: "State",
+  "component-preview": "Component preview",
   attachment: "File",
 };
 

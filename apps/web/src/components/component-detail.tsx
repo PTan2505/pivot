@@ -10,9 +10,12 @@ import {
   Check,
   Copy,
   ExternalLink,
+  Eye,
   FileCode,
+  Image as ImageIcon,
   ImageOff,
   Play,
+  RotateCcw,
   ShieldCheck,
   ShieldQuestion,
   XCircle,
@@ -22,6 +25,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Fragment, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
+import { previewMessage, previewOriginFor } from "@pivot/core/preview-messages";
 import type { ComponentFile, ComponentMeta, DesignSessionDTO } from "@pivot/core/types";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -146,20 +150,166 @@ export function ComponentIdentity({ c }: { c: ComponentMeta }) {
 
 const STAGE_H = "h-[min(46vh,420px)]";
 
+/** PIVOT's own live preview when it has one (the preview origin), else 21st's image or video by link. */
 function Stage({ c, title, onShowCode }: { c: ComponentMeta; title: string; onShowCode: () => void }) {
-  const [video, setVideo] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const reduced = useReducedMotion();
-  const open = (
+  const live = c.preview?.status === "ready" && c.preview.sha256 ? c.preview : null;
+  const has21st = !!(c.previewImageUrl || c.videoUrl);
+  const [mode, setMode] = useState<"live" | "21st">("live");
+  if (live && (mode === "live" || !has21st)) {
+    return (
+      <div>
+        <LivePreview
+          sha256={live.sha256!}
+          title={title}
+          extra={
+            has21st && (
+              <Button variant="secondary" size="xs" onClick={() => setMode("21st")}>
+                <ImageIcon /> Show 21st’s preview
+              </Button>
+            )
+          }
+          open={<OpenOn21st c={c} />}
+        />
+        <p className="mt-2 text-xs text-ink-subtle">
+          PIVOT’s live preview, running on its own origin with no network.
+          {live.builtFrom && live.builtFrom !== c.codeSha256 && " Built from earlier code."}
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <ImageStage
+        c={c}
+        title={title}
+        onShowCode={onShowCode}
+        extra={
+          live && (
+            <Button variant="secondary" size="xs" onClick={() => setMode("live")}>
+              <Eye /> Show live preview
+            </Button>
+          )
+        }
+      />
+      {has21st && (
+        <p className="mt-2 text-xs text-ink-subtle">
+          Preview from 21st.dev, shown by its link.
+          {!live && " PIVOT’s own live preview replaces it once built."}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function OpenOn21st({ c }: { c: ComponentMeta }) {
+  return (
     <Button variant="secondary" size="xs" asChild>
       <a href={c.pageUrl} target="_blank" rel="noopener noreferrer">
         <ExternalLink /> Open on 21st.dev<span className="sr-only"> (opens in a new tab)</span>
       </a>
     </Button>
   );
+}
+
+/** The stage's controls: over its top-right corner from sm up, a row under it on phones (the owner's change). */
+function StageControls({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mt-3 flex flex-wrap gap-1.5 sm:absolute sm:top-5 sm:right-5 sm:mt-0 sm:justify-end">{children}</div>
+  );
+}
+
+/**
+ * The preview in a sandboxed frame on the preview origin (PIVOT's port + 1): `allow-scripts allow-same-origin`, where
+ * same-origin is that origin, never PIVOT's; never `srcDoc` (it would inherit PIVOT's origin). PIVOT sends nothing in
+ * and reads only "ready" from that frame (previewMessage).
+ */
+function LivePreview({
+  sha256,
+  title,
+  extra,
+  open,
+}: {
+  sha256: string;
+  title: string;
+  extra?: React.ReactNode;
+  open: React.ReactNode;
+}) {
+  const { data, isError } = useQuery({
+    queryKey: ["preview-origin"],
+    queryFn: () => api<{ port: number }>("/api/components/preview-origin"),
+    staleTime: Infinity,
+  });
+  const origin = data ? previewOriginFor(window.location, data.port) : null;
+  const ref = useRef<HTMLIFrameElement>(null);
+  const [run, setRun] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    if (!origin) return;
+    const on = (e: MessageEvent) => {
+      if (previewMessage(e, ref.current?.contentWindow, origin) === "ready") setLoaded(true);
+    };
+    window.addEventListener("message", on);
+    return () => window.removeEventListener("message", on);
+  }, [origin]);
+  return (
+    <div className="relative rounded-[14px] bg-surface p-3">
+      <div className={cn("relative overflow-hidden rounded-[10px] bg-canvas", STAGE_H)}>
+        {origin && (
+          <iframe
+            key={run}
+            ref={ref}
+            src={`${origin}/p/${sha256}.html?theme=dark`}
+            sandbox="allow-scripts allow-same-origin"
+            allow=""
+            referrerPolicy="no-referrer"
+            title={`Live preview of ${title}`}
+            onLoad={() => setLoaded(true)}
+            className="block size-full border-0"
+          />
+        )}
+        {(!loaded || isError) && (
+          <p role="status" className="absolute inset-0 grid place-items-center bg-canvas text-sm text-ink-muted">
+            {isError ? "The preview server isn’t answering." : "Loading the preview…"}
+          </p>
+        )}
+      </div>
+      <StageControls>
+        <Button
+          variant="secondary"
+          size="xs"
+          onClick={() => {
+            setLoaded(false);
+            setRun((n) => n + 1);
+          }}
+        >
+          <RotateCcw /> Reload
+        </Button>
+        {extra}
+        {open}
+      </StageControls>
+    </div>
+  );
+}
+
+function ImageStage({
+  c,
+  title,
+  onShowCode,
+  extra,
+}: {
+  c: ComponentMeta;
+  title: string;
+  onShowCode: () => void;
+  extra?: React.ReactNode;
+}) {
+  const [video, setVideo] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const reduced = useReducedMotion();
+  const open = <OpenOn21st c={c} />;
   if (!c.previewImageUrl && !c.videoUrl) {
     return (
       <StageEmpty title="No preview saved" body="21st gave no preview image for this component.">
+        {extra}
         <Button variant="secondary" size="xs" onClick={onShowCode}>
           <FileCode /> Show code
         </Button>
@@ -209,15 +359,15 @@ function Stage({ c, title, onShowCode }: { c: ComponentMeta; title: string; onSh
           className={cn("block w-full rounded-[10px] bg-canvas object-cover object-top", STAGE_H)}
         />
       )}
-      {/* over the preview's corner from sm up; on phones a row under it, so nothing covers the picture */}
-      <div className="mt-3 flex flex-wrap gap-1.5 sm:absolute sm:top-5 sm:right-5 sm:mt-0 sm:justify-end">
+      <StageControls>
+        {extra}
         {c.videoUrl && (
           <Button variant="secondary" size="xs" onClick={() => setVideo((v) => !v)}>
             <Play /> {video ? "Show image" : "Play video"}
           </Button>
         )}
         {open}
-      </div>
+      </StageControls>
     </div>
   );
 }
@@ -546,11 +696,6 @@ export function ComponentMain({ c, title }: { c: ComponentMeta; title: string })
           className="motion-safe:animate-in motion-safe:duration-150 motion-safe:fade-in-0"
         >
           <Stage c={c} title={title} onShowCode={() => view.go({ tab: "code" })} />
-          {(c.previewImageUrl || c.videoUrl) && (
-            <p className="mt-2 text-xs text-ink-subtle">
-              Preview from 21st.dev, shown by its link. PIVOT’s own live preview replaces it once built.
-            </p>
-          )}
         </TabsContent>
         <TabsContent
           value="code"

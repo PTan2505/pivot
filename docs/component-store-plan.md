@@ -357,4 +357,43 @@ Each: audit → gaps → implement → test → report. Tests run only against a
     - accent focus rings on the tabs;
     - "opens in a new tab" on links.
   - Item 5, the stage's corner pills over the preview at 390, was the owner's call: "Move below on phones" (recorded as a change). Below `sm` they now sit in a row under the preview, 12px below it (checked at 390); desktop is unchanged. Pre-existing: the title is an input with no h1, and the phone dock covers content.
-- **Not verified:** a screen reader run (VoiceOver); the review chip on card glass over a white screenshot.
+- **Not verified:** a screen reader run (VoiceOver); the review chip on card glass over a white screenshot. Committed as `c149f0f`.
+
+### Phase 4: the preview origin (2026-11-23)
+
+- **Audit:**
+  - `.html` files are already stored as `text/plain` (`assets.ts`), so PIVOT's asset route never serves a preview as a page.
+  - Export and copied context keep only listed roles, so a new role stays out of them.
+  - `instrumentation.ts` runs at server start in `next start`, `next dev` and the CLI's standalone server.
+  - The CLI already passes `PORT`; `start.mjs` didn't set it.
+  - Next keeps `useSearchParams` in step with the native history API.
+- **Gaps:** no server or route for previews; no asset role; no frame; no port handling.
+- **Implemented:**
+  - `component-preview.ts`: `setComponentPreview` (role `component-preview`, replaces the last one, records `preview.sha256` and `builtFrom`), `findPreviewAsset` (role, type and Trash checked).
+  - `preview-server.ts`: port, CSP, headers, link guard, handler, a once-per-process start from `instrumentation.ts`.
+  - `preview-messages.ts`: the frame message filter and the origin.
+  - `GET /api/components/preview-origin`.
+  - The live stage in `component-detail.tsx`.
+  - `start.mjs` (sets `PORT` and `PIVOT_PREVIEW_PORT`; a scratch PIVOT may not use 4321 or 4322) and the CLI (`previewPortFor`, refuses a busy preview port).
+  - SPEC #38, §3, §21; DESIGN.md.
+  - **Changed from the plan:**
+    - `frame-ancestors` lists `127.0.0.1` and `localhost` only: Chrome rejects an IPv6 literal as a CSP source, and PIVOT binds 127.0.0.1;
+    - `Permissions-Policy` added (denies device and payment APIs).
+- **Tested:**
+  - core `preview-server.test.ts` (12):
+    - storing and replacing a preview, refusals;
+    - the exact headers and no cookies;
+    - HEAD;
+    - wrong hosts and ports 403, other methods 405;
+    - 11 paths and roles that must 404 (API routes, case, traversal, an attachment with the same kind of file, a trashed component);
+    - the guard's position; the port rules; the message filter;
+    - a static check that PIVOT writes no cookies.
+  - In Chromium, a hostile fixture inside a PIVOT-like page:
+    - fetch, XHR, an external script and an http image blocked; the WebSocket, beacon, form and link never reach the app's server;
+    - `parent.document` unreadable; top navigation blocked; its own storage works;
+    - another page can't frame it (frame-ancestors).
+  - Mutation checks: loosening `connect-src` and removing the link guard each fail the test.
+  - Scratch PIVOT (4410, preview 4411):
+    - the origin route; 200 `text/html` for the preview; the API 404 and a rebinding Host 403 on 4411; PIVOT's asset route still `text/plain`;
+    - on the component page, the frame loads from 4411 with the sandbox and no `srcdoc`, the fixture's fetch to PIVOT's token route is blocked by the CSP (console and its own text), and the frame's DOM is unreadable from PIVOT.
+- **Not verified:** the CLI package end to end (`pnpm cli:build`, then the standalone server's preview port); Safari and Firefox.
