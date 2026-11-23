@@ -43,8 +43,8 @@ describe("skills name real MCP tools and values", () => {
   const whichValues = new Set(
     [...(/which: z\s*\.enum\(\[([^\]]*)\]/.exec(src)?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1]),
   );
-  it("get_reference_images offers keyframes and states", () => {
-    expect([...whichValues]).toEqual(["cover", "fullpage", "all", "keyframes", "states"]);
+  it("get_reference_images offers keyframes, states and motion filmstrips", () => {
+    expect([...whichValues]).toEqual(["cover", "fullpage", "all", "keyframes", "states", "motion"]);
   });
   const milestones = enumValues("DESIGN_MILESTONES");
   const kinds = enumValues("DESIGN_DECISION_KINDS");

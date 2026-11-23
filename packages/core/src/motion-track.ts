@@ -31,6 +31,8 @@ export interface ProbeState {
 }
 export interface ProbeChange extends ProbeState {
   id: number;
+  /** Viewport left, px. */
+  x?: number;
   /** Visible area, px². */
   a: number;
   w: number;
@@ -65,6 +67,8 @@ export interface ProbeFrame {
   changed: number;
   visible: number;
   media?: [number, number];
+  /** Canvases and playing videos wholly on screen: element id, x, y, width, height, kind. */
+  boxes?: [number, number, number, number, number, "canvas" | "video"][];
 }
 export interface ProbeElement {
   name: string;
@@ -138,8 +142,9 @@ export interface MotionItem {
   id: string;
   /** The same motion gets the same key in another recording of the page (element, properties, trigger). */
   key: string;
-  source: "exact" | "measured";
-  /** CSS transition, CSS animation, Web Animation, GSAP tween, ScrollTrigger, or measured. */
+  /** `seen`: only pictures show it (a canvas or video whose pixels change); no numbers but where and when. */
+  source: "exact" | "measured" | "seen";
+  /** CSS transition, CSS animation, Web Animation, GSAP tween, ScrollTrigger, measured, canvas or video. */
   via: string;
   trigger: {
     kind: "load" | "scroll" | "always";
@@ -170,6 +175,8 @@ export interface MotionItem {
   fixedAt?: number;
   /** Measured as a jump between two frames: no duration or curve to tell. */
   instant?: boolean;
+  /** A filmstrip of it is stored (`motion-strip`); `get_reference_images` `which: "motion"` shows it. */
+  filmstrip?: boolean;
   /** Largest visible area, px², which orders the items. */
   area: number;
 }
@@ -210,8 +217,8 @@ const MIN_AREA = 1500;
 /** Measured runs longer than this are not fitted to a curve (a loop, a slow drift). */
 const MAX_FIT_MS = 4000;
 
-type Values = Record<Key, number> & { dy: number; y: number };
-const valuesOf = (s: ProbeState): Values => {
+type Values = Record<Key, number> & { dy: number; y: number; x: number; w: number; h: number };
+const valuesOf = (s: ProbeState & { x?: number; w?: number; h?: number }): Values => {
   const t = parseTransform(s.tf);
   return {
     tx: t.translateX,
@@ -222,6 +229,9 @@ const valuesOf = (s: ProbeState): Values => {
     blur: parseBlur(s.filt),
     dy: s.dy,
     y: s.y,
+    x: s.x ?? NaN,
+    w: s.w ?? NaN,
+    h: s.h ?? NaN,
   };
 };
 
@@ -233,6 +243,9 @@ interface Track {
 }
 
 interface Segment {
+  /** The frames it spans: the last still one and the last that moved. */
+  fStart: number;
+  fEnd: number;
   /** The samples of a run, for merging scroll-linked runs (scroll position, value). */
   xs?: number[];
   ys?: number[];
@@ -315,6 +328,8 @@ function segmentsOf(tr: Track, timeOf: Map<number, number>, atOf: Map<number, nu
       out.push({
         el: tr.el,
         kind: tr.pos === "fixed" ? "fixed" : "pin",
+        fStart: moved[0] - 1,
+        fEnd: moved[moved.length - 1],
         vFrom: 0,
         vTo: 0,
         tPrev: timeOf.get(moved[0] - 1) ?? 0,
@@ -347,6 +362,8 @@ function segmentsOf(tr: Track, timeOf: Map<number, number>, atOf: Map<number, nu
         key: ch.key,
         vFrom,
         vTo,
+        fStart: fPrev,
+        fEnd: fLast,
         tPrev: timeOf.get(fPrev) ?? 0,
         tLast: timeOf.get(fLast) ?? 0,
         atStart: at(fPrev),
@@ -432,6 +449,7 @@ function mergeScrollRuns(runs: Segment[]): Segment[] {
     ...first,
     kind: "scroll",
     vTo: last.vTo,
+    fEnd: last.fEnd,
     tLast: last.tLast,
     atEnd: last.atEnd,
     area: Math.max(...linked.map((s) => s.area)),
@@ -451,8 +469,12 @@ interface Draft extends Omit<MotionItem, "id" | "key"> {
   el?: number;
   /** Every element the item describes, so measured motion of the same elements isn't listed again. */
   els?: number[];
+  /** The frames it plays over, for its filmstrip. */
+  span?: [number, number];
   noGroup?: boolean;
 }
+
+const framesOf = (ms: number) => Math.ceil(ms / FRAME_MS);
 
 const triggerAt = (at: number, t: number): MotionItem["trigger"] =>
   at < 1 && t < 1500 ? { kind: "load" } : { kind: "scroll", at: Math.round(at) };
@@ -471,7 +493,14 @@ function valuesOfProp(property: string, values: (string | null)[]) {
 
 /** A change too small to see: the tail of an interrupted spring, a sub-pixel nudge. */
 function tiny(property: string, values: string[]) {
-  const nums = values.map((v) => (v.match(/-?\d*\.?\d+(e-?\d+)?/g) ?? []).map(Number));
+  const read = (v: string) => (v.match(/-?\d*\.?\d+(e-?\d+)?/g) ?? []).map(Number);
+  // a transform of `none` is all zeros next to a translate (a scale would need ones, so it isn't compared)
+  const width = Math.max(...values.map((v) => read(v).length));
+  const nums = values.map((v) =>
+    v === "none" && /transform|translate/i.test(property) && values.every((x) => x === "none" || /^translate/.test(x))
+      ? new Array<number>(width).fill(0)
+      : read(v),
+  );
   if (nums.some((n) => n.length !== nums[0].length) || !nums[0].length) return false;
   const limit = /opacity/i.test(property) ? 0.02 : 0.5;
   for (let i = 0; i < nums[0].length; i++) {
@@ -489,9 +518,22 @@ const VIA: Record<string, string> = {
 
 function declaredItems(rec: MotionRecording, area: (el?: number) => number): Draft[] {
   const groups = new Map<string, { a: ProbeAnimation; changes: MotionChange[]; easing: string }>();
+  // an animation that starts while an earlier one on the same element and properties is still running interrupts
+  // it (a spring retargeted, a transition reversed): it is part of that motion, not a motion of its own
+  const runningUntil = new Map<string, number>();
   for (const fr of rec.frames)
     for (const a of fr.anims) {
       if (!a.duration || a.duration < 50 || a.el === undefined) continue;
+      if (a.timeline === "document" && a.iterations !== "infinite") {
+        const same = [a.el, a.pseudo, (a.props ?? []).map((p) => p.property).join(",")].join("|");
+        const until = runningUntil.get(same);
+        const end = a.t + (a.delay ?? 0) + a.duration;
+        if (until !== undefined && a.t < until + FRAME_MS) {
+          runningUntil.set(same, Math.max(until, end));
+          continue;
+        }
+        runningUntil.set(same, end);
+      }
       const easing = compactEasing(
         a.type === "CSSAnimation" && (!a.easing || a.easing === "linear") && a.keyframeEasing
           ? a.keyframeEasing
@@ -540,6 +582,7 @@ function declaredItems(rec: MotionRecording, area: (el?: number) => number): Dra
       t: a.t,
       el: a.el,
       els: gs.map((g) => g.a.el!),
+      span: [a.f, a.f + framesOf((gs[gs.length - 1].a.delay ?? 0) + a.duration!)],
       noGroup: true,
     });
     gs.forEach((g) => used.add(g));
@@ -564,6 +607,7 @@ function declaredItems(rec: MotionRecording, area: (el?: number) => number): Dra
       area: area(a.el),
       t: a.t,
       el: a.el,
+      span: [a.f, a.f + framesOf((a.delay ?? 0) + a.duration!)],
     });
   }
   return out;
@@ -616,6 +660,7 @@ function libraryItems(rec: MotionRecording): Draft[] {
       ...(tw.stagger ? { staggerMs: tw.stagger } : {}),
       area: 0,
       t: tw.t,
+      span: [tw.f, tw.f + framesOf((tw.delay ?? 0) + (tw.duration ?? 0))],
     });
   }
   return out;
@@ -665,6 +710,8 @@ function measuredItems(
       area: g.reduce((s, x) => s + x.area, 0),
       t: s0.tPrev,
       el: s0.el,
+      els: g.map((x) => x.el),
+      span: [Math.min(...g.map((x) => x.fStart)), Math.max(...g.map((x) => x.fEnd))],
       noGroup: true,
     });
     g.forEach((s) => inStagger.add(s.el));
@@ -705,6 +752,7 @@ function measuredItems(
         area: s.area,
         t: s.tPrev,
         el: s.el,
+        span: [s.fStart, Math.max(...grp.map((x) => x.fEnd))] as [number, number],
       };
       if (s.kind === "fixed") {
         out.push({ ...base, trigger: { kind: "always" }, changes: [], fixedAt: Math.round(s.y!) });
@@ -758,6 +806,7 @@ const family = (selector: string) => selector.replace(/:nth-of-type\(\d+\)/g, ""
 
 export function timingText(it: MotionItem) {
   const parts: string[] = [];
+  if (it.source === "seen") return "pixels change while the page rests, no timing";
   if (it.fixedAt !== undefined) return `fixed at y=${it.fixedAt}`;
   if (it.pinnedAt !== undefined) return `pinned at y=${it.pinnedAt}`;
   if (it.instant) parts.push("jumps within one frame");
@@ -796,12 +845,12 @@ export function motionLine(it: MotionItem) {
     .map((c) => `${c.property} ${c.values.length === 1 ? `→${c.values[0]}` : c.values.join("→")}`)
     .join("; ");
   const timing = timingText(it);
-  const source = it.source === "exact" ? `exact (${it.via})` : "measured";
+  const source = it.source === "exact" ? `exact (${it.via})` : it.source === "seen" ? `seen (${it.via})` : "measured";
   return [
     `${it.id} ${triggerText(it.trigger)} ${count}${it.target.name} (${it.target.selector})`,
     changes,
     timing,
-    source,
+    it.filmstrip ? `${source}, filmstrip` : source,
   ]
     .filter(Boolean)
     .join(" | ");
@@ -817,6 +866,62 @@ export function motionTable(track: MotionTrack, cap = MOTION_TABLE_ITEMS) {
 
 /** Turns what a recording gathered into the stored track. Pure: same recording, same track. */
 export function buildMotionTrack(rec: MotionRecording): MotionTrack {
+  return analyseMotion(rec).track;
+}
+
+/** A filmstrip to cut from the recording's video: which frames, and the part of the screen the motion crosses. */
+export interface FilmstripPlan {
+  key: string;
+  /** Video frame numbers (the recording's frame `f`), in order. */
+  frames: number[];
+  /** The crop, in viewport px. */
+  box: { x: number; y: number; width: number; height: number };
+}
+
+/** A canvas or playing video on screen while the page rested: its frames are compared for moving pixels. */
+export interface SeenPlan {
+  el: number;
+  kind: "canvas" | "video";
+  name: string;
+  selector: string;
+  box: { x: number; y: number; width: number; height: number };
+  /** Frames 200 ms apart within one rest, per rest window (at most two windows). */
+  windows: number[][];
+  /** The scroll range it was wholly on screen in. */
+  from: number;
+  to: number;
+}
+
+export interface AnalysedMotion {
+  track: MotionTrack;
+  strips: FilmstripPlan[];
+  seen: SeenPlan[];
+}
+
+export const MAX_FILMSTRIPS = 6;
+const MAX_SEEN = 4;
+const STRIP_FRAMES = 5;
+
+/** `n` frames spread from `a` to `b`, both included, without repeats. */
+function spread(a: number, b: number, n: number) {
+  if (b - a + 1 <= n) return Array.from({ length: b - a + 1 }, (_, i) => a + i);
+  return [...new Set(Array.from({ length: n }, (_, i) => Math.round(a + ((b - a) * i) / (n - 1))))];
+}
+
+/** Moves read better than fades in a filmstrip: translation and scale first, blur and clips next, the rest last. */
+const legibility = (it: MotionItem) =>
+  it.changes.some((c) => /transform|translate|scale|rotate|^[xy]$|left|top/i.test(c.property))
+    ? 2
+    : it.changes.some((c) => /filter|blur|clip/i.test(c.property))
+      ? 1.5
+      : 1;
+
+/**
+ * The track plus what the capture needs to finish it from the video: the filmstrips worth cutting (the most legible
+ * and visible motion, preferring motion that plays while the page rests, since scrolling mixes into the frames
+ * otherwise) and the canvases and videos whose pixels should be compared.
+ */
+export function analyseMotion(rec: MotionRecording): AnalysedMotion {
   const timeOf = new Map(rec.frames.map((f) => [f.f, f.t]));
   const atOf = new Map(rec.frames.map((f) => [f.f, f.at]));
   const tracks = tracksOf(rec.frames);
@@ -880,22 +985,111 @@ export function buildMotionTrack(rec: MotionRecording): MotionTrack {
       (a, b) => (a.trigger.from ?? a.trigger.at ?? 0) - (b.trigger.from ?? b.trigger.at ?? 0) || a.t - b.t,
     ).forEach((d, n) => order.set(d, n + 1));
   const items: MotionItem[] = merged.slice(0, MAX_TRACK_ITEMS).map((d, i) => {
-    const { t: _t, el: _el, els: _els, noGroup: _n, ...rest } = d;
+    const { t: _t, el: _el, els: _els, span: _s, noGroup: _n, ...rest } = d;
     return { id: `M${i + 1}`, key: `${base(d)}#${order.get(d)}`, ...rest };
   });
 
+  const { width: vw, height: vh } = rec.viewport;
+  const lastFrame = rec.frames.length ? rec.frames[rec.frames.length - 1].f : 0;
+  const clampBox = (x0: number, y0: number, x1: number, y1: number) => {
+    const x = Math.max(0, Math.floor(x0 - 12));
+    const y = Math.max(0, Math.floor(y0 - 12));
+    return { x, y, width: Math.min(vw, Math.ceil(x1 + 12)) - x, height: Math.min(vh, Math.ceil(y1 + 12)) - y };
+  };
+  const candidates: (FilmstripPlan & { score: number })[] = [];
+  merged.slice(0, MAX_TRACK_ITEMS).forEach((d, i) => {
+    const it = items[i];
+    if (!d.span || it.pinnedAt !== undefined || it.fixedAt !== undefined || it.scrubbed || it.instant) return;
+    if (it.iterations === "infinite") return;
+    const [f0, f1] = d.span;
+    if (f1 - f0 < 2) return;
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const el of (d.els ?? (d.el === undefined ? [] : [d.el])).slice(0, 12)) {
+      for (const [f, v] of tracks.get(el)?.pts ?? []) {
+        if (f < f0 - 1 || f > f1 + 1 || !Number.isFinite(v.x) || !Number.isFinite(v.w)) continue;
+        x0 = Math.min(x0, v.x);
+        y0 = Math.min(y0, v.y);
+        x1 = Math.max(x1, v.x + v.w);
+        y1 = Math.max(y1, v.y + v.h);
+      }
+    }
+    if (!Number.isFinite(x0)) return;
+    const box = clampBox(x0, y0, x1, y1);
+    if (box.width < 40 || box.height < 24) return;
+    const scrolled = Math.abs((atOf.get(f1) ?? 0) - (atOf.get(f0) ?? 0));
+    candidates.push({
+      key: it.key,
+      frames: spread(Math.max(0, f0 - 1), Math.min(lastFrame, f1 + 1), STRIP_FRAMES),
+      box,
+      score: legibility(it) * Math.sqrt(it.area || box.width * box.height) * (scrolled < 40 ? 1 : 0.4),
+    });
+  });
+  const strips = candidates
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_FILMSTRIPS)
+    .map(({ score: _score, ...plan }) => plan);
+
+  // canvases and videos: where each was wholly on screen while the page rested
+  const media = new Map<number, { kind: "canvas" | "video"; at: Map<number, [number, number, number, number]> }>();
+  for (const fr of rec.frames)
+    for (const [el, x, y, w, h, kind] of fr.boxes ?? []) {
+      const m = media.get(el) ?? { kind, at: new Map() };
+      m.at.set(fr.f, [x, y, w, h]);
+      media.set(el, m);
+    }
+  const seen: SeenPlan[] = [];
+  for (const [el, m] of media) {
+    const fs = [...m.at.keys()].sort((a, b) => a - b);
+    const same = (f: number) => {
+      const a = m.at.get(f);
+      const b = m.at.get(f - 1);
+      return !!a && !!b && a.every((n, i) => n === b[i]) && (atOf.get(f) ?? 0) === (atOf.get(f - 1) ?? 0);
+    };
+    const windows: number[][] = [];
+    let run: number[] = [];
+    for (const f of fs) {
+      if (same(f)) run.push(f);
+      else {
+        if (run.length >= 13) windows.push([run[0], run[6], run[12]]);
+        run = [f];
+      }
+    }
+    if (run.length >= 13) windows.push([run[0], run[6], run[12]]);
+    if (!windows.length) continue;
+    const [x, y, w, h] = m.at.get(windows[0][0])!;
+    const ats = fs.map((f) => atOf.get(f) ?? 0);
+    seen.push({
+      el,
+      kind: m.kind,
+      name: rec.elements[el]?.name ?? m.kind,
+      selector: rec.elements[el]?.selector ?? m.kind,
+      box: { x, y, width: w, height: h },
+      windows: windows.length > 2 ? [windows[0], windows[Math.floor(windows.length / 2)]] : windows,
+      from: Math.round(Math.min(...ats)),
+      to: Math.round(Math.max(...ats)),
+    });
+  }
+  seen.sort((a, b) => b.box.width * b.box.height - a.box.width * a.box.height);
+
   const changedPerFrame = rec.frames.map((f) => f.changed);
-  const media = rec.frames.reduce((m, f) => Math.max(m, (f.media?.[0] ?? 0) + (f.media?.[1] ?? 0)), 0);
+  const mediaSeen = rec.frames.reduce((m, f) => Math.max(m, (f.media?.[0] ?? 0) + (f.media?.[1] ?? 0)), 0);
   const limits = [
     "Measured while PIVOT scrolled the page top to bottom with no pointer: hover, click and focus weren't exercised.",
     "Measured items were fitted from frames 33 ms apart: durations are within about one frame, and motion run by scripts reads slightly short.",
-    ...(media ? ["Canvas, WebGL and video aren't read as elements: their motion isn't in this table."] : []),
+    ...(mediaSeen
+      ? [
+          "Canvas, WebGL and video aren't read as elements: where their pixels change while the page rests they are listed as seen, with no timing.",
+        ]
+      : []),
     ...(rec.stopped ? [`The recording stopped before the bottom of the page (${rec.stopped}).`] : []),
     ...(changedPerFrame.some((n) => n > rec.cap)
       ? [`Some frames had more than ${rec.cap} moving elements; the smallest weren't measured.`]
       : []),
   ];
-  return {
+  const track: MotionTrack = {
     version: 1,
     fps: MOTION_TRACK_FPS,
     viewport: rec.viewport,
@@ -913,4 +1107,48 @@ export function buildMotionTrack(rec: MotionRecording): MotionTrack {
       framesOverCap: changedPerFrame.filter((n) => n > rec.cap).length,
     },
   };
+  return { track, strips, seen: seen.slice(0, MAX_SEEN) };
+}
+
+/**
+ * Adds the canvases and videos whose pixels moved as `seen` items (where and how big, no timing), renumbers the
+ * items by visible area, and plans a filmstrip for each from a window where it moved.
+ */
+export function withSeenItems(
+  track: MotionTrack,
+  seen: { plan: SeenPlan; moved: number[][] }[],
+): { track: MotionTrack; strips: FilmstripPlan[] } {
+  const added: MotionItem[] = [];
+  const strips: FilmstripPlan[] = [];
+  const count = new Map<string, number>();
+  for (const { plan, moved } of seen) {
+    if (!moved.length) continue;
+    const base = ["seen", family(plan.selector), "pixels", "scroll"].join("|");
+    count.set(base, (count.get(base) ?? 0) + 1);
+    const key = `${base}#${count.get(base)}`;
+    added.push({
+      id: "",
+      key,
+      source: "seen",
+      via: plan.kind,
+      trigger: { kind: "scroll", from: plan.from, to: plan.to },
+      target: { name: plan.name, selector: plan.selector, count: 1 },
+      changes: [],
+      area: plan.box.width * plan.box.height,
+    });
+    const [a, , c] = moved[0];
+    strips.push({ key, frames: spread(a, c, STRIP_FRAMES), box: plan.box });
+  }
+  if (!added.length) return { track, strips };
+  const items = [...track.items, ...added]
+    .sort((a, b) => b.area - a.area)
+    .slice(0, MAX_TRACK_ITEMS)
+    .map((it, i) => ({ ...it, id: `M${i + 1}` }));
+  return { track: { ...track, items, itemsTotal: track.itemsTotal + added.length }, strips };
+}
+
+/** Flags the items a filmstrip was stored for. */
+export function markFilmstrips(track: MotionTrack, keys: string[]): MotionTrack {
+  const has = new Set(keys);
+  return { ...track, items: track.items.map((it) => (has.has(it.key) ? { ...it, filmstrip: true } : it)) };
 }

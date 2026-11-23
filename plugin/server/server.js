@@ -37055,6 +37055,7 @@ var EASINGS = {
 var MOTION_TABLE_ITEMS = 24;
 function timingText(it) {
   const parts = [];
+  if (it.source === "seen") return "pixels change while the page rests, no timing";
   if (it.fixedAt !== void 0) return `fixed at y=${it.fixedAt}`;
   if (it.pinnedAt !== void 0) return `pinned at y=${it.pinnedAt}`;
   if (it.instant) parts.push("jumps within one frame");
@@ -37077,12 +37078,12 @@ function motionLine(it) {
   const count = it.target.count > 1 ? `${it.target.count}\xD7 ` : "";
   const changes = it.changes.map((c) => `${c.property} ${c.values.length === 1 ? `\u2192${c.values[0]}` : c.values.join("\u2192")}`).join("; ");
   const timing = timingText(it);
-  const source2 = it.source === "exact" ? `exact (${it.via})` : "measured";
+  const source2 = it.source === "exact" ? `exact (${it.via})` : it.source === "seen" ? `seen (${it.via})` : "measured";
   return [
     `${it.id} ${triggerText(it.trigger)} ${count}${it.target.name} (${it.target.selector})`,
     changes,
     timing,
-    source2
+    it.filmstrip ? `${source2}, filmstrip` : source2
   ].filter(Boolean).join(" | ");
 }
 function motionTable(track, cap = MOTION_TABLE_ITEMS) {
@@ -37772,6 +37773,7 @@ function motionTableText(m) {
   return [
     `Motion table (measured by PIVOT while scrolling, ${m.capturedAt.slice(0, 10)}, ${m.viewport.width}\xD7${m.viewport.height}${libraries}; ${m.itemsTotal} item${m.itemsTotal === 1 ? "" : "s"}${shown}). exact = declared by the page; measured = fitted from the recording's frames. Cite items by id (e.g. "M3").`,
     ...motionTable({ items: m.items, itemsTotal: m.itemsTotal }, MOTION_TABLE_ITEMS),
+    ...m.items.some((it) => it.filmstrip) ? ["Items marked filmstrip have pictures: get_reference_images which=motion item=<id> (about 400 tokens each)."] : [],
     `Motion limits: ${m.limits.join(" ")}`
   ].join("\n");
 }
@@ -37906,9 +37908,10 @@ var listFacets = {
 };
 var imagesInput = {
   id: idInput.id,
-  which: external_exports.enum(["cover", "fullpage", "all", "keyframes", "states"]).optional().describe(
-    "cover: the first screen as saved (default). fullpage: the whole page, top to bottom, in slices. all: both. keyframes: stills from PIVOT's scroll recording, in scroll order (motion evidence). states: stills of interaction states."
+  which: external_exports.enum(["cover", "fullpage", "all", "keyframes", "states", "motion"]).optional().describe(
+    "cover: the first screen as saved (default). fullpage: the whole page, top to bottom, in slices. all: both. keyframes: stills from PIVOT's scroll recording, in scroll order (motion evidence). states: stills of interaction states. motion: filmstrips of motion-table items (the frames of one motion, cropped to where it happens, side by side with their times); pass item for one."
   ),
+  item: external_exports.string().regex(/^M\d{1,3}$/, "an item id from get_reference's motion table, like M3").optional().describe("With which=motion: the motion-table item to show (M3). Without it, every item that has a filmstrip."),
   fromSlice: external_exports.number().int().min(0).max(20).optional().describe("Full page: the first slice to return. Keyframes and states: the first one to return. Default 0."),
   maxImages: external_exports.number().int().min(1).max(4).optional().describe("At most this many images (1\u20134, default 3).")
 };
@@ -37917,7 +37920,7 @@ var getReferenceImages = {
   title: "Look at a reference",
   description: "The screenshots of one PIVOT reference as images, so you can judge its layout, hierarchy, type and colour. The cover is the first screen as saved (or what the user saw when saving it with the browser extension). The full page is the whole page captured top to bottom, sent in 960px-wide slices; page through it with fromSlice. Keyframes are stills PIVOT took while recording the page scrolling: they show what appeared at each scroll position (observed), not timing or easing, and nothing about hover or click; states are stills of interaction states. Each image costs about 2,000 tokens, so look at a few chosen references rather than every result. Captured pages can show a half-revealed element where two screens meet, and pages behind a login only have the user's own view.",
   inputSchema: imagesInput,
-  async run(source2, { id, which = "cover", fromSlice = 0, maxImages = 3 }) {
+  async run(source2, { id, which = "cover", fromSlice = 0, maxImages = 3, item }) {
     const r = await liveResource(source2, id);
     const shots = screenshotsOf(r);
     const cover = shots.find((s) => s.role === "cover") ?? shots.find((s) => s.role === "viewport");
@@ -37940,6 +37943,7 @@ var getReferenceImages = {
         page.slices.length ? `Full page ${page.pageWidth}\xD7${page.pageHeight}: slices ${fromSlice + 1}\u2013${fromSlice + page.slices.length} of ${page.total}, page pixels ${page.slices[0].fromY}\u2013${page.slices.at(-1).toY} (~${page.slices.reduce((n, s) => n + imageTokens(s.width, s.height), 0)} tokens).${fromSlice + page.slices.length < page.total ? ` Call again with fromSlice ${fromSlice + page.slices.length} for the rest.` : ""}` : `Full page ${page.pageWidth}\xD7${page.pageHeight} has ${page.total} slice${page.total === 1 ? "" : "s"}; fromSlice ${fromSlice} is past the end.`
       );
     }
+    if (which === "motion") return motionStrips(source2, r, item, fromSlice, maxImages);
     if (which === "keyframes" || which === "states") {
       const motion = motionEvidenceOf(r);
       const total = which === "keyframes" ? motion.keyframesTotal : motion.statesTotal;
@@ -37957,11 +37961,11 @@ var getReferenceImages = {
         label: `State ${i + 1} of ${total}${st.state ? `: ${st.state}` : ""} (a still: how the state looks, not how it moves)`
       }));
       const picked = all.slice(fromSlice, fromSlice + maxImages);
-      for (const item of picked) {
-        const img = await source2.agentImage(item.assetId);
+      for (const item2 of picked) {
+        const img = await source2.agentImage(item2.assetId);
         parts.push(image(img));
         notes.push(
-          `${item.label}, sent at ${img.width}\xD7${img.height} (~${imageTokens(img.width, img.height)} tokens).`
+          `${item2.label}, sent at ${img.width}\xD7${img.height} (~${imageTokens(img.width, img.height)} tokens).`
         );
       }
       if (!picked.length) notes.push(`${which} has ${total}; fromSlice ${fromSlice} is past the end.`);
@@ -37997,6 +38001,53 @@ ${notes.join("\n")}`), ...parts]
     };
   }
 };
+async function motionStrips(source2, r, item, fromSlice, maxImages) {
+  const strips = r.assets.filter((a) => a.role === "motion-strip" && !a.missing && typeof metaOf(a).item === "string").map((a) => ({ assetId: a.id, item: metaOf(a).item, times: metaOf(a).times })).sort((a, b) => Number(a.item.slice(1)) - Number(b.item.slice(1)));
+  if (!strips.length) {
+    const hasTrack = r.assets.some((a) => a.role === "motion-track" && !a.missing);
+    throw new ToolError(
+      "no_images",
+      hasTrack ? `${r.title} has a motion table but no filmstrips: read the table with get_reference.` : `${r.title} has no motion filmstrips: they come with a "Record motion" made since motion tracks exist.`
+    );
+  }
+  const chosen = item ? strips.filter((s) => s.item === item) : strips;
+  if (!chosen.length)
+    throw new ToolError(
+      "no_images",
+      `${item} has no filmstrip. Items with one: ${strips.map((s) => s.item).join(", ")}.`
+    );
+  const motion = await motionDetailOf(source2, r);
+  const lineOf = (id) => {
+    const it = motion?.items.find((x) => x.id === id);
+    return it ? motionLine(it) : id;
+  };
+  const picked = chosen.slice(fromSlice, fromSlice + maxImages);
+  const parts = [];
+  const notes = [];
+  const labels = [];
+  for (const s of picked) {
+    const img = await source2.agentImage(s.assetId);
+    parts.push(image(img));
+    const times = Array.isArray(s.times) ? s.times.filter((t) => typeof t === "number") : [];
+    const label = `Filmstrip of ${lineOf(s.item)}. Frames ${times.length ? `at +${times.join(", +")} ms` : "in order"}, cropped to where it moves, left to right then down (seen in PIVOT's scroll recording; the page may scroll between frames).`;
+    labels.push({ assetId: s.assetId, label });
+    notes.push(`${label} Sent at ${img.width}\xD7${img.height} (~${imageTokens(img.width, img.height)} tokens).`);
+  }
+  if (!picked.length) notes.push(`motion has ${chosen.length} filmstrips; fromSlice ${fromSlice} is past the end.`);
+  const next = picked.length && fromSlice + picked.length < chosen.length ? fromSlice + picked.length : null;
+  if (next !== null) notes.push(`Call again with fromSlice ${next} for the rest.`);
+  return {
+    content: [text2(`${r.title}${r.sourceUrl ? ` (${hostOf(r.sourceUrl)})` : ""}
+${notes.join("\n")}`), ...parts],
+    structuredContent: {
+      which: "motion",
+      total: chosen.length,
+      returned: picked.map((s) => s.assetId),
+      images: labels,
+      next
+    }
+  };
+}
 var TOOLS = [searchReferences, getReference, listFacets, getReferenceImages];
 async function runTool(tool, source2, input2) {
   const parsed = external_exports.object(tool.inputSchema).safeParse(input2 ?? {});

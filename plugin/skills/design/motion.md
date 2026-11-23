@@ -59,12 +59,20 @@ A screenshot can't show motion. For every reference that informs motion, say wha
     Use its numbers as they are;
   - `measured`: PIVOT watched the element change frame by frame and fitted the samples. Durations are within about
     one frame (33 ms) and read slightly short for motion run by scripts; the easing is named with its fit error, and
-    `custom` when no standard curve fits.
+    `custom` when no standard curve fits;
+  - `seen`: a canvas or video whose pixels move while the page rests. Only where and when, no numbers: what it does
+    is in its filmstrip, or inferred.
 
-  Read the table before the keyframes, and look at keyframes only for what the table can't say (how a section looks
-  mid-motion). Cite items by reference and id in the brief's Motion block ("Linear M3: fade + rise 8px, 333 ms,
+  **Filmstrips:** items ending in `filmstrip` have one, about 400 tokens: `get_reference_images` with
+  `which: "motion"` and `item: "M3"` shows five frames of that motion, cropped to where it happens, with their times.
+  Look at one only when the numbers leave the look open (what a reveal uncovers, how a `seen` canvas moves); the
+  page may scroll between its frames.
+
+  Read the table before the filmstrips and keyframes, and look at keyframes only for what neither can say (how a
+  section looks mid-motion). Cite items by reference and id in the brief's Motion block ("Linear M3: fade + rise 8px, 333 ms,
   cubic-bezier(.23,1,.32,1), measured"). An item from the table counts as observed evidence for its numbers; what it
-  can't show (hover, click, canvas or WebGL, what the motion looks like) is still inferred unless seen another way.
+  can't show (hover, click, the timing of a `seen` item, the look of motion without a filmstrip) is still inferred
+  unless seen another way; a filmstrip you looked at counts as observed for what it shows.
 
 - **Look at it:** `get_reference_images` with `which: "keyframes"` sends the keyframes (page with `fromSlice`), and
   `which: "states"` the interaction-state stills. They count toward the image budget. The video can't be viewed
