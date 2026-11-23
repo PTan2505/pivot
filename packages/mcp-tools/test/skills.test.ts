@@ -35,8 +35,8 @@ const ordered = (text: string, words: string[]) => {
 describe("skills name real MCP tools and values", () => {
   const tools = all(/name: "([a-z_]+)"/g, src);
 
-  it("packages/mcp-tools defines 18 tools", () => {
-    expect(tools.size).toBe(18);
+  it("packages/mcp-tools defines 20 tools", () => {
+    expect(tools.size).toBe(20);
   });
 
   // get_reference_images' `which` values, from the tool's own schema
@@ -769,5 +769,30 @@ describe("pivot:design: GSAP for advanced motion (L1, text only)", () => {
     expect(d).toMatch(/\*\*Motion technology:\*\* the brief's \*\*Technology\*\* line/);
     expect(r).toMatch(/motion technology when the redesign changes motion/);
     expect(spec).toMatch(/GSAP for advanced motion/);
+  });
+});
+
+describe("components saved with their code (component store, phase 2)", () => {
+  const build = d.slice(d.indexOf("## 9. Build"), d.indexOf("## 10. QA"));
+  it("§9 checks PIVOT first, saves right after the fetch, reviews before the first edit, then saves it built", () => {
+    expect(
+      ordered(build, [
+        "`get_saved_component`",
+        '`save_component` with `status: "fetched"`',
+        "Review the code before the first edit",
+        '`save_component` again with `status: "built"`',
+      ]),
+    ).toBe(true);
+    expect(build).toMatch(/Never quietly remove or rewrite the suspicious part/);
+    expect(build).toMatch(/`concerns_accepted` with the user's words quoted exactly/);
+    expect(build).toMatch(/\$API_KEY_21ST/);
+    expect(build).toMatch(/npm view <name>@<version>/);
+  });
+  it("§2 proposes saved components first, and the rules keep components from being collected", () => {
+    expect(d).toMatch(/\*\*Components already saved in PIVOT come first\.\*\*/);
+    expect(d).toMatch(/\*\*Components are kept, not collected\.\*\*/);
+    expect(d).toMatch(/So is a component's code, saved or fetched/);
+    expect(r).toMatch(/`get_saved_component` first, `save_component` right after a fetch, the code review/);
+    expect(spec).toMatch(/`save_component`/);
   });
 });

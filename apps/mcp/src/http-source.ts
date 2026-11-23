@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { appOutdated, missingAppFeatures, REQUIRED_APP_FEATURES } from "@pivot/mcp-tools/app-compat";
+import { appOutdated, missingAppFeatures, REQUIRED_APP_FEATURES, UPDATE_APP } from "@pivot/mcp-tools/app-compat";
 import type { ImagePart, PageSlices } from "@pivot/mcp-tools/images";
 import { ToolError, type PivotSource, type PivotWriter } from "@pivot/mcp-tools/source";
 import type {
@@ -257,6 +257,29 @@ export class HttpSource implements PivotSource, PivotWriter {
 
   annotate(resourceId: string, note: string) {
     return this.post<{ line: string }>(`/api/resources/${encodeURIComponent(resourceId)}/annotate`, { note });
+  }
+
+  async findComponent(q: { provider: "21st"; providerId?: number; pageUrl?: string; resourceId?: string }) {
+    const sp = new URLSearchParams({ provider: q.provider });
+    if (q.providerId) sp.set("id", String(q.providerId));
+    if (q.pageUrl) sp.set("url", q.pageUrl);
+    if (q.resourceId) sp.set("resourceId", q.resourceId);
+    return this.json<ResourceDetailDTO>(`/api/components/lookup?${sp}`);
+  }
+
+  async saveComponent(input: Record<string, unknown>) {
+    const res = await this.call("/api/components", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!res) {
+      throw new ToolError(
+        "app_outdated",
+        `The PIVOT app at ${this.base} can't hold components yet. ${UPDATE_APP} Then call save_component again.`,
+      );
+    }
+    return (await res.json()) as { outcome: "created" | "updated" | "unchanged"; resource: ResourceDetailDTO };
   }
 
   /** Through the extension's endpoint, so duplicates, the Inbox and the background capture work the same way. */

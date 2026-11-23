@@ -8,8 +8,8 @@ Tracks [component-store-plan.md](component-store-plan.md), approved by the owner
 
 | Phase | Name                               | Status                                            |
 | ----- | ---------------------------------- | ------------------------------------------------- |
-| 1     | The `component` type and its store | Done on `feat/component-store`, not committed yet |
-| 2     | MCP tools and the skill            | Next                                              |
+| 1     | The `component` type and its store | Done (`2fbb294` on `feat/component-store`)        |
+| 2     | MCP tools and the skill            | Done on `feat/component-store-mcp`, not committed |
 | 3     | The component page                 | Waiting for a design direction the owner approves |
 | 4     | The preview origin                 | Planned                                           |
 | 5     | The local preview build            | Planned                                           |

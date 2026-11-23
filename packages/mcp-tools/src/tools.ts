@@ -420,6 +420,8 @@ const getReference: PivotTool<typeof idInput> = {
               `${i + 1}. "${a.note}" (${a.kind} at ${Math.round(a.x * 100)}%, ${Math.round(a.y * 100)}% of ${ROLE_LABEL[r.assets.find((x) => x.id === a.assetId)?.role ?? "attachment"]})`,
           )
           .join("; ")}`,
+      r.type === "component" &&
+        "A component saved with its code: get_saved_component (resourceId) gives all its files, dependencies, PIVOT's scan and the review, and spends no 21st retrieval.",
       r.content && `Content:\n${content.text}`,
     ].filter(Boolean);
     return { content: [text(lines.join("\n"))], structuredContent: detail };

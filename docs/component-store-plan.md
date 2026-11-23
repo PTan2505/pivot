@@ -284,4 +284,32 @@ Each: audit → gaps → implement → test → report. Tests run only against a
   - Over HTTP on a scratch PIVOT (port 4410, own data folder, `assertScratch`), 16 checks: capability, 201 / 200 / 409, placeholder key, scan flags, lookups by id and URL, 404 and 400, a secret refused, foreign origin and no-token writes 403, generic create 400, PATCH keeps `meta.component`, a code edit 400.
   - In the browser: the detail page shows the code read-only with the type locked, and Add doesn't offer Component.
 - **Versions:** pivot-studio covered by the pending 0.5.0 (npm has 0.4.0); plugin covered by the pending 0.6.0 (`main` has 0.5.0).
-- **Next:** Phase 2 (MCP tools and the skill).
+- **Next:** Phase 2 (MCP tools and the skill). Committed as `2fbb294`.
+
+### Phase 2: MCP tools and the skill (2026-11-23)
+
+- **Audit:**
+  - Tools are written against `PivotSource` / `PivotWriter` and served over HTTP by `apps/mcp/src/http-source.ts`; new routes are optional methods, so an older app degrades instead of failing.
+  - `REQUIRED_APP_FEATURES` blocks every tool when one is missing, so `components` stays out of it.
+  - `propose_references` already took any library id, and Phase 1's `inferCategory` makes a saved component a component.
+  - Overlap: `feat/21st-reference-rules` (e053027, unmerged) rewrites SKILL.md §2's 21st bullet, adds a 21st build bullet in §9, edits one line of redesign §2 and allowlists 21st tool names in `skills.test.ts`.
+- **Gaps:** no tool to save or read a component; the skill had no reuse, save or review step; `save_reference` could be asked for a component.
+- **Implemented:**
+  - `save_component` and `get_saved_component` (schemas as approved) in `write-tools.ts`. `PivotSource.findComponent?` and `PivotWriter.saveComponent?` are implemented over HTTP (an app without the store: `found: false`, or "update the app").
+  - `get_saved_component` is read-only in the server's annotations. The server instructions name both tools, and `get_reference` points a component to `get_saved_component`; `save_reference` excludes components.
+  - SKILL.md:
+    - the tool table;
+    - §2 "Components already saved in PIVOT come first";
+    - §9 the four steps: PIVOT first, save right after the fetch, the code review before the first edit, save it built;
+    - Rules "So is a component's code" and "Components are kept, not collected".
+  - redesign §5 points to §9.
+  - Placed to merge cleanly with e053027: new lines after the lines it changes, no edit to its lines, and no 21st tool names in backticks.
+  - SPEC §10, §15, §21.
+- **Tested:**
+  - `write-tools.test.ts` (6 new: the save and its text, refusals, the saved read with code and review, rejected and older-code warnings, found false, `save_reference` can't make a component);
+  - `skills.test.ts` (tool count 20; §9 order and review wording; §2, Rules, redesign, SPEC);
+  - `pnpm check` green.
+  - The built `plugin/server/server.js` over stdio against a scratch PIVOT (port 4410, `assertScratch`), 17 checks: both tools listed and annotated, found false, save fetched with no flags and the review step, read back with code, placeholder key, save built with support file and review, conflict, `concerns_accepted` without words refused, lookup by page, `get_reference` hint, `search_references` by type, and `propose_references` showing a saved component as `[component]`.
+- **Not verified yet:** a real design session with a 21st component (that run also records `get_component`'s field names, open question 1).
+- **Versions:** plugin covered by the pending 0.6.0; no npm package change.
+- **Next:** Phase 3 (the component page), which starts with a design direction for the owner to approve.
