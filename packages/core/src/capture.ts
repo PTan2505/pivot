@@ -5,9 +5,20 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { and, desc, eq, inArray } from "drizzle-orm";
-import type { Browser, Page } from "playwright";
+import type { Browser, CDPSession, Page, Route } from "playwright";
 import sharp from "sharp";
 import { attachAsset, deleteOrphanAssets, saveAsset } from "./assets";
+import { MOTION_PROBE, motionLibraries } from "./motion-probe";
+import { type Filmstrip, finishMotion } from "./motion-strips";
+import {
+  analyseMotion,
+  type LibraryTrigger,
+  type LibraryTween,
+  type MotionInteraction,
+  type MotionTrack,
+  type ProbeElement,
+  type ProbeFrame,
+} from "./motion-track";
 import { getDb } from "./db/client";
 import { assets, captureAttempts, resourceAssets, resources } from "./db/schema";
 import { fetchUrlMetadata } from "./metadata";
@@ -560,12 +571,144 @@ const stepAnimations = (ms: number) => `(() => {
   }
 })()`;
 
+/**
+ * Pauses the page's fake clock where it is now. The clock keeps running while the call travels to the page, and on a
+ * busy page (WebGL, heavy scripts) it can pass the time asked for, which Playwright refuses ("Cannot fast-forward to
+ * the past"). Each try reads the time again and asks further ahead; moving the clock a little forward before the
+ * recording starts is harmless, as nothing has been filmed yet.
+ */
+export async function pauseClock(page: Pick<Page, "evaluate" | "clock">) {
+  let failure: unknown;
+  for (const ahead of PAUSE_AHEAD_MS) {
+    const now = await page.evaluate<number>("Date.now()");
+    try {
+      return await page.clock.pauseAt(now + ahead);
+    } catch (e) {
+      if (!/fast-forward to the past/i.test(String(e))) throw e;
+      failure = e;
+    }
+  }
+  throw failure;
+}
+
+/** How far ahead of the page's time each try of `pauseClock` asks, in milliseconds. */
+const PAUSE_AHEAD_MS = [1, 50, 250, 1_000, 4_000];
+
 /** `promise`, or nothing once `ms` has passed in real time (the page's own timers are frozen while recording). */
 const within = <T>(promise: Promise<T>, ms: number): Promise<T | undefined> =>
   Promise.race([
     promise.catch(() => undefined),
     new Promise<undefined>((done) => setTimeout(() => done(undefined), ms)),
   ]);
+
+/** Hover and click: how many elements of distinct kinds are tried, and for how long at most. */
+const MOTION_HOVERS = 12;
+const MOTION_CLICKS = 6;
+const MOTION_INTERACT_BUDGET_MS = 45_000;
+
+/** The most changed elements measured per frame; M0 found 12 or fewer at p95 on real pages. */
+const MOTION_CHANGED_CAP = 40;
+
+/**
+ * Measures the page's motion frame by frame while it is filmed (motion-probe.ts, motion-track.ts). The DOM is read in
+ * an isolated world the page can't see; GSAP, ScrollTrigger and Lenis only exist on the page's own `window`, so they
+ * are read there, at the start and at each rest, and every frame only while GSAP is on the page. A failed read stops
+ * the measuring, never the recording.
+ */
+async function startMotionProbe(page: Page, cdp: CDPSession) {
+  const { frameTree } = await cdp.send("Page.getFrameTree");
+  const { executionContextId } = await cdp.send("Page.createIsolatedWorld", {
+    frameId: frameTree.frame.id,
+    worldName: "pivot-motion",
+  });
+  const run = async <T>(expression: string, awaitPromise = false) => {
+    const r = await cdp.send("Runtime.evaluate", {
+      expression,
+      contextId: executionContextId,
+      returnByValue: true,
+      awaitPromise,
+    });
+    if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text);
+    return r.result.value as T;
+  };
+  await run(MOTION_PROBE);
+  const frames: ProbeFrame[] = [];
+  const libraries = new Set<string>();
+  const tweens: LibraryTween[] = [];
+  let triggers: LibraryTrigger[] = [];
+  let lenis: { lerp?: number; duration?: number } | undefined;
+  let gsap = false;
+  let broken = false;
+  const readLibraries = async (full: boolean, f: number, t: number, at: number) => {
+    const r = await page
+      .evaluate<{
+        libraries: string[];
+        tweens?: Omit<LibraryTween, "f" | "t" | "at">[];
+        triggers?: LibraryTrigger[];
+        lenis?: { lerp?: number; duration?: number };
+      }>(motionLibraries(full))
+      .catch(() => null);
+    if (!r) return;
+    r.libraries.forEach((l) => libraries.add(l));
+    gsap = r.libraries.some((l) => l.startsWith("GSAP"));
+    for (const tw of r.tweens ?? []) tweens.push({ ...tw, f, t, at });
+    if (r.triggers?.length) triggers = r.triggers;
+    if (r.lenis) lenis = r.lenis;
+  };
+  await readLibraries(true, 0, 0, 0);
+  const interactions: MotionInteraction[] = [];
+  let tried: { hover: number; click: number; stopped?: string } | undefined;
+  return {
+    /** Measures frame `f`; `into` collects it elsewhere (a hover), `null` measures it only to keep up (a settle). */
+    async frame(f: number, t: number, at: number, into: ProbeFrame[] | null = frames) {
+      if (broken) return;
+      try {
+        const fr = await run<ProbeFrame>(`__pivotMotion.frame(${f}, ${t}, ${Math.round(at)}, ${MOTION_CHANGED_CAP})`);
+        into?.push(fr);
+        if (gsap) await readLibraries(false, f, t, at);
+      } catch {
+        broken = true;
+      }
+    },
+    call: run,
+    /**
+     * Waits for two real rendering frames. Chrome hands mouse events to the page with its next frame, which the fake
+     * clock doesn't drive; until they are handled, the clock must not move, or a hover would start at a random point
+     * between two measured frames. The isolated world's requestAnimationFrame is the real one.
+     */
+    async inputHandled() {
+      await within(
+        run("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(1))))", true),
+        500,
+      );
+    },
+    get broken() {
+      return broken;
+    },
+    interactions,
+    setTried(t: { hover: number; click: number; stopped?: string }) {
+      tried = t;
+    },
+    rest: (f: number, t: number, at: number) => (broken ? Promise.resolve() : readLibraries(true, f, t, at)),
+    async finish(viewport: { width: number; height: number }, wheel: boolean, stopped?: "budget" | "stuck") {
+      if (!frames.length) return null;
+      const elements = await run<Record<string, ProbeElement>>("__pivotMotion.elements()").catch(() => ({}));
+      return analyseMotion({
+        viewport,
+        method: wheel ? "wheel" : "scroll",
+        frames,
+        elements,
+        libraries: [...libraries],
+        tweens,
+        triggers,
+        ...(lenis ? { lenis } : {}),
+        cap: MOTION_CHANGED_CAP,
+        ...(stopped ? { stopped } : {}),
+        ...(tried ? { interactions, interactionsTried: tried } : {}),
+      });
+    },
+  };
+}
 
 /**
  * Records the page scrolling from top to bottom as a smooth 30 fps video, the way a screen recording of a visitor
@@ -578,7 +721,7 @@ const within = <T>(promise: Promise<T>, ms: number): Promise<T | undefined> =>
  * the video plays at its real speed, in step with the scroll, and scroll-scrubbed timelines (GSAP ScrollTrigger)
  * get the frames they need to catch up. Pages with a smooth-scroll library are scrolled with the mouse wheel and
  * followed by where their content actually is; the others jump to each frame's position. Keyframes come from the
- * same frames.
+ * same frames, and so does the motion track: what moved in each frame, measured as it was filmed.
  */
 async function recordScroll(page: Page, file: string) {
   const wheel = await page.evaluate<boolean>(NEEDS_WHEEL).catch(() => false);
@@ -592,8 +735,7 @@ async function recordScroll(page: Page, file: string) {
   if (wheel) await page.mouse.move(vp.width - 3, Math.round(vp.height / 2));
 
   // From here on the page's time moves only when a frame is taken.
-  const now = await page.evaluate<number>("Date.now()");
-  await page.clock.pauseAt(now + 1);
+  await pauseClock(page);
   const frameMs = 1000 / MOTION_FPS;
   // whole milliseconds per step, carried over so 30 frames are exactly one second
   let clockMs = 0;
@@ -606,12 +748,15 @@ async function recordScroll(page: Page, file: string) {
   };
 
   const cdp = await page.context().newCDPSession(page);
+  const probe = await startMotionProbe(page, cdp).catch(() => null);
+  let scrollAt = 0;
   const encoder = await startEncoder(file);
   const candidates: { jpeg: Buffer; scrollY: number }[] = [];
   let frames = 0;
   let y = 0;
   const shoot = async () => {
     await tick();
+    await probe?.frame(frames, clockMs, scrollAt);
     const { data } = await cdp.send("Page.captureScreenshot", { format: "jpeg", quality: 90, optimizeForSpeed: true });
     const jpeg = Buffer.from(data, "base64");
     await encoder.write(jpeg);
@@ -619,6 +764,124 @@ async function recordScroll(page: Page, file: string) {
     return jpeg;
   };
   const progress = () => page.evaluate<{ at: number; max: number }>(SCROLL_PROGRESS);
+
+  /**
+   * Hover and click on a sample of elements, after the scroll and off the video: each is scrolled to the middle of
+   * the screen and left to settle, then pointed at (or pressed) with the real mouse while 30 frames are measured and
+   * five screenshots kept for its filmstrip; then the pointer leaves and an opened disclosure is closed again. Only
+   * tabs, disclosures and menus are clicked (motion-probe.ts), any request but a read is refused meanwhile, and a
+   * window the page opens is closed. Not on smooth-scrolled pages, where scrolling to an element doesn't move it.
+   */
+  const tryInteractions = async () => {
+    const shots = new Map<number, Buffer>();
+    if (!probe || probe.broken) return shots;
+    const started = Date.now();
+    const tried: { hover: number; click: number; stopped?: string } = { hover: 0, click: 0 };
+    const picked = await probe
+      .call<{ i: number; kind: "hover" | "click"; el: number }[]>(
+        `__pivotMotion.candidates(${MOTION_HOVERS}, ${MOTION_CLICKS})`,
+      )
+      .catch(() => []);
+    const readsOnly = (route: Route) =>
+      ["GET", "HEAD", "OPTIONS"].includes(route.request().method())
+        ? route.fallback()
+        : route.abort("blockedbyclient").catch(() => {});
+    const closePopup = (p: Page) => void p.close().catch(() => {});
+    await page.route("**/*", readsOnly);
+    page.context().on("page", closePopup);
+    const url = page.url();
+    let f = frames;
+    let at = scrollAt;
+    const step = async (into: ProbeFrame[] | null) => {
+      await tick();
+      await probe.frame(f, clockMs, at, into);
+      f++;
+    };
+    const shot = async () =>
+      Buffer.from(
+        (await cdp.send("Page.captureScreenshot", { format: "jpeg", quality: 90, optimizeForSpeed: true })).data,
+        "base64",
+      );
+    try {
+      for (const c of picked) {
+        if (Date.now() - started > MOTION_INTERACT_BUDGET_MS) {
+          tried.stopped = "it ran out of time";
+          break;
+        }
+        const r = await probe
+          .call<{
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+            cx: number;
+            cy: number;
+            at: number;
+            clear: boolean;
+            expanded: string | null;
+          } | null>(`__pivotMotion.reveal(${c.i})`)
+          .catch(() => null);
+        if (!r || !r.clear) continue;
+        at = Math.round(r.at);
+        // its own scroll-in motion plays out first, measured only to keep up
+        for (let k = 0; k < 15; k++) await step(null);
+        if (c.kind === "click") {
+          await page.mouse.move(r.cx, r.cy);
+          await probe.inputHandled();
+          for (let k = 0; k < 15; k++) await step(null);
+          // it opened on hover: a click would only close it again, and its hover was already tried
+          const opened = await probe.call<string | null>(`__pivotMotion.expanded(${c.i})`).catch(() => null);
+          if (opened !== r.expanded) {
+            await page.mouse.move(vp.width - 2, vp.height - 2);
+            for (let k = 0; k < 20; k++) await step(null);
+            continue;
+          }
+        }
+        const into: ProbeFrame[] = [];
+        const kept: number[] = [f - 1];
+        shots.set(f - 1, await shot());
+        if (c.kind === "hover") await page.mouse.move(r.cx, r.cy);
+        else await page.mouse.click(r.cx, r.cy);
+        await probe.inputHandled();
+        for (let k = 0; k < 30; k++) {
+          await step(into);
+          if ([2, 5, 11, 23].includes(k)) {
+            shots.set(f - 1, await shot());
+            kept.push(f - 1);
+          }
+        }
+        if (page.url() !== url) {
+          tried.stopped = "a click left the page";
+          break;
+        }
+        probe.interactions.push({
+          kind: c.kind,
+          el: c.el,
+          frames: into,
+          shots: kept,
+          box: { x: r.x, y: r.y, width: r.w, height: r.h },
+        });
+        tried[c.kind]++;
+        // put it back as it was
+        if (c.kind === "click") {
+          const now = await probe.call<string | null>(`__pivotMotion.expanded(${c.i})`).catch(() => null);
+          if (now === "true" && r.expanded !== "true") await page.mouse.click(r.cx, r.cy);
+          await page.keyboard.press("Escape");
+        }
+        await page.mouse.move(vp.width - 2, vp.height - 2);
+        for (let k = 0; k < 20; k++) await step(null);
+      }
+    } catch {
+      tried.stopped ??= "the page stopped answering";
+    } finally {
+      await page.unroute("**/*", readsOnly).catch(() => {});
+      page.context().off("page", closePopup);
+    }
+    probe.setTried(tried);
+    return shots;
+  };
+
+  let stopped: "budget" | "stuck" | undefined;
   try {
     const started = Date.now();
     let { max } = wheel ? await progress() : await page.evaluate<{ at: number; max: number }>(scrollAndMeasure(0));
@@ -651,6 +914,7 @@ async function recordScroll(page: Page, file: string) {
         const behind = wheel ? y - moved.at > vp.height / 4 && moved.at <= at + 0.5 : moved.at < Math.round(y) - 2;
         stuck = behind ? stuck + 1 : 0;
         at = wheel ? moved.at : Math.round(y);
+        scrollAt = at;
         if (stuck >= MOTION_FPS) break;
         await shoot();
       }
@@ -661,6 +925,8 @@ async function recordScroll(page: Page, file: string) {
       let settled = await shoot();
       for (let i = 1; i < MOTION_FPS * MOTION_STEP_HOLD_S; i++) settled = await shoot();
       if (wheel) at = (await progress()).at;
+      scrollAt = at;
+      await probe?.rest(frames, clockMs, at);
       candidates.push({ jpeg: settled, scrollY: at });
     }
     await within(page.evaluate(IMAGES_ON_SCREEN), 1_500);
@@ -671,18 +937,35 @@ async function recordScroll(page: Page, file: string) {
     if (at - candidates[candidates.length - 1].scrollY >= vp.height * 0.25) {
       candidates.push({ jpeg: last, scrollY: at });
     }
+    stopped = !inBudget() ? "budget" : stuck >= MOTION_FPS ? "stuck" : undefined;
     await encoder.finish();
   } catch (err) {
     encoder.kill();
     throw err;
   }
+  const pointerShots = probe && !wheel ? await tryInteractions() : new Map<number, Buffer>();
   const keyframes = await Promise.all(
     spread(candidates, MAX_KEYFRAMES).map(async (c) => ({
       data: await sharp(c.jpeg).webp({ quality: 85 }).toBuffer(),
       scrollY: c.scrollY,
     })),
   );
-  return { video: await fs.readFile(file), durationMs: Math.round((frames / MOTION_FPS) * 1000), keyframes };
+  // a track that can't be built leaves the video and keyframes as they are; pictures that can't be cut leave the track
+  const analysis = probe ? await probe.finish(vp, wheel, stopped).catch(() => null) : null;
+  const motion = analysis
+    ? await finishMotion(await ffmpegPath(), file, analysis, pointerShots).catch(() => ({
+        track: analysis.track,
+        strips: [] as Filmstrip[],
+      }))
+    : null;
+  const motionTrack: MotionTrack | null = motion?.track ?? null;
+  return {
+    video: await fs.readFile(file),
+    durationMs: Math.round((frames / MOTION_FPS) * 1000),
+    keyframes,
+    motionTrack,
+    motionStrips: motion?.strips ?? [],
+  };
 }
 
 /** Clicks one visible "Load more"-style button. Buttons only, never links or form submits, so it can't navigate. */
@@ -850,9 +1133,11 @@ export async function screenshotUrl(
     let video: Buffer | null = null;
     let videoDurationMs = 0;
     let keyframes: { data: Buffer; scrollY: number }[] = [];
+    let motionTrack: MotionTrack | null = null;
+    let motionStrips: Filmstrip[] = [];
     if (motion && videoDir) {
       const recorded = await recordScroll(page, path.join(videoDir, "motion.webm"));
-      ({ video, keyframes } = recorded);
+      ({ video, keyframes, motionTrack, motionStrips } = recorded);
       videoDurationMs = recorded.durationMs;
     } else if (fullPage) {
       await loadWholePage(page, settle, expandContent).catch(() => {});
@@ -873,6 +1158,8 @@ export async function screenshotUrl(
       video,
       videoDurationMs,
       keyframes,
+      motionTrack,
+      motionStrips,
       motionLikely,
     };
   } catch (err) {
@@ -1313,8 +1600,39 @@ async function captureExtras(
         await attachAsset(resourceId, asset.id, "motion-keyframe");
         kept.push(asset.id);
       }
-      await replace(["motion-video", "motion-keyframe"], () => true, kept);
-      extras.motion = shots.video ? `done (${shots.keyframes.length} keyframes)` : "no video was recorded";
+      if (shots.motionTrack) {
+        const track = await saveAsset({
+          data: Buffer.from(JSON.stringify(shots.motionTrack)),
+          fileName: `${host}-${stamp}-motion-track.json`,
+          mimeType: "application/json",
+          sourceUrl,
+          meta: meta({
+            viewport: DESKTOP,
+            finalUrl: shots.finalUrl,
+            items: shots.motionTrack.itemsTotal,
+            libraries: shots.motionTrack.libraries,
+          }),
+        });
+        await attachAsset(resourceId, track.id, "motion-track");
+        kept.push(track.id);
+        const ids = new Map(shots.motionTrack.items.map((it) => [it.key, it.id]));
+        for (const strip of shots.motionStrips) {
+          const item = ids.get(strip.key);
+          if (!item) continue;
+          const asset = await saveAsset({
+            data: strip.data,
+            fileName: `${host}-${stamp}-motion-${item.toLowerCase()}.webp`,
+            sourceUrl,
+            meta: meta({ item, key: strip.key, frames: strip.frames, times: strip.times, box: strip.box }),
+          });
+          await attachAsset(resourceId, asset.id, "motion-strip");
+          kept.push(asset.id);
+        }
+      }
+      await replace(["motion-video", "motion-keyframe", "motion-track", "motion-strip"], () => true, kept);
+      extras.motion = shots.video
+        ? `done (${shots.keyframes.length} keyframes${shots.motionTrack ? `, ${shots.motionTrack.itemsTotal} motion items` : ""})`
+        : "no video was recorded";
     } catch (err) {
       if (err instanceof CaptureError && err.kind === "cancelled") throw err;
       extras.motion = `failed: ${err instanceof Error ? err.message : String(err)}`;

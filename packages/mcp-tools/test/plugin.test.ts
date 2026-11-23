@@ -101,6 +101,11 @@ describe("the committed MCP bundle", () => {
     expect((await bundle()) === read("plugin/server/server.js")).toBe(true);
   }, 60_000);
 
+  it("ships motion-qa the motion fitting code it imports, as the source builds it today (run pnpm mcp:build)", async () => {
+    const { bundleFit } = await import(pathToFileURL(P("apps/mcp/build.mjs")).href);
+    expect((await bundleFit()) === read("plugin/skills/design/scripts/motion-fit.mjs")).toBe(true);
+  }, 60_000);
+
   it("ships the hook a copy of the features it needs from the app (run pnpm mcp:build when this fails)", () => {
     expect(read("plugin/hooks/required-features.json")).toBe(read("packages/mcp-tools/src/required-app-features.json"));
   });

@@ -3,6 +3,7 @@
 export const RESOURCE_TYPES = [
   "reference",
   "library",
+  "component",
   "media",
   "icon",
   "animation",
@@ -189,6 +190,20 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
     fields: [],
     exportDir: "libraries",
   },
+  component: {
+    type: "component",
+    label: "Component",
+    plural: "Components",
+    blurb: "Components with code you built with",
+    group: "visual",
+    icon: "blocks",
+    visual: true,
+    url: "primary",
+    content: "code",
+    facets: ["technology", "uiPattern", "visualStyle"],
+    fields: [],
+    exportDir: "components",
+  },
   media: {
     type: "media",
     label: "Image & Video",
@@ -363,7 +378,11 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
 
 /** The app's top-level sections, shown in the navbar. Every type belongs to exactly one. */
 export const SECTIONS = [
-  { id: "library", label: "Library", types: ["reference", "library", "media", "icon", "animation", "typography"] },
+  {
+    id: "library",
+    label: "Library",
+    types: ["reference", "library", "component", "media", "icon", "animation", "typography"],
+  },
   { id: "knowledge", label: "Knowledge", types: ["prompt", "snippet", "rule", "checklist", "mcp"] },
   { id: "sources", label: "Sources", types: ["source"] },
   { id: "skills", label: "Skills", types: ["skill"] },
@@ -413,6 +432,21 @@ export function visibleTypes(showOther: boolean): ResourceType[] {
   return showOther ? [...RESOURCE_TYPES] : RESOURCE_TYPES.filter((t) => !isOtherType(t));
 }
 
+/**
+ * Types PIVOT creates itself: a component is saved with its code by the agent (`save_component`), never added or
+ * changed into by hand. They show and filter like the others, but aren't offered to add.
+ */
+export const AGENT_TYPES = ["component"] as const satisfies readonly ResourceType[];
+
+export function isAgentType(type: ResourceType): boolean {
+  return (AGENT_TYPES as readonly ResourceType[]).includes(type);
+}
+
+/** The types offered for adding by hand (Add, the URL dialog, the extension) for this setting. */
+export function addableTypes(showOther: boolean): ResourceType[] {
+  return visibleTypes(showOther).filter((t) => !isAgentType(t));
+}
+
 /** App-wide display settings (`app_settings` key `ui`). */
 export interface UiSettings {
   /** Show the Knowledge and Skills sections, their types, Export and Share package. Off by default. */
@@ -443,8 +477,17 @@ export type AssetRole =
   /** A recording of the page scrolling, and still frames from it, taken on request. */
   | "motion-video"
   | "motion-keyframe"
+  /** The recording's motion as numbers (JSON, `MotionTrack` in motion-track.ts): what moved, when, how and how long. */
+  | "motion-track"
+  /** A filmstrip of one motion-track item, cut from the recording's video; `meta.item` is the item's id. */
+  | "motion-strip"
   /** An interaction state (hover, open menu, error…) captured from the tab; `meta.state` names it. */
   | "state"
+  /**
+   * A component's preview: one self-contained HTML file, served only by the preview origin (preview-server.ts), never
+   * as a page on PIVOT's own origin (its file is stored as text/plain).
+   */
+  | "component-preview"
   | "attachment";
 /** `partial`: the first screen was saved but the full page wasn't. `cancelled`: stopped by the user. */
 export type CaptureStatus = "pending" | "done" | "partial" | "failed" | "cancelled";
@@ -1021,4 +1064,99 @@ export interface AnnotationDTO {
   note: string;
   author: "user" | "agent";
   createdAt: string;
+}
+
+// ---- Components (added 2026-11-23, docs/component-store-plan.md) ------------------------------------------------
+
+export const COMPONENT_PROVIDERS = ["21st"] as const;
+export type ComponentProvider = (typeof COMPONENT_PROVIDERS)[number];
+export const COMPONENT_FILE_ROLES = ["component", "demo", "support"] as const;
+export type ComponentFileRole = (typeof COMPONENT_FILE_ROLES)[number];
+export const LICENCE_SOURCES = ["21st_result", "component_page", "user", "unknown"] as const;
+export const COMPONENT_STATUSES = ["fetched", "built"] as const;
+export type ComponentStatus = (typeof COMPONENT_STATUSES)[number];
+export const REVIEW_VERDICTS = ["clean", "concerns_accepted", "rejected"] as const;
+export type ReviewVerdict = (typeof REVIEW_VERDICTS)[number];
+
+export interface ComponentFile {
+  path: string;
+  role: ComponentFileRole;
+  language: string;
+  code: string;
+}
+
+export interface ComponentScanFlag {
+  /** network | host | dynamic-code | beyond-component | obfuscation | install-command | registry */
+  kind: string;
+  /** What was found, e.g. "fetch(", "eval(", "a base64 string of 412 characters". */
+  what: string;
+  /** The file's path, or "installCommand" / "registryDependencies". */
+  file: string;
+  /** 1-based; 0 when the flag isn't about a line. */
+  line: number;
+  excerpt: string;
+}
+
+export interface ComponentScan {
+  version: number;
+  /** The code hash the scan covers (component and demo files). */
+  codeSha256: string;
+  flags: ComponentScanFlag[];
+  /** Every http(s) host named in the files. */
+  hosts: string[];
+}
+
+export interface ComponentReview {
+  verdict: ReviewVerdict;
+  notes: string;
+  /** The user's own words, kept verbatim; required for concerns_accepted. */
+  userWords?: string;
+  codeSha256: string;
+  reviewedAt: string;
+}
+
+export interface ComponentOrigin {
+  sessionId?: string;
+  candidateId?: string;
+  candidateN?: number;
+  project?: string;
+  status: ComponentStatus;
+  savedAt: string;
+}
+
+/** `meta.component` of a `component` resource. Written only by PIVOT (`packages/core/src/components.ts`). */
+export interface ComponentMeta {
+  provider: ComponentProvider;
+  /** The id 21st's get_component takes (a demo id). */
+  providerId: number;
+  /** "<author>/<component>/<demo>" when it can be read from the page or preview URL. */
+  slug?: string;
+  pageUrl: string;
+  author: { username: string; name?: string; url?: string };
+  licence: { spdx?: string; name?: string; source: (typeof LICENCE_SOURCES)[number] };
+  files: ComponentFile[];
+  npmDependencies: { name: string; version?: string }[];
+  registryDependencies: string[];
+  /** Any api_key value is replaced by the placeholder $API_KEY_21ST. */
+  installCommand?: string;
+  /** URLs only, never copied: 21st's media stays on 21st. */
+  previewImageUrl?: string;
+  videoUrl?: string;
+  /** sha256 of the component and demo files (support files left out). */
+  codeSha256: string;
+  status: ComponentStatus;
+  fetchedAt: string;
+  origins: ComponentOrigin[];
+  scan: ComponentScan;
+  review?: ComponentReview;
+  /** PIVOT's own preview (a single HTML file on the preview origin, by its sha256). */
+  preview?: {
+    status: "none" | "building" | "ready" | "failed";
+    assetId?: string;
+    sha256?: string;
+    /** The code it was built from (`codeSha256`), so a refresh of the code shows it is out of date. */
+    builtFrom?: string;
+    builtAt?: string;
+    error?: string;
+  };
 }

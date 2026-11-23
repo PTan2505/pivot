@@ -1,9 +1,10 @@
 "use client";
 
-import { Check, Copy, ExternalLink, ImageOff, Loader2 } from "lucide-react";
+import { Check, Copy, ExternalLink, ImageOff, Loader2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useState, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
 import { TAG_KIND_LABELS, TYPE_DEFS, type ResourceDTO } from "@pivot/core/types";
+import { componentMeta, ReviewChip } from "@/components/component-detail";
 import { TypeIcon } from "@/components/type-icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCopyResource } from "@/hooks/use-copy-resource";
@@ -122,8 +123,27 @@ function CardActions({ resource, glass, className }: { resource: ResourceDTO; gl
   );
 }
 
+/** A component's preview image on 21st.dev, shown by its link (PIVOT never copies 21st's media). */
+const componentPreview = (r: ResourceDTO) =>
+  r.type === "component" && !r.coverAssetId ? (componentMeta(r.meta)?.previewImageUrl ?? null) : null;
+
 function Cover({ resource }: { resource: ResourceDTO }) {
   const colors = Array.isArray(resource.meta.colors) ? (resource.meta.colors as string[]) : [];
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const preview = componentPreview(resource);
+  if (preview && !previewFailed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={preview}
+        alt=""
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        className="size-full object-cover object-top"
+        onError={() => setPreviewFailed(true)}
+      />
+    );
+  }
   if (resource.coverAssetId) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
@@ -212,6 +232,11 @@ interface CardProps {
 
 function metaLine(r: ResourceDTO) {
   const def = TYPE_DEFS[r.type];
+  const c = r.type === "component" ? componentMeta(r.meta) : null;
+  if (c) {
+    const licence = c.licence.spdx || c.licence.name || "licence unknown";
+    return [hostOf(r.sourceUrl) ?? "21st.dev", `@${c.author.username}`, licence].join(" · ");
+  }
   if (def.visual) return hostOf(r.sourceUrl) ?? def.label;
   if (r.type === "skill")
     return [(r.meta.invocation as string) || def.label, r.meta.readonly ? "plugin" : ""].filter(Boolean).join(" · ");
@@ -247,6 +272,33 @@ function Chips({ resource }: { resource: ResourceDTO }) {
   const def = TYPE_DEFS[resource.type];
   const tags = [...resource.tags].sort((a, b) => Number(a.kind === "tag") - Number(b.kind === "tag"));
   const chip = "inline-flex h-6 items-center gap-1 rounded-full bg-ink/8 px-2.5 text-xs font-medium text-ink";
+  // a component's review leads its chips: icon and word, so a rejected one reads before it is opened
+  const component = resource.type === "component" ? componentMeta(resource.meta) : null;
+  if (component) {
+    const shown = tags.slice(0, MAX_CHIPS - 1);
+    return (
+      <div className="flex flex-wrap gap-1.5">
+        <ReviewChip c={component} />
+        {shown.map((t) => (
+          <span key={t.id} className={chip}>
+            {t.kind !== "tag" && <span className="font-normal text-ink-secondary">{TAG_KIND_LABELS[t.kind]}</span>}
+            {t.name}
+          </span>
+        ))}
+        {tags.length > shown.length && (
+          <span
+            className={chip}
+            title={tags
+              .slice(shown.length)
+              .map((t) => t.name)
+              .join(", ")}
+          >
+            +{tags.length - shown.length}
+          </span>
+        )}
+      </div>
+    );
+  }
   if (!tags.length) {
     // a note card already shows its type inside the frame
     return resource.sourceUrl ? (
@@ -319,7 +371,9 @@ export function ResourceCard({
   };
   const isCode = def.content === "code" || def.content === "json";
   const shot = resource.type === "reference" ? resource.fullShot : null;
-  const art = resource.coverAssetId ? assetUrl(resource.coverAssetId, { thumb: true }) : null;
+  const art = resource.coverAssetId ? assetUrl(resource.coverAssetId, { thumb: true }) : componentPreview(resource);
+  const c = resource.type === "component" ? componentMeta(resource.meta) : null;
+  const rejected = c?.review?.verdict === "rejected" && c.review.codeSha256 === c.codeSha256;
 
   return (
     <Link
@@ -364,6 +418,11 @@ export function ResourceCard({
           </div>
         )}
         {compact && <HoverChip resource={resource} />}
+        {rejected && (
+          <span className="absolute bottom-2.5 left-2.5 inline-flex h-6 items-center gap-1.5 rounded-full bg-canvas px-2.5 text-xs font-medium text-danger">
+            <XCircle className="size-3.5" aria-hidden /> Rejected
+          </span>
+        )}
         <SelectBox selected={selected} onToggle={onToggle} visible={selecting} />
       </div>
       {compact ? (
@@ -415,7 +474,17 @@ export function ResourceRow({ resource, selected, selecting, onToggle, meta }: C
       )}
     >
       <div data-frame className="relative h-10 w-16 shrink-0 overflow-hidden rounded-[8px] bg-surface">
-        {resource.coverAssetId ? (
+        {componentPreview(resource) ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={componentPreview(resource)!}
+            alt=""
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            className="size-full object-cover object-top"
+            onError={(e) => (e.currentTarget.style.display = "none")}
+          />
+        ) : resource.coverAssetId ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={assetUrl(resource.coverAssetId, { thumb: true })}

@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { appOutdated, missingAppFeatures, REQUIRED_APP_FEATURES } from "@pivot/mcp-tools/app-compat";
+import { appOutdated, missingAppFeatures, REQUIRED_APP_FEATURES, UPDATE_APP } from "@pivot/mcp-tools/app-compat";
+import type { MotionTrack } from "@pivot/core/motion-track";
 import type { ImagePart, PageSlices } from "@pivot/mcp-tools/images";
 import { ToolError, type PivotSource, type PivotWriter } from "@pivot/mcp-tools/source";
 import type {
@@ -259,6 +260,29 @@ export class HttpSource implements PivotSource, PivotWriter {
     return this.post<{ line: string }>(`/api/resources/${encodeURIComponent(resourceId)}/annotate`, { note });
   }
 
+  async findComponent(q: { provider: "21st"; providerId?: number; pageUrl?: string; resourceId?: string }) {
+    const sp = new URLSearchParams({ provider: q.provider });
+    if (q.providerId) sp.set("id", String(q.providerId));
+    if (q.pageUrl) sp.set("url", q.pageUrl);
+    if (q.resourceId) sp.set("resourceId", q.resourceId);
+    return this.json<ResourceDetailDTO>(`/api/components/lookup?${sp}`);
+  }
+
+  async saveComponent(input: Record<string, unknown>) {
+    const res = await this.call("/api/components", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!res) {
+      throw new ToolError(
+        "app_outdated",
+        `The PIVOT app at ${this.base} can't hold components yet. ${UPDATE_APP} Then call save_component again.`,
+      );
+    }
+    return (await res.json()) as { outcome: "created" | "updated" | "unchanged"; resource: ResourceDetailDTO };
+  }
+
   /** Through the extension's endpoint, so duplicates, the Inbox and the background capture work the same way. */
   async saveReference(input: Parameters<PivotWriter["saveReference"]>[0]) {
     const form = new FormData();
@@ -309,6 +333,13 @@ export class HttpSource implements PivotSource, PivotWriter {
       width: Number(res.headers.get("x-image-width")) || 0,
       height: Number(res.headers.get("x-image-height")) || 0,
     };
+  }
+
+  async motionTrack(assetId: string): Promise<MotionTrack | null> {
+    const res = await this.call(`/api/assets/${encodeURIComponent(assetId)}`);
+    if (!res) return null;
+    const track = (await res.json().catch(() => null)) as MotionTrack | null;
+    return track && track.version === 1 && Array.isArray(track.items) ? track : null;
   }
 
   async agentSlices(assetId: string, from: number, count: number): Promise<PageSlices> {
