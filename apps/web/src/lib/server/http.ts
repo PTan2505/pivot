@@ -2,8 +2,10 @@ import { unstable_rethrow } from "next/navigation";
 import { connection, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { AssetError } from "@pivot/core/assets";
+import { ComponentConflictError, ComponentError } from "@pivot/core/components";
 import { retryOnConnectionError } from "@pivot/core/db/connection";
 import { UnsafeUrlError } from "@pivot/core/net-guard";
+import { ResourceRuleError } from "@pivot/core/resources";
 import { SkillConflictError } from "@pivot/core/skills";
 
 export class HttpError extends Error {
@@ -43,8 +45,14 @@ export function route<Args extends unknown[]>(fn: (...args: Args) => Promise<Res
         const first = err.issues[0];
         return json({ error: `${first?.path.join(".") || "input"}: ${first?.message}` }, { status: 400 });
       }
-      if (err instanceof UnsafeUrlError || err instanceof AssetError)
+      if (
+        err instanceof UnsafeUrlError ||
+        err instanceof AssetError ||
+        err instanceof ComponentError ||
+        err instanceof ResourceRuleError
+      )
         return json({ error: err.message }, { status: 400 });
+      if (err instanceof ComponentConflictError) return json({ error: err.message, conflict: true }, { status: 409 });
       if (err instanceof SkillConflictError) return json({ error: err.message, conflict: true }, { status: 409 });
       console.error("[pivot]", err);
       return json({ error: err instanceof Error ? err.message : "Something went wrong" }, { status: 500 });

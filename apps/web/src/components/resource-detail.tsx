@@ -19,7 +19,14 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { extractVariables } from "@pivot/core/prompt-vars";
-import { TYPE_DEFS, visibleTypes, type MetaField, type ResourceDetailDTO, type ResourceType } from "@pivot/core/types";
+import {
+  addableTypes,
+  isAgentType,
+  TYPE_DEFS,
+  type MetaField,
+  type ResourceDetailDTO,
+  type ResourceType,
+} from "@pivot/core/types";
 import { AssetGallery, useAttach } from "@/components/asset-gallery";
 import { Breadcrumbs, typeCrumbs } from "@/components/breadcrumbs";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -657,7 +664,11 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
           )}
           {showGallery && <AssetGallery resource={resource} compact={!def.visual} />}
           {def.content !== "none" && (
-            <ContentEditor draft={draft} change={change} readOnly={!!resource.meta.readonly} />
+            <ContentEditor
+              draft={draft}
+              change={change}
+              readOnly={!!resource.meta.readonly || isAgentType(draft.type)}
+            />
           )}
           {!def.visual && resource.assets.length === 0 && (
             <p className="text-xs text-ink-subtle">Paste or drop files on this page to attach them.</p>
@@ -823,11 +834,13 @@ function TypeSelect({
   onChange: (type: ResourceType) => void;
   className?: string;
 }) {
-  // the design types, plus this item's own type when it is one of the hidden ones
-  const types = visibleTypes(useShowOther());
+  // the design types, plus this item's own type when it is one of the hidden ones; a component stays a component
+  const addable = addableTypes(useShowOther());
+  const fixed = isAgentType(value);
+  const types = fixed ? [value] : addable;
   if (!types.includes(value)) types.push(value);
   return (
-    <Select value={value} onValueChange={(v) => onChange(v as ResourceType)}>
+    <Select value={value} onValueChange={(v) => onChange(v as ResourceType)} disabled={fixed}>
       <SelectTrigger id="type" size="sm" className={className} aria-label="Type">
         <SelectValue />
       </SelectTrigger>

@@ -38,6 +38,7 @@ import {
   RESOURCE_TYPES,
   SOURCE_CATEGORIES,
   TAG_KINDS,
+  isAgentType,
   type CaptureQuality,
   type CaptureStatus,
   type ResourceDetailDTO,
@@ -48,6 +49,9 @@ import {
 } from "./types";
 
 export const TRASH_RETENTION_DAYS = 30;
+
+/** A write the resource's type doesn't allow (e.g. making a component by hand). The API answers 400. */
+export class ResourceRuleError extends Error {}
 
 const tagInput = z.object({ kind: z.enum(TAG_KINDS), name: z.string().trim().min(1).max(60) });
 
@@ -360,7 +364,7 @@ async function upsertTags(input: { kind: TagKind; name: string }[]): Promise<str
   return ids;
 }
 
-async function setResourceTags(resourceId: string, input: { kind: TagKind; name: string }[]) {
+export async function setResourceTags(resourceId: string, input: { kind: TagKind; name: string }[]) {
   const db = await getDb();
   const ids = await upsertTags(input);
   await db.delete(resourceTags).where(eq(resourceTags.resourceId, resourceId));
@@ -391,6 +395,11 @@ function cleanUrl(url: string | null | undefined) {
 
 export async function createResource(input: ResourceInput): Promise<ResourceDetailDTO> {
   const data = resourceInput.parse(input);
+  if (isAgentType(data.type)) {
+    throw new ResourceRuleError(
+      "Components are saved with their code by the agent (save_component), not added by hand.",
+    );
+  }
   const db = await getDb();
   const derived: { title?: string; description?: string } =
     data.type === "skill" && data.content ? deriveFromSkill(data.content) : {};
@@ -423,6 +432,13 @@ export async function updateResource(id: string, patch: ResourcePatch): Promise<
   const db = await getDb();
   const [current] = await db.select().from(resources).where(eq(resources.id, id)).limit(1);
   if (!current) return null;
+  const type = current.type as ResourceType;
+  if (data.type !== undefined && data.type !== type && (isAgentType(data.type) || isAgentType(type))) {
+    throw new ResourceRuleError("A component's type can't be changed, and nothing can be changed into a component.");
+  }
+  if (isAgentType(type) && data.content !== undefined && data.content !== current.content) {
+    throw new ResourceRuleError("A component's code is kept as it was fetched; it can't be edited here.");
+  }
 
   const set: Partial<typeof resources.$inferInsert> = { updatedAt: new Date() };
   if (data.type !== undefined) set.type = data.type;

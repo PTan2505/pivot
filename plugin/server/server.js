@@ -36646,6 +36646,7 @@ var StdioServerTransport = class {
 var RESOURCE_TYPES = [
   "reference",
   "library",
+  "component",
   "media",
   "icon",
   "animation",
@@ -36714,6 +36715,20 @@ var TYPE_DEFS = {
     facets: ["technology", "visualStyle"],
     fields: [],
     exportDir: "libraries"
+  },
+  component: {
+    type: "component",
+    label: "Component",
+    plural: "Components",
+    blurb: "Components with code you built with",
+    group: "visual",
+    icon: "blocks",
+    visual: true,
+    url: "primary",
+    content: "code",
+    facets: ["technology", "uiPattern", "visualStyle"],
+    fields: [],
+    exportDir: "components"
   },
   media: {
     type: "media",
@@ -36887,7 +36902,11 @@ var TYPE_DEFS = {
   }
 };
 var SECTIONS = [
-  { id: "library", label: "Library", types: ["reference", "library", "media", "icon", "animation", "typography"] },
+  {
+    id: "library",
+    label: "Library",
+    types: ["reference", "library", "component", "media", "icon", "animation", "typography"]
+  },
   { id: "knowledge", label: "Knowledge", types: ["prompt", "snippet", "rule", "checklist", "mcp"] },
   { id: "sources", label: "Sources", types: ["source"] },
   { id: "skills", label: "Skills", types: ["skill"] }
@@ -38968,7 +38987,12 @@ var API_FEATURES = [
    * Renders, element maps and feedback at any width from 320 to 2560, and live notes from the interactive preview: a
    * pin's `live: true` with the element as the preview saw it and its `capture` (a crop, kept by its sha256).
    */
-  "design.feedback.live"
+  "design.feedback.live",
+  /**
+   * Components saved with their code: `POST /api/components` (save, by 21st id) and `GET /api/components/lookup`
+   * (`?id=`, `?url=` or `?resourceId=`), each with PIVOT's scan of the code.
+   */
+  "components"
 ];
 
 // ../../packages/mcp-tools/src/required-app-features.json

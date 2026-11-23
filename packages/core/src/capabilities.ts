@@ -43,6 +43,11 @@ export const API_FEATURES = [
    * pin's `live: true` with the element as the preview saw it and its `capture` (a crop, kept by its sha256).
    */
   "design.feedback.live",
+  /**
+   * Components saved with their code: `POST /api/components` (save, by 21st id) and `GET /api/components/lookup`
+   * (`?id=`, `?url=` or `?resourceId=`), each with PIVOT's scan of the code.
+   */
+  "components",
 ] as const;
 
 export type ApiFeature = (typeof API_FEATURES)[number];
