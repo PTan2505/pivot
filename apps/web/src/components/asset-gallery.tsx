@@ -48,6 +48,7 @@ const ROLE_LABEL: Record<AssetDTO["role"], string> = {
   "screenshot-full-responsive": "Full page",
   "motion-video": "Motion",
   "motion-keyframe": "Keyframe",
+  "motion-track": "Motion track",
   state: "State",
   attachment: "File",
 };
