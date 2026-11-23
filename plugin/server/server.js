@@ -38588,10 +38588,18 @@ var recordDesignQa = {
     };
   }
 };
+var imageHost = (u) => {
+  try {
+    return u ? new URL(u).hostname : "unknown host";
+  } catch {
+    return "unknown host";
+  }
+};
 var candidateText = (c) => `${c.n}. [${c.category === "component" ? "component" : "UI layout"}] ${c.title} \u2014 ${c.kind === "library" ? `library reference (id ${c.resourceId})` : `external, ${c.source}`}${c.url ? ` \u2014 ${c.url}` : ""}${c.selected ? " \u2014 PICKED by the user" : ""}
    Why: ${c.why}${c.take ? `
    Take: ${c.take}` : ""}${c.avoid ? `
-   Avoid: ${c.avoid}` : ""}${c.kind === "external" ? c.previewStatus === "ready" ? "\n   Preview: captured by PIVOT" : c.previewStatus === "failed" ? `
+   Avoid: ${c.avoid}` : ""}${c.kind === "external" ? c.previewStatus === "ready" ? c.previewKind === "image" ? `
+   Preview: the component's own preview image from ${imageHost(c.previewImageUrl)}` : c.previewImageUrl ? "\n   Preview: captured by PIVOT (the previewImageUrl couldn't be used)" : "\n   Preview: captured by PIVOT" : c.previewStatus === "failed" ? `
    Preview: none (${c.previewError})` : "\n   Preview: still capturing" : ""}`;
 var groupedCandidates = (cs) => {
   const layouts = cs.filter((c) => c.category !== "component");
@@ -38614,6 +38622,9 @@ var proposeInput = {
       ),
       title: external_exports.string().max(200).optional().describe("Defaults to the reference's title, or the page's host."),
       source: external_exports.string().max(120).optional().describe('Where an external page was found, e.g. "web search", "land-book.com", "React Bits".'),
+      previewImageUrl: external_exports.string().url().optional().describe(
+        "For an external component page only: the component's own preview image, shown instead of a capture of the whole page. Only https images from cdn.21st.dev (pass a 21st.dev search result's previewUrl as is); never invent one. PIVOT captures the page when it is left out or can't be used."
+      ),
       category: external_exports.enum(DESIGN_REFERENCE_CATEGORIES).optional().describe(
         'What it shows: "layout" for a whole page, site or design (a gallery site, a Dribbble shot, a saved page), "component" for a single component (React Bits, shadcn/ui, Magic UI, a saved snippet or UI library). PIVOT infers it when left out, from the library type or the catalog site; the session page and the list show the two groups apart.'
       ),

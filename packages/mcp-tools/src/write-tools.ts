@@ -440,6 +440,14 @@ const recordDesignQa: PivotTool<typeof qaInput> = {
 
 // ---- propose_references / select_references (gate 1) --------------------------------------------------------------
 
+const imageHost = (u: string | null) => {
+  try {
+    return u ? new URL(u).hostname : "unknown host";
+  } catch {
+    return "unknown host";
+  }
+};
+
 const candidateText = (c: DesignCandidateDTO) =>
   `${c.n}. [${c.category === "component" ? "component" : "UI layout"}] ${c.title} — ${c.kind === "library" ? `library reference (id ${c.resourceId})` : `external, ${c.source}`}${
     c.url ? ` — ${c.url}` : ""
@@ -448,7 +456,11 @@ const candidateText = (c: DesignCandidateDTO) =>
   }${
     c.kind === "external"
       ? c.previewStatus === "ready"
-        ? "\n   Preview: captured by PIVOT"
+        ? c.previewKind === "image"
+          ? `\n   Preview: the component's own preview image from ${imageHost(c.previewImageUrl)}`
+          : c.previewImageUrl
+            ? "\n   Preview: captured by PIVOT (the previewImageUrl couldn't be used)"
+            : "\n   Preview: captured by PIVOT"
         : c.previewStatus === "failed"
           ? `\n   Preview: none (${c.previewError})`
           : "\n   Preview: still capturing"
@@ -487,6 +499,13 @@ const proposeInput = {
           .max(120)
           .optional()
           .describe('Where an external page was found, e.g. "web search", "land-book.com", "React Bits".'),
+        previewImageUrl: z
+          .string()
+          .url()
+          .optional()
+          .describe(
+            "For an external component page only: the component's own preview image, shown instead of a capture of the whole page. Only https images from cdn.21st.dev (pass a 21st.dev search result's previewUrl as is); never invent one. PIVOT captures the page when it is left out or can't be used.",
+          ),
         category: z
           .enum(DESIGN_REFERENCE_CATEGORIES)
           .optional()

@@ -4,6 +4,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 let tmp: string;
@@ -202,5 +203,81 @@ describe("UI layouts and components", () => {
     const { eq } = await import("drizzle-orm");
     await (await db.getDb()).update(designCandidates).set({ category: null }).where(eq(designCandidates.id, c.id));
     expect((await cands.listCandidates(id))[0].category).toBe("component");
+  });
+});
+
+describe("a component's own preview image (previewImageUrl)", () => {
+  const IMG = "https://cdn.21st.dev/u/ink-orbit-pricing/default/preview.1.webp";
+  const png = () =>
+    sharp({ create: { width: 2000, height: 1500, channels: 3, background: "#123456" } })
+      .png()
+      .toBuffer();
+
+  it("stores the image instead of capturing the page, scaled to WebP; other pages are still captured", async () => {
+    const id = await session();
+    const fetched: string[] = [];
+    const body = await png();
+    cands.candidateDeps.fetchImage = async (url: string) => {
+      fetched.push(url);
+      return { body, contentType: "image/png" };
+    };
+    captured.length = 0;
+    const added = await cands.addCandidates(
+      id,
+      [
+        { url: "https://93.184.215.14/components/pricing", previewImageUrl: IMG, why: "the component" },
+        { url: "https://93.184.215.14/page", why: "a page" },
+      ],
+      { wait: true },
+    );
+    expect(fetched).toEqual([IMG]);
+    expect(captured).toEqual(["https://93.184.215.14/page"]);
+    const [img, page] = (await design.getDesignSession(id))!.candidates;
+    expect(img).toMatchObject({ previewStatus: "ready", previewKind: "image", previewImageUrl: IMG });
+    expect(page).toMatchObject({ previewStatus: "ready", previewKind: "capture", previewImageUrl: null });
+    const meta = await sharp((await cands.candidatePreview(added[0].id))!).metadata();
+    expect(meta).toMatchObject({ format: "webp", width: 1440, height: 1080 });
+  });
+
+  it("falls back to capturing the page when the image can't be used", async () => {
+    const id = await session();
+    const cases: Record<string, () => Promise<{ body: Buffer; contentType: string }>> = {
+      html: async () => ({ body: Buffer.from("<html></html>"), contentType: "text/html" }),
+      broken: async () => ({ body: Buffer.from("not really a png"), contentType: "image/png" }),
+      down: async () => {
+        throw new Error("HTTP 404");
+      },
+    };
+    let which = "";
+    cands.candidateDeps.fetchImage = async () => cases[which]();
+    for (const k of Object.keys(cases)) {
+      which = k;
+      captured.length = 0;
+      await cands.addCandidates(id, [{ url: `https://93.184.215.14/c/${k}`, previewImageUrl: IMG, why: k }], {
+        wait: true,
+      });
+      expect(captured).toEqual([`https://93.184.215.14/c/${k}`]);
+    }
+    const all = (await design.getDesignSession(id))!.candidates;
+    for (const c of all)
+      expect(c).toMatchObject({ previewStatus: "ready", previewKind: "capture", previewImageUrl: IMG });
+  });
+
+  it("accepts only https images on an allowed host, and only for external pages", async () => {
+    const id = await session();
+    const lib = await resources.createResource({ type: "reference", title: "Lib", sourceUrl: "https://linear.app/" });
+    const bad: [Record<string, string>, RegExp][] = [
+      [
+        { url: "https://93.184.215.14/a", previewImageUrl: "https://evil.example/x.png" },
+        /only come from cdn\.21st\.dev/,
+      ],
+      [{ url: "https://93.184.215.14/a", previewImageUrl: "http://cdn.21st.dev/x.png" }, /must be an https image/],
+      [{ url: "https://93.184.215.14/a", previewImageUrl: "not a url" }, /isn't a valid URL/],
+      [{ resourceId: lib.id, previewImageUrl: IMG }, /for an external page/],
+    ];
+    for (const [item, msg] of bad)
+      await expect(cands.addCandidates(id, [{ ...item, why: "x" }], { wait: true })).rejects.toThrow(msg);
+    expect(await cands.listCandidates(id)).toEqual([]);
+    expect(cands.PREVIEW_IMAGE_HOSTS).toEqual(["cdn.21st.dev"]);
   });
 });

@@ -13,6 +13,7 @@ const input = z.object({
         url: z.string().url().max(2000).optional(),
         title: z.string().max(CANDIDATE_LIMITS.title).optional(),
         source: z.string().max(120).optional(),
+        previewImageUrl: z.string().url().max(2000).optional(),
         category: z.enum(DESIGN_REFERENCE_CATEGORIES).optional(),
         why: text.min(1),
         take: text.optional(),
@@ -32,7 +33,8 @@ export const GET = route(async (_req: Request, { params }: IdParams) => {
 
 /**
  * Proposes references: library ones by id, external pages by URL. PIVOT captures a preview of each external page in the
- * background (`previewStatus: "pending"` until then). External pages are not added to the library.
+ * background (`previewStatus: "pending"` until then), or fetches its `previewImageUrl` (a component-only image on an
+ * allowed host, e.g. cdn.21st.dev) instead. External pages are not added to the library.
  */
 export const POST = route(async (req: Request, { params }: IdParams) => {
   const { id } = await params;

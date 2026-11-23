@@ -92,7 +92,12 @@ function PickedChip({ c }: { c: DesignCandidateDTO }) {
     <>
       {c.previewUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- PIVOT's own image routes
-        <img src={c.previewUrl} alt="" loading="lazy" className="h-10 w-16 rounded-lg object-cover object-top" />
+        <img
+          src={c.previewUrl}
+          alt=""
+          loading="lazy"
+          className={cn("h-10 w-16 rounded-lg object-cover", c.previewKind !== "image" && "object-top")}
+        />
       ) : (
         <span aria-hidden className="h-10 w-16 rounded-lg bg-surface-raised" />
       )}
@@ -184,14 +189,19 @@ function Preview({ c }: { c: DesignCandidateDTO }) {
         src={c.previewUrl}
         alt={`Preview of ${c.title}`}
         loading="lazy"
-        className="aspect-[16/10] w-full bg-surface-raised object-cover object-top"
+        className={cn(
+          "aspect-[16/10] w-full bg-surface-raised",
+          // a component's own preview image is shown whole; a page capture fills the card from the top
+          c.previewKind === "image" ? "object-contain" : "object-cover object-top",
+        )}
       />
     );
   return (
     <div className="flex aspect-[16/10] w-full items-center justify-center bg-surface-raised px-4 text-center text-xs text-ink-muted">
       {c.previewStatus === "pending" ? (
         <span className="inline-flex items-center gap-2">
-          <Loader2 className="size-3.5 animate-spin" aria-hidden /> Capturing a preview…
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />{" "}
+          {c.previewImageUrl ? "Loading the preview…" : "Capturing a preview…"}
         </span>
       ) : c.previewStatus === "failed" ? (
         `No preview: ${c.previewError}`

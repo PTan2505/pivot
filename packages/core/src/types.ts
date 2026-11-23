@@ -967,6 +967,13 @@ export interface DesignCandidateDTO {
   avoid: string;
   /** Where the page shows a preview: the library reference's cover, or PIVOT's capture of the external page. */
   previewUrl: string | null;
+  /**
+   * What an external candidate's stored preview is: "image" (its own component-only preview image, previewImageUrl) or
+   * "capture" (PIVOT's capture of the page). Null for library references and while there is no preview yet.
+   */
+  previewKind: "image" | "capture" | null;
+  /** The component-only preview image the agent passed for an external candidate, or null. */
+  previewImageUrl: string | null;
   previewError: string | null;
   /** "pending" while PIVOT is still capturing an external page. */
   previewStatus: "ready" | "pending" | "failed" | "none";

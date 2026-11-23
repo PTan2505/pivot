@@ -415,6 +415,13 @@ export const designCandidates = pgTable(
     /** Blob key of PIVOT's own capture of an external page, and the store it is in. */
     previewKey: text("preview_key"),
     previewStorage: text("preview_storage"),
+    /**
+     * A component-only preview image the agent passed (e.g. a 21st.dev component's preview, on an allowed image host),
+     * fetched instead of capturing the page. Null when the page is captured.
+     */
+    previewImageUrl: text("preview_image_url"),
+    /** What the stored preview is: "image" (the previewImageUrl) or "capture" (PIVOT's capture of the page). */
+    previewKind: text("preview_kind"),
     /** Why there is no preview (blocked, timed out…), shown instead of one. */
     previewError: text("preview_error"),
     selected: boolean("selected").notNull().default(false),

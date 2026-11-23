@@ -478,6 +478,8 @@ describe("gate 1: propose_references and select_references", () => {
     take: "",
     avoid: "",
     previewUrl: null,
+    previewKind: null as "image" | "capture" | null,
+    previewImageUrl: null as string | null,
     previewError: null,
     previewStatus: "pending" as const,
     selected: false,
@@ -522,6 +524,38 @@ describe("gate 1: propose_references and select_references", () => {
       ]),
     ).toBe(true);
     expect(out).toMatch(/two groups, UI layouts then components/);
+  });
+
+  it("passes a component's preview image through and says which kind of preview each candidate got", async () => {
+    const { source, calls } = writerSource();
+    const img = "https://cdn.21st.dev/u/ink-orbit-pricing/default/preview.1.webp";
+    const all = [
+      cand(1, { category: "component", previewStatus: "ready", previewKind: "image", previewImageUrl: img }),
+      cand(2, { category: "component", previewStatus: "ready", previewKind: "capture", previewImageUrl: img }),
+      cand(3, { previewStatus: "ready", previewKind: "capture" }),
+    ];
+    const s = {
+      ...source,
+      proposeReferences: async (...args: unknown[]) => {
+        calls.push({ method: "proposeReferences", args });
+        return { candidates: all };
+      },
+      listCandidates: async () => all,
+    };
+    const r = await tool("propose_references").run(s, {
+      sessionId: ID,
+      candidates: [
+        { url: "https://21st.dev/@a/components/x", previewImageUrl: img, why: "a" },
+        { url: "https://21st.dev/@a/components/y", previewImageUrl: img, why: "b" },
+        { url: "https://example.com/3", why: "c" },
+      ],
+    });
+    const sent = (calls[0].args[1] as { previewImageUrl?: string }[]).map((c) => c.previewImageUrl);
+    expect(sent).toEqual([img, img, undefined]);
+    const out = r.content[0].type === "text" ? r.content[0].text : "";
+    expect(out).toContain("Preview: the component's own preview image from cdn.21st.dev");
+    expect(out).toContain("Preview: captured by PIVOT (the previewImageUrl couldn't be used)");
+    expect(out.match(/Preview: captured by PIVOT$/gm)).toHaveLength(1);
   });
 
   it("waits for PIVOT's previews, returns them as images, and points the user at the session page", async () => {
