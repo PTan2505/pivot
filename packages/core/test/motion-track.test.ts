@@ -21,10 +21,13 @@ const FIXTURES = path.join(__dirname, "fixtures/motion");
 const GSAP = path.resolve(__dirname, "../../../apps/web/node_modules/gsap/dist");
 let server: http.Server;
 let baseUrl: string;
+/** Every request the fixture server answered, as "METHOD /path". */
+const requests: string[] = [];
 
 beforeAll(async () => {
   server = http.createServer(async (req, res) => {
     const name = new URL(req.url!, "http://x").pathname.slice(1);
+    requests.push(`${req.method} /${name}`);
     const file = name.endsWith(".js") ? path.join(GSAP, name) : path.join(FIXTURES, `${name}.html`);
     try {
       const body = await fs.readFile(file);
@@ -234,6 +237,68 @@ describe.skipIf(!chromium.installed)("motion track of a recording", () => {
       );
     },
   );
+
+  it("tries hover and click on a sample, safely", { timeout: 180_000 }, async () => {
+    requests.length = 0;
+    const track = await record("pointer");
+    const table = motionTable(track, 24, 20).join("\n");
+    const pointer = track.items.filter((i) => i.trigger.kind === "hover" || i.trigger.kind === "click");
+    // one nav link of the three: the underline grows on hover, declared by the page
+    const underline = pointer.filter((i) => i.target.selector.includes("span.line"));
+    expect(underline, table).toEqual([
+      expect.objectContaining({
+        source: "exact",
+        via: "CSS transition",
+        durationMs: 200,
+        easing: "ease-out",
+        trigger: expect.objectContaining({
+          kind: "hover",
+          on: expect.objectContaining({ selector: expect.stringContaining("nav") }),
+        }),
+      }),
+    ]);
+    expect(find(track, "a.card")).toEqual([
+      expect.objectContaining({
+        trigger: { kind: "hover" },
+        source: "exact",
+        durationMs: 250,
+        changes: [{ property: "transform", values: ["none", "translateY(-4px)"] }],
+      }),
+    ]);
+    // run by a script on mouseenter: Chrome hands the event over on one of its real frames, so the start can fall
+    // between two measured frames and the duration is within about two frames
+    const grow = find(track, "button#grow").find((i) => i.source === "measured");
+    expect(grow, table).toMatchObject({
+      trigger: { kind: "hover" },
+      changes: [{ property: "scale", values: ["1", "1.1"] }],
+    });
+    expect(Math.abs(grow!.durationMs! - 300)).toBeLessThanOrEqual(2 * FRAME_MS);
+    expect(["easeOutCubic / power2.out", "power1.out", "expo.out", "cubic-bezier(.23,1,.32,1)"]).toContain(
+      grow!.easing,
+    );
+    expect(find(track, "div#p2")).toEqual([
+      expect.objectContaining({
+        trigger: expect.objectContaining({ kind: "click" }),
+        durationMs: 300,
+        easing: "ease-out",
+      }),
+    ]);
+    expect(find(track, "div#more-body")).toEqual([
+      expect.objectContaining({
+        trigger: expect.objectContaining({ kind: "click" }),
+        durationMs: 400,
+        easing: "ease-in-out",
+      }),
+    ]);
+    // never pressed: a purchase, a button in a form, a link dressed as a tab; and no write ever left the page
+    expect(requests.filter((r) => /bought|inform|away|one|two|three|card/.test(r))).toEqual([]);
+    expect(requests.filter((r) => !r.startsWith("GET "))).toEqual([]);
+    expect(track.limits.join(" ")).toMatch(
+      /Hover and click were tried on a sample, one element of each kind: \d+ hovered, 2 clicked/,
+    );
+    expect(table).toContain("Hover and click (a sample: one element of each kind was tried):");
+    expect(lastStrips.some((s) => s.key.startsWith("hover|"))).toBe(true);
+  });
 
   it("reads GSAP tweens and ScrollTriggers from the page", { timeout: 180_000 }, async () => {
     const track = await record("gsap");

@@ -22,6 +22,8 @@ import {
 
 /** The whole strip fits in this box (about 410 tokens when Claude looks at it). */
 const STRIP_MAX = { width: 960, height: 320 };
+/** Filmstrips of hover and click items, on top of the scroll ones. */
+const MAX_POINTER_STRIPS = 4;
 const GAP = 6;
 const LABEL = 16;
 /** Mean difference (0–255, greyscale) between two frames of a canvas or video above which its pixels moved. */
@@ -184,7 +186,12 @@ async function compose(plan: FilmstripPlan, frames: Map<number, Buffer>): Promis
  * pixels moved), then cuts the filmstrips, `seen` items first since pictures are all they have. A failure leaves the
  * track as the analysis built it, without pictures.
  */
-export async function finishMotion(ffmpeg: string, video: string, analysis: AnalysedMotion) {
+export async function finishMotion(
+  ffmpeg: string,
+  video: string,
+  analysis: AnalysedMotion,
+  pointerShots: Map<number, Buffer> = new Map(),
+) {
   const dir = await fs.mkdtemp(path.join(path.dirname(video), "strips-"));
   try {
     const seenFrames = await readFrames(
@@ -209,6 +216,11 @@ export async function finishMotion(ffmpeg: string, video: string, analysis: Anal
     const strips = (await Promise.all(plans.map((p) => compose(p, frames).catch(() => null)))).filter(
       (s): s is Filmstrip => !!s,
     );
+    // hover and click: from the screenshots taken while trying them
+    for (const p of analysis.pointerStrips.slice(0, MAX_POINTER_STRIPS)) {
+      const strip = await compose(p, pointerShots).catch(() => null);
+      if (strip) strips.push(strip);
+    }
     return {
       track: markFilmstrips(
         track,

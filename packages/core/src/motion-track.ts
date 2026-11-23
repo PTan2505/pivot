@@ -126,8 +126,25 @@ export interface MotionRecording {
   lenis?: { lerp?: number; duration?: number };
   /** The most changed elements read per frame. */
   cap: number;
+  /**
+   * Hover and click, tried after the scroll on a sample of elements: each one's frames from the moment the pointer
+   * arrived (or pressed), the frames a picture was taken at, and the element's box then.
+   */
+  interactions?: MotionInteraction[];
+  /** How many elements were tried, and why trying stopped early, if it did. */
+  interactionsTried?: { hover: number; click: number; stopped?: string };
   /** Why the recording stopped before the bottom, if it did. */
   stopped?: "budget" | "stuck";
+}
+
+export interface MotionInteraction {
+  kind: "hover" | "click";
+  /** The element pointed at or pressed. */
+  el: number;
+  frames: ProbeFrame[];
+  /** Frames with a screenshot, for its filmstrip. */
+  shots: number[];
+  box: { x: number; y: number; width: number; height: number };
 }
 
 // ---------------------------------------------------------------- what is stored and served
@@ -147,7 +164,9 @@ export interface MotionItem {
   /** CSS transition, CSS animation, Web Animation, GSAP tween, ScrollTrigger, measured, canvas or video. */
   via: string;
   trigger: {
-    kind: "load" | "scroll" | "always";
+    kind: "load" | "scroll" | "always" | "hover" | "click";
+    /** For hover and click: the element pointed at or pressed, when it isn't the one that moves. */
+    on?: { name: string; selector: string };
     /** The scroll position where it started. */
     at?: number;
     /** A scroll range for scroll-linked motion and pins. */
@@ -193,6 +212,8 @@ export interface MotionTrack {
   items: MotionItem[];
   /** All items found; `items` keeps at most `MAX_TRACK_ITEMS`. */
   itemsTotal: number;
+  /** Of those, how many are hover and click items (they come after the others). */
+  interactionItems?: number;
   limits: string[];
   stats: { changedPerFrameMedian: number; changedPerFrameMax: number; framesOverCap: number };
 }
@@ -311,7 +332,10 @@ function segmentsOf(tr: Track, timeOf: Map<number, number>, atOf: Map<number, nu
     }
     return v;
   };
-  const at = (f: number) => atOf.get(f) ?? 0;
+  // a recording that starts mid-motion (a hover's first frame already moved) has no frame before it: that frame is
+  // one frame earlier than the first, at the same scroll position
+  const at = (f: number) => atOf.get(f) ?? atOf.get(f + 1) ?? 0;
+  const time = (f: number) => timeOf.get(f) ?? (timeOf.has(f + 1) ? timeOf.get(f + 1)! - FRAME_MS : 0);
   const out: Segment[] = [];
 
   // a pin: the document position moves one for one with the scroll, so it stays put on screen
@@ -364,7 +388,7 @@ function segmentsOf(tr: Track, timeOf: Map<number, number>, atOf: Map<number, nu
         vTo,
         fStart: fPrev,
         fEnd: fLast,
-        tPrev: timeOf.get(fPrev) ?? 0,
+        tPrev: time(fPrev),
         tLast: timeOf.get(fLast) ?? 0,
         atStart: at(fPrev),
         atEnd: at(fLast),
@@ -416,7 +440,7 @@ function segmentsOf(tr: Track, timeOf: Map<number, number>, atOf: Map<number, nu
           fLast + 1,
           fLast + 2,
         ]) {
-          const t = timeOf.get(f);
+          const t = f === fPrev ? seg.tPrev : timeOf.get(f);
           const v = valueAt(f, ch.key);
           if (t !== undefined && v !== undefined) points.push([t, (v - vFrom) / range]);
         }
@@ -827,16 +851,25 @@ export function timingText(it: MotionItem) {
   return parts.join(", ");
 }
 
+/** Hover and click items, which come after the scroll items and are listed apart. */
+export const isInteraction = (it: MotionItem) => it.trigger.kind === "hover" || it.trigger.kind === "click";
+/** At most this many hover and click lines in a reply to Claude. */
+export const MOTION_TABLE_INTERACTIONS = 8;
+
 const triggerText = (tr: MotionItem["trigger"]) =>
-  tr.kind === "load"
-    ? "load"
-    : tr.kind === "always"
-      ? "always"
-      : tr.spread
-        ? `scroll@${tr.spread[0]}…${tr.spread[1]}`
-        : tr.from !== undefined
-          ? `scroll ${tr.from}–${tr.to}`
-          : `scroll@${tr.at ?? 0}`;
+  tr.kind === "hover" || tr.kind === "click"
+    ? tr.on
+      ? `${tr.kind} on ${tr.on.name} (${tr.on.selector}) →`
+      : tr.kind
+    : tr.kind === "load"
+      ? "load"
+      : tr.kind === "always"
+        ? "always"
+        : tr.spread
+          ? `scroll@${tr.spread[0]}…${tr.spread[1]}`
+          : tr.from !== undefined
+            ? `scroll ${tr.from}–${tr.to}`
+            : `scroll@${tr.at ?? 0}`;
 
 /** One line per item: `M3 scroll@2700 3× img "Gallery" (div.card) | opacity 0→1 | 600ms ease-out | exact (CSS transition)`. */
 export function motionLine(it: MotionItem) {
@@ -856,11 +889,29 @@ export function motionLine(it: MotionItem) {
     .join(" | ");
 }
 
-/** The table Claude reads: at most `cap` lines, the most visible first, and a count of the rest. */
-export function motionTable(track: MotionTrack, cap = MOTION_TABLE_ITEMS) {
-  const lines = track.items.slice(0, cap).map(motionLine);
-  const more = track.itemsTotal - Math.min(cap, track.items.length);
-  if (more > 0) lines.push(`(+${more} more item${more === 1 ? "" : "s"})`);
+/**
+ * The table Claude reads: at most `cap` scroll lines, the most visible first, then at most `interactionCap` hover
+ * and click lines under their own heading, each part with a count of the rest.
+ */
+export function motionTable(
+  track: Pick<MotionTrack, "items" | "itemsTotal" | "interactionItems">,
+  cap = MOTION_TABLE_ITEMS,
+  interactionCap = MOTION_TABLE_INTERACTIONS,
+) {
+  const more = (n: number) => (n > 0 ? [`(+${n} more item${n === 1 ? "" : "s"})`] : []);
+  const scroll = track.items.filter((it) => !isInteraction(it));
+  const pointer = track.items.filter(isInteraction);
+  const pointerTotal = track.interactionItems ?? pointer.length;
+  const lines = [
+    ...scroll.slice(0, cap).map(motionLine),
+    ...more(track.itemsTotal - pointerTotal - Math.min(cap, scroll.length)),
+  ];
+  if (pointer.length)
+    lines.push(
+      "Hover and click (a sample: one element of each kind was tried):",
+      ...pointer.slice(0, interactionCap).map(motionLine),
+      ...more(pointerTotal - Math.min(interactionCap, pointer.length)),
+    );
   return lines;
 }
 
@@ -896,6 +947,8 @@ export interface AnalysedMotion {
   track: MotionTrack;
   strips: FilmstripPlan[];
   seen: SeenPlan[];
+  /** Filmstrips of hover and click items, from the screenshots taken while trying them (not from the video). */
+  pointerStrips: FilmstripPlan[];
 }
 
 export const MAX_FILMSTRIPS = 6;
@@ -1074,6 +1127,51 @@ export function analyseMotion(rec: MotionRecording): AnalysedMotion {
   }
   seen.sort((a, b) => b.box.width * b.box.height - a.box.width * a.box.height);
 
+  // hover and click: each tried element's frames are a small recording of their own, analysed the same way
+  const pointerItems: MotionItem[] = [];
+  const pointerStrips: FilmstripPlan[] = [];
+  for (const ix of rec.interactions ?? []) {
+    const frameSet = new Set(ix.frames.map((f) => f.f));
+    const sub = analyseMotion({
+      ...rec,
+      frames: ix.frames,
+      interactions: undefined,
+      tweens: rec.tweens.filter((t) => frameSet.has(t.f)),
+      triggers: [],
+    });
+    const on = rec.elements[ix.el];
+    const found = sub.track.items.filter(
+      (it) => it.source !== "seen" && !it.scrubbed && it.pinnedAt === undefined && it.fixedAt === undefined,
+    );
+    for (const it of found)
+      pointerItems.push({
+        ...it,
+        key: `${ix.kind}|${family(on?.selector ?? "?")}|${it.key}`,
+        trigger: {
+          kind: ix.kind,
+          ...(on && on.selector !== it.target.selector ? { on: { name: on.name, selector: on.selector } } : {}),
+        },
+      });
+    if (found.length && ix.shots.length >= 2) {
+      const own = sub.strips.find((p) => found.some((it) => it.key === p.key))?.box;
+      const pad = {
+        x: ix.box.x - 24,
+        y: ix.box.y - 24,
+        x1: ix.box.x + ix.box.width + 24,
+        y1: ix.box.y + ix.box.height + 24,
+      };
+      const box = clampBox(
+        Math.min(pad.x, own?.x ?? Infinity),
+        Math.min(pad.y, own?.y ?? Infinity),
+        Math.max(pad.x1, own ? own.x + own.width : -Infinity),
+        Math.max(pad.y1, own ? own.y + own.height : -Infinity),
+      );
+      pointerStrips.push({ key: `${ix.kind}|${family(on?.selector ?? "?")}|${found[0].key}`, frames: ix.shots, box });
+    }
+  }
+  pointerItems.forEach((it, i) => (it.id = `M${items.length + i + 1}`));
+  items.push(...pointerItems);
+
   const changedPerFrame = rec.frames.map((f) => f.changed);
   const mediaSeen = rec.frames.reduce((m, f) => Math.max(m, (f.media?.[0] ?? 0) + (f.media?.[1] ?? 0)), 0);
   const limits = [
@@ -1085,6 +1183,11 @@ export function analyseMotion(rec: MotionRecording): AnalysedMotion {
         ]
       : []),
     ...(rec.stopped ? [`The recording stopped before the bottom of the page (${rec.stopped}).`] : []),
+    ...(rec.interactionsTried
+      ? [
+          `Hover and click were tried on a sample, one element of each kind: ${rec.interactionsTried.hover} hovered, ${rec.interactionsTried.click} clicked (tabs, disclosures and menus only; never links, forms, or anything that buys, signs in, sends or consents). Hover and click motion run by a script can start between two measured frames: its duration is within about two frames.${rec.interactionsTried.stopped ? ` Trying stopped early: ${rec.interactionsTried.stopped}.` : ""}`,
+        ]
+      : []),
     ...(changedPerFrame.some((n) => n > rec.cap)
       ? [`Some frames had more than ${rec.cap} moving elements; the smallest weren't measured.`]
       : []),
@@ -1099,7 +1202,8 @@ export function analyseMotion(rec: MotionRecording): AnalysedMotion {
     libraries: rec.libraries,
     ...(rec.lenis ? { lenis: rec.lenis } : {}),
     items,
-    itemsTotal: merged.length,
+    itemsTotal: merged.length + pointerItems.length,
+    ...(rec.interactions ? { interactionItems: pointerItems.length } : {}),
     limits,
     stats: {
       changedPerFrameMedian: median(changedPerFrame),
@@ -1107,7 +1211,7 @@ export function analyseMotion(rec: MotionRecording): AnalysedMotion {
       framesOverCap: changedPerFrame.filter((n) => n > rec.cap).length,
     },
   };
-  return { track, strips, seen: seen.slice(0, MAX_SEEN) };
+  return { track, strips, seen: seen.slice(0, MAX_SEEN), pointerStrips };
 }
 
 /**
@@ -1140,10 +1244,12 @@ export function withSeenItems(
     strips.push({ key, frames: spread(a, c, STRIP_FRAMES), box: plan.box });
   }
   if (!added.length) return { track, strips };
-  const items = [...track.items, ...added]
-    .sort((a, b) => b.area - a.area)
-    .slice(0, MAX_TRACK_ITEMS)
-    .map((it, i) => ({ ...it, id: `M${i + 1}` }));
+  const items = [
+    ...[...track.items.filter((it) => !isInteraction(it)), ...added]
+      .sort((a, b) => b.area - a.area)
+      .slice(0, MAX_TRACK_ITEMS),
+    ...track.items.filter(isInteraction),
+  ].map((it, i) => ({ ...it, id: `M${i + 1}` }));
   return { track: { ...track, items, itemsTotal: track.itemsTotal + added.length }, strips };
 }
 

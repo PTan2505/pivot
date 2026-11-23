@@ -1,22 +1,33 @@
 "use client";
 
 import type { AssetDTO } from "@pivot/core/types";
-import { MOTION_TABLE_ITEMS, timingText, type MotionItem, type MotionTrack } from "@pivot/core/motion-track";
+import {
+  isInteraction,
+  MOTION_TABLE_INTERACTIONS,
+  MOTION_TABLE_ITEMS,
+  timingText,
+  type MotionItem,
+  type MotionTrack,
+} from "@pivot/core/motion-track";
 import { useQuery } from "@tanstack/react-query";
 import { assetUrl } from "@/lib/api";
 
 const SOURCE: Record<MotionItem["source"], string> = { exact: "exact", measured: "measured", seen: "seen" };
 
 const triggerText = (t: MotionItem["trigger"]) =>
-  t.kind === "load"
-    ? "load"
-    : t.kind === "always"
-      ? "always"
-      : t.spread
-        ? `scroll@${t.spread[0]}…${t.spread[1]}`
-        : t.from !== undefined
-          ? `scroll ${t.from}–${t.to}`
-          : `scroll@${t.at ?? 0}`;
+  t.kind === "hover" || t.kind === "click"
+    ? t.on
+      ? `${t.kind} on ${t.on.name} →`
+      : t.kind
+    : t.kind === "load"
+      ? "load"
+      : t.kind === "always"
+        ? "always"
+        : t.spread
+          ? `scroll@${t.spread[0]}…${t.spread[1]}`
+          : t.from !== undefined
+            ? `scroll ${t.from}–${t.to}`
+            : `scroll@${t.at ?? 0}`;
 
 /**
  * The motion table of a recording ("Record motion"), read-only: the same items Claude reads through MCP, in the same
@@ -40,6 +51,8 @@ export function MotionTable({ assets }: { assets: AssetDTO[] }) {
       .filter((a) => a.role === "motion-strip" && !a.missing && typeof a.meta?.item === "string")
       .map((a) => [a.meta!.item as string, a]),
   );
+  const scroll = track.items.filter((it) => !isInteraction(it));
+  const pointer = track.items.filter(isInteraction);
   return (
     <details className="text-xs text-ink-muted">
       <summary className="w-fit cursor-pointer rounded-full px-2 py-1 hover:text-ink">
@@ -52,8 +65,27 @@ export function MotionTable({ assets }: { assets: AssetDTO[] }) {
         <span className="text-ink">seen</span> only in pixels.
       </p>
       <ol className="mt-2 space-y-0.5">
-        {track.items.map((it, i) => (
-          <MotionRow key={it.key} item={it} strip={strips.get(it.id)} divider={i === MOTION_TABLE_ITEMS} />
+        {scroll.map((it, i) => (
+          <MotionRow
+            key={it.key}
+            item={it}
+            strip={strips.get(it.id)}
+            note={i === MOTION_TABLE_ITEMS ? "Claude reads the items above; the ones below are only counted." : null}
+          />
+        ))}
+        {pointer.map((it, i) => (
+          <MotionRow
+            key={it.key}
+            item={it}
+            strip={strips.get(it.id)}
+            note={
+              i === 0
+                ? "Hover and click: a sample, one element of each kind was tried."
+                : i === MOTION_TABLE_INTERACTIONS
+                  ? `Claude reads the first ${MOTION_TABLE_INTERACTIONS} of these; the rest are only counted.`
+                  : null
+            }
+          />
         ))}
       </ol>
       {track.items.length < track.itemsTotal && (
@@ -70,18 +102,14 @@ export function MotionTable({ assets }: { assets: AssetDTO[] }) {
   );
 }
 
-function MotionRow({ item: it, strip, divider }: { item: MotionItem; strip?: AssetDTO; divider: boolean }) {
+function MotionRow({ item: it, strip, note }: { item: MotionItem; strip?: AssetDTO; note: string | null }) {
   const changes = it.changes
     .map((c) => `${c.property} ${c.values.length === 1 ? `→${c.values[0]}` : c.values.join("→")}`)
     .join("; ");
   const times = Array.isArray(strip?.meta?.times) ? (strip!.meta!.times as number[]) : [];
   return (
     <>
-      {divider && (
-        <li className="px-2 pt-2 pb-1 text-ink-subtle">
-          Claude reads the items above; the ones below are only counted.
-        </li>
-      )}
+      {note && <li className="px-2 pt-2 pb-1 text-ink-subtle">{note}</li>}
       <li className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-[10px] bg-surface px-3 py-2">
         <span className="font-mono text-ink-subtle tabular-nums">{it.id}</span>
         <span className="font-mono text-ink-muted tabular-nums">{triggerText(it.trigger)}</span>

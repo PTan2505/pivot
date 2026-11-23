@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  isInteraction,
+  MOTION_TABLE_INTERACTIONS,
   MOTION_TABLE_ITEMS,
   motionLine as motionItemLine,
   motionTable,
@@ -322,7 +324,9 @@ export function motionEvidenceOf(r: ResourceDetailDTO, limit = MOTION_LIST_MAX, 
     states,
     statesTotal: allStates.length,
     limitations: [
-      "Recorded while PIVOT scrolled the page top to bottom with no pointer: hover, click, focus and other triggers weren't exercised.",
+      measured
+        ? "Recorded while PIVOT scrolled the page top to bottom with no pointer; hover and click, where PIVOT tried them on a sample, are in the motion table."
+        : "Recorded while PIVOT scrolled the page top to bottom with no pointer: hover, click, focus and other triggers weren't exercised.",
       measured
         ? "Timing and easing are in the motion table (`motion`); keyframes are stills at the listed scroll positions."
         : "Timing and easing weren't measured: keyframes are stills at the listed scroll positions, and what happens between them is inferred.",
@@ -344,6 +348,8 @@ export interface MotionDetail {
   libraries: string[];
   items: MotionItem[];
   itemsTotal: number;
+  /** Of `itemsTotal`, the hover and click items (listed after the scroll items). */
+  interactionItems: number;
   limits: string[];
 }
 
@@ -362,18 +368,27 @@ export async function motionDetailOf(source: PivotSource, r: ResourceDetailDTO):
     viewport: track.viewport,
     method: track.method,
     libraries: track.libraries,
-    items: track.items.slice(0, MOTION_TABLE_ITEMS),
+    // the most visible scroll items, then a sample of hover and click
+    items: [
+      ...track.items.filter((it) => !isInteraction(it)).slice(0, MOTION_TABLE_ITEMS),
+      ...track.items.filter(isInteraction).slice(0, MOTION_TABLE_INTERACTIONS),
+    ],
     itemsTotal: track.itemsTotal,
+    interactionItems: track.interactionItems ?? track.items.filter(isInteraction).length,
     limits: track.limits,
   };
 }
 
 function motionTableText(m: MotionDetail) {
-  const shown = m.items.length < m.itemsTotal ? `, the ${m.items.length} most visible shown` : "";
+  const pointer = m.items.filter(isInteraction).length;
+  const shown =
+    m.items.length < m.itemsTotal
+      ? `, the ${m.items.length - pointer} most visible shown${pointer ? ` plus ${pointer} from hover and click` : ""}`
+      : "";
   const libraries = m.libraries.length ? `; libraries: ${m.libraries.join(", ")}` : "";
   return [
     `Motion table (measured by PIVOT while scrolling, ${m.capturedAt.slice(0, 10)}, ${m.viewport.width}×${m.viewport.height}${libraries}; ${m.itemsTotal} item${m.itemsTotal === 1 ? "" : "s"}${shown}). exact = declared by the page; measured = fitted from the recording's frames. Cite items by id (e.g. "M3").`,
-    ...motionTable({ items: m.items, itemsTotal: m.itemsTotal } as MotionTrack, MOTION_TABLE_ITEMS),
+    ...motionTable(m),
     ...(m.items.some((it) => it.filmstrip)
       ? ["Items marked filmstrip have pictures: get_reference_images which=motion item=<id> (about 400 tokens each)."]
       : []),
