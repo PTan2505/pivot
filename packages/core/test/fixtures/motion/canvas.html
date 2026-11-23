@@ -1,0 +1,47 @@
+<!doctype html>
+<!-- Canvases for motion-track.test.ts: one keeps drawing (a seen item), one is drawn once and stays still (none). -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Motion fixture: canvas</title>
+    <style>
+      body {
+        margin: 0;
+        height: 2600px;
+        position: relative;
+        background: #111;
+      }
+      canvas {
+        position: absolute;
+        left: 100px;
+      }
+      #spin {
+        top: 1100px;
+      }
+      #still {
+        top: 1100px;
+        left: 800px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="spin" width="500" height="300"></canvas>
+    <canvas id="still" width="500" height="300"></canvas>
+    <script>
+      const still = document.getElementById("still").getContext("2d");
+      still.fillStyle = "#36a";
+      still.fillRect(0, 0, 500, 300);
+      const spin = document.getElementById("spin").getContext("2d");
+      const draw = (now) => {
+        spin.fillStyle = "#222";
+        spin.fillRect(0, 0, 500, 300);
+        spin.fillStyle = "#e85";
+        spin.beginPath();
+        spin.arc(250 + 180 * Math.cos(now / 400), 150 + 100 * Math.sin(now / 400), 30, 0, 7);
+        spin.fill();
+        requestAnimationFrame(draw);
+      };
+      requestAnimationFrame(draw);
+    </script>
+  </body>
+</html>

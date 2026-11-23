@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { appOutdated, missingAppFeatures, REQUIRED_APP_FEATURES, UPDATE_APP } from "@pivot/mcp-tools/app-compat";
+import type { MotionTrack } from "@pivot/core/motion-track";
 import type { ImagePart, PageSlices } from "@pivot/mcp-tools/images";
 import { ToolError, type PivotSource, type PivotWriter } from "@pivot/mcp-tools/source";
 import type {
@@ -332,6 +333,13 @@ export class HttpSource implements PivotSource, PivotWriter {
       width: Number(res.headers.get("x-image-width")) || 0,
       height: Number(res.headers.get("x-image-height")) || 0,
     };
+  }
+
+  async motionTrack(assetId: string): Promise<MotionTrack | null> {
+    const res = await this.call(`/api/assets/${encodeURIComponent(assetId)}`);
+    if (!res) return null;
+    const track = (await res.json().catch(() => null)) as MotionTrack | null;
+    return track && track.version === 1 && Array.isArray(track.items) ? track : null;
   }
 
   async agentSlices(assetId: string, from: number, count: number): Promise<PageSlices> {

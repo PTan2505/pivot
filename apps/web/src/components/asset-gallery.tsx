@@ -35,6 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api, assetUrl, uploadToResource, useInvalidate, useUpdateResource } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { MotionTable } from "@/components/motion-table";
 import { useQuery } from "@tanstack/react-query";
 
 const ROLE_LABEL: Record<AssetDTO["role"], string> = {
@@ -48,6 +49,8 @@ const ROLE_LABEL: Record<AssetDTO["role"], string> = {
   "screenshot-full-responsive": "Full page",
   "motion-video": "Motion",
   "motion-keyframe": "Keyframe",
+  "motion-track": "Motion track",
+  "motion-strip": "Motion filmstrip",
   state: "State",
   "component-preview": "Component preview",
   attachment: "File",
@@ -58,6 +61,7 @@ function labelOf(asset: AssetDTO) {
   const m = asset.meta ?? {};
   if (asset.role === "state" && typeof m.state === "string") return `State · ${m.state}`;
   if (asset.role === "motion-keyframe" && typeof m.keyframe === "number") return `Keyframe ${m.keyframe}`;
+  if (asset.role === "motion-strip" && typeof m.item === "string") return `Filmstrip ${m.item}`;
   const parts = [ROLE_LABEL[asset.role]];
   if (typeof m.viewportName === "string") parts.push(m.viewportName);
   if (typeof m.colorScheme === "string" && asset.role !== "attachment" && asset.role !== "state")
@@ -472,6 +476,7 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
           </details>
         ))}
 
+      <MotionTable assets={assets} />
       {capturable && assets.some((a) => a.role === "screenshot-original") && (
         <CompareOriginal resourceId={resource.id} />
       )}

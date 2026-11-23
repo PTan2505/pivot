@@ -379,3 +379,221 @@ describe("motion evidence edge cases", () => {
     expect(m.limitations.join(" ")).not.toMatch(/scroll/i);
   });
 });
+
+describe("get_reference with a motion track", () => {
+  const trackAsset = asset(
+    "track",
+    "motion-track",
+    {},
+    { kind: "text", mimeType: "application/json", width: null, height: null },
+  );
+  const item = (i: number) => ({
+    id: `M${i}`,
+    key: `exact|div.card|opacity|scroll|${i}`,
+    source: i % 2 ? "exact" : "measured",
+    via: i % 2 ? "CSS transition" : "measured",
+    trigger: { kind: "scroll", at: i * 100 },
+    target: { name: 'div "Card"', selector: "div.card", count: 1 },
+    changes: [{ property: "opacity", values: ["0", "1"] }],
+    durationMs: 300,
+    easing: "ease-out",
+    ...(i % 2 ? {} : { fitRms: 0.004 }),
+    area: 1000 - i,
+  });
+  const track = {
+    version: 1,
+    fps: 30,
+    viewport: { width: 1440, height: 900 },
+    method: "scroll",
+    frames: 600,
+    scrolledTo: 4300,
+    libraries: ["GSAP 3.15.1"],
+    items: Array.from({ length: 30 }, (_, i) => item(i + 1)),
+    itemsTotal: 30,
+    limits: ["Measured while PIVOT scrolled the page top to bottom with no pointer."],
+    stats: { changedPerFrameMedian: 2, changedPerFrameMax: 9, framesOverCap: 0 },
+  };
+  const withTrack = (read: (id: string) => Promise<unknown>) => {
+    const { source } = sourceFor([cover, video, ...keyframes, trackAsset]);
+    return Object.assign(source, { motionTrack: read }) as PivotSource;
+  };
+
+  it("serves the table, the 24 most visible items first, and says timing was measured", async () => {
+    const asked: string[] = [];
+    const source = withTrack(async (id) => (asked.push(id), track));
+    const r = await runTool(tool("get_reference"), source, { id: ID });
+    expect(asked).toEqual(["track"]);
+    const out = text(r);
+    expect(out).toContain(
+      "Motion table (measured by PIVOT while scrolling, 2026-11-01, 1440×900; libraries: GSAP 3.15.1; 30 items, the 24 most visible shown)",
+    );
+    expect(out).toContain(
+      'M1 scroll@100 div "Card" (div.card) | opacity 0→1 | 300ms ease-out | exact (CSS transition)',
+    );
+    expect(out).toContain(
+      'M2 scroll@200 div "Card" (div.card) | opacity 0→1 | 300ms ease-out, fit error 0.004 | measured',
+    );
+    expect(out).not.toContain("M25 ");
+    expect(out).toContain("(+6 more items)");
+    expect(out).not.toContain("Timing and easing weren't measured");
+    const detail = r.structuredContent as {
+      motion: { items: unknown[]; itemsTotal: number };
+      motionEvidence: { limitations: string[] };
+    };
+    expect(detail.motion.items).toHaveLength(24);
+    expect(detail.motion.itemsTotal).toBe(30);
+    expect(detail.motionEvidence.limitations.join(" ")).toContain("Timing and easing are in the motion table");
+  });
+
+  it("falls back to the keyframes alone when the track can't be read", async () => {
+    const r = await runTool(
+      tool("get_reference"),
+      withTrack(async () => null),
+      { id: ID },
+    );
+    expect(text(r)).not.toContain("Motion table");
+    expect(text(r)).toContain("Timing and easing weren't measured");
+    expect((r.structuredContent as Record<string, unknown>).motion).toBeUndefined();
+    // an older source without motionTrack does the same
+    const { source } = sourceFor([cover, video, trackAsset]);
+    expect(text(await runTool(tool("get_reference"), source, { id: ID }))).not.toContain("Motion table");
+  });
+});
+
+describe("get_reference_images which=motion", () => {
+  const trackAsset = asset(
+    "track",
+    "motion-track",
+    {},
+    { kind: "text", mimeType: "application/json", width: null, height: null },
+  );
+  const strip = (id: string, item: string) =>
+    asset(id, "motion-strip", { item, key: `k-${item}`, times: [0, 100, 200] }, { width: 960, height: 160 });
+  const track = {
+    version: 1,
+    fps: 30,
+    viewport: { width: 1440, height: 900 },
+    method: "scroll",
+    frames: 600,
+    scrolledTo: 4300,
+    libraries: [],
+    items: ["M2", "M10"].map((id) => ({
+      id,
+      key: `k-${id}`,
+      source: "exact",
+      via: "CSS transition",
+      trigger: { kind: "scroll", at: 1200 },
+      target: { name: 'div "Card"', selector: "div.card", count: 1 },
+      changes: [{ property: "opacity", values: ["0", "1"] }],
+      durationMs: 300,
+      easing: "ease-out",
+      filmstrip: true,
+      area: 1,
+    })),
+    itemsTotal: 2,
+    limits: [],
+    stats: { changedPerFrameMedian: 1, changedPerFrameMax: 1, framesOverCap: 0 },
+  };
+  const withStrips = (assets: AssetDTO[]) => {
+    const made = sourceFor([cover, video, trackAsset, ...assets]);
+    return {
+      source: Object.assign(made.source, { motionTrack: async () => track }) as PivotSource,
+      fetched: made.fetched,
+    };
+  };
+
+  it("shows one item's filmstrip, labelled with its table line and frame times", async () => {
+    const { source, fetched } = withStrips([strip("s10", "M10"), strip("s2", "M2")]);
+    const r = await runTool(tool("get_reference_images"), source, { id: ID, which: "motion", item: "M2" });
+    expect(fetched).toEqual(["s2"]);
+    expect(text(r)).toContain(
+      'Filmstrip of M2 scroll@1200 div "Card" (div.card) | opacity 0→1 | 300ms ease-out | exact (CSS transition), filmstrip. Frames at +0, +100, +200 ms',
+    );
+    expect(r.structuredContent).toMatchObject({ which: "motion", total: 1, returned: ["s2"], next: null });
+  });
+
+  it("without an item, pages through every filmstrip in item order", async () => {
+    const { source, fetched } = withStrips([strip("s10", "M10"), strip("s2", "M2")]);
+    const r = await runTool(tool("get_reference_images"), source, { id: ID, which: "motion", maxImages: 1 });
+    expect(fetched).toEqual(["s2"]);
+    expect(r.structuredContent).toMatchObject({ total: 2, next: 1 });
+  });
+
+  it("says which items have one, or that there are none", async () => {
+    const { source } = withStrips([strip("s2", "M2")]);
+    const missing = await runTool(tool("get_reference_images"), source, { id: ID, which: "motion", item: "M5" });
+    expect(missing.isError).toBe(true);
+    expect(text(missing)).toContain("M5 has no filmstrip. Items with one: M2.");
+    const none = await runTool(tool("get_reference_images"), withStrips([]).source, { id: ID, which: "motion" });
+    expect(text(none)).toContain("has a motion table but no filmstrips");
+    const bad = await runTool(tool("get_reference_images"), source, { id: ID, which: "motion", item: "3" });
+    expect(text(bad)).toContain("an item id from get_reference's motion table");
+  });
+
+  it("get_reference points at the filmstrips", async () => {
+    const r = await runTool(tool("get_reference"), withStrips([strip("s2", "M2")]).source, { id: ID });
+    expect(text(r)).toContain("Items marked filmstrip have pictures: get_reference_images which=motion item=<id>");
+  });
+});
+
+describe("get_reference with hover and click items", () => {
+  const trackAsset = asset(
+    "track",
+    "motion-track",
+    {},
+    { kind: "text", mimeType: "application/json", width: null, height: null },
+  );
+  const item = (i: number, kind: "scroll" | "hover") => ({
+    id: `M${i}`,
+    key: `${kind}|${i}`,
+    source: "exact",
+    via: "CSS transition",
+    trigger:
+      kind === "hover"
+        ? { kind: "hover", on: { name: 'a "Pricing"', selector: "nav a" } }
+        : { kind: "scroll", at: i * 10 },
+    target: { name: "span", selector: "span.line", count: 1 },
+    changes: [{ property: "transform", values: ["scaleX(0)", "none"] }],
+    durationMs: 200,
+    easing: "ease-out",
+    area: 100,
+  });
+  const track = {
+    version: 1,
+    fps: 30,
+    viewport: { width: 1440, height: 900 },
+    method: "scroll",
+    frames: 600,
+    scrolledTo: 4300,
+    libraries: [],
+    items: [
+      ...Array.from({ length: 30 }, (_, i) => item(i + 1, "scroll")),
+      ...Array.from({ length: 10 }, (_, i) => item(i + 31, "hover")),
+    ],
+    itemsTotal: 40,
+    interactionItems: 10,
+    limits: ["Hover and click were tried on a sample, one element of each kind: 10 hovered, 0 clicked."],
+    stats: { changedPerFrameMedian: 1, changedPerFrameMax: 1, framesOverCap: 0 },
+  };
+
+  it("lists 24 scroll items, then up to 8 hover and click items under their own heading", async () => {
+    const { source } = sourceFor([cover, video, trackAsset]);
+    const r = await runTool(
+      tool("get_reference"),
+      Object.assign(source, { motionTrack: async () => track }) as PivotSource,
+      { id: ID },
+    );
+    const out = text(r);
+    expect(out).toContain("40 items, the 24 most visible shown plus 8 from hover and click");
+    expect(out).toContain(
+      '(+6 more items)\nHover and click (a sample: one element of each kind was tried):\nM31 hover on a "Pricing" (nav a) → span (span.line) | transform scaleX(0)→none | 200ms ease-out | exact (CSS transition)',
+    );
+    expect(out).toContain("M38 hover");
+    expect(out).not.toContain("M39 hover");
+    expect(out).toMatch(/M38 hover[^\n]*\n\(\+2 more items\)/);
+    expect((r.structuredContent as { motion: { items: unknown[]; interactionItems: number } }).motion).toMatchObject({
+      interactionItems: 10,
+    });
+    expect((r.structuredContent as { motion: { items: unknown[] } }).motion.items).toHaveLength(32);
+  });
+});

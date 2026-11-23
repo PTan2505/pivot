@@ -231,7 +231,7 @@ Through `pivot:redesign` (or `pivot:design`) with mockups in PIVOT and **one dir
 
 ### SPEC.md changes
 
-- §1 rows: **#37 Components saved with their code** (type, upsert by 21st id, saved right after the fetch, what is stored and never stored, origins, the scan and the code review before a build, Share/Export rule); **#38 Component preview origin** (the second server, its port, CSP, frame sandbox, never srcdoc, where previews come from); edit **#4** (13 types + `source`), **#13 Export** (components carry title, link, author and licence only), **#29** (the component type is a component reference).
+- §1 rows: **#38 Components saved with their code** (type, upsert by 21st id, saved right after the fetch, what is stored and never stored, origins, the scan and the code review before a build, Share/Export rule); **#38 Component preview origin** (the second server, its port, CSP, frame sandbox, never srcdoc, where previews come from); edit **#4** (13 types + `source`), **#13 Export** (components carry title, link, author and licence only), **#29** (the component type is a component reference).
 - §2 table: the `component` row.
 - §3 Security: the preview origin's rules and residual risks.
 - §10 MCP: `save_component`, `get_saved_component`.
@@ -251,7 +251,7 @@ Each: audit → gaps → implement → test → report. Tests run only against a
 1. **The `component` type and its store** (`feat/component-store`): `TYPE_DEFS`, section, `inferCategory`, `ComponentMeta` validation, the install-command sanitiser, `packages/core/src/components.ts` (save/upsert, lookup, `scanComponent`), the API routes, Share/Export exclusions, capabilities. The generic detail page shows a component's fields read-only until Phase 3. Tests: upsert and duplicate refusal, `replaceCode`, origins, key stripping (`api_key=sk_…` → placeholder; other secret patterns refused), size limits, lookup by id and URL, the scan (one fixture per flag kind, harmless code with no flags, re-scan on a code or scanner change), Share/Export never write code, backup round trip. SPEC #4, #13, #29, #37, §2, §17. pivot-studio: covered by the pending 0.5.0 (a feature after a pending minor), or 0.6.0 if 0.5.0 is released first.
 2. **MCP and the skill** (`feat/component-store-mcp`): `save_component`, `get_saved_component`, `propose_references` with saved components, `pnpm mcp:build`, SKILL.md §2, §9 (save after the fetch, the code review) and Rules, redesign's mention, `skills.test.ts`; the review's `concerns_accepted` without `userWords` is refused. SPEC §10, §15. Plugin minor bump. Tested with the MCP test harness against a scratch PIVOT, and once in a real session when the owner next picks a 21st component (that run also records `get_component`'s field names).
 3. **The component page** (`feat/component-page`): design session with mockups, the owner approves one direction, then the page and the cards; DESIGN.md. Real-input e2e on a scratch PIVOT with a fixture component written for the test.
-4. **The preview origin** (`feat/component-preview-origin`): the second server, its Host and path rules and CSP, the frame and message handling, `start.mjs`/CLI port handling, SPEC #38 and §3. Tests: only `/p/<sha>.html` of a `component-preview` asset is served; wrong Host, other ports, path tricks and other assets refused; the CSP blocks `fetch`, `XMLHttpRequest`, `WebSocket`, forms and external scripts (Playwright on a fixture bundle that tries each); the frame can't reach PIVOT's DOM, storage or API with its credentials; the page ignores foreign messages; PIVOT sets no cookies.
+4. **The preview origin** (`feat/component-preview-origin`): the second server, its Host and path rules and CSP, the frame and message handling, `start.mjs`/CLI port handling, SPEC #39 and §3. Tests: only `/p/<sha>.html` of a `component-preview` asset is served; wrong Host, other ports, path tricks and other assets refused; the CSP blocks `fetch`, `XMLHttpRequest`, `WebSocket`, forms and external scripts (Playwright on a fixture bundle that tries each); the frame can't reach PIVOT's DOM, storage or API with its credentials; the page ignores foreign messages; PIVOT sets no cookies.
 5. **Preview producer** (`feat/component-preview-build`): the local build (or the owner's other choice below), the "Build preview" action, its states on the page, the package-size check for the CLI. Tests: a fixture component with an npm dependency builds to one HTML file that renders in the frame offline; a failing build keeps its error; `--ignore-scripts` holds (a fixture package with a postinstall script doesn't run it).
 6. **End-to-end and release**: a full pass on a scratch PIVOT (save through MCP → lookup → page → build → preview), Progress logged, versions decided per CLAUDE.md.
 
@@ -276,7 +276,7 @@ Each: audit → gaps → implement → test → report. Tests run only against a
   - `POST /api/components`, `GET /api/components/lookup`; `ComponentError` 400, `ComponentConflictError` 409; capability `components`.
   - Export, copied context and Share give the link, author and licence only.
   - **Changed from the plan:** no migration. A partial unique index would make restoring a component from the Trash fail next to a newer save, so the save keeps one per 21st id itself, and lookups take the newest.
-  - `plugin/server/server.js` rebuilt (the shared types changed). SPEC #4, #13, #29, new #37, §2, §17, new §21.
+  - `plugin/server/server.js` rebuilt (the shared types changed). SPEC #4, #13, #29, new #38, §2, §17, new §21.
 - **Tested:**
   - core `components.test.ts` (16 tests): create, the placeholder key and refused secrets, input refusals, the repeat save after the build, different code and `replaceCode`, lookups and the Trash, hand-made and retyped components refused, the scan per kind with no false flags on ordinary code, the hash, Export, context, Share, and a backup round trip;
   - `ui-settings.test.ts` updated for the new visible type;
@@ -375,7 +375,7 @@ Each: audit → gaps → implement → test → report. Tests run only against a
   - `GET /api/components/preview-origin`.
   - The live stage in `component-detail.tsx`.
   - `start.mjs` (sets `PORT` and `PIVOT_PREVIEW_PORT`; a scratch PIVOT may not use 4321 or 4322) and the CLI (`previewPortFor`, refuses a busy preview port).
-  - SPEC #38, §3, §21; DESIGN.md.
+  - SPEC #39, §3, §21; DESIGN.md.
   - **Changed from the plan:**
     - `frame-ancestors` lists `127.0.0.1` and `localhost` only: Chrome rejects an IPv6 literal as a CSP source, and PIVOT binds 127.0.0.1;
     - `Permissions-Policy` added (denies device and payment APIs).
@@ -415,7 +415,7 @@ Each: audit → gaps → implement → test → report. Tests run only against a
   - `POST /api/components/[id]/preview`; `PreviewError` 400; the resource refetches every 2 s while a build runs.
   - **Build preview / Rebuild preview** and the building and failed states on the stage; `save_component` tells the agent the owner can build one.
   - `esbuild` 0.25.12 and `tailwindcss` 4.3.3 in core, web and the CLI package; Next server externals.
-  - SPEC #38, §20, §21; DESIGN.md.
+  - SPEC #39, §20, §21; DESIGN.md.
 - **Package size** (Python, from this machine's install): +20.8 MB per `pivot-studio` install (esbuild's wrapper and copied binary 10.1 MB, the platform binary 9.9 MB, tailwindcss 0.8 MB). Using `tailwindcss` directly instead of `@tailwindcss/node` avoided another 13.8 MB of native packages.
 - **Tested:**
   - core `preview-build.test.ts` (6), with fixture components and npm stubbed offline by React from this checkout and a fake package:
@@ -464,7 +464,11 @@ Each: audit → gaps → implement → test → report. Tests run only against a
 - **Release** (CLAUDE.md):
   - npm: covered by the pending 0.5.0. `main` holds 0.4.0, and `npm view pivot-studio version` is 0.4.0. `dev` already raised the version to 0.5.0, a minor, and the component store is a feature, so a minor covers it.
   - Plugin: covered by the pending 0.6.0 (`main` 0.5.0, `dev` 0.6.0).
-- **Before the PR into `dev`:**
+- **Merged `dev` (2026-11-23):**
+  - Both sides had added SPEC §1 row #37. The motion track, already on `dev`, keeps #37; components become **#38** and the preview origin **#39**. The SPEC's mentions of the row and this file's mentions are renumbered to match.
+  - `apps/mcp/src/http-source.ts`: both imports are kept (`UPDATE_APP` and the `MotionTrack` type).
+  - `plugin/server/server.js` was rebuilt.
+- **Before the PR into `dev`** (written before the merge):
   - `dev` has moved on (the motion track, #157–#159). Merging it conflicts in `apps/mcp/src/http-source.ts` and `docs/SPEC.md`, and `plugin/server/server.js` must be rebuilt (`pnpm mcp:build`) after the merge.
   - The six phase branches are stacked, so one PR from this branch's tip carries all of them.
 - **Not verified:**

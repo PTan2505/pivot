@@ -1,4 +1,13 @@
 import { z } from "zod";
+import {
+  isInteraction,
+  MOTION_TABLE_INTERACTIONS,
+  MOTION_TABLE_ITEMS,
+  motionLine as motionItemLine,
+  motionTable,
+  type MotionItem,
+  type MotionTrack,
+} from "@pivot/core/motion-track";
 import { hostOf } from "@pivot/core/source-match";
 import {
   isOtherSection,
@@ -263,7 +272,7 @@ const viewportOf = (v: unknown) => {
  * keyframes, interaction-state stills). Nothing is guessed: timing, easing and triggers other than scrolling are
  * never filled in, and a reference without a recording is "unknown". Lists stop at `limit` items; the totals don't.
  */
-export function motionEvidenceOf(r: ResourceDetailDTO, limit = MOTION_LIST_MAX): MotionEvidence {
+export function motionEvidenceOf(r: ResourceDetailDTO, limit = MOTION_LIST_MAX, measured = false): MotionEvidence {
   const live = r.assets.filter((a) => !a.missing);
   const video = live.find((a) => a.role === "motion-video");
   const allKeyframes = live
@@ -315,8 +324,12 @@ export function motionEvidenceOf(r: ResourceDetailDTO, limit = MOTION_LIST_MAX):
     states,
     statesTotal: allStates.length,
     limitations: [
-      "Recorded while PIVOT scrolled the page top to bottom with no pointer: hover, click, focus and other triggers weren't exercised.",
-      "Timing and easing weren't measured: keyframes are stills at the listed scroll positions, and what happens between them is inferred.",
+      measured
+        ? "Recorded while PIVOT scrolled the page top to bottom with no pointer; hover and click, where PIVOT tried them on a sample, are in the motion table."
+        : "Recorded while PIVOT scrolled the page top to bottom with no pointer: hover, click, focus and other triggers weren't exercised.",
+      measured
+        ? "Timing and easing are in the motion table (`motion`); keyframes are stills at the listed scroll positions."
+        : "Timing and easing weren't measured: keyframes are stills at the listed scroll positions, and what happens between them is inferred.",
       video
         ? "The video itself can't be viewed through these tools; look at the keyframes."
         : "The recording's video is missing; only its keyframes remain.",
@@ -324,6 +337,63 @@ export function motionEvidenceOf(r: ResourceDetailDTO, limit = MOTION_LIST_MAX):
       ...stateNote,
     ],
   };
+}
+
+export interface MotionDetail {
+  assetId: string;
+  capturedAt: string;
+  viewport: { width: number; height: number };
+  /** `wheel` when a smooth-scroll library was scrolled with the mouse wheel. */
+  method: "scroll" | "wheel";
+  libraries: string[];
+  items: MotionItem[];
+  itemsTotal: number;
+  /** Of `itemsTotal`, the hover and click items (listed after the scroll items). */
+  interactionItems: number;
+  limits: string[];
+}
+
+/**
+ * The reference's motion as numbers, from its `motion-track` asset (a "Record motion" made since motion tracks
+ * exist), or null. The first `MOTION_TABLE_ITEMS` items, most visible first; the rest are counted.
+ */
+export async function motionDetailOf(source: PivotSource, r: ResourceDetailDTO): Promise<MotionDetail | null> {
+  const asset = r.assets.find((a) => a.role === "motion-track" && !a.missing);
+  if (!asset || !source.motionTrack) return null;
+  const track = await source.motionTrack(asset.id).catch(() => null);
+  if (!track) return null;
+  return {
+    assetId: asset.id,
+    capturedAt: asset.createdAt,
+    viewport: track.viewport,
+    method: track.method,
+    libraries: track.libraries,
+    // the most visible scroll items, then a sample of hover and click
+    items: [
+      ...track.items.filter((it) => !isInteraction(it)).slice(0, MOTION_TABLE_ITEMS),
+      ...track.items.filter(isInteraction).slice(0, MOTION_TABLE_INTERACTIONS),
+    ],
+    itemsTotal: track.itemsTotal,
+    interactionItems: track.interactionItems ?? track.items.filter(isInteraction).length,
+    limits: track.limits,
+  };
+}
+
+function motionTableText(m: MotionDetail) {
+  const pointer = m.items.filter(isInteraction).length;
+  const shown =
+    m.items.length < m.itemsTotal
+      ? `, the ${m.items.length - pointer} most visible shown${pointer ? ` plus ${pointer} from hover and click` : ""}`
+      : "";
+  const libraries = m.libraries.length ? `; libraries: ${m.libraries.join(", ")}` : "";
+  return [
+    `Motion table (measured by PIVOT while scrolling, ${m.capturedAt.slice(0, 10)}, ${m.viewport.width}×${m.viewport.height}${libraries}; ${m.itemsTotal} item${m.itemsTotal === 1 ? "" : "s"}${shown}). exact = declared by the page; measured = fitted from the recording's frames. Cite items by id (e.g. "M3").`,
+    ...motionTable(m),
+    ...(m.items.some((it) => it.filmstrip)
+      ? ["Items marked filmstrip have pictures: get_reference_images which=motion item=<id> (about 400 tokens each)."]
+      : []),
+    `Motion limits: ${m.limits.join(" ")}`,
+  ].join("\n");
 }
 
 function motionLine(m: MotionEvidence) {
@@ -365,10 +435,11 @@ const idInput = {
 const getReference: PivotTool<typeof idInput> = {
   name: "get_reference",
   title: "Get a reference's details",
-  description: `Full details of one PIVOT reference or source: link, description, the user's notes, facets, collections, which screenshots exist (with sizes), and its motion evidence: "observed" only when PIVOT recorded the page while scrolling (with the recording's source and limits, and keyframes you can view), otherwise "unknown". Call it before relying on a reference. ${UNTRUSTED}`,
+  description: `Full details of one PIVOT reference or source: link, description, the user's notes, facets, collections, which screenshots exist (with sizes), and its motion evidence: "observed" only when PIVOT recorded the page while scrolling (with the recording's source and limits, and keyframes you can view), otherwise "unknown". A recording made since motion tracks exist adds a motion table: what moves, its trigger (load, scroll position or range), properties from → to, duration, delay, easing, stagger, pins and parallax, each item exact (declared by the page) or measured (fitted from frames, with its error). Read the table before asking for keyframes. Call it before relying on a reference. ${UNTRUSTED}`,
   inputSchema: idInput,
   async run(source, { id }) {
     const r = await liveResource(source, id);
+    const motion = await motionDetailOf(source, r);
     const notes = clip(r.notes, NOTES_CHARS);
     const content = clip(r.content, CONTENT_CHARS);
     const url = r.sourceUrl && /^https?:/i.test(r.sourceUrl) ? r.sourceUrl : null;
@@ -385,7 +456,8 @@ const getReference: PivotTool<typeof idInput> = {
       facets: r.tags.map(({ kind, name }) => ({ kind, name })),
       collections: r.collections.map((c) => c.name),
       screenshots: screenshotsOf(r),
-      motionEvidence: motionEvidenceOf(r),
+      motionEvidence: motionEvidenceOf(r, MOTION_LIST_MAX, !!motion),
+      ...(motion ? { motion } : {}),
       // the user's (or an agent's) notes on places in the screenshots, as fractions of the image
       annotations: (r.annotations ?? []).map((a) => ({
         assetId: a.assetId,
@@ -412,6 +484,7 @@ const getReference: PivotTool<typeof idInput> = {
       detail.screenshots.length
         ? `Screenshots: ${detail.screenshots.map((s) => `${s.role} ${s.width}×${s.height}`).join(", ")}. get_reference_images shows them.`
         : "No screenshots.",
+      motion && motionTableText(motion),
       motionLine(detail.motionEvidence),
       detail.annotations.length &&
         `Annotations: ${detail.annotations
@@ -488,11 +561,16 @@ const listFacets: PivotTool<Record<string, never>> = {
 const imagesInput = {
   id: idInput.id,
   which: z
-    .enum(["cover", "fullpage", "all", "keyframes", "states"])
+    .enum(["cover", "fullpage", "all", "keyframes", "states", "motion"])
     .optional()
     .describe(
-      "cover: the first screen as saved (default). fullpage: the whole page, top to bottom, in slices. all: both. keyframes: stills from PIVOT's scroll recording, in scroll order (motion evidence). states: stills of interaction states.",
+      "cover: the first screen as saved (default). fullpage: the whole page, top to bottom, in slices. all: both. keyframes: stills from PIVOT's scroll recording, in scroll order (motion evidence). states: stills of interaction states. motion: filmstrips of motion-table items (the frames of one motion, cropped to where it happens, side by side with their times); pass item for one.",
     ),
+  item: z
+    .string()
+    .regex(/^M\d{1,3}$/, "an item id from get_reference's motion table, like M3")
+    .optional()
+    .describe("With which=motion: the motion-table item to show (M3). Without it, every item that has a filmstrip."),
   fromSlice: z
     .number()
     .int()
@@ -509,7 +587,7 @@ const getReferenceImages: PivotTool<typeof imagesInput> = {
   description:
     "The screenshots of one PIVOT reference as images, so you can judge its layout, hierarchy, type and colour. The cover is the first screen as saved (or what the user saw when saving it with the browser extension). The full page is the whole page captured top to bottom, sent in 960px-wide slices; page through it with fromSlice. Keyframes are stills PIVOT took while recording the page scrolling: they show what appeared at each scroll position (observed), not timing or easing, and nothing about hover or click; states are stills of interaction states. Each image costs about 2,000 tokens, so look at a few chosen references rather than every result. Captured pages can show a half-revealed element where two screens meet, and pages behind a login only have the user's own view.",
   inputSchema: imagesInput,
-  async run(source, { id, which = "cover", fromSlice = 0, maxImages = 3 }) {
+  async run(source, { id, which = "cover", fromSlice = 0, maxImages = 3, item }) {
     const r = await liveResource(source, id);
     const shots = screenshotsOf(r);
     const cover = shots.find((s) => s.role === "cover") ?? shots.find((s) => s.role === "viewport");
@@ -539,6 +617,7 @@ const getReferenceImages: PivotTool<typeof imagesInput> = {
           : `Full page ${page.pageWidth}×${page.pageHeight} has ${page.total} slice${page.total === 1 ? "" : "s"}; fromSlice ${fromSlice} is past the end.`,
       );
     }
+    if (which === "motion") return motionStrips(source, r, item, fromSlice, maxImages);
     if (which === "keyframes" || which === "states") {
       const motion = motionEvidenceOf(r);
       const total = which === "keyframes" ? motion.keyframesTotal : motion.statesTotal;
@@ -604,6 +683,65 @@ const getReferenceImages: PivotTool<typeof imagesInput> = {
     };
   },
 };
+
+/** `which: "motion"`: the filmstrips stored with a recording's motion track, one item or all, in item order. */
+async function motionStrips(
+  source: PivotSource,
+  r: ResourceDetailDTO,
+  item: string | undefined,
+  fromSlice: number,
+  maxImages: number,
+): Promise<ToolResult> {
+  const strips = r.assets
+    .filter((a) => a.role === "motion-strip" && !a.missing && typeof metaOf(a).item === "string")
+    .map((a) => ({ assetId: a.id, item: metaOf(a).item as string, times: metaOf(a).times }))
+    .sort((a, b) => Number(a.item.slice(1)) - Number(b.item.slice(1)));
+  if (!strips.length) {
+    const hasTrack = r.assets.some((a) => a.role === "motion-track" && !a.missing);
+    throw new ToolError(
+      "no_images",
+      hasTrack
+        ? `${r.title} has a motion table but no filmstrips: read the table with get_reference.`
+        : `${r.title} has no motion filmstrips: they come with a "Record motion" made since motion tracks exist.`,
+    );
+  }
+  const chosen = item ? strips.filter((s) => s.item === item) : strips;
+  if (!chosen.length)
+    throw new ToolError(
+      "no_images",
+      `${item} has no filmstrip. Items with one: ${strips.map((s) => s.item).join(", ")}.`,
+    );
+  const motion = await motionDetailOf(source, r);
+  const lineOf = (id: string) => {
+    const it = motion?.items.find((x) => x.id === id);
+    return it ? motionItemLine(it) : id;
+  };
+  const picked = chosen.slice(fromSlice, fromSlice + maxImages);
+  const parts: ToolResult["content"] = [];
+  const notes: string[] = [];
+  const labels: { assetId: string; label: string }[] = [];
+  for (const s of picked) {
+    const img = await source.agentImage(s.assetId);
+    parts.push(image(img));
+    const times = Array.isArray(s.times) ? s.times.filter((t): t is number => typeof t === "number") : [];
+    const label = `Filmstrip of ${lineOf(s.item)}. Frames ${times.length ? `at +${times.join(", +")} ms` : "in order"}, cropped to where it moves, left to right then down (seen in PIVOT's scroll recording; the page may scroll between frames).`;
+    labels.push({ assetId: s.assetId, label });
+    notes.push(`${label} Sent at ${img.width}×${img.height} (~${imageTokens(img.width, img.height)} tokens).`);
+  }
+  if (!picked.length) notes.push(`motion has ${chosen.length} filmstrips; fromSlice ${fromSlice} is past the end.`);
+  const next = picked.length && fromSlice + picked.length < chosen.length ? fromSlice + picked.length : null;
+  if (next !== null) notes.push(`Call again with fromSlice ${next} for the rest.`);
+  return {
+    content: [text(`${r.title}${r.sourceUrl ? ` (${hostOf(r.sourceUrl)})` : ""}\n${notes.join("\n")}`), ...parts],
+    structuredContent: {
+      which: "motion",
+      total: chosen.length,
+      returned: picked.map((s) => s.assetId),
+      images: labels,
+      next,
+    },
+  };
+}
 
 export const TOOLS = [searchReferences, getReference, listFacets, getReferenceImages] as PivotTool[];
 

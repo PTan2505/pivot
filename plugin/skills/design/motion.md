@@ -38,6 +38,7 @@ A screenshot can't show motion. For every reference that informs motion, say wha
 | Evidence                   | Meaning                                                                                                  |
 | -------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `observed live`            | You opened the page in a browser tool (with the user's permission) and triggered the behaviour yourself. |
+| `motion table`             | You read the reference's motion table in PIVOT (`get_reference`): numbers, not pictures.                 |
 | `keyframes`                | You looked at the reference's motion keyframes in PIVOT.                                                 |
 | `video exists, not viewed` | PIVOT holds a motion recording (`motionEvidence` says observed) but you didn't look at its keyframes.    |
 | `screenshot`               | Only still images.                                                                                       |
@@ -51,10 +52,37 @@ A screenshot can't show motion. For every reference that informs motion, say wha
   - `classification: "unknown"` when there is no recording: every reference saved without motion capture. Anything you
     write about its motion is **inferred** (or observed live, if you open it);
   - PIVOT never labels anything inferred itself: that label is yours, in the brief.
+- **The motion table** (a recording made since motion tracks exist): `get_reference` adds `motion`, one line per
+  item, most visible first: trigger (load, a scroll position, a scroll range), the element, properties from → to,
+  duration, delay, easing, stagger, pin or parallax. Each item says where its numbers come from:
+  - `exact`: the page declared it (a CSS transition or animation, a Web Animation, a GSAP tween or ScrollTrigger).
+    Use its numbers as they are;
+  - `measured`: PIVOT watched the element change frame by frame and fitted the samples. Durations are within about
+    one frame (33 ms) and read slightly short for motion run by scripts; the easing is named with its fit error, and
+    `custom` when no standard curve fits;
+  - `seen`: a canvas or video whose pixels move while the page rests. Only where and when, no numbers: what it does
+    is in its filmstrip, or inferred.
+
+  **Hover and click** (under their own heading): PIVOT tried one element of each kind (a nav link, a card, a tab,
+  a disclosure…), so an item there is the observed hover or click of that kind, not of every element. It never
+  pressed links, forms or anything that buys, signs in or sends, so what those do is still unknown.
+
+  **Filmstrips:** items ending in `filmstrip` have one, about 400 tokens: `get_reference_images` with
+  `which: "motion"` and `item: "M3"` shows five frames of that motion, cropped to where it happens, with their times.
+  Look at one only when the numbers leave the look open (what a reveal uncovers, how a `seen` canvas moves); the
+  page may scroll between its frames.
+
+  Read the table before the filmstrips and keyframes, and look at keyframes only for what neither can say (how a
+  section looks mid-motion). Cite items by reference and id in the brief's Motion block ("Linear M3: fade + rise 8px, 333 ms,
+  cubic-bezier(.23,1,.32,1), measured"). An item from the table counts as observed evidence for its numbers; what it
+  can't show (hover or click on elements PIVOT didn't try, the timing of a `seen` item, the look of motion without a
+  filmstrip) is still inferred
+  unless seen another way; a filmstrip you looked at counts as observed for what it shows.
+
 - **Look at it:** `get_reference_images` with `which: "keyframes"` sends the keyframes (page with `fromSlice`), and
   `which: "states"` the interaction-state stills. They count toward the image budget. The video can't be viewed
   through MCP.
-- **What keyframes prove:** what was on screen at each scroll position, while PIVOT scrolled top to bottom with no
+- **What keyframes prove** (without a motion table): what was on screen at each scroll position, while PIVOT scrolled top to bottom with no
   pointer. Not timing, easing, or what happens between two frames (inferred); nothing about hover, click or focus
   (not exercised). A state still shows how a state looks, not how it moves.
 - **Name the gaps:** when an essential motion item has no observed evidence, say so in the brief's Motion block

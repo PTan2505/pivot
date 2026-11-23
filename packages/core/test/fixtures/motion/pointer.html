@@ -1,0 +1,188 @@
+<!doctype html>
+<!-- Hover and click with known numbers, for motion-track.test.ts, and the things that must never be pressed. -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Motion fixture: hover and click</title>
+    <style>
+      body {
+        margin: 0;
+        height: 1800px;
+        position: relative;
+        font: 16px sans-serif;
+        background: #111;
+        color: #eee;
+      }
+      nav {
+        position: absolute;
+        top: 20px;
+        left: 100px;
+        display: flex;
+        gap: 24px;
+      }
+      /* each nav link: an underline that grows in 200 ms ease-out */
+      nav a {
+        position: relative;
+        display: inline-block;
+        padding: 8px 4px;
+        color: #eee;
+        text-decoration: none;
+      }
+      nav a .line {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 2px;
+        background: #e85;
+        transform: scaleX(0);
+        transition: transform 200ms ease-out;
+      }
+      nav a:hover .line {
+        transform: scaleX(1);
+      }
+      /* a card that rises 4 px in 250 ms */
+      a.card {
+        position: absolute;
+        top: 200px;
+        left: 100px;
+        display: block;
+        width: 360px;
+        height: 200px;
+        background: #2a6;
+        color: #111;
+        transition: transform 250ms cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+      a.card:hover {
+        transform: translateY(-4px);
+      }
+      /* a button scaled by script on hover: 1 → 1.1 in 300 ms easeOutCubic */
+      #grow {
+        position: absolute;
+        top: 200px;
+        left: 600px;
+        width: 240px;
+        height: 120px;
+        background: #36a;
+        color: #eee;
+        border: 0;
+        transition: background-color 1ms;
+      }
+      /* tabs: the panel fades in over 300 ms */
+      #tabs {
+        position: absolute;
+        top: 500px;
+        left: 100px;
+      }
+      [role="tab"] {
+        padding: 10px 20px;
+        background: #333;
+        color: #eee;
+        border: 0;
+      }
+      .panel {
+        width: 600px;
+        height: 160px;
+        background: #a63;
+        opacity: 0;
+        transition: opacity 300ms ease-out;
+      }
+      .panel.on {
+        opacity: 1;
+      }
+      /* a disclosure: its body fades in over 400 ms */
+      #more {
+        position: absolute;
+        top: 800px;
+        left: 100px;
+        padding: 10px 20px;
+        background: #333;
+        color: #eee;
+        border: 0;
+      }
+      #more-body {
+        position: absolute;
+        top: 860px;
+        left: 100px;
+        width: 600px;
+        height: 160px;
+        background: #6a3;
+        opacity: 0;
+        transition: opacity 400ms ease-in-out;
+      }
+      #more[aria-expanded="true"] + #more-body {
+        opacity: 1;
+      }
+      /* traps: none of these may be pressed */
+      #buy,
+      #inform,
+      #away {
+        position: absolute;
+        left: 800px;
+        padding: 10px 20px;
+        background: #333;
+        color: #eee;
+        border: 0;
+        transition: background-color 150ms;
+      }
+      #buy {
+        top: 800px;
+      }
+      #trapform {
+        position: absolute;
+        top: 900px;
+        left: 800px;
+      }
+      #away {
+        top: 1000px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <a href="/one">One<span class="line"></span></a>
+      <a href="/two">Two<span class="line"></span></a>
+      <a href="/three">Three<span class="line"></span></a>
+    </nav>
+    <a class="card" href="/card">Card</a>
+    <button id="grow">Grow</button>
+    <div id="tabs">
+      <button role="tab" aria-selected="true" aria-controls="p1">First</button>
+      <button role="tab" aria-selected="false" aria-controls="p2" id="second">Second</button>
+      <div class="panel on" id="p1"></div>
+      <div class="panel" id="p2" hidden></div>
+    </div>
+    <button id="more" aria-expanded="false">Details</button>
+    <div id="more-body"></div>
+    <button id="buy" aria-expanded="false">Buy now</button>
+    <form id="trapform"><button type="button" id="inform" aria-expanded="false">More options</button></form>
+    <a id="away" role="tab" aria-selected="false" href="/away">Away</a>
+    <script>
+      const grow = document.getElementById("grow");
+      grow.addEventListener("mouseenter", () => {
+        const start = performance.now();
+        const step = (now) => {
+          const x = Math.min(1, (now - start) / 300);
+          grow.style.transform = `scale(${1 + 0.1 * (1 - (1 - x) ** 3)})`;
+          if (x < 1) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      });
+      document.getElementById("second").addEventListener("click", () => {
+        document.getElementById("p1").hidden = true;
+        const p2 = document.getElementById("p2");
+        p2.hidden = false;
+        p2.getBoundingClientRect();
+        p2.classList.add("on");
+        document.getElementById("second").setAttribute("aria-selected", "true");
+      });
+      const more = document.getElementById("more");
+      more.addEventListener("click", () => {
+        more.setAttribute("aria-expanded", more.getAttribute("aria-expanded") === "true" ? "false" : "true");
+        fetch("/write", { method: "POST", body: "x" }).catch(() => {});
+      });
+      document.getElementById("buy").addEventListener("click", () => fetch("/bought").catch(() => {}));
+      document.getElementById("inform").addEventListener("click", () => fetch("/inform").catch(() => {}));
+    </script>
+  </body>
+</html>

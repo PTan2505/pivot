@@ -21,6 +21,7 @@ import type {
   SourceCategory,
   TagDTO,
 } from "@pivot/core/types";
+import type { MotionTrack } from "@pivot/core/motion-track";
 import type { ImagePart, PageSlices } from "./images";
 
 /**
@@ -42,6 +43,11 @@ export interface PivotSource {
   agentImage(assetId: string): Promise<ImagePart>;
   /** `count` slices of a full-page screenshot from slice `from`, 960px wide, prepared by the app. */
   agentSlices(assetId: string, from: number, count: number): Promise<PageSlices>;
+  /**
+   * A reference's motion track (the `motion-track` asset's JSON), or null when it can't be read. Optional: a source
+   * without it serves the motion evidence alone.
+   */
+  motionTrack?(assetId: string): Promise<MotionTrack | null>;
   /**
    * Hybrid search, external side: free public catalogs searched by the app, plus search links for other sites.
    * Optional, so an older app (or a source without it) makes `search_external` say so instead of failing.
