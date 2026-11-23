@@ -443,6 +443,8 @@ export type AssetRole =
   /** A recording of the page scrolling, and still frames from it, taken on request. */
   | "motion-video"
   | "motion-keyframe"
+  /** The recording's motion as numbers (JSON, `MotionTrack` in motion-track.ts): what moved, when, how and how long. */
+  | "motion-track"
   /** An interaction state (hover, open menu, error…) captured from the tab; `meta.state` names it. */
   | "state"
   | "attachment";

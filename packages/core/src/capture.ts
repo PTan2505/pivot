@@ -5,9 +5,18 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { and, desc, eq, inArray } from "drizzle-orm";
-import type { Browser, Page } from "playwright";
+import type { Browser, CDPSession, Page } from "playwright";
 import sharp from "sharp";
 import { attachAsset, deleteOrphanAssets, saveAsset } from "./assets";
+import { MOTION_PROBE, motionLibraries } from "./motion-probe";
+import {
+  buildMotionTrack,
+  type LibraryTrigger,
+  type LibraryTween,
+  type MotionTrack,
+  type ProbeElement,
+  type ProbeFrame,
+} from "./motion-track";
 import { getDb } from "./db/client";
 import { assets, captureAttempts, resourceAssets, resources } from "./db/schema";
 import { fetchUrlMetadata } from "./metadata";
@@ -590,6 +599,81 @@ const within = <T>(promise: Promise<T>, ms: number): Promise<T | undefined> =>
     new Promise<undefined>((done) => setTimeout(() => done(undefined), ms)),
   ]);
 
+/** The most changed elements measured per frame; M0 found 12 or fewer at p95 on real pages. */
+const MOTION_CHANGED_CAP = 40;
+
+/**
+ * Measures the page's motion frame by frame while it is filmed (motion-probe.ts, motion-track.ts). The DOM is read in
+ * an isolated world the page can't see; GSAP, ScrollTrigger and Lenis only exist on the page's own `window`, so they
+ * are read there, at the start and at each rest, and every frame only while GSAP is on the page. A failed read stops
+ * the measuring, never the recording.
+ */
+async function startMotionProbe(page: Page, cdp: CDPSession) {
+  const { frameTree } = await cdp.send("Page.getFrameTree");
+  const { executionContextId } = await cdp.send("Page.createIsolatedWorld", {
+    frameId: frameTree.frame.id,
+    worldName: "pivot-motion",
+  });
+  const run = async <T>(expression: string) => {
+    const r = await cdp.send("Runtime.evaluate", { expression, contextId: executionContextId, returnByValue: true });
+    if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text);
+    return r.result.value as T;
+  };
+  await run(MOTION_PROBE);
+  const frames: ProbeFrame[] = [];
+  const libraries = new Set<string>();
+  const tweens: LibraryTween[] = [];
+  let triggers: LibraryTrigger[] = [];
+  let lenis: { lerp?: number; duration?: number } | undefined;
+  let gsap = false;
+  let broken = false;
+  const readLibraries = async (full: boolean, f: number, t: number, at: number) => {
+    const r = await page
+      .evaluate<{
+        libraries: string[];
+        tweens?: Omit<LibraryTween, "f" | "t" | "at">[];
+        triggers?: LibraryTrigger[];
+        lenis?: { lerp?: number; duration?: number };
+      }>(motionLibraries(full))
+      .catch(() => null);
+    if (!r) return;
+    r.libraries.forEach((l) => libraries.add(l));
+    gsap = r.libraries.some((l) => l.startsWith("GSAP"));
+    for (const tw of r.tweens ?? []) tweens.push({ ...tw, f, t, at });
+    if (r.triggers?.length) triggers = r.triggers;
+    if (r.lenis) lenis = r.lenis;
+  };
+  await readLibraries(true, 0, 0, 0);
+  return {
+    async frame(f: number, t: number, at: number) {
+      if (broken) return;
+      try {
+        frames.push(await run<ProbeFrame>(`__pivotMotion.frame(${f}, ${t}, ${Math.round(at)}, ${MOTION_CHANGED_CAP})`));
+        if (gsap) await readLibraries(false, f, t, at);
+      } catch {
+        broken = true;
+      }
+    },
+    rest: (f: number, t: number, at: number) => (broken ? Promise.resolve() : readLibraries(true, f, t, at)),
+    async finish(viewport: { width: number; height: number }, wheel: boolean, stopped?: "budget" | "stuck") {
+      if (!frames.length) return null;
+      const elements = await run<Record<string, ProbeElement>>("__pivotMotion.elements()").catch(() => ({}));
+      return buildMotionTrack({
+        viewport,
+        method: wheel ? "wheel" : "scroll",
+        frames,
+        elements,
+        libraries: [...libraries],
+        tweens,
+        triggers,
+        ...(lenis ? { lenis } : {}),
+        cap: MOTION_CHANGED_CAP,
+        ...(stopped ? { stopped } : {}),
+      });
+    },
+  };
+}
+
 /**
  * Records the page scrolling from top to bottom as a smooth 30 fps video, the way a screen recording of a visitor
  * reads it: a rest on the first screen, then one screen at a time (an eased glide down a window height, a short rest
@@ -601,7 +685,7 @@ const within = <T>(promise: Promise<T>, ms: number): Promise<T | undefined> =>
  * the video plays at its real speed, in step with the scroll, and scroll-scrubbed timelines (GSAP ScrollTrigger)
  * get the frames they need to catch up. Pages with a smooth-scroll library are scrolled with the mouse wheel and
  * followed by where their content actually is; the others jump to each frame's position. Keyframes come from the
- * same frames.
+ * same frames, and so does the motion track: what moved in each frame, measured as it was filmed.
  */
 async function recordScroll(page: Page, file: string) {
   const wheel = await page.evaluate<boolean>(NEEDS_WHEEL).catch(() => false);
@@ -628,12 +712,15 @@ async function recordScroll(page: Page, file: string) {
   };
 
   const cdp = await page.context().newCDPSession(page);
+  const probe = await startMotionProbe(page, cdp).catch(() => null);
+  let scrollAt = 0;
   const encoder = await startEncoder(file);
   const candidates: { jpeg: Buffer; scrollY: number }[] = [];
   let frames = 0;
   let y = 0;
   const shoot = async () => {
     await tick();
+    await probe?.frame(frames, clockMs, scrollAt);
     const { data } = await cdp.send("Page.captureScreenshot", { format: "jpeg", quality: 90, optimizeForSpeed: true });
     const jpeg = Buffer.from(data, "base64");
     await encoder.write(jpeg);
@@ -641,6 +728,7 @@ async function recordScroll(page: Page, file: string) {
     return jpeg;
   };
   const progress = () => page.evaluate<{ at: number; max: number }>(SCROLL_PROGRESS);
+  let stopped: "budget" | "stuck" | undefined;
   try {
     const started = Date.now();
     let { max } = wheel ? await progress() : await page.evaluate<{ at: number; max: number }>(scrollAndMeasure(0));
@@ -673,6 +761,7 @@ async function recordScroll(page: Page, file: string) {
         const behind = wheel ? y - moved.at > vp.height / 4 && moved.at <= at + 0.5 : moved.at < Math.round(y) - 2;
         stuck = behind ? stuck + 1 : 0;
         at = wheel ? moved.at : Math.round(y);
+        scrollAt = at;
         if (stuck >= MOTION_FPS) break;
         await shoot();
       }
@@ -683,6 +772,8 @@ async function recordScroll(page: Page, file: string) {
       let settled = await shoot();
       for (let i = 1; i < MOTION_FPS * MOTION_STEP_HOLD_S; i++) settled = await shoot();
       if (wheel) at = (await progress()).at;
+      scrollAt = at;
+      await probe?.rest(frames, clockMs, at);
       candidates.push({ jpeg: settled, scrollY: at });
     }
     await within(page.evaluate(IMAGES_ON_SCREEN), 1_500);
@@ -693,6 +784,7 @@ async function recordScroll(page: Page, file: string) {
     if (at - candidates[candidates.length - 1].scrollY >= vp.height * 0.25) {
       candidates.push({ jpeg: last, scrollY: at });
     }
+    stopped = !inBudget() ? "budget" : stuck >= MOTION_FPS ? "stuck" : undefined;
     await encoder.finish();
   } catch (err) {
     encoder.kill();
@@ -704,7 +796,14 @@ async function recordScroll(page: Page, file: string) {
       scrollY: c.scrollY,
     })),
   );
-  return { video: await fs.readFile(file), durationMs: Math.round((frames / MOTION_FPS) * 1000), keyframes };
+  // a track that can't be built leaves the video and keyframes as they are
+  const motionTrack: MotionTrack | null = probe ? await probe.finish(vp, wheel, stopped).catch(() => null) : null;
+  return {
+    video: await fs.readFile(file),
+    durationMs: Math.round((frames / MOTION_FPS) * 1000),
+    keyframes,
+    motionTrack,
+  };
 }
 
 /** Clicks one visible "Load more"-style button. Buttons only, never links or form submits, so it can't navigate. */
@@ -872,9 +971,10 @@ export async function screenshotUrl(
     let video: Buffer | null = null;
     let videoDurationMs = 0;
     let keyframes: { data: Buffer; scrollY: number }[] = [];
+    let motionTrack: MotionTrack | null = null;
     if (motion && videoDir) {
       const recorded = await recordScroll(page, path.join(videoDir, "motion.webm"));
-      ({ video, keyframes } = recorded);
+      ({ video, keyframes, motionTrack } = recorded);
       videoDurationMs = recorded.durationMs;
     } else if (fullPage) {
       await loadWholePage(page, settle, expandContent).catch(() => {});
@@ -895,6 +995,7 @@ export async function screenshotUrl(
       video,
       videoDurationMs,
       keyframes,
+      motionTrack,
       motionLikely,
     };
   } catch (err) {
@@ -1335,8 +1436,26 @@ async function captureExtras(
         await attachAsset(resourceId, asset.id, "motion-keyframe");
         kept.push(asset.id);
       }
-      await replace(["motion-video", "motion-keyframe"], () => true, kept);
-      extras.motion = shots.video ? `done (${shots.keyframes.length} keyframes)` : "no video was recorded";
+      if (shots.motionTrack) {
+        const track = await saveAsset({
+          data: Buffer.from(JSON.stringify(shots.motionTrack)),
+          fileName: `${host}-${stamp}-motion-track.json`,
+          mimeType: "application/json",
+          sourceUrl,
+          meta: meta({
+            viewport: DESKTOP,
+            finalUrl: shots.finalUrl,
+            items: shots.motionTrack.itemsTotal,
+            libraries: shots.motionTrack.libraries,
+          }),
+        });
+        await attachAsset(resourceId, track.id, "motion-track");
+        kept.push(track.id);
+      }
+      await replace(["motion-video", "motion-keyframe", "motion-track"], () => true, kept);
+      extras.motion = shots.video
+        ? `done (${shots.keyframes.length} keyframes${shots.motionTrack ? `, ${shots.motionTrack.itemsTotal} motion items` : ""})`
+        : "no video was recorded";
     } catch (err) {
       if (err instanceof CaptureError && err.kind === "cancelled") throw err;
       extras.motion = `failed: ${err instanceof Error ? err.message : String(err)}`;

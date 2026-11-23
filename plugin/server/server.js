@@ -6511,11 +6511,11 @@ var require_format = __commonJS({
           }
           function getFormat(fmtDef) {
             const code = fmtDef instanceof RegExp ? (0, codegen_1.regexpCode)(fmtDef) : opts.code.formats ? (0, codegen_1._)`${opts.code.formats}${(0, codegen_1.getProperty)(schema)}` : void 0;
-            const fmt = gen.scopeValue("formats", { key: schema, ref: fmtDef, code });
+            const fmt2 = gen.scopeValue("formats", { key: schema, ref: fmtDef, code });
             if (typeof fmtDef == "object" && !(fmtDef instanceof RegExp)) {
-              return [fmtDef.type || "string", fmtDef.validate, (0, codegen_1._)`${fmt}.validate`];
+              return [fmtDef.type || "string", fmtDef.validate, (0, codegen_1._)`${fmt2}.validate`];
             }
-            return ["string", fmtDef, fmt];
+            return ["string", fmtDef, fmt2];
           }
           function validCondition() {
             if (typeof formatDef == "object" && !(formatDef instanceof RegExp) && formatDef.async) {
@@ -7177,8 +7177,8 @@ var require_limit = __commonJS({
             ref: self.formats,
             code: opts.code.formats
           });
-          const fmt = gen.const("fmt", (0, codegen_1._)`${fmts}[${fCxt.schemaCode}]`);
-          cxt.fail$data((0, codegen_1.or)((0, codegen_1._)`typeof ${fmt} != "object"`, (0, codegen_1._)`${fmt} instanceof RegExp`, (0, codegen_1._)`typeof ${fmt}.compare != "function"`, compareCode(fmt)));
+          const fmt2 = gen.const("fmt", (0, codegen_1._)`${fmts}[${fCxt.schemaCode}]`);
+          cxt.fail$data((0, codegen_1.or)((0, codegen_1._)`typeof ${fmt2} != "object"`, (0, codegen_1._)`${fmt2} instanceof RegExp`, (0, codegen_1._)`typeof ${fmt2}.compare != "function"`, compareCode(fmt2)));
         }
         function validateFormat() {
           const format = fCxt.schema;
@@ -7188,15 +7188,15 @@ var require_limit = __commonJS({
           if (typeof fmtDef != "object" || fmtDef instanceof RegExp || typeof fmtDef.compare != "function") {
             throw new Error(`"${keyword}": format "${format}" does not define "compare" function`);
           }
-          const fmt = gen.scopeValue("formats", {
+          const fmt2 = gen.scopeValue("formats", {
             key: format,
             ref: fmtDef,
             code: opts.code.formats ? (0, codegen_1._)`${opts.code.formats}${(0, codegen_1.getProperty)(format)}` : void 0
           });
-          cxt.fail$data(compareCode(fmt));
+          cxt.fail$data(compareCode(fmt2));
         }
-        function compareCode(fmt) {
-          return (0, codegen_1._)`${fmt}.compare(${data}, ${schemaCode}) ${KWDs[keyword].fail} 0`;
+        function compareCode(fmt2) {
+          return (0, codegen_1._)`${fmt2}.compare(${data}, ${schemaCode}) ${KWDs[keyword].fail} 0`;
         }
       },
       dependencies: ["format"]
@@ -24288,45 +24288,45 @@ var PATTERN_IS_COMPLETE = /* @__PURE__ */ new Set([
   "xid"
 ]);
 function generateStringFormatCheck(doc, ctx, def, accessor, needsValue = true) {
-  const fmt = def.format;
-  if (fmt === "base64") {
+  const fmt2 = def.format;
+  if (fmt2 === "base64") {
     const validator = addConstant(ctx, isValidBase64);
     doc.write(`if (!${validator}(${accessor})) return INVALID;`);
     return accessor;
   }
-  if (fmt === "base64url") {
+  if (fmt2 === "base64url") {
     const validator = addConstant(ctx, isValidBase64URL);
     doc.write(`if (!${validator}(${accessor})) return INVALID;`);
     return accessor;
   }
-  if (fmt === "jwt") {
+  if (fmt2 === "jwt") {
     const validator = addConstant(ctx, isValidJWT2);
     const alg = addConstant(ctx, def.alg ?? null);
     doc.write(`if (!${validator}(${accessor}, ${alg})) return INVALID;`);
     return accessor;
   }
-  if (fmt === "ipv6") {
+  if (fmt2 === "ipv6") {
     const validator = addConstant(ctx, isValidIPv6);
     doc.write(`if (!${validator}(${accessor})) return INVALID;`);
     return accessor;
   }
-  if (fmt === "cidrv6") {
+  if (fmt2 === "cidrv6") {
     const validator = addConstant(ctx, isValidCIDRv6);
     doc.write(`if (!${validator}(${accessor})) return INVALID;`);
     return accessor;
   }
-  if (fmt === "credit_card") {
+  if (fmt2 === "credit_card") {
     const validator = addConstant(ctx, isValidCreditCard);
     doc.write(`if (!${validator}(${accessor})) return INVALID;`);
     return accessor;
   }
-  if (fmt === "iban") {
+  if (fmt2 === "iban") {
     const validator = addConstant(ctx, isValidIBAN);
     doc.write(`if (!${validator}(${accessor})) return INVALID;`);
     return accessor;
   }
   const formatDef = def;
-  if (fmt === "url" || fmt === "httpurl" || formatDef.normalize || formatDef.hostname !== void 0 || formatDef.protocol !== void 0) {
+  if (fmt2 === "url" || fmt2 === "httpurl" || formatDef.normalize || formatDef.hostname !== void 0 || formatDef.protocol !== void 0) {
     const parseConst = addConstant(ctx, validateURL);
     const defConst = addConstant(ctx, def);
     const trimVar = newVar(ctx);
@@ -24352,12 +24352,12 @@ function generateStringFormatCheck(doc, ctx, def, accessor, needsValue = true) {
   const customFn = def.fn;
   if (customFn) {
     if (isAsyncFunction(customFn))
-      throw new ZodCompileUnsupportedError(`async string format ${fmt}`);
+      throw new ZodCompileUnsupportedError(`async string format ${fmt2}`);
     const fnConst = addConstant(ctx, customFn);
     doc.write(`if (!${fnConst}(${accessor})) return INVALID;`);
     return accessor;
   }
-  if (PATTERN_IS_COMPLETE.has(fmt) && def.pattern) {
+  if (PATTERN_IS_COMPLETE.has(fmt2) && def.pattern) {
     const patternConst = addConstant(ctx, def.pattern);
     doc.write(`${patternConst}.lastIndex = 0;`);
     doc.write(`if (!${patternConst}.test(${accessor})) return INVALID;`);
@@ -36997,6 +36997,101 @@ var searchExternal = {
 };
 var EXTERNAL_TOOLS = [searchExternal];
 
+// ../../packages/core/src/motion-fit.ts
+var MOTION_TRACK_FPS = 30;
+var FRAME_MS = 1e3 / MOTION_TRACK_FPS;
+var TABLE = 1e3;
+function tabulate(f) {
+  const ys = new Float64Array(TABLE + 1);
+  for (let i = 0; i <= TABLE; i++) ys[i] = f(i / TABLE);
+  return (x) => {
+    if (x <= 0) return 0;
+    if (x >= 1) return 1;
+    const p = x * TABLE;
+    const i = Math.floor(p);
+    return ys[i] + (p - i) * (ys[i + 1] - ys[i]);
+  };
+}
+function cubicBezier(x1, y1, x2, y2) {
+  const n = 4e3;
+  const xs = new Float64Array(n + 1);
+  const ys = new Float64Array(n + 1);
+  for (let i = 0; i <= n; i++) {
+    const s = i / n;
+    const u = 1 - s;
+    xs[i] = 3 * u * u * s * x1 + 3 * u * s * s * x2 + s ** 3;
+    ys[i] = 3 * u * u * s * y1 + 3 * u * s * s * y2 + s ** 3;
+  }
+  return tabulate((x) => {
+    let lo = 0;
+    let hi = n;
+    while (hi - lo > 1) {
+      const mid = lo + hi >> 1;
+      if (xs[mid] < x) lo = mid;
+      else hi = mid;
+    }
+    const span = xs[hi] - xs[lo];
+    const k = span === 0 ? 0 : (x - xs[lo]) / span;
+    return ys[lo] + k * (ys[hi] - ys[lo]);
+  });
+}
+var BACK = 1.70158;
+var EASINGS = {
+  linear: (x) => Math.min(1, Math.max(0, x)),
+  ease: cubicBezier(0.25, 0.1, 0.25, 1),
+  "ease-in": cubicBezier(0.42, 0, 1, 1),
+  "ease-out": cubicBezier(0, 0, 0.58, 1),
+  "ease-in-out": cubicBezier(0.42, 0, 0.58, 1),
+  "power1.out": tabulate((x) => 1 - (1 - x) ** 2),
+  "easeOutCubic / power2.out": tabulate((x) => 1 - (1 - x) ** 3),
+  "easeInCubic / power2.in": tabulate((x) => x ** 3),
+  "easeInOutCubic / power2.inOut": tabulate((x) => x < 0.5 ? 4 * x ** 3 : 1 - (-2 * x + 2) ** 3 / 2),
+  "expo.out": tabulate((x) => x >= 1 ? 1 : 1 - 2 ** (-10 * x)),
+  "back.out": tabulate((x) => 1 + (BACK + 1) * (x - 1) ** 3 + BACK * (x - 1) ** 2),
+  "cubic-bezier(.23,1,.32,1)": cubicBezier(0.23, 1, 0.32, 1)
+};
+
+// ../../packages/core/src/motion-track.ts
+var MOTION_TABLE_ITEMS = 24;
+function timingText(it) {
+  const parts = [];
+  if (it.fixedAt !== void 0) return `fixed at y=${it.fixedAt}`;
+  if (it.pinnedAt !== void 0) return `pinned at y=${it.pinnedAt}`;
+  if (it.instant) parts.push("jumps within one frame");
+  if (it.scrubbed) {
+    parts.push(
+      it.parallax && it.parallax.ratio ? `scroll-linked ${it.parallax.ratio > 0 ? "+" : ""}${it.parallax.ratio}/px${it.parallax.smoothed ? ", smoothed" : ""}` : `scrubbed${it.parallax?.smoothed ? ", smoothed" : ""}`
+    );
+  }
+  if (it.durationMs !== void 0) parts.push(`${Math.round(it.durationMs)}ms`);
+  if (it.easing && !it.scrubbed) parts[parts.length - 1] = `${parts[parts.length - 1] ?? ""} ${it.easing}`.trim();
+  if (it.iterations !== void 0) parts.push(it.iterations === "infinite" ? "loops" : `\xD7${it.iterations}`);
+  if (it.staggerMs) parts.push(`stagger ${it.staggerMs}ms`);
+  if (it.delayMs !== void 0)
+    parts.push(`delay ${Array.isArray(it.delayMs) ? `${it.delayMs[0]}\u2013${it.delayMs[1]}` : it.delayMs}ms`);
+  if (it.fitRms !== void 0) parts.push(`fit error ${it.fitRms}`);
+  return parts.join(", ");
+}
+var triggerText = (tr) => tr.kind === "load" ? "load" : tr.kind === "always" ? "always" : tr.spread ? `scroll@${tr.spread[0]}\u2026${tr.spread[1]}` : tr.from !== void 0 ? `scroll ${tr.from}\u2013${tr.to}` : `scroll@${tr.at ?? 0}`;
+function motionLine(it) {
+  const count = it.target.count > 1 ? `${it.target.count}\xD7 ` : "";
+  const changes = it.changes.map((c) => `${c.property} ${c.values.length === 1 ? `\u2192${c.values[0]}` : c.values.join("\u2192")}`).join("; ");
+  const timing = timingText(it);
+  const source2 = it.source === "exact" ? `exact (${it.via})` : "measured";
+  return [
+    `${it.id} ${triggerText(it.trigger)} ${count}${it.target.name} (${it.target.selector})`,
+    changes,
+    timing,
+    source2
+  ].filter(Boolean).join(" | ");
+}
+function motionTable(track, cap = MOTION_TABLE_ITEMS) {
+  const lines2 = track.items.slice(0, cap).map(motionLine);
+  const more = track.itemsTotal - Math.min(cap, track.items.length);
+  if (more > 0) lines2.push(`(+${more} more item${more === 1 ? "" : "s"})`);
+  return lines2;
+}
+
 // ../../packages/core/src/known-sources.ts
 var KNOWN_SOURCES = [
   {
@@ -37601,7 +37696,7 @@ var viewportOf = (v) => {
   const height = positive(o.height);
   return width && height ? { width, height } : null;
 };
-function motionEvidenceOf(r, limit = MOTION_LIST_MAX) {
+function motionEvidenceOf(r, limit = MOTION_LIST_MAX, measured = false) {
   const live = r.assets.filter((a) => !a.missing);
   const video = live.find((a) => a.role === "motion-video");
   const allKeyframes = live.filter((a) => a.role === "motion-keyframe" && (a.kind === "image" || a.kind === "svg")).map((a) => ({
@@ -37648,14 +37743,39 @@ function motionEvidenceOf(r, limit = MOTION_LIST_MAX) {
     statesTotal: allStates.length,
     limitations: [
       "Recorded while PIVOT scrolled the page top to bottom with no pointer: hover, click, focus and other triggers weren't exercised.",
-      "Timing and easing weren't measured: keyframes are stills at the listed scroll positions, and what happens between them is inferred.",
+      measured ? "Timing and easing are in the motion table (`motion`); keyframes are stills at the listed scroll positions." : "Timing and easing weren't measured: keyframes are stills at the listed scroll positions, and what happens between them is inferred.",
       video ? "The video itself can't be viewed through these tools; look at the keyframes." : "The recording's video is missing; only its keyframes remain.",
       ...allKeyframes.length ? [] : ["No keyframes were kept, so nothing from the recording can be looked at here."],
       ...stateNote
     ]
   };
 }
-function motionLine(m) {
+async function motionDetailOf(source2, r) {
+  const asset = r.assets.find((a) => a.role === "motion-track" && !a.missing);
+  if (!asset || !source2.motionTrack) return null;
+  const track = await source2.motionTrack(asset.id).catch(() => null);
+  if (!track) return null;
+  return {
+    assetId: asset.id,
+    capturedAt: asset.createdAt,
+    viewport: track.viewport,
+    method: track.method,
+    libraries: track.libraries,
+    items: track.items.slice(0, MOTION_TABLE_ITEMS),
+    itemsTotal: track.itemsTotal,
+    limits: track.limits
+  };
+}
+function motionTableText(m) {
+  const shown = m.items.length < m.itemsTotal ? `, the ${m.items.length} most visible shown` : "";
+  const libraries = m.libraries.length ? `; libraries: ${m.libraries.join(", ")}` : "";
+  return [
+    `Motion table (measured by PIVOT while scrolling, ${m.capturedAt.slice(0, 10)}, ${m.viewport.width}\xD7${m.viewport.height}${libraries}; ${m.itemsTotal} item${m.itemsTotal === 1 ? "" : "s"}${shown}). exact = declared by the page; measured = fitted from the recording's frames. Cite items by id (e.g. "M3").`,
+    ...motionTable({ items: m.items, itemsTotal: m.itemsTotal }, MOTION_TABLE_ITEMS),
+    `Motion limits: ${m.limits.join(" ")}`
+  ].join("\n");
+}
+function motionLine2(m) {
   if (m.classification === "unknown") {
     return `Motion: unknown (PIVOT holds no recording).${m.statesTotal ? ` ${m.statesTotal} interaction-state still${m.statesTotal === 1 ? "" : "s"}: get_reference_images which=states.` : ""}`;
   }
@@ -37683,10 +37803,11 @@ var idInput = {
 var getReference = {
   name: "get_reference",
   title: "Get a reference's details",
-  description: `Full details of one PIVOT reference or source: link, description, the user's notes, facets, collections, which screenshots exist (with sizes), and its motion evidence: "observed" only when PIVOT recorded the page while scrolling (with the recording's source and limits, and keyframes you can view), otherwise "unknown". Call it before relying on a reference. ${UNTRUSTED}`,
+  description: `Full details of one PIVOT reference or source: link, description, the user's notes, facets, collections, which screenshots exist (with sizes), and its motion evidence: "observed" only when PIVOT recorded the page while scrolling (with the recording's source and limits, and keyframes you can view), otherwise "unknown". A recording made since motion tracks exist adds a motion table: what moves, its trigger (load, scroll position or range), properties from \u2192 to, duration, delay, easing, stagger, pins and parallax, each item exact (declared by the page) or measured (fitted from frames, with its error). Read the table before asking for keyframes. Call it before relying on a reference. ${UNTRUSTED}`,
   inputSchema: idInput,
   async run(source2, { id }) {
     const r = await liveResource(source2, id);
+    const motion = await motionDetailOf(source2, r);
     const notes = clip(r.notes, NOTES_CHARS);
     const content = clip(r.content, CONTENT_CHARS);
     const url2 = r.sourceUrl && /^https?:/i.test(r.sourceUrl) ? r.sourceUrl : null;
@@ -37703,7 +37824,8 @@ var getReference = {
       facets: r.tags.map(({ kind, name }) => ({ kind, name })),
       collections: r.collections.map((c) => c.name),
       screenshots: screenshotsOf(r),
-      motionEvidence: motionEvidenceOf(r),
+      motionEvidence: motionEvidenceOf(r, MOTION_LIST_MAX, !!motion),
+      ...motion ? { motion } : {},
       // the user's (or an agent's) notes on places in the screenshots, as fractions of the image
       annotations: (r.annotations ?? []).map((a) => ({
         assetId: a.assetId,
@@ -37727,7 +37849,8 @@ var getReference = {
       detail.collections.length && `Collections: ${detail.collections.join(", ")}`,
       notes.text && `Notes: ${notes.text}`,
       detail.screenshots.length ? `Screenshots: ${detail.screenshots.map((s) => `${s.role} ${s.width}\xD7${s.height}`).join(", ")}. get_reference_images shows them.` : "No screenshots.",
-      motionLine(detail.motionEvidence),
+      motion && motionTableText(motion),
+      motionLine2(detail.motionEvidence),
       detail.annotations.length && `Annotations: ${detail.annotations.map(
         (a, i) => `${i + 1}. "${a.note}" (${a.kind} at ${Math.round(a.x * 100)}%, ${Math.round(a.y * 100)}% of ${ROLE_LABEL[r.assets.find((x) => x.id === a.assetId)?.role ?? "attachment"]})`
       ).join("; ")}`,
@@ -39237,6 +39360,12 @@ var HttpSource = class {
       width: Number(res.headers.get("x-image-width")) || 0,
       height: Number(res.headers.get("x-image-height")) || 0
     };
+  }
+  async motionTrack(assetId) {
+    const res = await this.call(`/api/assets/${encodeURIComponent(assetId)}`);
+    if (!res) return null;
+    const track = await res.json().catch(() => null);
+    return track && track.version === 1 && Array.isArray(track.items) ? track : null;
   }
   async agentSlices(assetId, from, count) {
     const page = await this.json(`/api/assets/${encodeURIComponent(assetId)}/agent?slices=1&from=${from}&count=${count}`);

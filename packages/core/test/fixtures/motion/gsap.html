@@ -1,0 +1,48 @@
+<!doctype html>
+<!-- GSAP with known numbers, for motion-track.test.ts: a scrubbed parallax and a tween started by a ScrollTrigger. -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Motion fixture: GSAP</title>
+    <style>
+      body {
+        margin: 0;
+        height: 4200px;
+        position: relative;
+        background: #111;
+      }
+      .box {
+        position: absolute;
+        left: 100px;
+        width: 600px;
+        height: 300px;
+        background: #2a6;
+      }
+      #para {
+        top: 1200px;
+      }
+      #tween {
+        top: 2600px;
+        background: #36a;
+      }
+    </style>
+    <script src="/gsap.min.js"></script>
+    <script src="/ScrollTrigger.min.js"></script>
+  </head>
+  <body>
+    <div class="box" id="para">Parallax</div>
+    <div class="box" id="tween">Tween</div>
+    <script>
+      gsap.registerPlugin(ScrollTrigger);
+      // y 0 → -200 over scroll 500–2200, scrubbed
+      gsap.to("#para", { y: -200, ease: "none", scrollTrigger: { start: 500, end: 2200, scrub: true } });
+      // x 0 → 300 in 0.8 s, power2.out, when it enters
+      ScrollTrigger.create({
+        trigger: "#tween",
+        start: "top 80%",
+        once: true,
+        onEnter: () => gsap.to("#tween", { x: 300, duration: 0.8, ease: "power2.out" }),
+      });
+    </script>
+  </body>
+</html>

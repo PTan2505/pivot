@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MOTION_TABLE_ITEMS, motionTable, type MotionItem, type MotionTrack } from "@pivot/core/motion-track";
 import { hostOf } from "@pivot/core/source-match";
 import {
   isOtherSection,
@@ -263,7 +264,7 @@ const viewportOf = (v: unknown) => {
  * keyframes, interaction-state stills). Nothing is guessed: timing, easing and triggers other than scrolling are
  * never filled in, and a reference without a recording is "unknown". Lists stop at `limit` items; the totals don't.
  */
-export function motionEvidenceOf(r: ResourceDetailDTO, limit = MOTION_LIST_MAX): MotionEvidence {
+export function motionEvidenceOf(r: ResourceDetailDTO, limit = MOTION_LIST_MAX, measured = false): MotionEvidence {
   const live = r.assets.filter((a) => !a.missing);
   const video = live.find((a) => a.role === "motion-video");
   const allKeyframes = live
@@ -316,7 +317,9 @@ export function motionEvidenceOf(r: ResourceDetailDTO, limit = MOTION_LIST_MAX):
     statesTotal: allStates.length,
     limitations: [
       "Recorded while PIVOT scrolled the page top to bottom with no pointer: hover, click, focus and other triggers weren't exercised.",
-      "Timing and easing weren't measured: keyframes are stills at the listed scroll positions, and what happens between them is inferred.",
+      measured
+        ? "Timing and easing are in the motion table (`motion`); keyframes are stills at the listed scroll positions."
+        : "Timing and easing weren't measured: keyframes are stills at the listed scroll positions, and what happens between them is inferred.",
       video
         ? "The video itself can't be viewed through these tools; look at the keyframes."
         : "The recording's video is missing; only its keyframes remain.",
@@ -324,6 +327,49 @@ export function motionEvidenceOf(r: ResourceDetailDTO, limit = MOTION_LIST_MAX):
       ...stateNote,
     ],
   };
+}
+
+export interface MotionDetail {
+  assetId: string;
+  capturedAt: string;
+  viewport: { width: number; height: number };
+  /** `wheel` when a smooth-scroll library was scrolled with the mouse wheel. */
+  method: "scroll" | "wheel";
+  libraries: string[];
+  items: MotionItem[];
+  itemsTotal: number;
+  limits: string[];
+}
+
+/**
+ * The reference's motion as numbers, from its `motion-track` asset (a "Record motion" made since motion tracks
+ * exist), or null. The first `MOTION_TABLE_ITEMS` items, most visible first; the rest are counted.
+ */
+export async function motionDetailOf(source: PivotSource, r: ResourceDetailDTO): Promise<MotionDetail | null> {
+  const asset = r.assets.find((a) => a.role === "motion-track" && !a.missing);
+  if (!asset || !source.motionTrack) return null;
+  const track = await source.motionTrack(asset.id).catch(() => null);
+  if (!track) return null;
+  return {
+    assetId: asset.id,
+    capturedAt: asset.createdAt,
+    viewport: track.viewport,
+    method: track.method,
+    libraries: track.libraries,
+    items: track.items.slice(0, MOTION_TABLE_ITEMS),
+    itemsTotal: track.itemsTotal,
+    limits: track.limits,
+  };
+}
+
+function motionTableText(m: MotionDetail) {
+  const shown = m.items.length < m.itemsTotal ? `, the ${m.items.length} most visible shown` : "";
+  const libraries = m.libraries.length ? `; libraries: ${m.libraries.join(", ")}` : "";
+  return [
+    `Motion table (measured by PIVOT while scrolling, ${m.capturedAt.slice(0, 10)}, ${m.viewport.width}×${m.viewport.height}${libraries}; ${m.itemsTotal} item${m.itemsTotal === 1 ? "" : "s"}${shown}). exact = declared by the page; measured = fitted from the recording's frames. Cite items by id (e.g. "M3").`,
+    ...motionTable({ items: m.items, itemsTotal: m.itemsTotal } as MotionTrack, MOTION_TABLE_ITEMS),
+    `Motion limits: ${m.limits.join(" ")}`,
+  ].join("\n");
 }
 
 function motionLine(m: MotionEvidence) {
@@ -365,10 +411,11 @@ const idInput = {
 const getReference: PivotTool<typeof idInput> = {
   name: "get_reference",
   title: "Get a reference's details",
-  description: `Full details of one PIVOT reference or source: link, description, the user's notes, facets, collections, which screenshots exist (with sizes), and its motion evidence: "observed" only when PIVOT recorded the page while scrolling (with the recording's source and limits, and keyframes you can view), otherwise "unknown". Call it before relying on a reference. ${UNTRUSTED}`,
+  description: `Full details of one PIVOT reference or source: link, description, the user's notes, facets, collections, which screenshots exist (with sizes), and its motion evidence: "observed" only when PIVOT recorded the page while scrolling (with the recording's source and limits, and keyframes you can view), otherwise "unknown". A recording made since motion tracks exist adds a motion table: what moves, its trigger (load, scroll position or range), properties from → to, duration, delay, easing, stagger, pins and parallax, each item exact (declared by the page) or measured (fitted from frames, with its error). Read the table before asking for keyframes. Call it before relying on a reference. ${UNTRUSTED}`,
   inputSchema: idInput,
   async run(source, { id }) {
     const r = await liveResource(source, id);
+    const motion = await motionDetailOf(source, r);
     const notes = clip(r.notes, NOTES_CHARS);
     const content = clip(r.content, CONTENT_CHARS);
     const url = r.sourceUrl && /^https?:/i.test(r.sourceUrl) ? r.sourceUrl : null;
@@ -385,7 +432,8 @@ const getReference: PivotTool<typeof idInput> = {
       facets: r.tags.map(({ kind, name }) => ({ kind, name })),
       collections: r.collections.map((c) => c.name),
       screenshots: screenshotsOf(r),
-      motionEvidence: motionEvidenceOf(r),
+      motionEvidence: motionEvidenceOf(r, MOTION_LIST_MAX, !!motion),
+      ...(motion ? { motion } : {}),
       // the user's (or an agent's) notes on places in the screenshots, as fractions of the image
       annotations: (r.annotations ?? []).map((a) => ({
         assetId: a.assetId,
@@ -412,6 +460,7 @@ const getReference: PivotTool<typeof idInput> = {
       detail.screenshots.length
         ? `Screenshots: ${detail.screenshots.map((s) => `${s.role} ${s.width}×${s.height}`).join(", ")}. get_reference_images shows them.`
         : "No screenshots.",
+      motion && motionTableText(motion),
       motionLine(detail.motionEvidence),
       detail.annotations.length &&
         `Annotations: ${detail.annotations

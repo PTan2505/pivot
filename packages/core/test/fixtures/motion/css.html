@@ -1,0 +1,152 @@
+<!doctype html>
+<!-- Motion with known numbers, for motion-track.test.ts. Every value here is asserted there. -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Motion fixture: CSS, script and sticky</title>
+    <style>
+      body {
+        margin: 0;
+        height: 5200px;
+        position: relative;
+        font: 16px sans-serif;
+        background: #111;
+        color: #eee;
+      }
+      .box {
+        position: absolute;
+        left: 100px;
+        width: 600px;
+        height: 200px;
+        background: #2a6;
+      }
+      /* @keyframes on load: 600 ms cubic-bezier(.23,1,.32,1) */
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(24px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      #hero {
+        top: 200px;
+        height: 300px;
+        animation: rise 600ms cubic-bezier(0.23, 1, 0.32, 1) both;
+      }
+      /* a CSS transition started when it scrolls into view: 300 ms ease-out */
+      #card {
+        top: 1300px;
+        opacity: 0;
+        transform: translateY(40px);
+        transition:
+          opacity 300ms ease-out,
+          transform 300ms ease-out;
+      }
+      #card.in {
+        opacity: 1;
+        transform: none;
+      }
+      /* six siblings, 400 ms ease-out, 80 ms apart */
+      #list {
+        position: absolute;
+        top: 1800px;
+        left: 100px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      #list li {
+        width: 500px;
+        height: 50px;
+        margin: 0 0 10px;
+        background: #36a;
+        opacity: 0;
+        transition: opacity 400ms ease-out;
+      }
+      #list.in li {
+        opacity: 1;
+      }
+      /* a fade run by requestAnimationFrame: 500 ms easeOutCubic */
+      #fade {
+        top: 2400px;
+        opacity: 0;
+        background: #a63;
+      }
+      /* a sticky element held at y=100 while its section scrolls: pinned over scroll 2800–3900 */
+      #pinwrap {
+        position: absolute;
+        top: 2900px;
+        left: 800px;
+        width: 400px;
+        height: 1400px;
+      }
+      #pin {
+        position: sticky;
+        top: 100px;
+        width: 400px;
+        height: 300px;
+        background: #a36;
+      }
+      /* a parallax that trails the scroll (lerped): -0.3 px per px scrolled */
+      #lerp {
+        top: 1500px;
+        left: 800px;
+        width: 400px;
+        height: 300px;
+        background: #6a3;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="box" id="hero">Hero</div>
+    <div class="box" id="card">Card</div>
+    <ul id="list">
+      <li style="transition-delay: 0ms">1</li>
+      <li style="transition-delay: 80ms">2</li>
+      <li style="transition-delay: 160ms">3</li>
+      <li style="transition-delay: 240ms">4</li>
+      <li style="transition-delay: 320ms">5</li>
+      <li style="transition-delay: 400ms">6</li>
+    </ul>
+    <div class="box" id="fade">Fade</div>
+    <div id="pinwrap"><div id="pin">Pinned</div></div>
+    <div class="box" id="lerp">Lerp</div>
+    <script>
+      const once = (el, run) => {
+        const io = new IntersectionObserver(
+          (es) => {
+            if (es[0].isIntersecting) {
+              io.disconnect();
+              run();
+            }
+          },
+          { threshold: 0.5 },
+        );
+        io.observe(el);
+      };
+      once(document.getElementById("card"), () => document.getElementById("card").classList.add("in"));
+      once(document.getElementById("list"), () => document.getElementById("list").classList.add("in"));
+      const fade = document.getElementById("fade");
+      once(fade, () => {
+        const start = performance.now();
+        const step = (now) => {
+          const x = Math.min(1, (now - start) / 500);
+          fade.style.opacity = String(1 - (1 - x) ** 3);
+          if (x < 1) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      });
+      const lerp = document.getElementById("lerp");
+      let cur = 0;
+      const follow = () => {
+        cur += (-0.3 * scrollY - cur) * 0.1;
+        lerp.style.transform = `translateY(${cur.toFixed(2)}px)`;
+        requestAnimationFrame(follow);
+      };
+      requestAnimationFrame(follow);
+    </script>
+  </body>
+</html>
