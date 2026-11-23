@@ -433,3 +433,41 @@ Each: audit → gaps → implement → test → report. Tests run only against a
     - a rejected component shows no button, and the API answers 400.
   - `pnpm check`.
 - **Not verified:** the CLI package end to end (`pnpm cli:build`, then a build from the standalone server, where `tailwindcss` resolves from the package's folder); Windows (`npm.cmd`).
+
+### Phase 6: end-to-end and release (2026-11-23)
+
+- **Audit:**
+  - Phases 1–5 each have unit tests, plus a scratch QA pass that was logged but not repeatable.
+  - Nothing ran the whole path through the MCP server the plugin ships (`plugin/server/server.js`).
+  - Phase 5 left the npm package itself unverified: whether `tailwindcss` and `esbuild` resolve from an npm install of `pivot-studio`, where the standalone server has no `node_modules` of its own.
+- **Gaps:** a repeatable end-to-end run, and a check of the packed package.
+- **Implemented:** `scripts/qa/component-store/` (README, `component-store.e2e.ts`, its vitest config). It runs only against a scratch PIVOT (`scratch-guard.mjs`) and is never part of `pnpm test`. It does the agent's part over the real stdio MCP server, then the owner's part in the page with Playwright:
+  - `save_component` right after the fetch (the key in the install command becomes `$API_KEY_21ST`), then again once built, with the review and the support file;
+  - refusals: different code without `replaceCode`, and a command holding a token;
+  - `get_saved_component` by 21st id, page URL and PIVOT id;
+  - **Build preview** with the real npm, the live frame on the preview origin (sandboxed, the demo at its Tailwind size), and the build folder removed;
+  - the preview origin's CSP, no cookie, and refusals for anything else;
+  - a rejected component: a warning, no button, and a 400.
+
+  The component is a fixture: no 21st code, and no 21st retrieval spent.
+
+- **Tested:**
+  - **The npm package:**
+    - `pnpm cli:build`; `externals.json` lists `esbuild` and `tailwindcss`;
+    - `npm pack`, installed into an empty folder with npm 11.20 and Node 26.13 on darwin-arm64;
+    - `pivot-studio start` on scratch data, port 4430, previews on 4431;
+    - the e2e passes 9/9: Tailwind resolves from the installed package, and esbuild from its platform binary.
+  - **Size, measured in Python on that real install:** `esbuild` 10.06 MB, `@esbuild/darwin-arm64` 9.94 MB and `tailwindcss` 0.77 MB. That makes 20.77 MB of 425.9 MB of `node_modules` (4.9%), as Phase 5 estimated.
+  - **The checkout:** `node scripts/start.mjs --scratch` (4410, previews 4411); the e2e passes 9/9.
+  - **The guard:** pointed at 4321, the run stops before any write ("4321 is the real PIVOT's port").
+  - `pnpm check`.
+- **Release** (CLAUDE.md):
+  - npm: covered by the pending 0.5.0. `main` holds 0.4.0, and `npm view pivot-studio version` is 0.4.0. `dev` already raised the version to 0.5.0, a minor, and the component store is a feature, so a minor covers it.
+  - Plugin: covered by the pending 0.6.0 (`main` 0.5.0, `dev` 0.6.0).
+- **Before the PR into `dev`:**
+  - `dev` has moved on (the motion track, #157–#159). Merging it conflicts in `apps/mcp/src/http-source.ts` and `docs/SPEC.md`, and `plugin/server/server.js` must be rebuilt (`pnpm mcp:build`) after the merge.
+  - The six phase branches are stacked, so one PR from this branch's tip carries all of them.
+- **Not verified:**
+  - Windows (`npm.cmd`, junctions) and Linux;
+  - a real session that fetches a 21st component and saves it: this spends a retrieval, so it waits for the owner's next pick, as Phase 2 planned;
+  - Safari, Firefox and VoiceOver on the page.
