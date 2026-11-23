@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { toast } from "sonner";
-import { isOtherType, isResourceType, visibleSections } from "@pivot/core/types";
+import { isAgentType, isOtherType, isResourceType, visibleSections } from "@pivot/core/types";
 import { AddMenu } from "@/components/add-menu";
 import { PivotMark, PivotWordmark } from "@/components/brand";
 import { clip, clipTo, eases, reducedMotion, useIndicator, useScrollDirection } from "@/components/nav-motion";
@@ -60,7 +60,11 @@ export function TopBar() {
   const [newCollection, setNewCollection] = useState(false);
   const showOther = useShowOther();
   // a hidden type's page doesn't turn Add into "New prompt…"
-  const preferType = pathname === "/" && isResourceType(type) && (showOther || !isOtherType(type)) ? type : undefined;
+  // a type only the agent creates (a component) keeps the general Add, never "New component"
+  const preferType =
+    pathname === "/" && isResourceType(type) && (showOther || !isOtherType(type)) && !isAgentType(type)
+      ? type
+      : undefined;
 
   // The page starts below the bar.
   useEffect(() => {

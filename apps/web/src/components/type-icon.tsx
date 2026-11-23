@@ -1,4 +1,5 @@
 import {
+  Blocks,
   Code,
   Compass,
   Globe,
@@ -19,6 +20,7 @@ import { TYPE_DEFS, type ResourceType } from "@pivot/core/types";
 const ICONS: Record<string, LucideIcon> = {
   globe: Globe,
   library: Library,
+  blocks: Blocks,
   image: ImageIcon,
   shapes: Shapes,
   sparkles: Sparkles,

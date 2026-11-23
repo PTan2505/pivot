@@ -4,6 +4,9 @@ export async function register() {
   const { resumePendingCaptures } = await import("@pivot/core/capture");
   const { pruneAssetCache } = await import("@pivot/core/assets");
   const { apiToken } = await import("@pivot/core/api-token");
+  // the preview origin: component previews run third-party code, so they never run on PIVOT's own origin
+  const { startPreviewServer } = await import("@pivot/core/preview-server");
+  startPreviewServer();
   try {
     // the MCP server and the extension read it from the data folder; create it now, not when Settings is first opened
     apiToken();

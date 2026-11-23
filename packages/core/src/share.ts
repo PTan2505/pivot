@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getAsset, readAssetBytes } from "./assets";
+import { componentOf } from "./components";
 import { resolveWriteTarget, WriteTargetError } from "./write-target";
 import { getResource } from "./resources";
 import { TAG_KIND_LABELS, TYPE_DEFS } from "./types";
@@ -40,6 +41,7 @@ export async function createSharePackage(
       left.push({ id, title: r.title, why: "saved from a private page" });
       continue;
     }
+    const component = r.type === "component" ? componentOf(r) : null;
     const images: string[] = [];
     for (const a of r.assets.filter(
       (x) => x.role === "screenshot" || x.role === "screenshot-full" || x.role === "state",
@@ -58,6 +60,10 @@ export async function createSharePackage(
       description: r.description,
       facets: r.tags.filter((t) => t.kind !== "tag").map((t) => `${TAG_KIND_LABELS[t.kind]}: ${t.name}`),
       ...(includeNotes ? { notes: r.notes, annotations: r.annotations ?? [] } : {}),
+      // a component travels as its link, author and licence: never its code or 21st's media
+      ...(component
+        ? { author: component.author, licence: component.licence.spdx || component.licence.name || "unknown" }
+        : {}),
       images,
     });
   }

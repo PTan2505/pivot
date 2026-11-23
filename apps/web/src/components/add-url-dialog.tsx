@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { TYPE_DEFS, visibleTypes, type ResourceDTO, type ResourceType } from "@pivot/core/types";
+import { addableTypes, TYPE_DEFS, type ResourceDTO, type ResourceType } from "@pivot/core/types";
 import { TagsEditor } from "@/components/tags-editor";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -67,7 +67,7 @@ function AddUrlForm({
   // skills come from disk, not from a URL; the types outside design show only with "Other resource types" (the chosen
   // type stays listed either way)
   const showOther = useShowOther();
-  const urlTypes = visibleTypes(showOther).filter((t) => t !== "skill" || type === t);
+  const urlTypes = addableTypes(showOther).filter((t) => t !== "skill" || type === t);
   if (!urlTypes.includes(type)) urlTypes.push(type);
   // null = untouched, so fetched metadata can fill it in.
   const [title, setTitle] = useState<string | null>(null);

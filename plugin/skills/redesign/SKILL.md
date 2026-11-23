@@ -156,6 +156,7 @@ If the write tools fail or the connection is read-only, say so in one line and s
 - **When the direction needs something the design system lacks** (a new token, variant, component or a changed global value): stop and propose it as a separate design-system change, with what else it would affect. It needs its own explicit approval (Major): a separate proposal, or a `designSystemChange` on a round, which the user approves with a version of that round ([feedback.md](../design/feedback.md) §5–§6).
 - Change only what the approval covers. Keep everything on the keep list, every state (empty, loading, error, disabled, long content, focus, reduced motion), and the scope from §1.
 - Follow the project's repo rules. List the references that shaped it in the PR description or summary (title + link).
+- **A 21st.dev component in the approved direction** is built as `pivot:design` §9 says: `get_saved_component` first, `save_component` right after a fetch, the code review before the first edit, and `save_component` again once built.
 
 ## 6. Verification by risk
 

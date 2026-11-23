@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   ArrowLeft,
+  Blocks,
   Check,
   ChevronDown,
   Code,
@@ -26,6 +27,7 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
+  isAgentType,
   isOtherType,
   RESOURCE_TYPES,
   TAG_KIND_LABELS,
@@ -56,7 +58,7 @@ type Mode = "page" | "selection";
 type Step = "type" | "details";
 type TagValue = { kind: TagKind; name: string };
 
-const PAGE_TYPES = RESOURCE_TYPES.filter((t) => t !== "skill");
+const PAGE_TYPES = RESOURCE_TYPES.filter((t) => t !== "skill" && !isAgentType(t));
 const TEXT_TYPES: ResourceType[] = ["snippet", "prompt", "rule", "checklist"];
 /** Offered first when saving a page; the rest sit behind "More types". */
 const MAIN_TYPES: ResourceType[] = ["reference", "source", "library", "media", "animation", "typography"];
@@ -73,6 +75,7 @@ const quickFacets = (t: ResourceType) => QUICK_FACETS[t] ?? TYPE_DEFS[t].facets;
 const ICONS: Record<string, LucideIcon> = {
   globe: Globe,
   library: Library,
+  blocks: Blocks,
   image: ImageIcon,
   shapes: Shapes,
   sparkles: Sparkles,

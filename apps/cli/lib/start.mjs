@@ -47,6 +47,11 @@ export function openBrowser(url, platform = process.platform) {
   }
 }
 
+/** The component preview origin's port: PIVOT_PREVIEW_PORT, else PIVOT's port + 1 (docs/component-store-plan.md). */
+export function previewPortFor(env, port) {
+  return String(env.PIVOT_PREVIEW_PORT || Number(port) + 1);
+}
+
 /** The built server's environment: this machine only, and the migrations and preview script shipped in dist/. */
 export function serverEnv(env, port) {
   return {
@@ -55,6 +60,7 @@ export function serverEnv(env, port) {
     NEXT_TELEMETRY_DISABLED: "1",
     HOSTNAME: "127.0.0.1",
     PORT: String(port),
+    PIVOT_PREVIEW_PORT: previewPortFor(env, port),
     PIVOT_MIGRATIONS_DIR: env.PIVOT_MIGRATIONS_DIR || dist.migrations,
     PIVOT_PREVIEW_SCRIPT: env.PIVOT_PREVIEW_SCRIPT || path.join(dist.scripts, "preview.mjs"),
   };
@@ -80,6 +86,13 @@ export async function start(opts) {
   if (await portBusy(port)) {
     console.error(
       `› Something else is using port ${port}. Start PIVOT on another one: pivot-studio start --port ${Number(port) + 1}`,
+    );
+    return 1;
+  }
+  const previewPort = previewPortFor(env, port);
+  if (!/^\d{2,5}$/.test(previewPort) || previewPort === port || (await portBusy(previewPort))) {
+    console.error(
+      `› Port ${previewPort}, where PIVOT shows component previews, is busy or invalid. Start PIVOT on another port (pivot-studio start --port ${Number(port) + 2}) or set PIVOT_PREVIEW_PORT.`,
     );
     return 1;
   }

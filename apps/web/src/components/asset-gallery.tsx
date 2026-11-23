@@ -52,6 +52,7 @@ const ROLE_LABEL: Record<AssetDTO["role"], string> = {
   "motion-track": "Motion track",
   "motion-strip": "Motion filmstrip",
   state: "State",
+  "component-preview": "Component preview",
   attachment: "File",
 };
 

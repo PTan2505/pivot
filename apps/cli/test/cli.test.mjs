@@ -15,7 +15,7 @@ import { installExtension } from "../lib/extension.mjs";
 import { linkExternals } from "../lib/externals.mjs";
 import { writeInstallInfo } from "../lib/install-info.mjs";
 import { dist, resolveDataDir } from "../lib/paths.mjs";
-import { serverEnv } from "../lib/start.mjs";
+import { previewPortFor, serverEnv } from "../lib/start.mjs";
 import { packageFiles } from "../release-check.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -121,6 +121,12 @@ describe("start refuses before it serves anything", () => {
     expect(env.PIVOT_PREVIEW_SCRIPT).toBe(path.join(dist.scripts, "preview.mjs"));
     expect(serverEnv({ PIVOT_PREVIEW_SCRIPT: "/own.mjs" }, 1).PIVOT_PREVIEW_SCRIPT).toBe("/own.mjs");
   });
+
+  it("puts component previews on their own port: PIVOT's + 1, or PIVOT_PREVIEW_PORT", () => {
+    expect(serverEnv({}, 4410).PIVOT_PREVIEW_PORT).toBe("4411");
+    expect(serverEnv({ PIVOT_PREVIEW_PORT: "5000" }, 4410).PIVOT_PREVIEW_PORT).toBe("5000");
+    expect(previewPortFor({}, "4321")).toBe("4322");
+  });
 });
 
 describe("the native packages", () => {
@@ -130,12 +136,15 @@ describe("the native packages", () => {
       [
         "@aws-sdk/client-s3",
         "@electric-sql/pglite",
+        // the component preview build (packages/core/src/preview-build.ts)
+        "esbuild",
         "next",
         "playwright",
         "postgres",
         "react",
         "react-dom",
         "sharp",
+        "tailwindcss",
       ].sort(),
     );
   });

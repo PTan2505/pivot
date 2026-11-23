@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  addableTypes,
   isOtherSection,
   isOtherType,
   OTHER_TYPES,
@@ -40,7 +41,19 @@ describe("other resource types (design focus)", () => {
   it("hide from the sections and types unless shown", () => {
     expect(visibleSections(false).map((s) => s.id)).toEqual(["library", "sources"]);
     expect(visibleSections(true).map((s) => s.id)).toEqual(SECTIONS.map((s) => s.id));
-    expect(visibleTypes(false)).toEqual(["reference", "library", "media", "icon", "animation", "typography", "source"]);
+    expect(visibleTypes(false)).toEqual([
+      "reference",
+      "library",
+      "component",
+      "media",
+      "icon",
+      "animation",
+      "typography",
+      "source",
+    ]);
+    // a component is a design type, but only the agent saves one (save_component): never offered to add by hand
+    expect(addableTypes(false)).toEqual(visibleTypes(false).filter((t) => t !== "component"));
+    expect(addableTypes(true)).not.toContain("component");
     expect(visibleTypes(true)).toEqual([...RESOURCE_TYPES]);
   });
 

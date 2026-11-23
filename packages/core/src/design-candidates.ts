@@ -41,7 +41,7 @@ export interface CandidateInput {
 }
 
 /** Library types that hold a single component rather than a page or design. */
-const COMPONENT_TYPES = new Set<ResourceType>(["library", "animation", "snippet"]);
+const COMPONENT_TYPES = new Set<ResourceType>(["library", "component", "animation", "snippet"]);
 /** Sites that publish components (the known sources in the "components" category: React Bits, shadcn/ui, Magic UI…). */
 const COMPONENT_HOSTS = KNOWN_SOURCES.filter((s) => s.category === "components").flatMap((s) => [
   s.host,

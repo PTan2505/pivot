@@ -81,7 +81,10 @@ if (scratchAt >= 0) {
   process.env.CLAUDE_PLUGINS_DIR = path.join(dir, "claude", "plugins");
   process.env.AGENTS_SKILL_LOCK = path.join(dir, "agents", ".skill-lock.json");
   process.env.PORT ||= "4400";
-  if (process.env.PORT === "4321") fail("4321 is the real PIVOT's port");
+  process.env.PIVOT_PREVIEW_PORT ||= String(Number(process.env.PORT) + 1);
+  // 4321 is the real PIVOT and 4322 its component previews
+  for (const p of [process.env.PORT, process.env.PIVOT_PREVIEW_PORT])
+    if (p === "4321" || p === "4322") fail(`${p} is the real PIVOT's port`);
   process.env.PIVOT_NO_OPEN = "1";
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(
@@ -118,6 +121,13 @@ if (scratchAt < 0) {
 
 process.env.PIVOT_MIGRATIONS_DIR ??= path.join(root, "packages/core/src/db/migrations");
 const port = process.env.PORT || "4321";
+// the server and its component preview origin read these (packages/core/src/preview-server.ts)
+process.env.PORT = port;
+process.env.PIVOT_PREVIEW_PORT ||= String(Number(port) + 1);
+if (process.env.PIVOT_PREVIEW_PORT === port) {
+  console.error("› PIVOT_PREVIEW_PORT can't be PIVOT's own port.");
+  process.exit(1);
+}
 
 if (!fs.existsSync(path.join(web, "node_modules"))) {
   console.log("› Installing dependencies…");
