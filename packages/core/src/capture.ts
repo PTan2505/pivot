@@ -9,8 +9,9 @@ import type { Browser, CDPSession, Page } from "playwright";
 import sharp from "sharp";
 import { attachAsset, deleteOrphanAssets, saveAsset } from "./assets";
 import { MOTION_PROBE, motionLibraries } from "./motion-probe";
+import { type Filmstrip, finishMotion } from "./motion-strips";
 import {
-  buildMotionTrack,
+  analyseMotion,
   type LibraryTrigger,
   type LibraryTween,
   type MotionTrack,
@@ -658,7 +659,7 @@ async function startMotionProbe(page: Page, cdp: CDPSession) {
     async finish(viewport: { width: number; height: number }, wheel: boolean, stopped?: "budget" | "stuck") {
       if (!frames.length) return null;
       const elements = await run<Record<string, ProbeElement>>("__pivotMotion.elements()").catch(() => ({}));
-      return buildMotionTrack({
+      return analyseMotion({
         viewport,
         method: wheel ? "wheel" : "scroll",
         frames,
@@ -796,13 +797,21 @@ async function recordScroll(page: Page, file: string) {
       scrollY: c.scrollY,
     })),
   );
-  // a track that can't be built leaves the video and keyframes as they are
-  const motionTrack: MotionTrack | null = probe ? await probe.finish(vp, wheel, stopped).catch(() => null) : null;
+  // a track that can't be built leaves the video and keyframes as they are; pictures that can't be cut leave the track
+  const analysis = probe ? await probe.finish(vp, wheel, stopped).catch(() => null) : null;
+  const motion = analysis
+    ? await finishMotion(await ffmpegPath(), file, analysis).catch(() => ({
+        track: analysis.track,
+        strips: [] as Filmstrip[],
+      }))
+    : null;
+  const motionTrack: MotionTrack | null = motion?.track ?? null;
   return {
     video: await fs.readFile(file),
     durationMs: Math.round((frames / MOTION_FPS) * 1000),
     keyframes,
     motionTrack,
+    motionStrips: motion?.strips ?? [],
   };
 }
 
@@ -972,9 +981,10 @@ export async function screenshotUrl(
     let videoDurationMs = 0;
     let keyframes: { data: Buffer; scrollY: number }[] = [];
     let motionTrack: MotionTrack | null = null;
+    let motionStrips: Filmstrip[] = [];
     if (motion && videoDir) {
       const recorded = await recordScroll(page, path.join(videoDir, "motion.webm"));
-      ({ video, keyframes, motionTrack } = recorded);
+      ({ video, keyframes, motionTrack, motionStrips } = recorded);
       videoDurationMs = recorded.durationMs;
     } else if (fullPage) {
       await loadWholePage(page, settle, expandContent).catch(() => {});
@@ -996,6 +1006,7 @@ export async function screenshotUrl(
       videoDurationMs,
       keyframes,
       motionTrack,
+      motionStrips,
       motionLikely,
     };
   } catch (err) {
@@ -1451,8 +1462,21 @@ async function captureExtras(
         });
         await attachAsset(resourceId, track.id, "motion-track");
         kept.push(track.id);
+        const ids = new Map(shots.motionTrack.items.map((it) => [it.key, it.id]));
+        for (const strip of shots.motionStrips) {
+          const item = ids.get(strip.key);
+          if (!item) continue;
+          const asset = await saveAsset({
+            data: strip.data,
+            fileName: `${host}-${stamp}-motion-${item.toLowerCase()}.webp`,
+            sourceUrl,
+            meta: meta({ item, key: strip.key, frames: strip.frames, times: strip.times, box: strip.box }),
+          });
+          await attachAsset(resourceId, asset.id, "motion-strip");
+          kept.push(asset.id);
+        }
       }
-      await replace(["motion-video", "motion-keyframe", "motion-track"], () => true, kept);
+      await replace(["motion-video", "motion-keyframe", "motion-track", "motion-strip"], () => true, kept);
       extras.motion = shots.video
         ? `done (${shots.keyframes.length} keyframes${shots.motionTrack ? `, ${shots.motionTrack.itemsTotal} motion items` : ""})`
         : "no video was recorded";

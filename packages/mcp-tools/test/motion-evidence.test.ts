@@ -459,3 +459,79 @@ describe("get_reference with a motion track", () => {
     expect(text(await runTool(tool("get_reference"), source, { id: ID }))).not.toContain("Motion table");
   });
 });
+
+describe("get_reference_images which=motion", () => {
+  const trackAsset = asset(
+    "track",
+    "motion-track",
+    {},
+    { kind: "text", mimeType: "application/json", width: null, height: null },
+  );
+  const strip = (id: string, item: string) =>
+    asset(id, "motion-strip", { item, key: `k-${item}`, times: [0, 100, 200] }, { width: 960, height: 160 });
+  const track = {
+    version: 1,
+    fps: 30,
+    viewport: { width: 1440, height: 900 },
+    method: "scroll",
+    frames: 600,
+    scrolledTo: 4300,
+    libraries: [],
+    items: ["M2", "M10"].map((id) => ({
+      id,
+      key: `k-${id}`,
+      source: "exact",
+      via: "CSS transition",
+      trigger: { kind: "scroll", at: 1200 },
+      target: { name: 'div "Card"', selector: "div.card", count: 1 },
+      changes: [{ property: "opacity", values: ["0", "1"] }],
+      durationMs: 300,
+      easing: "ease-out",
+      filmstrip: true,
+      area: 1,
+    })),
+    itemsTotal: 2,
+    limits: [],
+    stats: { changedPerFrameMedian: 1, changedPerFrameMax: 1, framesOverCap: 0 },
+  };
+  const withStrips = (assets: AssetDTO[]) => {
+    const made = sourceFor([cover, video, trackAsset, ...assets]);
+    return {
+      source: Object.assign(made.source, { motionTrack: async () => track }) as PivotSource,
+      fetched: made.fetched,
+    };
+  };
+
+  it("shows one item's filmstrip, labelled with its table line and frame times", async () => {
+    const { source, fetched } = withStrips([strip("s10", "M10"), strip("s2", "M2")]);
+    const r = await runTool(tool("get_reference_images"), source, { id: ID, which: "motion", item: "M2" });
+    expect(fetched).toEqual(["s2"]);
+    expect(text(r)).toContain(
+      'Filmstrip of M2 scroll@1200 div "Card" (div.card) | opacity 0→1 | 300ms ease-out | exact (CSS transition), filmstrip. Frames at +0, +100, +200 ms',
+    );
+    expect(r.structuredContent).toMatchObject({ which: "motion", total: 1, returned: ["s2"], next: null });
+  });
+
+  it("without an item, pages through every filmstrip in item order", async () => {
+    const { source, fetched } = withStrips([strip("s10", "M10"), strip("s2", "M2")]);
+    const r = await runTool(tool("get_reference_images"), source, { id: ID, which: "motion", maxImages: 1 });
+    expect(fetched).toEqual(["s2"]);
+    expect(r.structuredContent).toMatchObject({ total: 2, next: 1 });
+  });
+
+  it("says which items have one, or that there are none", async () => {
+    const { source } = withStrips([strip("s2", "M2")]);
+    const missing = await runTool(tool("get_reference_images"), source, { id: ID, which: "motion", item: "M5" });
+    expect(missing.isError).toBe(true);
+    expect(text(missing)).toContain("M5 has no filmstrip. Items with one: M2.");
+    const none = await runTool(tool("get_reference_images"), withStrips([]).source, { id: ID, which: "motion" });
+    expect(text(none)).toContain("has a motion table but no filmstrips");
+    const bad = await runTool(tool("get_reference_images"), source, { id: ID, which: "motion", item: "3" });
+    expect(text(bad)).toContain("an item id from get_reference's motion table");
+  });
+
+  it("get_reference points at the filmstrips", async () => {
+    const r = await runTool(tool("get_reference"), withStrips([strip("s2", "M2")]).source, { id: ID });
+    expect(text(r)).toContain("Items marked filmstrip have pictures: get_reference_images which=motion item=<id>");
+  });
+});

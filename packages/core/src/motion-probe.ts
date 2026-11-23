@@ -145,7 +145,7 @@ export const MOTION_PROBE = `(() => {
       out.visible = visible;
       const r1 = (n) => Math.round(n * 10) / 10;
       for (const c of changed.slice(0, cap)) {
-        const o = { id: idOf(c.el), a: Math.round(c.area), y: r1(c.cur.y), w: Math.round(c.cur.w), h: Math.round(c.cur.h), dy: r1(c.cur.dy), tf: c.cur.tf, op: c.cur.op, pos: c.cur.pos };
+        const o = { id: idOf(c.el), a: Math.round(c.area), x: Math.round(c.cur.x), y: r1(c.cur.y), w: Math.round(c.cur.w), h: Math.round(c.cur.h), dy: r1(c.cur.dy), tf: c.cur.tf, op: c.cur.op, pos: c.cur.pos };
         if (c.cur.clip !== "none") o.clip = c.cur.clip;
         if (c.cur.filt !== "none") o.filt = c.cur.filt;
         if (!emitted.has(c.el)) {
@@ -154,9 +154,23 @@ export const MOTION_PROBE = `(() => {
         }
         out.ch.push(o);
       }
+      // canvases and playing videos wholly on screen: their pixels can move without any DOM change, so the recording's
+      // frames are compared there later (a "seen" item)
       let canvases = 0, videos = 0;
-      for (const c of document.getElementsByTagName("canvas")) { const r = c.getBoundingClientRect(); if (r.width > 50 && r.height > 50 && r.bottom > 0 && r.top < vh) canvases++; }
-      for (const v of document.getElementsByTagName("video")) if (!v.paused && !v.ended) videos++;
+      out.boxes = [];
+      const onScreen = (r) => r.width > 120 && r.height > 80 && r.top >= 0 && r.left >= 0 && r.bottom <= vh && r.right <= vw;
+      for (const c of document.getElementsByTagName("canvas")) {
+        const r = c.getBoundingClientRect();
+        if (r.width > 50 && r.height > 50 && r.bottom > 0 && r.top < vh) canvases++;
+        if (onScreen(r) && out.boxes.length < 6) out.boxes.push([idOf(c), Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height), "canvas"]);
+      }
+      for (const v of document.getElementsByTagName("video")) {
+        if (v.paused || v.ended) continue;
+        videos++;
+        const r = v.getBoundingClientRect();
+        if (onScreen(r) && out.boxes.length < 6) out.boxes.push([idOf(v), Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height), "video"]);
+      }
+      if (!out.boxes.length) delete out.boxes;
       out.media = [canvases, videos];
       return out;
     },

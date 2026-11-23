@@ -445,6 +445,8 @@ export type AssetRole =
   | "motion-keyframe"
   /** The recording's motion as numbers (JSON, `MotionTrack` in motion-track.ts): what moved, when, how and how long. */
   | "motion-track"
+  /** A filmstrip of one motion-track item, cut from the recording's video; `meta.item` is the item's id. */
+  | "motion-strip"
   /** An interaction state (hover, open menu, error…) captured from the tab; `meta.state` names it. */
   | "state"
   | "attachment";
