@@ -7,7 +7,7 @@
 export const MOTION_TRACK_FPS = 30;
 export const FRAME_MS = 1000 / MOTION_TRACK_FPS;
 
-type Curve = (x: number) => number;
+export type Curve = (x: number) => number;
 
 const TABLE = 1000;
 
@@ -89,7 +89,20 @@ export const FIT_NAMED_RMS = 0.03;
  * grid, then 1 ms around the best. Returns every curve, best first.
  */
 export function fitEasing(points: [number, number][], prevMs: number, firstMs: number, lastMs: number): EasingFit[] {
-  const sse = (f: Curve, t0: number, d: number) => {
+  return Object.entries(EASINGS)
+    .map(([name, f]) => ({ easing: name, ...fitWith(points, prevMs, firstMs, lastMs, f) }))
+    .sort((a, b) => a.rms - b.rms);
+}
+
+/** The start and duration that fit the samples best to one curve, and how well (see `fitEasing`). */
+export function fitWith(
+  points: [number, number][],
+  prevMs: number,
+  firstMs: number,
+  lastMs: number,
+  f: Curve,
+): Omit<EasingFit, "easing"> {
+  const sse = (t0: number, d: number) => {
     let e = 0;
     for (const [t, p] of points) {
       const r = f((t - t0) / d) - p;
@@ -99,23 +112,76 @@ export function fitEasing(points: [number, number][], prevMs: number, firstMs: n
   };
   const dmin = Math.max(1, 0.5 * (lastMs - prevMs));
   const dmax = lastMs - prevMs + 2 * FRAME_MS;
-  const out: EasingFit[] = [];
-  for (const [name, f] of Object.entries(EASINGS)) {
-    let best = { e: Infinity, t0: prevMs, d: dmin };
-    for (let t0 = prevMs; t0 < firstMs; t0 += 4)
-      for (let d = dmin; d <= dmax; d += 4) {
-        const e = sse(f, t0, d);
-        if (e < best.e) best = { e, t0, d };
-      }
-    const coarse = best;
-    for (let t0 = Math.max(prevMs, coarse.t0 - 4); t0 <= Math.min(firstMs, coarse.t0 + 4); t0++)
-      for (let d = Math.max(dmin, coarse.d - 4); d <= coarse.d + 4; d++) {
-        const e = sse(f, t0, d);
-        if (e < best.e) best = { e, t0, d };
-      }
-    out.push({ easing: name, rms: Math.sqrt(best.e / points.length), startMs: best.t0, durationMs: best.d });
-  }
-  return out.sort((a, b) => a.rms - b.rms);
+  let best = { e: Infinity, t0: prevMs, d: dmin };
+  for (let t0 = prevMs; t0 < firstMs; t0 += 4)
+    for (let d = dmin; d <= dmax; d += 4) {
+      const e = sse(t0, d);
+      if (e < best.e) best = { e, t0, d };
+    }
+  const coarse = best;
+  for (let t0 = Math.max(prevMs, coarse.t0 - 4); t0 <= Math.min(firstMs, coarse.t0 + 4); t0++)
+    for (let d = Math.max(dmin, coarse.d - 4); d <= coarse.d + 4; d++) {
+      const e = sse(t0, d);
+      if (e < best.e) best = { e, t0, d };
+    }
+  return { rms: Math.sqrt(best.e / Math.max(1, points.length)), startMs: best.t0, durationMs: best.d };
+}
+
+const KEYWORDS: Record<string, string> = {
+  linear: "linear",
+  none: "linear",
+  ease: "ease",
+  "ease-in": "ease-in",
+  "ease-out": "ease-out",
+  "ease-in-out": "ease-in-out",
+  "power1.out": "power1.out",
+  "quad.out": "power1.out",
+  "power2.out": "easeOutCubic / power2.out",
+  "cubic.out": "easeOutCubic / power2.out",
+  easeoutcubic: "easeOutCubic / power2.out",
+  "power2.in": "easeInCubic / power2.in",
+  easeincubic: "easeInCubic / power2.in",
+  "power2.inout": "easeInOutCubic / power2.inOut",
+  easeinoutcubic: "easeInOutCubic / power2.inOut",
+  "expo.out": "expo.out",
+  "back.out": "back.out",
+  "back.out(1.7)": "back.out",
+};
+const EXTRA: Record<string, Curve> = {
+  "power3.out": tabulate((x) => 1 - (1 - x) ** 4),
+  "power4.out": tabulate((x) => 1 - (1 - x) ** 5),
+  "sine.out": tabulate((x) => Math.sin((x * Math.PI) / 2)),
+  "sine.inout": tabulate((x) => -(Math.cos(Math.PI * x) - 1) / 2),
+};
+
+/**
+ * The curve an easing names, as a brief or a page writes it: CSS keywords and `cubic-bezier()`, and the GSAP and
+ * easings.net names PIVOT fits to (`power2.out`, `easeOutCubic`…). Null for what has no single curve to compare
+ * (`steps()`, a `linear()` spring, `custom`).
+ */
+export function curveOf(easing: string | null | undefined): Curve | null {
+  if (!easing) return null;
+  const e = easing.trim().toLowerCase().replace(/\s+/g, "");
+  if (KEYWORDS[e]) return EASINGS[KEYWORDS[e]];
+  if (EXTRA[e]) return EXTRA[e];
+  if (e === "easeoutcubic/power2.out") return EASINGS["easeOutCubic / power2.out"];
+  const named = Object.keys(EASINGS).find((k) => k.toLowerCase().replace(/\s+/g, "") === e);
+  if (named) return EASINGS[named];
+  const m = /^cubic-bezier\(([^)]*)\)$/.exec(e);
+  if (!m) return null;
+  const n = m[1].split(",").map(Number);
+  if (n.length !== 4 || n.some((x) => !Number.isFinite(x)) || n[0] < 0 || n[0] > 1 || n[2] < 0 || n[2] > 1) return null;
+  return cubicBezier(n[0], n[1], n[2], n[3]);
+}
+
+/** How far apart two easings are: the root mean square difference of their curves over 0–1 (0 is the same curve). */
+export function easingDistance(a: string, b: string): number | null {
+  const fa = curveOf(a);
+  const fb = curveOf(b);
+  if (!fa || !fb) return null;
+  let e = 0;
+  for (let i = 0; i <= 50; i++) e += (fa(i / 50) - fb(i / 50)) ** 2;
+  return Math.sqrt(e / 51);
 }
 
 export interface TransformParts {

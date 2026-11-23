@@ -12,8 +12,11 @@
 //
 // Every item ends Pass, Fail or Not Verified. Pass needs an executed observation of every check; anything that couldn't
 // run or be observed is Not Verified, never Pass. The overall status is Pass only when every essential item of the
-// approved brief passed. Timing is the duration and easing the running animation declares, compared as written in the
-// brief; nothing is measured on screen and no tolerance is applied.
+// approved brief passed. Timing is the duration and easing the running animation declares, compared exactly as written
+// in the brief. Motion that declares none (run by a script) is measured on screen instead: the element is read in every
+// animation frame (polled about every 16 ms at load), and the samples are fitted with the code PIVOT measures references with
+// (motion-fit.mjs); its duration must be within one frame (33 ms) of the brief's and its samples must follow the
+// brief's easing. An item can also be compared with the reference item the brief cites (`expect.reference`).
 //
 // Writes report.json, report.md and screenshots (and videos with --video) to --out: a new, empty folder in the
 // scratchpad, never in the target project. `--verify report.json` re-checks the evidence files against their sha256.
@@ -40,6 +43,16 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  curveOf,
+  easingDistance,
+  FIT_NAMED_RMS,
+  fitEasing,
+  fitWith,
+  FRAME_MS,
+  parseBlur,
+  parseTransform,
+} from "./motion-fit.mjs";
 
 export const VERSION = "1.0.0";
 export const VIEWPORTS = { desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } };
@@ -342,6 +355,17 @@ export function validatePlan(input) {
     if (item.trigger?.type === "other") continue;
     if (!item.target) errors.push(`${where}: target (the element that moves) missing`);
     if (typeof item.expect?.animates !== "boolean") errors.push(`${where}: expect.animates must be true or false`);
+    const ref = item.expect?.reference;
+    if (ref !== undefined) {
+      if (typeof ref?.label !== "string" || !ref.label.trim())
+        errors.push(`${where}: expect.reference needs a label (the reference and its item, e.g. "Linear M3")`);
+      if (ref?.durationMs !== undefined && !(typeof ref.durationMs === "number" && ref.durationMs > 0))
+        errors.push(`${where}: expect.reference.durationMs must be a positive number`);
+      if (ref?.easing !== undefined && typeof ref.easing !== "string")
+        errors.push(`${where}: expect.reference.easing must be text`);
+      if (ref?.durationMs === undefined && ref?.easing === undefined)
+        errors.push(`${where}: expect.reference needs durationMs or easing to compare`);
+    }
     if (item.reduced && item.reduced.animates !== undefined && typeof item.reduced.animates !== "boolean")
       errors.push(`${where}: reduced.animates must be true or false`);
   }
@@ -409,6 +433,110 @@ const endDiff = (want, got) =>
     .filter(([p, v]) => norm(got?.[p]) !== norm(v))
     .map(([p, v]) => `${p} ${norm(got?.[p]) || "(unset)"} instead of ${norm(v)}`);
 
+/** One number from each computed value, as PIVOT's motion track reads them: transform parts, opacity, blur. */
+function channelsOf(v) {
+  const t = parseTransform(v.transform);
+  const out = {
+    translateX: t.translateX,
+    translateY: t.translateY,
+    scale: t.scale,
+    rotate: t.rotate,
+    opacity: Number(v.opacity ?? 1),
+    blur: parseBlur(v.filter),
+  };
+  if (v.translate && v.translate !== "none") {
+    const [x, y] = v.translate.split(/\s+/).map(parseFloat);
+    out.translateX += x || 0;
+    out.translateY += y || 0;
+  }
+  if (v.scale && v.scale !== "none") out.scale *= parseFloat(v.scale) || 1;
+  if (v.rotate && v.rotate !== "none") out.rotate += parseFloat(v.rotate) || 0;
+  return out;
+}
+/** The smallest change that counts as motion, per channel (the same as PIVOT's motion track). */
+const AMP = { translateX: 2, translateY: 2, scale: 0.01, rotate: 1, opacity: 0.05, blur: 0.5 };
+const round = (n, d = 3) => Math.round(n * 10 ** d) / 10 ** d;
+
+/**
+ * Motion measured from the polled samples (`now` is the page's performance.now()): the value that moved most, its
+ * samples as progress from 0 to 1, and the curve and duration that fit them best. Null when nothing moved enough,
+ * when it was already moving when watching began (`stillFirst`: at load, where nothing settled first, it must hold
+ * still for two samples), or when it ran longer than 4 s.
+ */
+export function measureMotion(samples, { stillFirst = false } = {}) {
+  const pts = samples
+    .filter((s) => s?.found && s.values && typeof s.now === "number")
+    .map((s) => ({ t: s.now, c: channelsOf(s.values) }));
+  if (pts.length < 3) return null;
+  const a = pts[0].c;
+  const z = pts[pts.length - 1].c;
+  let key = null;
+  let most = 1;
+  for (const k of Object.keys(AMP)) {
+    const d = Math.abs(z[k] - a[k]) / AMP[k];
+    if (d >= most) [key, most] = [k, d];
+  }
+  if (!key) return null;
+  const v0 = a[key];
+  const v1 = z[key];
+  const eps = Math.max(AMP[key] / 20, Math.abs(v1 - v0) * 0.002);
+  const i1 = pts.findIndex((p) => Math.abs(p.c[key] - v0) > eps);
+  let i2 = pts.length - 1;
+  while (i2 > i1 && Math.abs(pts[i2 - 1].c[key] - v1) <= eps) i2--;
+  if (i1 < 1 || i2 < i1) return null;
+  // at load nothing was settled before watching: two equal samples must show it hadn't started yet
+  if (stillFirst && i1 < 2) return null;
+  const prevMs = pts[i1 - 1].t;
+  const firstMs = pts[i1].t;
+  const lastMs = pts[i2].t;
+  if (lastMs - prevMs > 4000) return null;
+  const points = pts.slice(i1 - 1, Math.min(pts.length, i2 + 3)).map((p) => [p.t, (p.c[key] - v0) / (v1 - v0)]);
+  const [best] = fitEasing(points, prevMs, firstMs, lastMs);
+  const gaps = points
+    .slice(1)
+    .map((p, i) => p[0] - points[i][0])
+    .sort((x, y) => x - y);
+  return {
+    property: key,
+    from: round(v0),
+    to: round(v1),
+    durationMs: Math.round(best.durationMs),
+    easing: best.rms < FIT_NAMED_RMS ? best.easing : "custom",
+    rms: round(best.rms),
+    samples: points.length,
+    spacingMs: Math.round(gaps[gaps.length >> 1] ?? 0),
+    points: points.map(([t, p]) => [round(t, 1), round(p, 4)]),
+    prevMs: round(prevMs, 1),
+    firstMs: round(firstMs, 1),
+    lastMs: round(lastMs, 1),
+  };
+}
+
+/**
+ * Measured motion against a duration and an easing (the brief's, or a reference item's): the duration fitted on that
+ * easing's curve must be within one frame (33 ms), and the samples must follow the curve (fit error under 0.03).
+ */
+export function timingAgainst(m, durationMs, easing) {
+  const curve = easing ? curveOf(easing) : null;
+  const what = `measured on screen: ${m.property} ${m.from}→${m.to}, best fit ${m.durationMs} ms ${m.easing} (fit error ${m.rms}), ${m.samples} samples about ${m.spacingMs} ms apart`;
+  if (easing && !curve) {
+    const durOk = durationMs == null || Math.abs(m.durationMs - durationMs) <= FRAME_MS;
+    return {
+      status: durOk ? "not verified" : "fail",
+      detail: `${what}; the easing "${easing}" has no single curve to compare${durOk ? "" : `, and ${m.durationMs} ms is more than one frame from ${durationMs} ms`}`,
+    };
+  }
+  const fit = curve
+    ? fitWith(m.points, m.prevMs, m.firstMs, m.lastMs, curve)
+    : { durationMs: m.durationMs, rms: m.rms };
+  const durOk = durationMs == null || Math.abs(fit.durationMs - durationMs) <= FRAME_MS;
+  const easeOk = !curve || fit.rms < FIT_NAMED_RMS;
+  return {
+    status: durOk && easeOk ? "pass" : "fail",
+    detail: `${what}; on ${curve ? easing : "its best curve"}: ${Math.round(fit.durationMs)} ms, fit error ${round(fit.rms)} (within one frame, 33 ms, and under ${FIT_NAMED_RMS})`,
+  };
+}
+
 /**
  * Judges one item from its observations: `runs[viewport] = { full: [first, replay], reduced: [first, replay] }`.
  * Each check is pass, fail or not verified; the item fails on any failed check, is Not Verified on any check that
@@ -465,13 +593,16 @@ export function judgeItem(item, runs, viewports) {
         }
         if (item.expect.durationMs != null || item.expect.easing) {
           const want = `${item.expect.durationMs ?? "any"} ms, ${item.expect.easing ?? "any easing"}`;
-          if (!first.declared.length)
+          if (!first.declared.length && first.measured) {
+            const m = timingAgainst(first.measured, item.expect.durationMs, item.expect.easing);
+            add(vp, "full", "measured timing", m.status, `${m.detail}; brief: ${want}`);
+          } else if (!first.declared.length)
             add(
               vp,
               "full",
               "declared timing",
               "not verified",
-              `no declared timing to read (script-driven motion?); brief: ${want}`,
+              `no declared timing to read, and the motion couldn't be measured (it started before watching, or no watched value moved enough); brief: ${want}`,
             );
           else {
             const ok = first.declared.some(
@@ -488,6 +619,40 @@ export function judgeItem(item, runs, viewports) {
               `declared ${got}; brief: ${want} (declared values, not measured on screen)`,
             );
           }
+        }
+        const ref = item.expect.reference;
+        if (ref) {
+          const want = `${ref.label}: ${ref.durationMs ?? "any"} ms, ${ref.easing ?? "any easing"}${ref.source ? ` (${ref.source})` : ""}`;
+          if (first.declared.length) {
+            const d = [...first.declared].sort(
+              (a, b) =>
+                Math.abs((a.durationMs ?? 0) - (ref.durationMs ?? 0)) -
+                Math.abs((b.durationMs ?? 0) - (ref.durationMs ?? 0)),
+            )[0];
+            const durOk = ref.durationMs == null || Math.abs((d.durationMs ?? 0) - ref.durationMs) <= FRAME_MS;
+            const dist = ref.easing
+              ? norm(d.easing) === norm(ref.easing)
+                ? 0
+                : easingDistance(d.easing, ref.easing)
+              : 0;
+            add(
+              vp,
+              "full",
+              "matches reference",
+              dist === null ? "not verified" : durOk && dist < FIT_NAMED_RMS ? "pass" : "fail",
+              `declared ${d.durationMs} ms ${d.easing}${dist === null ? " (its easing or the reference's has no single curve to compare)" : dist ? ` (curves ${dist.toFixed(3)} apart)` : ""}; reference ${want}; within one frame (33 ms)`,
+            );
+          } else if (first.measured) {
+            const m = timingAgainst(first.measured, ref.durationMs, ref.easing);
+            add(vp, "full", "matches reference", m.status, `${m.detail}; reference ${want}`);
+          } else
+            add(
+              vp,
+              "full",
+              "matches reference",
+              "not verified",
+              `nothing declared or measured to compare; reference ${want}`,
+            );
         }
         for (const [key, label] of [
           ["cls", "layout shift"],
@@ -641,6 +806,8 @@ const HINTS = {
     "With reduced motion the element must still reach its final state: a rule that only removes the animation can leave it at its hidden start.",
   "final state": "The element doesn't end where the brief and the approved mockup put it.",
   "declared timing": "Use the duration and easing the brief states.",
+  "measured timing": "Use the duration and easing the brief states; the script's own timing is what was measured.",
+  "matches reference": "Match the reference item the brief cites, or record the difference as a decision.",
   "reduced visibility":
     "With reduced motion the element ends less visible than with full motion: give the reduced branch the final state.",
   replay: "The second run differs from the first: state left over from the last run, or a one-time animation.",
@@ -671,6 +838,18 @@ export function renderMarkdown(r) {
     "",
   );
   out.push(`**Overall: ${r.overall.status}.** ${r.overall.reasons.join("; ") || "every essential item passed"}.`, "");
+  const timing = r.items.flatMap((i) => i.checks);
+  const count = (check, status) =>
+    timing.filter((c) => c.check === check && (status ? c.status === status : c.status !== "not verified")).length;
+  const notVerified = ["declared timing", "measured timing", "matches reference"].reduce(
+    (n, c) => n + count(c, "not verified"),
+    0,
+  );
+  if (timing.some((c) => /timing|reference/.test(c.check)))
+    out.push(
+      `Timing evidence: ${count("declared timing")} checked against what the page declares (exact), ${count("measured timing")} measured on screen (within one frame, 33 ms), ${count("matches reference")} compared with a reference item, ${notVerified} not verified.`,
+      "",
+    );
   out.push("| ID | Item | Tag | Trigger | Result | Reduced motion |", "| --- | --- | --- | --- | --- | --- |");
   for (const i of r.items) {
     const red = i.checks.filter((c) => c.mode === "reduced");
@@ -701,7 +880,7 @@ export function renderMarkdown(r) {
                 .map(([p, v]) => `${p} ${norm(v)}`)
                 .join(
                   ", ",
-                )}${o.declared.length ? `; declared ${o.declared.map((d) => `${d.name} ${d.durationMs} ms ${d.easing}`).join(", ")}` : ""}`
+                )}${o.declared.length ? `; declared ${o.declared.map((d) => `${d.name} ${d.durationMs} ms ${d.easing}`).join(", ")}` : ""}${o.measured ? `; measured ${o.measured.property} ${o.measured.durationMs} ms ${o.measured.easing} (fit error ${o.measured.rms})` : ""}`
             : `not executed: ${o.error}`
         }`,
       );
@@ -813,6 +992,7 @@ function probe({ sel, props }) {
   const m = window.__motionQa;
   return {
     found: true,
+    now: performance.now(),
     values,
     anims,
     rect: { top: r.top, left: r.left, width: r.width, height: r.height },
@@ -932,6 +1112,28 @@ async function observeOnce(page, scopeOf, item, ctx, label) {
   if (type !== "load") await shot("before");
 
   const scope = await scopeOf();
+  // Frame-by-frame samples for measuring motion that declares no timing: read in the page's own animation frames, so
+  // each value goes with the frame time it was drawn at (polling can't pair them). Not at load (the page is new), nor
+  // where the page runs no script (the viewer's frame): polled samples stand in there.
+  if (type !== "load")
+    await scope
+      .evaluate(
+        ({ sel, props }) => {
+          const el = document.querySelector(sel);
+          const frames = [];
+          let on = true;
+          window.__motionQaStop = () => ((on = false), frames);
+          const tick = (t) => {
+            if (!on) return;
+            const cs = el && el.isConnected ? getComputedStyle(el) : null;
+            if (cs) frames.push({ t, values: Object.fromEntries(props.map((p) => [p, cs.getPropertyValue(p)])) });
+            if (frames.length < 900) requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        },
+        { sel, props },
+      )
+      .catch(() => {});
   const on = item.trigger.on ?? sel;
   const samples = [before];
   const box = async (s) =>
@@ -1042,6 +1244,7 @@ async function observeOnce(page, scopeOf, item, ctx, label) {
     await pause(16);
   }
   const after = samples.at(-1);
+  const drawn = await scope.evaluate(() => window.__motionQaStop?.() ?? null).catch(() => null);
   await shot("after");
 
   const fresh = samples
@@ -1085,6 +1288,12 @@ async function observeOnce(page, scopeOf, item, ctx, label) {
     properties: [...new Set([...animated, ...between, ...changed.filter((p) => ran.length || scrollMoved)])],
     animated: [...new Set([...animated, ...between])],
     declared,
+    // what the element did on screen, when it declares no timing (motion run by a script)
+    measured: declared.length
+      ? null
+      : drawn?.length > 2
+        ? measureMotion(drawn.map((f) => ({ found: true, now: f.t, values: f.values })))
+        : measureMotion(samples, { stillFirst: type === "load" }),
     end: after.values,
     infinite: fresh.some((a) => a.infinite),
     capped,
@@ -1312,7 +1521,7 @@ export async function runPlan(
   const limitations = [
     "Reduced motion was browser emulation in Chromium (Playwright). The OS setting and real devices weren't checked: they are verified only when the user checks them.",
     "Only Chromium ran; other browsers weren't checked.",
-    "Timing is what the running animation declares; on-screen timing and smoothness weren't measured. Screenshots are taken around the named moments, not at exact times.",
+    "Timing is what the running animation declares when it declares any (compared exactly); motion that declares none was measured on screen from samples about 16 ms apart and is within about one frame (33 ms). Smoothness (dropped frames) wasn't measured. Screenshots are taken around the named moments, not at exact times.",
     "The phone viewport is a narrow window, not touch emulation: hover results there are desktop hover.",
     "Cleanup after leaving the view (listeners, observers, timelines) isn't checked by this script.",
   ];

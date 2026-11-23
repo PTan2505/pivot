@@ -3,7 +3,8 @@
 //                node_modules: npm installs the runtime packages listed in package.json for each machine instead, and
 //                app/externals.json names the hashed links `start` recreates (lib/externals.mjs)
 //   migrations/  the database migrations (PIVOT_MIGRATIONS_DIR)
-//   scripts/     the design skill's preview.mjs and motion-qa.mjs (pivot-studio preview / motion-qa)
+//   scripts/     the design skill's preview.mjs and motion-qa.mjs (pivot-studio preview / motion-qa), and the
+//                motion-fit.mjs motion-qa imports
 //   extension/   the built Chrome extension (pivot-studio extension)
 //
 //   node build.mjs                 build the web app and the extension, then assemble dist/
@@ -31,6 +32,7 @@ export const REQUIRED = [
   "migrations/meta/_journal.json",
   "scripts/preview.mjs",
   "scripts/motion-qa.mjs",
+  "scripts/motion-fit.mjs",
   "extension/manifest.json",
   "THIRD_PARTY_NOTICES.md",
 ];
@@ -128,7 +130,7 @@ function main(argv) {
 
   fs.cpSync(path.join(repo, "packages/core/src/db/migrations"), path.join(out, "migrations"), { recursive: true });
   fs.mkdirSync(path.join(out, "scripts"));
-  for (const f of ["preview.mjs", "motion-qa.mjs"])
+  for (const f of ["preview.mjs", "motion-qa.mjs", "motion-fit.mjs"])
     fs.copyFileSync(path.join(repo, "plugin/skills/design/scripts", f), path.join(out, "scripts", f));
   fs.cpSync(path.join(repo, "apps/extension/dist"), path.join(out, "extension"), { recursive: true });
   // the built app includes third-party code under its own terms (GSAP among them)

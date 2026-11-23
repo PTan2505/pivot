@@ -13,6 +13,8 @@ docs/requirements-v0.1.md
 
 # The plugin's MCP server: built by `pnpm mcp:build`, committed as is.
 plugin/server
+# motion-qa's copy of the motion fitting code: built by `pnpm mcp:build` from packages/core/src/motion-fit.ts.
+plugin/skills/design/scripts/motion-fit.mjs
 
 # Local state the impeccable hook writes. The hook ignores these through
 # .git/info/exclude, which Prettier doesn't read (only .gitignore and this file).
