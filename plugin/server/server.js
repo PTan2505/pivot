@@ -37073,7 +37073,9 @@ function timingText(it) {
   if (it.fitRms !== void 0) parts.push(`fit error ${it.fitRms}`);
   return parts.join(", ");
 }
-var triggerText = (tr) => tr.kind === "load" ? "load" : tr.kind === "always" ? "always" : tr.spread ? `scroll@${tr.spread[0]}\u2026${tr.spread[1]}` : tr.from !== void 0 ? `scroll ${tr.from}\u2013${tr.to}` : `scroll@${tr.at ?? 0}`;
+var isInteraction = (it) => it.trigger.kind === "hover" || it.trigger.kind === "click";
+var MOTION_TABLE_INTERACTIONS = 8;
+var triggerText = (tr) => tr.kind === "hover" || tr.kind === "click" ? tr.on ? `${tr.kind} on ${tr.on.name} (${tr.on.selector}) \u2192` : tr.kind : tr.kind === "load" ? "load" : tr.kind === "always" ? "always" : tr.spread ? `scroll@${tr.spread[0]}\u2026${tr.spread[1]}` : tr.from !== void 0 ? `scroll ${tr.from}\u2013${tr.to}` : `scroll@${tr.at ?? 0}`;
 function motionLine(it) {
   const count = it.target.count > 1 ? `${it.target.count}\xD7 ` : "";
   const changes = it.changes.map((c) => `${c.property} ${c.values.length === 1 ? `\u2192${c.values[0]}` : c.values.join("\u2192")}`).join("; ");
@@ -37086,10 +37088,21 @@ function motionLine(it) {
     it.filmstrip ? `${source2}, filmstrip` : source2
   ].filter(Boolean).join(" | ");
 }
-function motionTable(track, cap = MOTION_TABLE_ITEMS) {
-  const lines2 = track.items.slice(0, cap).map(motionLine);
-  const more = track.itemsTotal - Math.min(cap, track.items.length);
-  if (more > 0) lines2.push(`(+${more} more item${more === 1 ? "" : "s"})`);
+function motionTable(track, cap = MOTION_TABLE_ITEMS, interactionCap = MOTION_TABLE_INTERACTIONS) {
+  const more = (n) => n > 0 ? [`(+${n} more item${n === 1 ? "" : "s"})`] : [];
+  const scroll = track.items.filter((it) => !isInteraction(it));
+  const pointer = track.items.filter(isInteraction);
+  const pointerTotal = track.interactionItems ?? pointer.length;
+  const lines2 = [
+    ...scroll.slice(0, cap).map(motionLine),
+    ...more(track.itemsTotal - pointerTotal - Math.min(cap, scroll.length))
+  ];
+  if (pointer.length)
+    lines2.push(
+      "Hover and click (a sample: one element of each kind was tried):",
+      ...pointer.slice(0, interactionCap).map(motionLine),
+      ...more(pointerTotal - Math.min(interactionCap, pointer.length))
+    );
   return lines2;
 }
 
@@ -37743,7 +37756,7 @@ function motionEvidenceOf(r, limit = MOTION_LIST_MAX, measured = false) {
     states,
     statesTotal: allStates.length,
     limitations: [
-      "Recorded while PIVOT scrolled the page top to bottom with no pointer: hover, click, focus and other triggers weren't exercised.",
+      measured ? "Recorded while PIVOT scrolled the page top to bottom with no pointer; hover and click, where PIVOT tried them on a sample, are in the motion table." : "Recorded while PIVOT scrolled the page top to bottom with no pointer: hover, click, focus and other triggers weren't exercised.",
       measured ? "Timing and easing are in the motion table (`motion`); keyframes are stills at the listed scroll positions." : "Timing and easing weren't measured: keyframes are stills at the listed scroll positions, and what happens between them is inferred.",
       video ? "The video itself can't be viewed through these tools; look at the keyframes." : "The recording's video is missing; only its keyframes remain.",
       ...allKeyframes.length ? [] : ["No keyframes were kept, so nothing from the recording can be looked at here."],
@@ -37762,17 +37775,23 @@ async function motionDetailOf(source2, r) {
     viewport: track.viewport,
     method: track.method,
     libraries: track.libraries,
-    items: track.items.slice(0, MOTION_TABLE_ITEMS),
+    // the most visible scroll items, then a sample of hover and click
+    items: [
+      ...track.items.filter((it) => !isInteraction(it)).slice(0, MOTION_TABLE_ITEMS),
+      ...track.items.filter(isInteraction).slice(0, MOTION_TABLE_INTERACTIONS)
+    ],
     itemsTotal: track.itemsTotal,
+    interactionItems: track.interactionItems ?? track.items.filter(isInteraction).length,
     limits: track.limits
   };
 }
 function motionTableText(m) {
-  const shown = m.items.length < m.itemsTotal ? `, the ${m.items.length} most visible shown` : "";
+  const pointer = m.items.filter(isInteraction).length;
+  const shown = m.items.length < m.itemsTotal ? `, the ${m.items.length - pointer} most visible shown${pointer ? ` plus ${pointer} from hover and click` : ""}` : "";
   const libraries = m.libraries.length ? `; libraries: ${m.libraries.join(", ")}` : "";
   return [
     `Motion table (measured by PIVOT while scrolling, ${m.capturedAt.slice(0, 10)}, ${m.viewport.width}\xD7${m.viewport.height}${libraries}; ${m.itemsTotal} item${m.itemsTotal === 1 ? "" : "s"}${shown}). exact = declared by the page; measured = fitted from the recording's frames. Cite items by id (e.g. "M3").`,
-    ...motionTable({ items: m.items, itemsTotal: m.itemsTotal }, MOTION_TABLE_ITEMS),
+    ...motionTable(m),
     ...m.items.some((it) => it.filmstrip) ? ["Items marked filmstrip have pictures: get_reference_images which=motion item=<id> (about 400 tokens each)."] : [],
     `Motion limits: ${m.limits.join(" ")}`
   ].join("\n");

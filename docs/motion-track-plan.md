@@ -182,3 +182,13 @@ Branch `feat/motion-strips`.
 - **Real pages:** posthog.com (6 strips; the sliding label reads clearly, a card fading in during a scroll less so) and resend.com (its three.js cube as a `seen` canvas, a playing video as `seen`, both with strips). One strip is about 150–400 tokens.
 - **End to end** on a private scratch PIVOT: Record motion stores the track and 6 strips, the reference page shows the table with folded filmstrips (no sideways scroll at 375px, no console errors), and the plugin's MCP bundle serves `which: "motion"`.
 - **Not done here:** hover and click (M3), motion QA against tracks (M4).
+
+### M3: hover and click (2026-11-23)
+
+Branch `feat/motion-interactions`.
+
+- **Built:** after the scroll pass, `recordScroll` tries a sample (up to 12 hovers and 6 clicks, one per kind of element, 45 s at most) on the same fake clock: scroll to the element, settle, point or press with the real mouse, measure 30 frames, keep five screenshots, put things back. The probe picks candidates and refuses risky ones (`motion-probe.ts`); while trying, anything but a read request is refused and popups are closed. `analyseMotion` analyses each element's frames on their own and adds `hover` / `click` items after the scroll items, with filmstrips from the screenshots. MCP and the reference page list them under their own heading (24 scroll + 8 hover and click lines for Claude).
+- **Fixture** (`pointer.html`): a nav underline (200 ms ease-out, one of three links tried), a card lift (250 ms), a script-driven hover scale (300 ms within two frames, an ease-out curve: Chrome delivers the pointer event on one of its real frames, so on a cold browser the start can fall between two measured frames; PIVOT waits two real frames after each pointer action, after which 9 of 10 runs read 310 ms and easeOutCubic, the tenth 220 ms power1.out on a cold browser), a tab panel (300 ms ease-out) and a disclosure (400 ms ease-in-out) on click; traps that must not be pressed (a "Buy now" button, a button in a form, a link dressed as a tab) were not, and no POST left the page.
+- **Real pages:** linear.app (16 items: the Product mega menu's 180 ms ease reveal, buttons, two menus on click), vercel.com (7), cal.com (24: the Products menu and the "Talk to sales" popover). Trying adds about 5–10 s per page.
+- **Fixed on the way:** ids made at run time (React `useId`, Base UI, Radix) are no longer used in selectors; a click on something that already opened on hover is skipped (it would only close it); a recording that starts mid-motion (a hover's first frame already moved) takes its start from one frame before its first.
+- **Not done here:** motion QA against tracks (M4).

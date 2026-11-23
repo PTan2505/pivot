@@ -535,3 +535,65 @@ describe("get_reference_images which=motion", () => {
     expect(text(r)).toContain("Items marked filmstrip have pictures: get_reference_images which=motion item=<id>");
   });
 });
+
+describe("get_reference with hover and click items", () => {
+  const trackAsset = asset(
+    "track",
+    "motion-track",
+    {},
+    { kind: "text", mimeType: "application/json", width: null, height: null },
+  );
+  const item = (i: number, kind: "scroll" | "hover") => ({
+    id: `M${i}`,
+    key: `${kind}|${i}`,
+    source: "exact",
+    via: "CSS transition",
+    trigger:
+      kind === "hover"
+        ? { kind: "hover", on: { name: 'a "Pricing"', selector: "nav a" } }
+        : { kind: "scroll", at: i * 10 },
+    target: { name: "span", selector: "span.line", count: 1 },
+    changes: [{ property: "transform", values: ["scaleX(0)", "none"] }],
+    durationMs: 200,
+    easing: "ease-out",
+    area: 100,
+  });
+  const track = {
+    version: 1,
+    fps: 30,
+    viewport: { width: 1440, height: 900 },
+    method: "scroll",
+    frames: 600,
+    scrolledTo: 4300,
+    libraries: [],
+    items: [
+      ...Array.from({ length: 30 }, (_, i) => item(i + 1, "scroll")),
+      ...Array.from({ length: 10 }, (_, i) => item(i + 31, "hover")),
+    ],
+    itemsTotal: 40,
+    interactionItems: 10,
+    limits: ["Hover and click were tried on a sample, one element of each kind: 10 hovered, 0 clicked."],
+    stats: { changedPerFrameMedian: 1, changedPerFrameMax: 1, framesOverCap: 0 },
+  };
+
+  it("lists 24 scroll items, then up to 8 hover and click items under their own heading", async () => {
+    const { source } = sourceFor([cover, video, trackAsset]);
+    const r = await runTool(
+      tool("get_reference"),
+      Object.assign(source, { motionTrack: async () => track }) as PivotSource,
+      { id: ID },
+    );
+    const out = text(r);
+    expect(out).toContain("40 items, the 24 most visible shown plus 8 from hover and click");
+    expect(out).toContain(
+      '(+6 more items)\nHover and click (a sample: one element of each kind was tried):\nM31 hover on a "Pricing" (nav a) → span (span.line) | transform scaleX(0)→none | 200ms ease-out | exact (CSS transition)',
+    );
+    expect(out).toContain("M38 hover");
+    expect(out).not.toContain("M39 hover");
+    expect(out).toMatch(/M38 hover[^\n]*\n\(\+2 more items\)/);
+    expect((r.structuredContent as { motion: { items: unknown[]; interactionItems: number } }).motion).toMatchObject({
+      interactionItems: 10,
+    });
+    expect((r.structuredContent as { motion: { items: unknown[] } }).motion.items).toHaveLength(32);
+  });
+});

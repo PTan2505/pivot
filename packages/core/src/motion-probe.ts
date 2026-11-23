@@ -22,7 +22,9 @@ const DESCRIBE = `
   // a CSS module's class, \`WS84WW_shade\`: the hash changes with every build, the name after it doesn't
   const MODULE = /^_?(?=[A-Za-z0-9]*(?:\\d|[a-z][A-Z]|[A-Z][a-z]))[A-Za-z0-9]{5,8}_([A-Za-z][A-Za-z0-9-]{1,24})$/;
   const goodClass = (c) => c.length > 1 && c.length <= 28 && !/[:\\[\\]\\/@!#%.]/.test(c) && !UTILITY.test(c) && !HASHED.test(c) && !MODULE.test(c);
-  const goodId = (id) => id && id.length <= 40 && !/\\d{3,}|[:]/.test(id) && !/^[a-z0-9]{8,}$/i.test(id) && !HASHED.test(id);
+  // ids made at run time (React's useId, Base UI, Radix, Headless UI) change between builds and say nothing
+  const GENERATED = /^(base-ui|radix|headlessui|react-aria|mui|mantine|chakra)-|(^|[-_])_?[rR]_[0-9a-zA-Z]*_?|^:r|^_r/;
+  const goodId = (id) => id && id.length <= 40 && !/\\d{3,}|[:]/.test(id) && !/^[a-z0-9]{8,}$/i.test(id) && !HASHED.test(id) && !GENERATED.test(id);
   const own = (el) => {
     const tag = el.tagName.toLowerCase();
     const id = el.getAttribute("id");
@@ -175,6 +177,62 @@ export const MOTION_PROBE = `(() => {
       return out;
     },
     elements() { return elements; },
+    // hover and click: a small sample of what a visitor would point at or press, one per kind of element
+    candidates(maxHover, maxClick) {
+      const vw = innerWidth, vh = innerHeight;
+      const shown = (el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width < 24 || r.height < 16 || r.width > vw * 0.95 || r.height > vh * 0.9) return false;
+        const cs = getComputedStyle(el);
+        return cs.visibility !== "hidden" && cs.display !== "none" && Number(cs.opacity) > 0.05;
+      };
+      // something on it or just inside it transitions: a hover rule is likely
+      const transitions = (el) => [el, ...el.querySelectorAll(":scope > *, :scope > * > *")].slice(0, 16).some((n) => getComputedStyle(n).transitionDuration.split(",").some((d) => parseFloat(d) > 0));
+      const family = (el) => selectorOf(el).replace(/:nth-of-type\\(\\d+\\)/g, "").replace(/\\d+/g, "#");
+      // never pressed: anything that buys, signs in, sends, downloads, consents or closes
+      const RISKY = /buy|pay|checkout|order|cart|delete|remove|sign|log ?in|log ?out|register|subscribe|download|install|accept|agree|consent|cookie|allow|reject|decline|book|send|submit|contact|share|copy|print|play|start|trial|upgrade|close|dismiss|search/i;
+      const pick = [];
+      const seenFamilies = new Set();
+      const add = (el, kind) => {
+        const fam = kind + "|" + family(el);
+        if (seenFamilies.has(fam)) return false;
+        seenFamilies.add(fam);
+        pick.push({ el, kind });
+        return true;
+      };
+      const rank = (el) => (el.closest("nav, header") ? 0 : el.matches("button, [role=button], [role=tab]") ? 1 : el.querySelector("img, picture, video, svg") ? 2 : 3);
+      const hover = [...document.querySelectorAll("a[href], button, [role=button], [role=tab], [role=menuitem], [aria-haspopup], summary")]
+        .filter((el) => shown(el) && transitions(el))
+        .sort((a, b) => rank(a) - rank(b));
+      let h = 0;
+      for (const el of hover) if (h < maxHover && add(el, "hover")) h++;
+      const click = [...document.querySelectorAll("[role=tab]:not([aria-selected=true]), button[aria-expanded], [role=button][aria-expanded], button[aria-controls], summary")].filter((el) => {
+        if (!shown(el) || el.closest("a, form") || el.disabled || el.getAttribute("type") === "submit") return false;
+        if (el.getAttribute("aria-selected") === "true") return false;
+        const text = (el.innerText || el.getAttribute("aria-label") || "").trim();
+        return text.length <= 60 && !RISKY.test(text) && !RISKY.test(el.getAttribute("aria-label") || "");
+      });
+      let c = 0;
+      for (const el of click) if (c < maxClick && add(el, "click")) c++;
+      globalThis.__pivotTargets = pick.map((p) => p.el);
+      return pick.map((p, i) => ({ i, kind: p.kind, el: idOf(p.el) }));
+    },
+    // scrolls a candidate to the middle of the screen; its box, the scroll position, and whether the point at its
+    // centre is the element itself (nothing covers it)
+    reveal(i) {
+      const el = (globalThis.__pivotTargets || [])[i];
+      if (!el || !el.isConnected) return null;
+      el.scrollIntoView({ block: "center", inline: "nearest" });
+      const r = el.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const hit = document.elementFromPoint(cx, cy);
+      const sc = document.scrollingElement || document.documentElement;
+      return { x: r.left, y: r.top, w: r.width, h: r.height, cx, cy, at: window.scrollY || sc.scrollTop, clear: !!hit && (hit === el || el.contains(hit)), expanded: el.getAttribute("aria-expanded") };
+    },
+    expanded(i) {
+      const el = (globalThis.__pivotTargets || [])[i];
+      return el ? el.getAttribute("aria-expanded") : null;
+    },
   };
   return true;
 })()`;
