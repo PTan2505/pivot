@@ -23,12 +23,21 @@ import {
   addableTypes,
   isAgentType,
   TYPE_DEFS,
+  type ComponentMeta,
   type MetaField,
   type ResourceDetailDTO,
   type ResourceType,
 } from "@pivot/core/types";
 import { AssetGallery, useAttach } from "@/components/asset-gallery";
 import { Breadcrumbs, typeCrumbs } from "@/components/breadcrumbs";
+import {
+  ComponentFacts,
+  ComponentIdentity,
+  ComponentMain,
+  ComponentReviewGroup,
+  ComponentUsedIn,
+  componentMeta,
+} from "@/components/component-detail";
 import { ConfirmButton } from "@/components/confirm-button";
 import { Markdown } from "@/components/markdown";
 import { AddToCollection } from "@/components/selection-bar";
@@ -569,7 +578,9 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
     bulk.mutate({ action: "removeFromCollection", ids: [resource.id], collectionId });
 
   const colors = Array.isArray(draft.meta.colors) ? (draft.meta.colors as string[]) : [];
-  const showGallery = def.visual || resource.assets.length > 0;
+  // a component saved with its code gets its own page body (component-detail.tsx); the header and panel stay
+  const component = draft.type === "component" ? componentMeta(resource.meta) : null;
+  const showGallery = !component && (def.visual || resource.assets.length > 0);
 
   // The page actions. Visual types get them as one icon row under the title on phones; labels stay as aria-labels.
   const actions = (iconOnly: boolean) => {
@@ -580,7 +591,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
         {openableUrl(draft.sourceUrl) && (
           <Button variant="secondary" asChild className={grow}>
             <a href={openableUrl(draft.sourceUrl)!} target="_blank" rel="noopener noreferrer">
-              <ExternalLink /> {label("Open")}
+              <ExternalLink /> {label(component ? "Open on 21st.dev" : "Open")}
             </a>
           </Button>
         )}
@@ -589,7 +600,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
           className={grow}
           onClick={() => flush().then(() => copy({ ...resource, content: draft.content, type: draft.type }))}
         >
-          <Copy /> {label("Copy")}
+          <Copy /> {label(component ? "Copy code" : "Copy")}
         </Button>
         <Button variant="secondary" className={grow} onClick={() => flush().then(() => copyContext([resource.id]))}>
           <ClipboardCopy /> {label("Context")}
@@ -637,6 +648,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
           className="w-full min-w-0 bg-transparent text-[clamp(32px,4.5vw,56px)] leading-[1] font-medium tracking-[-0.04em] text-ink outline-none placeholder:text-ink-subtle focus-visible:outline-none"
           placeholder="Untitled"
         />
+        {component && <ComponentIdentity c={component} />}
         {def.visual && <div className="-mt-1 flex items-center gap-2 sm:hidden">{actions(true)}</div>}
       </header>
 
@@ -663,7 +675,8 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
             </section>
           )}
           {showGallery && <AssetGallery resource={resource} compact={!def.visual} />}
-          {def.content !== "none" && (
+          {component && <ComponentMain c={component} title={draft.title || resource.title} />}
+          {def.content !== "none" && !component && (
             <ContentEditor
               draft={draft}
               change={change}
@@ -681,6 +694,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
             draft={draft}
             change={change}
             onRemoveFromCollection={removeFromCollection}
+            component={component}
           />
         ) : (
           <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start" aria-label="Details">
@@ -964,15 +978,20 @@ function VisualPanel({
   draft,
   change,
   onRemoveFromCollection,
+  component = null,
 }: {
   resource: ResourceDetailDTO;
   draft: Draft;
   change: (patch: Partial<Draft>) => void;
   onRemoveFromCollection: (collectionId: string) => void;
+  /** A component's review and uses lead the panel, and its source is the facts PIVOT keeps. */
+  component?: ComponentMeta | null;
 }) {
   const def = TYPE_DEFS[draft.type];
   return (
     <aside className="space-y-3 xl:sticky xl:top-6 xl:self-start" aria-label="Details">
+      {component && <ComponentReviewGroup c={component} />}
+      {component && <ComponentUsedIn c={component} />}
       <PanelGroup title="Classification">
         <TagsEditor kinds={[...def.facets, "tag"]} value={draft.tags} onChange={(tags) => change({ tags })} />
       </PanelGroup>
@@ -990,17 +1009,23 @@ function VisualPanel({
         <CollectionsField resource={resource} onRemove={onRemoveFromCollection} nested />
       </PanelGroup>
 
-      <PanelGroup title="Source">
-        <Label htmlFor="url" className="sr-only">
-          Source URL
-        </Label>
-        <Input
-          id="url"
-          value={draft.sourceUrl}
-          onChange={(e) => change({ sourceUrl: e.target.value })}
-          placeholder="https://"
-          className={cn("font-mono text-xs", NESTED_FIELD)}
-        />
+      <PanelGroup title={component ? "Source & author" : "Source"}>
+        {component ? (
+          <ComponentFacts c={component} />
+        ) : (
+          <>
+            <Label htmlFor="url" className="sr-only">
+              Source URL
+            </Label>
+            <Input
+              id="url"
+              value={draft.sourceUrl}
+              onChange={(e) => change({ sourceUrl: e.target.value })}
+              placeholder="https://"
+              className={cn("font-mono text-xs", NESTED_FIELD)}
+            />
+          </>
+        )}
         {typeof draft.meta.section === "object" && draft.meta.section !== null && (
           <SectionInfo section={draft.meta.section as Record<string, unknown>} />
         )}
@@ -1015,7 +1040,7 @@ function VisualPanel({
           <ExternalOriginInfo origin={draft.meta.externalOrigin as Record<string, unknown>} />
         )}
         <DescriptionField value={draft.description} onChange={(description) => change({ description })} />
-        <AttributionFields draft={draft} change={change} />
+        {!component && <AttributionFields draft={draft} change={change} />}
         {def.fields.map((f) => (
           <MetaFieldInput key={f.key} field={f} draft={draft} change={change} />
         ))}

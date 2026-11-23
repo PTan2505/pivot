@@ -312,4 +312,49 @@ Each: audit → gaps → implement → test → report. Tests run only against a
   - The built `plugin/server/server.js` over stdio against a scratch PIVOT (port 4410, `assertScratch`), 17 checks: both tools listed and annotated, found false, save fetched with no flags and the review step, read back with code, placeholder key, save built with support file and review, conflict, `concerns_accepted` without words refused, lookup by page, `get_reference` hint, `search_references` by type, and `propose_references` showing a saved component as `[component]`.
 - **Not verified yet:** a real design session with a 21st component (that run also records `get_component`'s field names, open question 1).
 - **Versions:** plugin covered by the pending 0.6.0; no npm package change.
-- **Next:** Phase 3 (the component page), which starts with a design direction for the owner to approve.
+- **Next:** Phase 3 (the component page), which starts with a design direction for the owner to approve. Committed as `904d58f`.
+
+### Phase 3: the component page (2026-11-23)
+
+- **Design:**
+  - Through `pivot:redesign` (path A, Major), design session `118304e2` in the owner's PIVOT. Options: 2–3 directions, desktop first, standard motion with CSS, references from the library, catalogs and the web.
+  - References: the owner picked all three ("All three"): 21st.dev's component page, Magic UI's and shadcn/ui's component docs, with PIVOT's detail page as the consistency target.
+  - `ui-ux-pro-max` reviewed the brief, partially adopted:
+    - adopted: the verdict beside the title; the scan kept apart from the review; flags linking to their line; empty and failed previews; the phone order; dropping a "View code" reveal that duplicated the tabs;
+    - rejected: "Copy command" as the ember fill, because the top bar's Add is the screen's one primary.
+  - Three directions in round 1. The owner approved **version 3, "Today's layout, component stage"**, in PIVOT with no note.
+- **Audit:** a component showed the generic detail page (an empty gallery and the code in the content editor), plain cards with the type icon, and "New component" on the Components list (refused by the API since Phase 1).
+- **Implemented:**
+  - `components/component-detail.tsx`:
+    - identity row and review chip;
+    - Preview / Code tabs with the tab, file and line in the URL (native `history.replaceState`, so no server round trip);
+    - the stage with 21st's image or video by link, plus empty and failed states;
+    - the code view: file tabs, line numbers left out of copies and screen readers, the first 40 lines of a long file, flagged lines;
+    - Install with the placeholder chip and copy feedback;
+    - the rejected note; Review with the scan; Used in; Source & author.
+  - Wired into `resource-detail.tsx` (Open on 21st.dev, Copy code, the panel's first groups).
+  - `resource-card.tsx`: preview cover by link, `21st.dev · @author · licence`, the review chip first, a "Rejected" badge.
+  - `top-bar.tsx`: the Components list keeps the general Add.
+  - Syntax colouring: quiet emphasis without a highlighter. No new dependency, since the owner didn't ask for shiki.
+  - DESIGN.md "Component page"; SPEC §21.
+- **Tested on a scratch PIVOT** (port 4410, fixtures for clean, not reviewed and no preview, concerns accepted, rejected, refreshed code, long file, 60 flags, broken image with a video):
+  - before and after at 1440 and 390;
+  - no sideways scroll at 320 and 390 on every fixture, both tabs;
+  - keyboard: tabs with arrows, then file tabs, Copy file, the code block, with focus rings;
+  - a flag opens its file at its line;
+  - no console errors;
+  - the cards;
+  - Add on the Components list;
+  - new text pairs at 4.62:1 or more (Python).
+- **QA:**
+  - `impeccable` detector: 0 anti-patterns (two 11px sizes raised to 12px).
+  - `impeccable` audit through `pivot:specialist`, 15/20, adopted:
+    - copy buttons named from their visible label;
+    - a failed image keeps Play video;
+    - the scan guarded, and "and N more" past 50 flags;
+    - the code block a named region and its flagged line announced;
+    - one toggle state for the video;
+    - accent focus rings on the tabs;
+    - "opens in a new tab" on links.
+  - Item 5, the stage's corner pills over the preview at 390, was the owner's call: "Move below on phones" (recorded as a change). Below `sm` they now sit in a row under the preview, 12px below it (checked at 390); desktop is unchanged. Pre-existing: the title is an input with no h1, and the phone dock covers content.
+- **Not verified:** a screen reader run (VoiceOver); the review chip on card glass over a white screenshot.

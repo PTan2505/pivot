@@ -6,14 +6,14 @@ Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 
 Tracks [component-store-plan.md](component-store-plan.md), approved by the owner on 2026-11-23 (preview built locally, option A). Details per phase are in that file's Progress.
 
-| Phase | Name                               | Status                                            |
-| ----- | ---------------------------------- | ------------------------------------------------- |
-| 1     | The `component` type and its store | Done (`2fbb294` on `feat/component-store`)        |
-| 2     | MCP tools and the skill            | Done on `feat/component-store-mcp`, not committed |
-| 3     | The component page                 | Waiting for a design direction the owner approves |
-| 4     | The preview origin                 | Planned                                           |
-| 5     | The local preview build            | Planned                                           |
-| 6     | End-to-end and release             | Planned                                           |
+| Phase | Name                               | Status                                                             |
+| ----- | ---------------------------------- | ------------------------------------------------------------------ |
+| 1     | The `component` type and its store | Done (`2fbb294` on `feat/component-store`)                         |
+| 2     | MCP tools and the skill            | Done (`904d58f` on `feat/component-store-mcp`)                     |
+| 3     | The component page                 | Built on `feat/component-page` (version 3 approved), not committed |
+| 4     | The preview origin                 | Planned                                                            |
+| 5     | The local preview build            | Planned                                                            |
+| 6     | End-to-end and release             | Planned                                                            |
 
 ## Design Orchestrator v2
 
