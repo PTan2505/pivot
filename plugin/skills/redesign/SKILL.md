@@ -92,7 +92,7 @@ These steps differ from `pivot:design`:
   - **A screenshot:** study it closely; it shows exactly what the user means.
 - **Fill gaps only:**
   - PIVOT first. Before any general library search, call `list_facets` once per task, as `pivot:design` §2 says, and reuse its result after a resume.
-  - Then `search_external`: free providers only, never paid sources' tools, and web search only when the user asks.
+  - Then `search_external`: free providers only, never paid sources' tools, and web search only when the user asks. For a component, 21st.dev's search follows `pivot:design` §2 (look only, no code before the build).
   - Keep 2–4 references in all.
 - **Brief:** `pivot:design`'s shape, titled "Redesign brief", plus:
   - **Keep** and **Impact** lines (the consumers from §1);
