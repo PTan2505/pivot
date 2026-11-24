@@ -44,6 +44,18 @@ const listen = (handler) =>
     server.listen(0, "127.0.0.1", () => resolve(server));
   });
 
+/**
+ * `count` distinct ports that were free a moment ago: all held open together, then released. A start that gets past
+ * the port checks needs two (PIVOT's and PIVOT_PREVIEW_PORT); PIVOT's + 1 can't be assumed free while other packages'
+ * tests run in parallel.
+ */
+async function freePorts(count) {
+  const servers = await Promise.all(Array.from({ length: count }, () => listen()));
+  const ports = servers.map((s) => s.address().port);
+  await Promise.all(servers.map((s) => new Promise((resolve) => s.close(resolve))));
+  return ports;
+}
+
 describe("options", () => {
   it("parses each command's options and refuses anything else before doing anything", () => {
     expect(parseArgs(["--port", "4400", "--data-dir=/x", "--no-open"], "start")).toEqual({
@@ -101,13 +113,10 @@ describe("start refuses before it serves anything", () => {
   it("when the data folder belongs to a library in Postgres but DATABASE_URL is missing", async () => {
     const data = dir("neon");
     fs.writeFileSync(path.join(data, "api-token"), "t");
-    const port = await new Promise((resolve) => {
-      const s = http.createServer().listen(0, "127.0.0.1", () => {
-        const p = s.address().port;
-        s.close(() => resolve(p));
-      });
+    const [port, previewPort] = await freePorts(2);
+    const r = await cli(["start", "--port", String(port), "--data-dir", data], {
+      env: { PIVOT_PREVIEW_PORT: String(previewPort) },
     });
-    const r = await cli(["start", "--port", String(port), "--data-dir", data]);
     expect(r.code).toBe(1);
     expect(r.out).toMatch(/probably in Neon.*Nothing was started/);
     expect(fs.existsSync(path.join(data, "db"))).toBe(false);
