@@ -665,6 +665,8 @@ export interface SearchRequest {
   collectionId?: string;
   /** Only resources saved from this source (a source resource id). */
   sourceId?: string;
+  /** Only the owner's designs marked as work of this organisation (any case). */
+  organisation?: string;
   /** `relevance` (the default with a query) ranks title, then tag, then description matches; otherwise recently edited. */
   sort?: SearchSort;
   /** 1–50, default 20. */
@@ -687,6 +689,8 @@ export interface SearchHit {
   /** Facets first, then plain tags; at most 8. */
   facets: { kind: TagKind; name: string }[];
   hasScreenshot: boolean;
+  /** One of the owner's designs: its kind, and whose work it is (never its code). */
+  myDesign?: { kind: MyDesignKind; ownership: Ownership; organisation?: string };
   createdAt: string;
   updatedAt: string;
 }

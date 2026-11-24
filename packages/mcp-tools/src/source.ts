@@ -74,6 +74,25 @@ export interface PivotSource {
     pageUrl?: string;
     resourceId?: string;
   }): Promise<ResourceDetailDTO | null>;
+  /**
+   * One of the owner's saved designs, by its PIVOT id or its name (exact, any case); null when PIVOT doesn't hold it.
+   * Optional: an app from before My designs makes `get_my_design` say it needs an update.
+   */
+  findMyDesign?(q: { id?: string; name?: string }): Promise<ResourceDetailDTO | null>;
+  /** A stored file's bytes, exactly as saved (a design's SVG, font or model); null when it is gone. */
+  assetData?(assetId: string): Promise<Buffer | null>;
+}
+
+/** One file going to a saved design: a non-code file with its path, a screenshot or a video. */
+export interface MyDesignUploadInput {
+  data: Buffer;
+  fileName: string;
+  mimeType: string;
+  role: "design-asset" | "design-shot" | "design-video";
+  /** design-asset: where it goes, relative to the design's files. */
+  path?: string;
+  /** design-shot: desktop or mobile. */
+  viewport?: "desktop" | "mobile";
 }
 
 /**
@@ -179,6 +198,15 @@ export interface PivotWriter {
   saveComponent?(
     input: Record<string, unknown>,
   ): Promise<{ outcome: "created" | "updated" | "unchanged"; resource: ResourceDetailDTO }>;
+  /**
+   * Saves one of the owner's designs with its exact code (or updates the one with `id`; different code needs
+   * `replaceCode`, else a `conflict`). Optional: an app from before My designs makes the tool say so.
+   */
+  saveMyDesign?(
+    input: Record<string, unknown>,
+  ): Promise<{ outcome: "created" | "updated" | "unchanged"; resource: ResourceDetailDTO }>;
+  /** Adds a file, screenshot or video to a saved design. */
+  addMyDesignAsset?(id: string, upload: MyDesignUploadInput): Promise<ResourceDetailDTO>;
   saveReference(input: {
     url: string;
     type?: string;

@@ -48,6 +48,13 @@ export const API_FEATURES = [
    * (`?id=`, `?url=` or `?resourceId=`), each with PIVOT's scan of the code.
    */
   "components",
+  /**
+   * The owner's own designs, saved to be rebuilt exactly: `POST /api/my-designs` (save, or update with `id`; 409 on
+   * different code without `replaceCode`), `GET /api/my-designs/lookup` (`?id=` or `?name=`),
+   * `POST /api/my-designs/[id]/assets` (a file, screenshot or video), and the agent search's `organisation` filter
+   * (`GET /api/resources?paged=1&organisation=`).
+   */
+  "my-designs",
 ] as const;
 
 export type ApiFeature = (typeof API_FEATURES)[number];

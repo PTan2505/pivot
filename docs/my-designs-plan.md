@@ -54,14 +54,32 @@ A My designs grid (cover, name, kind, Personal or Company · Org badge, filters,
 
 | Phase | Name            | Branch                 | Status                                   |
 | ----- | --------------- | ---------------------- | ---------------------------------------- |
-| 1     | Core and API    | `feat/my-designs`      | Done, not committed                      |
-| 2     | MCP and skill   | `feat/my-designs-mcp`  | To do                                    |
+| 1     | Core and API    | `feat/my-designs`      | Done (PR #166)                           |
+| 2     | MCP and skill   | `feat/my-designs-mcp`  | Done, not committed                      |
 | 3     | UI and preview  | `feat/my-designs-page` | To do                                    |
 | 4     | Release + saves | release PR             | To do, when the owner asks for a release |
 
 Phase 4's first saves, one per session in its project folder: the ODIN 3D logo hero, the portfolio grid-scan, the ODIN layer timeline, the Pulse pricing scroll story, `story.html` A/B/C, the merchant-portal theme.
 
 ## Progress
+
+### Phase 2 — MCP tools and the skill (2026-11-24)
+
+- Status: Done, not committed.
+- Existing functionality reused: Phase 1's routes and core (`saveMyDesign`, `addMyDesignAsset`, `findMyDesign`, the 409 on different code), the shared path rules and refused files (`relativePath`, `refusedFileReason` in `code-files.ts`), the component store's tool shapes (`save_component` / `get_saved_component`: the scan lines, the 300,000-character code cap, the `structuredContent` with everything), `searchResources` and its route, `get_reference_images`' paging, `GET /api/assets/[id]` for the bytes, the HTTP source's capability check, the scratch guard and the component store's stdio e2e.
+- Files changed:
+  - new `packages/mcp-tools/src/my-design-files.ts` (the disk side: real paths, the escape and link checks, exact UTF-8, media reading, the all-or-nothing `writeInside`);
+  - `packages/mcp-tools/src/write-tools.ts` (`save_my_design`, `get_my_design`; `save_reference` names it), `source.ts` (`findMyDesign`, `assetData`, `saveMyDesign`, `addMyDesignAsset`), `tools.ts` (`search_references` `organisation` and "Yours", `get_reference` pointer, `get_reference_images` `which: "shots"`, labels of the design roles);
+  - `apps/mcp/src/http-source.ts` (the routes, multipart upload, `requireFeature("my-designs")`), `apps/mcp/src/server.ts` (instructions);
+  - core: `capabilities.ts` (`my-designs`), `types.ts` (`SearchRequest.organisation`, `SearchHit.myDesign`), `search.ts`, `resources.ts` (the `organisation` filter on `meta.myDesign.organisation`); `apps/web/src/app/api/resources/route.ts` (`organisation`);
+  - `plugin/skills/design/SKILL.md` (tool rows, §2 step 0 "Yours" first, §4 source column, §9 rebuild steps, the new "Save a design to My designs" section, the rule), `plugin/skills/redesign/SKILL.md` (§2, §5, rules); `plugin/server/server.js` rebuilt;
+  - tests: new `packages/mcp-tools/test/my-design-tools.test.ts`; `packages/core/test/my-designs.test.ts` (search); `write-tools.test.ts` and `skills.test.ts` (the tool list, 22 tools, `shots`);
+  - new `scripts/qa/my-designs/` (the e2e, its README and config); SPEC §10 and §22.
+- Decision taken here: `my-designs` is checked by the tools that need it, not added to the required list (`required-app-features.json`), like `design.feedback`: an app from before My designs keeps working for everything else, and `save_my_design`, `get_my_design` and an `organisation` search answer `app_outdated` naming `my-designs` with the update steps. Adding it to the required list would have blocked every tool on such an app.
+- Checks run and results: `my-design-tools.test.ts` 12/12 (reading from root, CRLF and non-ASCII kept; `..`, absolute, a link out, a link to `.env`, `.env`, `node_modules`, a key file, a missing file, a non-UTF-8 file, all refused before any save; relative root and company work without organisation refused; the 409 message and `replaceCode`; read-only and older-app refusals; `writeTo` sha256-equal and idempotent; no overwrite of a file that differs; no write through a linked folder; an asset whose sha256 changed; the `organisation` filter and "Yours"; `get_reference` and `which: "shots"`; `save_reference` can't make one); `my-designs.test.ts` 11/11 with the new database search test; `pnpm check` exit 0 (cli 18, core 284, extension 12, mcp-tools 367); `pnpm plugin:validate` passed.
+- Manual verification: the scratch e2e (`scripts/qa/my-designs/`) on a scratch PIVOT built from this branch (`node scripts/start.mjs --scratch /tmp/pivot-mydesigns-e2e`, port 4400, guard passed), over the real MCP server on stdio: a three.js fixture with a tokens CSS (CRLF), a demo page and an SVG, screenshots and a video taken by Playwright; 6/6 steps: refusals before any save, saved with sha256-equal files, the 409, `writeTo` with sha256 equal for all four files, no overwrite, found by organisation (any case) and not by another, its shots shown. No 21st retrieval was spent.
+- Remaining issues: the design page and its preview are Phase 3; until then a design opens on the generic detail page. The skill steps were checked by reading and by the tool tests, not by a full Claude session saving and reusing a real design (Phase 4's first saves will).
+- Next step: Phase 3.
 
 ### Phase 1 — Core and API (2026-11-24)
 
