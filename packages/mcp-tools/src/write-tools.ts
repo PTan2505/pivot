@@ -458,7 +458,9 @@ const candidateText = (c: DesignCandidateDTO) =>
         ? "\n   Preview: captured by PIVOT"
         : c.previewStatus === "failed"
           ? `\n   Preview: none (${c.previewError})`
-          : "\n   Preview: still capturing"
+          : c.previewStatus === "none"
+            ? "\n   Preview: not captured (PIVOT never captures this site; the user opens the page to review it)"
+            : "\n   Preview: still capturing"
       : ""
   }`;
 
@@ -515,7 +517,7 @@ const PREVIEW_WAIT_MS = 120_000;
 const proposeReferences: PivotTool<typeof proposeInput> = {
   name: "propose_references",
   title: "Propose references for the user to pick (gate 1)",
-  description: `Puts the references you recommend on the design session's page in PIVOT, numbered, so the user can see them and pick: library references by id, and real external pages by URL. PIVOT captures its own preview of each external page (public http/https only) and returns those previews here so you can check each one is what you said; a page that can't be captured (blocked, login, timeout) is listed with the reason. External pages are NOT saved to the library (save_reference only if the user asks). Never invent a URL: propose only pages you found and opened. After this, show the user the numbered list with the session link and wait for their pick (gate 1); record it with select_references. ${NOT_IN_REPO}`,
+  description: `Puts the references you recommend on the design session's page in PIVOT, numbered, so the user can see them and pick: library references by id, and real external pages by URL. PIVOT captures its own preview of each external page (public http/https only) and returns those previews here so you can check each one is what you said; a page that can't be captured (blocked, login, timeout) is listed with the reason. 21st.dev pages are never captured (its terms forbid it): they show their name and link only, and the user opens them to review. External pages are NOT saved to the library (save_reference only if the user asks). Never invent a URL: propose only pages you found and opened. After this, show the user the numbered list with the session link and wait for their pick (gate 1); record it with select_references. ${NOT_IN_REPO}`,
   inputSchema: proposeInput,
   async run(source, { sessionId, candidates }) {
     const w = writer(source);

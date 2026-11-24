@@ -51,6 +51,19 @@ const COMPONENT_HOSTS = KNOWN_SOURCES.filter((s) => s.category === "components")
 const onHost = (host: string, site: string) => host === site || host.endsWith(`.${site}`);
 
 /**
+ * Sites PIVOT never captures. 21st.dev's terms treat its demo previews and screenshots as its own works and forbid
+ * collecting them automatically, so a 21st.dev candidate shows its name and link only, and the user opens the page to
+ * review it.
+ */
+const NO_CAPTURE_HOSTS = ["21st.dev"];
+
+/** Whether PIVOT captures a preview of this external page (false for the sites in NO_CAPTURE_HOSTS). */
+export function capturesPreview(url: string | null | undefined): boolean {
+  const host = hostOf(url);
+  return !host || !NO_CAPTURE_HOSTS.some((site) => onHost(host, site));
+}
+
+/**
  * What a candidate shows when the agent didn't say: a library resource by its type, an external page by its site (a
  * component catalog, or anything else, which is taken as a page).
  */
@@ -112,7 +125,9 @@ function toDTO(
         ? "ready"
         : r.previewError
           ? "failed"
-          : "pending",
+          : capturesPreview(r.url)
+            ? "pending"
+            : "none",
     selected: r.selected,
     selectedWords: r.selectedWords,
     createdAt: r.createdAt.toISOString(),
@@ -145,7 +160,8 @@ async function exploringSession(sessionId: string) {
 
 /**
  * Adds candidates to a session, numbered after the existing ones. External pages are checked (public http/https only)
- * and captured one at a time; a page that can't be captured is still listed, with the reason instead of a preview.
+ * and captured one at a time; a page that can't be captured is still listed, with the reason instead of a preview. A
+ * page on a site PIVOT never captures (capturesPreview) is listed with no preview.
  */
 export async function addCandidates(
   sessionId: string,
@@ -224,7 +240,7 @@ export async function addCandidates(
   for (const row of rows) {
     const [inserted] = await db.insert(designCandidates).values(row).returning({ id: designCandidates.id });
     added.push(inserted.id);
-    if (!row.resourceId) captures.push({ id: inserted.id, url: row.url! });
+    if (!row.resourceId && capturesPreview(row.url)) captures.push({ id: inserted.id, url: row.url! });
   }
   // previews are captured in the background, three at a time: a page can take tens of seconds, longer than a request
   const done = captureAll(sessionId, captures);

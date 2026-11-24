@@ -1,10 +1,11 @@
 // Gate 1: references proposed for a design session. Library references link by id; external pages are checked (public
 // only), previewed by PIVOT's own capture (stubbed here; the real capture runs in the end-to-end check), never added to
 // the library, and only the user's pick, in their words, marks them selected.
+import dns from "node:dns/promises";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 let tmp: string;
 let cands: typeof import("../src/design-candidates");
@@ -202,5 +203,47 @@ describe("UI layouts and components", () => {
     const { eq } = await import("drizzle-orm");
     await (await db.getDb()).update(designCandidates).set({ category: null }).where(eq(designCandidates.id, c.id));
     expect((await cands.listCandidates(id))[0].category).toBe("component");
+  });
+});
+
+describe("sites PIVOT never captures", () => {
+  it("lists a 21st.dev page with its name and link and no preview, and never captures it", async () => {
+    expect(cands.capturesPreview("https://21st.dev/@author/components/pricing")).toBe(false);
+    expect(cands.capturesPreview("https://www.21st.dev/community/components")).toBe(false);
+    expect(cands.capturesPreview("https://cdn.21st.dev/x.png")).toBe(false);
+    expect(cands.capturesPreview("https://not21st.dev/")).toBe(true);
+    expect(cands.capturesPreview("https://reactbits.dev/")).toBe(true);
+
+    // 21st.dev resolves to a public address here, so the test runs offline
+    const lookup = vi.spyOn(dns, "lookup").mockResolvedValue([{ address: "93.184.215.14", family: 4 }] as never);
+    try {
+      const id = await session();
+      const before = captured.length;
+      const [c] = await cands.addCandidates(
+        id,
+        [
+          {
+            url: "https://21st.dev/@author/components/pricing",
+            title: "Pricing toggle",
+            source: "21st.dev (author)",
+            category: "component",
+            why: "Monthly/yearly toggle",
+          },
+        ],
+        { wait: true },
+      );
+      expect(captured.length).toBe(before);
+      expect(c).toMatchObject({
+        kind: "external",
+        title: "Pricing toggle",
+        url: "https://21st.dev/@author/components/pricing",
+        previewStatus: "none",
+        previewUrl: null,
+        previewError: null,
+      });
+      expect(await cands.candidatePreview(c.id)).toBeNull();
+    } finally {
+      lookup.mockRestore();
+    }
   });
 });

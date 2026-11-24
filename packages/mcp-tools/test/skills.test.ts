@@ -49,10 +49,20 @@ describe("skills name real MCP tools and values", () => {
   const milestones = enumValues("DESIGN_MILESTONES");
   const kinds = enumValues("DESIGN_DECISION_KINDS");
   const tagKinds = enumValues("TAG_KINDS");
+  // Tools of the user's own 21st.dev MCP, which pivot:design names in its §2 (search) and §9 (build) rules.
+  // They are not PIVOT's, so they are allowed by name here instead of being matched against `tools`.
+  const external21st = new Set([
+    "search_picker",
+    "get_inspiration",
+    "get_component",
+    "get_usage",
+    "get_theme",
+    "search_logo",
+  ]);
   for (const [f, t] of Object.entries(files)) {
     it(`${f}: every tool it names exists`, () => {
       const used = all(/`((?:list|search|get|save|record|suggest|annotate|set)_[a-z_]+)`/g, t);
-      expect(subset(used, tools)).toEqual([]);
+      expect(subset(used, new Set([...tools, ...external21st]))).toEqual([]);
     });
     it(`${f}: milestones, decision kinds, facet kinds and image 'which' values exist`, () => {
       expect(subset(all(/milestone: "([a-z_]+)"/g, t), milestones)).toEqual([]);
