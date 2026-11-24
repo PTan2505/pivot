@@ -482,8 +482,11 @@ export const SERVER_OWNED_SKILL_META = [
   "readonly",
   "packId",
 ] as const;
-/** Meta PIVOT writes itself and a client can't: a synced skill's fields, and a saved component (`components.ts`). */
-const SERVER_OWNED_META = [...SERVER_OWNED_SKILL_META, "component"] as const;
+/**
+ * Meta PIVOT writes itself and a client can't: a synced skill's fields, a saved component (`components.ts`) and a saved
+ * design (`my-designs.ts`).
+ */
+const SERVER_OWNED_META = [...SERVER_OWNED_SKILL_META, "component", "myDesign"] as const;
 export function withoutServerOwnedMeta<T extends { meta?: unknown }>(input: T): T {
   if (!input?.meta || typeof input.meta !== "object") return input;
   const meta = { ...(input.meta as Record<string, unknown>) };

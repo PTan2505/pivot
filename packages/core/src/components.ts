@@ -2,9 +2,9 @@
 // is saved right after its code is fetched from 21st.dev (status "fetched") and again once it is built into a project
 // ("built"), so the next use reads it from PIVOT and spends no 21st retrieval. PIVOT scans the code on every save; the
 // scan flags, it never blocks or edits. Nothing here fetches anything from 21st: the agent passes what it retrieved.
-import { createHash } from "node:crypto";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
+import { filesSha, MAX_FLAGS, NPM_NAME, NPM_VERSION, relativePath, scanFiles, SECRET_PATTERNS } from "./code-files";
 import { getDb } from "./db/client";
 import { resources } from "./db/schema";
 import { getResource, setResourceTags } from "./resources";
@@ -34,11 +34,6 @@ export const SCAN_VERSION = 1;
 export const API_KEY_PLACEHOLDER = "$API_KEY_21ST";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** npm's own rule for package names (lowercase, optional scope). */
-const NPM_NAME = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
-/** A registry version or range only: no git, file, link, URL or alias specs, which npm would fetch from elsewhere. */
-const NPM_VERSION = /^[0-9A-Za-z.\-^~<>=*|+ ]{1,100}$/;
-
 const httpsOn = (hosts: string[]) =>
   z
     .string()
@@ -56,15 +51,7 @@ const httpsOn = (hosts: string[]) =>
       `must be an https link on ${hosts.join(" or ")}`,
     );
 
-const filePath = z
-  .string()
-  .trim()
-  .min(1)
-  .max(300)
-  .refine(
-    (p) => !p.startsWith("/") && !p.includes("\\") && !p.split("/").some((part) => part === ".." || part === ""),
-    "must be a relative path like components/ui/orbit.tsx (no .., no leading /)",
-  );
+const filePath = relativePath;
 
 export const componentInput = z.object({
   provider: z.enum(COMPONENT_PROVIDERS),
@@ -132,16 +119,6 @@ export type ComponentInput = z.infer<typeof componentInput>;
 
 // ---- install command -------------------------------------------------------------------------------------------
 
-/** Values that look like a credential, wherever they appear in an install command. */
-const SECRET_PATTERNS: RegExp[] = [
-  /\b(sk|pk|rk)[-_](live|test|proj)?[-_]?[A-Za-z0-9]{16,}/,
-  /\bgh[pousr]_[A-Za-z0-9]{20,}/,
-  /\bxox[abprs]-[A-Za-z0-9-]{10,}/,
-  /\bAKIA[0-9A-Z]{16}\b/,
-  /\bBearer\s+[A-Za-z0-9._~+/-]{16,}/i,
-  /\b(token|secret|password|passwd|auth|access_key|apikey|key)=(?!\$)[^\s&"']{8,}/i,
-];
-
 /**
  * The install command as PIVOT keeps it: any `api_key=` value becomes the placeholder `$API_KEY_21ST`, and a command
  * that still holds something like a credential is refused (never stored, never echoed back).
@@ -161,63 +138,13 @@ export function sanitizeInstallCommand(cmd: string): string {
 
 // ---- the scan --------------------------------------------------------------------------------------------------
 
-type Rule = { kind: string; what: string; re: RegExp };
-
-const LINE_RULES: Rule[] = [
-  { kind: "network", what: "fetch(", re: /\bfetch\s*\(/ },
-  { kind: "network", what: "XMLHttpRequest", re: /\bXMLHttpRequest\b/ },
-  { kind: "network", what: "WebSocket", re: /\bnew\s+WebSocket\b/ },
-  { kind: "network", what: "EventSource", re: /\bnew\s+EventSource\b/ },
-  { kind: "network", what: "sendBeacon", re: /\bsendBeacon\s*\(/ },
-  { kind: "network", what: "a source set at runtime (.src =)", re: /\.src\s*=(?!=)/ },
-  { kind: "dynamic-code", what: "eval(", re: /(^|[^.\w])eval\s*\(/ },
-  { kind: "dynamic-code", what: "new Function(", re: /\bnew\s+Function\s*\(/ },
-  { kind: "dynamic-code", what: "a timer run from a string", re: /\bset(Timeout|Interval)\s*\(\s*["'`]/ },
-  { kind: "dynamic-code", what: "import() of a URL", re: /\bimport\s*\(\s*["'`]https?:/ },
-  { kind: "dynamic-code", what: "a script element made at runtime", re: /createElement\s*\(\s*["'`]script["'`]/i },
-  { kind: "dynamic-code", what: "document.write", re: /\bdocument\.write(ln)?\s*\(/ },
-  {
-    kind: "dynamic-code",
-    what: "dangerouslySetInnerHTML with a value that isn't a literal",
-    re: /dangerouslySetInnerHTML\s*=\s*\{\s*\{\s*__html\s*:\s*(?!["'`])/,
-  },
-  { kind: "beyond-component", what: "document.cookie", re: /\bdocument\.cookie\b/ },
-  { kind: "beyond-component", what: "localStorage / sessionStorage", re: /\b(localStorage|sessionStorage)\b/ },
-  { kind: "beyond-component", what: "reading the clipboard", re: /\bnavigator\.clipboard\.read/ },
-  { kind: "beyond-component", what: "navigator.credentials", re: /\bnavigator\.credentials\b/ },
-  {
-    kind: "beyond-component",
-    what: "the parent or top window",
-    re: /\bwindow\.(parent|top|opener)\b|\b(top|parent)\.location\b/,
-  },
-  { kind: "beyond-component", what: 'postMessage to "*"', re: /postMessage\s*\([^)]*,\s*["'`]\*["'`]\s*\)/ },
-  { kind: "obfuscation", what: "atob(", re: /\batob\s*\(/ },
-  { kind: "obfuscation", what: "a run of escaped characters", re: /(\\x[0-9a-fA-F]{2}){8,}|(\\u[0-9a-fA-F]{4}){8,}/ },
-];
-
-const LONG_STRING = /[A-Za-z0-9+/=_-]{200,}/;
-const LONG_LINE = 1000;
-/** Hosts every SVG or XML file names: never a request. */
-const QUIET_HOSTS = new Set(["www.w3.org"]);
-const MAX_FLAGS = 200;
 const INSTALL_OK =
   /^npx\s+shadcn@(latest|[0-9][0-9A-Za-z.-]*)\s+add\s+"?https:\/\/21st\.dev\/r\/[\w@.~/-]+(\?api_key=\$API_KEY_21ST)?"?$/;
 const REGISTRY_HOSTS = ["21st.dev", "ui.shadcn.com"];
 
-function excerpt(line: string, index: number) {
-  const t = line.trim();
-  if (t.length <= 160) return t;
-  const start = Math.max(0, index - 60);
-  return `${start > 0 ? "…" : ""}${line.slice(start, start + 160).trim()}…`;
-}
-
 /** sha256 of the component and demo files, in path order. Support files are left out. */
 export function componentCodeSha(files: Pick<ComponentFile, "path" | "role" | "code">[]) {
-  const h = createHash("sha256");
-  for (const f of [...files].filter((f) => f.role !== "support").sort((a, b) => a.path.localeCompare(b.path))) {
-    h.update(f.path).update("\0").update(f.code).update("\0");
-  }
-  return h.digest("hex");
+  return filesSha(files.filter((f) => f.role !== "support"));
 }
 
 /**
@@ -229,43 +156,8 @@ export function scanComponent(c: {
   installCommand?: string;
   registryDependencies?: string[];
 }): ComponentScan {
-  const flags: ComponentScanFlag[] = [];
-  const hosts = new Set<string>();
+  const { flags, hosts } = scanFiles(c.files);
   const add = (f: ComponentScanFlag) => flags.length < MAX_FLAGS && flags.push(f);
-  for (const file of c.files) {
-    const lines = file.code.split("\n");
-    lines.forEach((line, i) => {
-      for (const r of LINE_RULES) {
-        const m = r.re.exec(line);
-        if (m) add({ kind: r.kind, what: r.what, file: file.path, line: i + 1, excerpt: excerpt(line, m.index) });
-      }
-      const long = LONG_STRING.exec(line);
-      if (long) {
-        add({
-          kind: "obfuscation",
-          what: `an encoded-looking string of ${long[0].length} characters`,
-          file: file.path,
-          line: i + 1,
-          excerpt: excerpt(line, long.index),
-        });
-      }
-      if (line.length > LONG_LINE) {
-        add({
-          kind: "obfuscation",
-          what: `a line of ${line.length} characters`,
-          file: file.path,
-          line: i + 1,
-          excerpt: excerpt(line, 0),
-        });
-      }
-      for (const m of line.matchAll(/https?:\/\/([a-z0-9.-]+\.[a-z]{2,})/gi)) {
-        const host = m[1].toLowerCase();
-        if (QUIET_HOSTS.has(host) || hosts.has(host)) continue;
-        hosts.add(host);
-        add({ kind: "host", what: host, file: file.path, line: i + 1, excerpt: excerpt(line, m.index ?? 0) });
-      }
-    });
-  }
   if (c.installCommand && !INSTALL_OK.test(c.installCommand)) {
     add({
       kind: "install-command",
@@ -295,7 +187,7 @@ export function scanComponent(c: {
       });
     }
   }
-  return { version: SCAN_VERSION, codeSha256: componentCodeSha(c.files), flags, hosts: [...hosts].sort() };
+  return { version: SCAN_VERSION, codeSha256: componentCodeSha(c.files), flags, hosts };
 }
 
 // ---- save and look up ------------------------------------------------------------------------------------------
