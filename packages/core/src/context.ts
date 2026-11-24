@@ -4,6 +4,7 @@ import sharp from "sharp";
 import { getAsset, listResourceAssets, materializeAsset, readAssetBytes } from "./assets";
 import { pluginsDir, skillsDir } from "./config";
 import { resolveWriteTarget, within } from "./write-target";
+import { componentCredit, componentOf } from "./components";
 import { getResourcesByIds } from "./resources";
 import type { SkillMeta } from "./skills";
 import { estimateImageTokens, estimateTextTokens, scaledImageSize, CLAUDE_MAX_IMAGE_EDGE } from "./tokens";
@@ -103,6 +104,8 @@ function sectionFor(r: ResourceDTO, index: number, planned: PlannedAsset[], file
   if (Array.isArray(meta.colors) && meta.colors.length)
     facts.push(`- **Colors:** ${meta.colors.map((c) => `\`${c}\``).join(" ")}`);
   if (typeof meta.whenToUse === "string" && meta.whenToUse) facts.push(`- **When to use:** ${meta.whenToUse}`);
+  const component = r.type === "component" ? componentOf(r) : null;
+  if (component) facts.push(...componentCredit(component).map((l) => `- ${l}`));
   if (facts.length) lines.push(...facts, "");
   if (r.description) lines.push(r.description.trim(), "");
   if (r.notes.trim()) lines.push("**Notes**", "", r.notes.trim(), "");
@@ -113,6 +116,9 @@ function sectionFor(r: ResourceDTO, index: number, planned: PlannedAsset[], file
     if (ref) lines.push(`**Skill file:** \`${ref}\` — read it before starting.`, "");
   } else if (fileRef) {
     lines.push(`**File:** \`${fileRef}\``, "");
+  } else if (component) {
+    // never the code: a component's code is third-party, kept for the owner's own reuse (docs/component-store-plan.md)
+    lines.push("**Code:** saved in PIVOT, not included here; an agent reads it with `get_saved_component`.", "");
   } else if (r.content.trim()) {
     const content = r.content;
     if (def.content === "code") lines.push(fence(content, String(meta.language ?? "")), "");
@@ -293,7 +299,7 @@ export async function exportBundle(opts: ExportOptions) {
       await fs.writeFile(path.join(dest, "SKILL.md"), r.content, "utf8");
       fileRef = `skills/${skillName}/SKILL.md`;
       fileCount++;
-    } else if (r.content.trim() && def.content !== "none") {
+    } else if (r.content.trim() && def.content !== "none" && r.type !== "component") {
       const ext =
         def.content === "json"
           ? ".json"

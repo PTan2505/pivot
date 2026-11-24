@@ -1,6 +1,6 @@
 {
   "name": "pivot-studio",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "PIVOT: your own library of UI references, and design sessions with Claude Code. Runs locally.",
   "license": "MIT",
   "repository": {
@@ -36,12 +36,14 @@
   "dependencies": {
     "@aws-sdk/client-s3": "3.1156.0",
     "@electric-sql/pglite": "0.5.11",
+    "esbuild": "0.25.12",
     "next": "16.4.6",
     "playwright": "1.64.1",
     "postgres": "3.4.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "sharp": "0.35.5"
+    "sharp": "0.35.5",
+    "tailwindcss": "4.3.3"
   },
   "devDependencies": {
     "vitest": "^5.0.5"

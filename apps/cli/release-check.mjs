@@ -20,7 +20,7 @@ const INCLUDED = [
   /^apps\/extension\/[^/]+\.(html|json|ts)$/,
   /^apps\/cli\/(bin|lib)\//,
   /^apps\/cli\/(build\.mjs|package\.json|README\.md|LICENSE)$/,
-  /^plugin\/skills\/design\/scripts\/(preview|motion-qa)\.mjs$/,
+  /^plugin\/skills\/design\/scripts\/(preview|motion-qa|motion-fit)\.mjs$/,
   /^THIRD_PARTY_NOTICES\.md$/,
   /^pnpm-lock\.yaml$/,
 ];

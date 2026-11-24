@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { MAX_EDGE } from "./agent-images";
 import { elementsHtml, MAX_FULL_PAGE_HEIGHT, renderHtml, type RenderedElement } from "./capture";
@@ -17,9 +18,19 @@ import type { DesignFeedbackDTO, DesignFeedbackElement, DesignFeedbackPin } from
  * of the same render, so the agent gets the element's selector, box and HTML rather than a spot.
  */
 
-export const FEEDBACK_LIMITS = { text: 5000, pins: 30, pinText: 1000 } as const;
-/** The widths the session page shows a version at (Desktop, Tablet, Phone): the only ones pins are placed on. */
-export const RENDER_WIDTHS = [1440, 834, 390] as const;
+export const FEEDBACK_LIMITS = {
+  text: 5000,
+  pins: 30,
+  pinText: 1000,
+  captureBytes: 400_000,
+  captureTotal: 6_000_000,
+  captureEdge: 2400,
+} as const;
+/**
+ * The widths a version is rendered and commented at: the session page's Tablet (834) and Phone (390), and Desktop at
+ * 1440 or at the window's own width in the full-screen view and the preview window.
+ */
+export const RENDER_WIDTH = { min: 320, max: 2560 } as const;
 
 type FeedbackRow = typeof designFeedback.$inferSelect;
 
@@ -60,14 +71,97 @@ export async function getFeedback(id: string): Promise<DesignFeedbackDTO | null>
  * Stores the owner's feedback on a round of an exploring session: text for the round or one version, and pins on that
  * version's render at a width. Refuses a request carrying the API token. Throws DesignError for anything else wrong.
  */
+export interface FeedbackPinInput {
+  x: number;
+  y: number;
+  text: string;
+  n?: number;
+  element?: {
+    selector: string;
+    tag?: string;
+    id?: string;
+    classes?: string[];
+    text?: string;
+    label?: string;
+    box?: { x: number; y: number; w: number; h: number };
+    html?: string;
+  };
+  live?: boolean;
+  capture?: { image: string; region: { left: number; top: number; width: number; height: number } };
+}
+
+const clip = (v: unknown, max: number) => {
+  const t = typeof v === "string" ? v.replace(/\s+/g, " ").trim() : "";
+  return t ? t.slice(0, max) : undefined;
+};
+const int = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v) : NaN);
+
+/** A live note's element, as the preview reported it, cut to the stored limits. Null when it isn't usable. */
+function liveElement(e: FeedbackPinInput["element"], width: number): DesignFeedbackElement | null {
+  if (!e) return null;
+  const tag = clip(e.tag, 40)?.toLowerCase();
+  const selector = clip(e.selector, 1000);
+  const box = e.box && { x: int(e.box.x), y: int(e.box.y), w: int(e.box.w), h: int(e.box.h) };
+  if (!tag || !/^[a-z][a-z0-9-]*$/.test(tag) || !selector || !box) return null;
+  if (Object.values(box).some((n) => !Number.isFinite(n) || n < 0) || box.x > width || box.y > MAX_FULL_PAGE_HEIGHT)
+    return null;
+  const classes = (Array.isArray(e.classes) ? e.classes : [])
+    .map((c) => clip(c, 60))
+    .filter(Boolean)
+    .slice(0, 3);
+  const id = clip(e.id, 80);
+  const text = clip(e.text, 80);
+  const label = clip(e.label, 80);
+  const html = typeof e.html === "string" && e.html.trim() ? e.html.trim().slice(0, 2000) : undefined;
+  return {
+    selector,
+    tag,
+    ...(id ? { id } : {}),
+    ...(classes.length ? { classes: classes as string[] } : {}),
+    ...(text ? { text } : {}),
+    ...(label ? { label } : {}),
+    box,
+    ...(html ? { html } : {}),
+  };
+}
+
+const captureKey = (sha256: string) => `design-captures/${sha256}.jpg`;
+
+/**
+ * Stores a live note's crop: decoded as an image (JPEG or PNG only), at most `captureBytes` and `captureEdge` pixels a
+ * side, and re-encoded as JPEG, so what is kept is a picture and nothing else. Returns its sha256.
+ */
+async function storeCapture(image: string, i: number) {
+  const raw = Buffer.from(String(image ?? "").replace(/^data:image\/(?:jpeg|png);base64,/, ""), "base64");
+  if (!raw.length || raw.length > FEEDBACK_LIMITS.captureBytes)
+    throw new DesignError(`Pin ${i + 1}'s picture is empty or over ${FEEDBACK_LIMITS.captureBytes / 1000} kB.`);
+  const sharp = (await import("sharp")).default;
+  const meta = await sharp(raw, { limitInputPixels: 40_000_000 })
+    .metadata()
+    .catch(() => null);
+  if (!meta || (meta.format !== "jpeg" && meta.format !== "png"))
+    throw new DesignError(`Pin ${i + 1}'s picture isn't a JPEG or PNG image.`);
+  if ((meta.width ?? 0) > FEEDBACK_LIMITS.captureEdge || (meta.height ?? 0) > FEEDBACK_LIMITS.captureEdge)
+    throw new DesignError(`Pin ${i + 1}'s picture is over ${FEEDBACK_LIMITS.captureEdge}px a side.`);
+  const jpeg = await sharp(raw).jpeg({ quality: 82, mozjpeg: true }).toBuffer();
+  const sha256 = crypto.createHash("sha256").update(jpeg).digest("hex");
+  await writeStore().put(captureKey(sha256), jpeg, "image/jpeg");
+  return sha256;
+}
+
 export async function addFeedback(input: {
   sessionId: string;
   round: number;
   mockupId?: string | null;
   text?: string;
   width?: number | null;
-  /** A pin's `element` needs only its `selector`: the rest comes from PIVOT's element map. */
-  pins?: (Omit<DesignFeedbackPin, "element"> & { element?: { selector: string } })[];
+  /** The height of the owner's frame when the pins were made (`100vh`), 900 when not given. */
+  height?: number | null;
+  /**
+   * A pin's `element` needs only its `selector`: the rest comes from PIVOT's element map. A live pin (the interactive
+   * preview) carries the element as the preview saw it and its `capture`: a JPEG or PNG crop, base64.
+   */
+  pins?: FeedbackPinInput[];
   /** The request's Authorization header: any value is an agent's request. */
   bearer?: string | null;
 }): Promise<DesignFeedbackDTO> {
@@ -87,7 +181,9 @@ export async function addFeedback(input: {
     y: p.y,
     text: String(p.text ?? "").trim(),
     n: given[i] ?? ++free,
-    selector: typeof p.element?.selector === "string" ? p.element.selector : null,
+    live: p.live === true,
+    selector: p.live !== true && typeof p.element?.selector === "string" ? p.element.selector : null,
+    raw: p,
   }));
   if (text.length > FEEDBACK_LIMITS.text)
     throw new DesignError(`Feedback is at most ${FEEDBACK_LIMITS.text} characters.`);
@@ -110,9 +206,9 @@ export async function addFeedback(input: {
   let width: number | null = null;
   if (pins.length) {
     if (!version) throw new DesignError("Pins are placed on one version: say which (mockupId).");
-    if (!RENDER_WIDTHS.includes(input.width as (typeof RENDER_WIDTHS)[number]))
-      throw new DesignError(`Pins are placed on the render at ${RENDER_WIDTHS.join(", ")} px wide.`);
+    checkWidth(input.width ?? NaN);
     width = input.width!;
+    if (input.height != null) checkHeight(input.height);
     for (const [i, p] of pins.entries()) {
       if (
         !Number.isFinite(p.x) ||
@@ -127,13 +223,32 @@ export async function addFeedback(input: {
         throw new DesignError(`Pin ${i + 1}'s note is over ${FEEDBACK_LIMITS.pinText} characters.`);
       if (p.selector !== null && (!p.selector || p.selector.length > 1000))
         throw new DesignError(`Pin ${i + 1}'s element has no usable selector.`);
+      if (p.live && !p.raw.capture) throw new DesignError(`Pin ${i + 1} is live but has no picture.`);
+      if (p.live && p.raw.element && !liveElement(p.raw.element, width))
+        throw new DesignError(`Pin ${i + 1}'s element isn't usable.`);
     }
   }
+  // live notes keep what the preview saw: its element and its crop (stored as a picture, by its sha256)
+  const captures = new Map<number, NonNullable<DesignFeedbackPin["capture"]>>();
+  const total = pins.reduce((sum, p) => sum + (p.live ? String(p.raw.capture?.image ?? "").length * 0.75 : 0), 0);
+  if (total > FEEDBACK_LIMITS.captureTotal)
+    throw new DesignError(
+      `The pictures are over ${FEEDBACK_LIMITS.captureTotal / 1_000_000} MB in all: send fewer notes at once.`,
+    );
+  for (const [i, p] of pins.entries()) {
+    if (!p.live || !p.raw.capture) continue;
+    const r = p.raw.capture.region ?? {};
+    const region = { left: int(r.left), top: int(r.top), width: int(r.width), height: int(r.height) };
+    if (Object.values(region).some((n) => !Number.isFinite(n) || n < 0))
+      throw new DesignError(`Pin ${i + 1}'s picture has no usable region.`);
+    captures.set(i, { sha256: await storeCapture(p.raw.capture.image, i), region });
+  }
+  const vh = input.height ?? DEFAULT_VIEWPORT_HEIGHT;
   // the elements the owner selected, as PIVOT's own map of that render describes them
   const elements = new Map<number, DesignFeedbackElement>();
   const withElement = pins.flatMap((p, i) => (p.selector ? [i] : []));
   if (withElement.length && version && width) {
-    const map = await mockupElements(version.id, width);
+    const map = await mockupElements(version.id, width, vh);
     const html = await versionHtml(version.id);
     if (!map || html === null) throw new DesignError("That version is gone.");
     const bySelector = new Map(map.map((e) => [e.sel, e]));
@@ -143,9 +258,9 @@ export async function addFeedback(input: {
       return e;
     });
     const snippets = await elementsHtml(
-      html,
+      withDoctype(html),
       found.map((e) => e.sel),
-      { width },
+      { width, viewportHeight: vh },
     );
     for (const [k, i] of withElement.entries()) {
       const e = found[k];
@@ -171,6 +286,18 @@ export async function addFeedback(input: {
       text,
       width,
       pins: pins.map((p, i) => {
+        if (p.live) {
+          const element = liveElement(p.raw.element, width!);
+          return {
+            n: p.n,
+            x: Math.round(p.x),
+            y: Math.round(p.y),
+            text: p.text,
+            live: true,
+            ...(element ? { element } : {}),
+            capture: captures.get(i)!,
+          };
+        }
         const element = elements.get(i);
         // an element pin sits on its element: a point outside the box moves to the box's centre
         const b = element?.box;
@@ -181,6 +308,8 @@ export async function addFeedback(input: {
           y: Math.round(inside ? p.y : b.y + b.h / 2),
           text: p.text,
           ...(element ? { element } : {}),
+          // the frame's height, when it wasn't the default: the crop is rendered the same way
+          ...(vh !== DEFAULT_VIEWPORT_HEIGHT ? { vh } : {}),
         };
       }),
       source: "owner",
@@ -221,12 +350,24 @@ export async function checkFeedbackIds(sessionId: string, ids: string[]) {
   if (found.length !== ids.length) throw new DesignError("addressesFeedback names feedback this session doesn't have.");
 }
 
-const renderKey = (digest: string, width: number) => `design-renders/${digest}-${width}.jpg`;
-const elementsKey = (digest: string, width: number) => `design-renders/${digest}-${width}.elements.json`;
+/** The viewport height renders use unless the owner's frame said otherwise (`100vh` resolves against it). */
+export const DEFAULT_VIEWPORT_HEIGHT = 900;
+const sized = (width: number, height: number) =>
+  height === DEFAULT_VIEWPORT_HEIGHT ? `${width}` : `${width}x${height}`;
+const renderKey = (digest: string, width: number, height = DEFAULT_VIEWPORT_HEIGHT) =>
+  `design-renders/${digest}-${sized(width, height)}.jpg`;
+const elementsKey = (digest: string, width: number, height = DEFAULT_VIEWPORT_HEIGHT) =>
+  `design-renders/${digest}-${sized(width, height)}.elements.json`;
+/** A page with no doctype renders in standards mode, like the frame PIVOT shows it in (a srcdoc is always one). */
+export const withDoctype = (html: string) => (/^\s*<!doctype/i.test(html) ? html : `<!doctype html>\n${html}`);
+const checkHeight = (height: number) => {
+  if (!Number.isInteger(height) || height < 200 || height > 4000)
+    throw new DesignError("Viewport heights are whole pixels from 200 to 4000.");
+};
 
 const checkWidth = (width: number) => {
-  if (!RENDER_WIDTHS.includes(width as (typeof RENDER_WIDTHS)[number]))
-    throw new DesignError(`Renders are made at ${RENDER_WIDTHS.join(", ")} px wide.`);
+  if (!Number.isInteger(width) || width < RENDER_WIDTH.min || width > RENDER_WIDTH.max)
+    throw new DesignError(`Widths are whole pixels from ${RENDER_WIDTH.min} to ${RENDER_WIDTH.max}.`);
 };
 
 async function versionRow(mockupId: string) {
@@ -244,11 +385,15 @@ async function versionHtml(mockupId: string) {
 }
 
 /** Renders a version with its element map and keeps both, so a picture and its map always come from one layout. */
-async function renderAndStore(m: { html: string; digest: string }, width: number) {
-  const shot = await renderHtml(m.html, { width, elements: true });
+async function renderAndStore(m: { html: string; digest: string }, width: number, height = DEFAULT_VIEWPORT_HEIGHT) {
+  const shot = await renderHtml(withDoctype(m.html), { width, elements: true, viewportHeight: height });
   const store = writeStore();
-  await store.put(renderKey(m.digest, width), shot.data, "image/jpeg");
-  await store.put(elementsKey(m.digest, width), Buffer.from(JSON.stringify(shot.elements ?? [])), "application/json");
+  await store.put(renderKey(m.digest, width, height), shot.data, "image/jpeg");
+  await store.put(
+    elementsKey(m.digest, width, height),
+    Buffer.from(JSON.stringify(shot.elements ?? [])),
+    "application/json",
+  );
   return shot;
 }
 
@@ -259,19 +404,21 @@ async function renderAndStore(m: { html: string; digest: string }, width: number
 export async function renderMockup(
   mockupId: string,
   width: number,
+  viewportHeight = DEFAULT_VIEWPORT_HEIGHT,
 ): Promise<{ data: Buffer; width: number; height: number } | null> {
   checkWidth(width);
+  checkHeight(viewportHeight);
   const m = await versionRow(mockupId);
   if (!m) return null;
   const cached = await writeStore()
-    .get(renderKey(m.digest, width))
+    .get(renderKey(m.digest, width, viewportHeight))
     .catch(() => null);
   if (cached) {
     const sharp = (await import("sharp")).default;
     const meta = await sharp(cached, { limitInputPixels: false }).metadata();
     return { data: cached, width: meta.width ?? width, height: meta.height ?? 0 };
   }
-  const shot = await renderAndStore(m, width);
+  const shot = await renderAndStore(m, width, viewportHeight);
   return { data: shot.data, width: shot.width, height: shot.height };
 }
 
@@ -280,15 +427,20 @@ export async function renderMockup(
  * `MAX_RENDER_ELEMENTS`): what the owner's Select tool hovers and picks. Kept with the render; a render made before
  * maps existed is made again, with its map.
  */
-export async function mockupElements(mockupId: string, width: number): Promise<RenderedElement[] | null> {
+export async function mockupElements(
+  mockupId: string,
+  width: number,
+  viewportHeight = DEFAULT_VIEWPORT_HEIGHT,
+): Promise<RenderedElement[] | null> {
   checkWidth(width);
+  checkHeight(viewportHeight);
   const m = await versionRow(mockupId);
   if (!m) return null;
   const cached = await writeStore()
-    .get(elementsKey(m.digest, width))
+    .get(elementsKey(m.digest, width, viewportHeight))
     .catch(() => null);
   if (cached) return JSON.parse(cached.toString("utf8")) as RenderedElement[];
-  return (await renderAndStore(m, width)).elements ?? [];
+  return (await renderAndStore(m, width, viewportHeight)).elements ?? [];
 }
 
 /** The pin's number in a round marker, drawn over the crop. */
@@ -328,7 +480,28 @@ export async function pinImage(feedbackId: string, index: number): Promise<PinIm
   const fb = await getFeedback(feedbackId);
   const pin = fb?.pins[index];
   if (!fb || !pin || !fb.mockupId || !fb.width) return null;
-  const render = await renderMockup(fb.mockupId, fb.width);
+  if (pin.capture) {
+    // a live note shows what the preview captured, never PIVOT's scripts-off render
+    const kept = await writeStore()
+      .get(captureKey(pin.capture.sha256))
+      .catch(() => null);
+    if (!kept) return null;
+    const sharp = (await import("sharp")).default;
+    const { data, info } = await sharp(kept)
+      .resize(MAX_EDGE, MAX_EDGE, { fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 82, mozjpeg: true })
+      .toBuffer({ resolveWithObject: true });
+    return {
+      index,
+      pin,
+      data,
+      mimeType: "image/jpeg",
+      width: info.width,
+      height: info.height,
+      region: pin.capture.region,
+    };
+  }
+  const render = await renderMockup(fb.mockupId, fb.width, pin.vh ?? DEFAULT_VIEWPORT_HEIGHT);
   if (!render) return null;
   const box = pin.element?.box;
   // an element is shown whole with some room around it (up to 1600 × 1200 page pixels); a spot, at its centre
@@ -366,4 +539,5 @@ export async function pinImage(feedbackId: string, index: number): Promise<PinIm
 /** For tests: where a render of this version at this width is cached. */
 export const renderStoreKey = renderKey;
 export const elementsStoreKey = elementsKey;
+export const captureStoreKey = captureKey;
 export const renderStore = (kind?: StorageKind) => (kind ? storeFor(kind) : writeStore());

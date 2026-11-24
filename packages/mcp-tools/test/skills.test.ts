@@ -35,24 +35,34 @@ const ordered = (text: string, words: string[]) => {
 describe("skills name real MCP tools and values", () => {
   const tools = all(/name: "([a-z_]+)"/g, src);
 
-  it("packages/mcp-tools defines 18 tools", () => {
-    expect(tools.size).toBe(18);
+  it("packages/mcp-tools defines 20 tools", () => {
+    expect(tools.size).toBe(20);
   });
 
   // get_reference_images' `which` values, from the tool's own schema
   const whichValues = new Set(
     [...(/which: z\s*\.enum\(\[([^\]]*)\]/.exec(src)?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1]),
   );
-  it("get_reference_images offers keyframes and states", () => {
-    expect([...whichValues]).toEqual(["cover", "fullpage", "all", "keyframes", "states"]);
+  it("get_reference_images offers keyframes, states and motion filmstrips", () => {
+    expect([...whichValues]).toEqual(["cover", "fullpage", "all", "keyframes", "states", "motion"]);
   });
   const milestones = enumValues("DESIGN_MILESTONES");
   const kinds = enumValues("DESIGN_DECISION_KINDS");
   const tagKinds = enumValues("TAG_KINDS");
+  // Tools of the user's own 21st.dev MCP, which pivot:design names in its §2 (search) and §9 (build) rules.
+  // They are not PIVOT's, so they are allowed by name here instead of being matched against `tools`.
+  const external21st = new Set([
+    "search_picker",
+    "get_inspiration",
+    "get_component",
+    "get_usage",
+    "get_theme",
+    "search_logo",
+  ]);
   for (const [f, t] of Object.entries(files)) {
     it(`${f}: every tool it names exists`, () => {
       const used = all(/`((?:list|search|get|save|record|suggest|annotate|set)_[a-z_]+)`/g, t);
-      expect(subset(used, tools)).toEqual([]);
+      expect(subset(used, new Set([...tools, ...external21st]))).toEqual([]);
     });
     it(`${f}: milestones, decision kinds, facet kinds and image 'which' values exist`, () => {
       expect(subset(all(/milestone: "([a-z_]+)"/g, t), milestones)).toEqual([]);
@@ -226,6 +236,12 @@ describe("feedback rounds", () => {
       /\| `get_feedback_images` +\| .*an element note gives the element outlined, its selector and its HTML/,
     );
     expect(spec).toContain("an element note gives the element's selector and HTML");
+  });
+  it("a live note is found by its crop and HTML, and every note is read at its own width", () => {
+    expect(fb).toContain("**A live note** (`[live: seen in the preview with scripts running]`)");
+    expect(fb).toContain("its selector may find nothing in the saved HTML");
+    expect(fb).toContain("**Every note has a width**");
+    expect(spec).toContain("a live note, made in the preview with scripts running, is found by its crop and HTML");
   });
   it("SPEC describes the skill's feedback rounds", () => {
     expect(spec).toContain("**The skill's feedback rounds**");
@@ -763,5 +779,30 @@ describe("pivot:design: GSAP for advanced motion (L1, text only)", () => {
     expect(d).toMatch(/\*\*Motion technology:\*\* the brief's \*\*Technology\*\* line/);
     expect(r).toMatch(/motion technology when the redesign changes motion/);
     expect(spec).toMatch(/GSAP for advanced motion/);
+  });
+});
+
+describe("components saved with their code (component store, phase 2)", () => {
+  const build = d.slice(d.indexOf("## 9. Build"), d.indexOf("## 10. QA"));
+  it("§9 checks PIVOT first, saves right after the fetch, reviews before the first edit, then saves it built", () => {
+    expect(
+      ordered(build, [
+        "`get_saved_component`",
+        '`save_component` with `status: "fetched"`',
+        "Review the code before the first edit",
+        '`save_component` again with `status: "built"`',
+      ]),
+    ).toBe(true);
+    expect(build).toMatch(/Never quietly remove or rewrite the suspicious part/);
+    expect(build).toMatch(/`concerns_accepted` with the user's words quoted exactly/);
+    expect(build).toMatch(/\$API_KEY_21ST/);
+    expect(build).toMatch(/npm view <name>@<version>/);
+  });
+  it("§2 proposes saved components first, and the rules keep components from being collected", () => {
+    expect(d).toMatch(/\*\*Components already saved in PIVOT come first\.\*\*/);
+    expect(d).toMatch(/\*\*Components are kept, not collected\.\*\*/);
+    expect(d).toMatch(/So is a component's code, saved or fetched/);
+    expect(r).toMatch(/`get_saved_component` first, `save_component` right after a fetch, the code review/);
+    expect(spec).toMatch(/`save_component`/);
   });
 });

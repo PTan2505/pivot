@@ -92,7 +92,7 @@ These steps differ from `pivot:design`:
   - **A screenshot:** study it closely; it shows exactly what the user means.
 - **Fill gaps only:**
   - PIVOT first. Before any general library search, call `list_facets` once per task, as `pivot:design` §2 says, and reuse its result after a resume.
-  - Then `search_external`: free providers only, never paid sources' tools, and web search only when the user asks.
+  - Then `search_external`: free providers only, never paid sources' tools, and web search only when the user asks. For a component, 21st.dev's search follows `pivot:design` §2 (look only, no code before the build).
   - Keep 2–4 references in all.
 - **Brief:** `pivot:design`'s shape, titled "Redesign brief", plus:
   - **Keep** and **Impact** lines (the consumers from §1);
@@ -156,6 +156,7 @@ If the write tools fail or the connection is read-only, say so in one line and s
 - **When the direction needs something the design system lacks** (a new token, variant, component or a changed global value): stop and propose it as a separate design-system change, with what else it would affect. It needs its own explicit approval (Major): a separate proposal, or a `designSystemChange` on a round, which the user approves with a version of that round ([feedback.md](../design/feedback.md) §5–§6).
 - Change only what the approval covers. Keep everything on the keep list, every state (empty, loading, error, disabled, long content, focus, reduced motion), and the scope from §1.
 - Follow the project's repo rules. List the references that shaped it in the PR description or summary (title + link).
+- **A 21st.dev component in the approved direction** is built as `pivot:design` §9 says: `get_saved_component` first, `save_component` right after a fetch, the code review before the first edit, and `save_component` again once built.
 
 ## 6. Verification by risk
 

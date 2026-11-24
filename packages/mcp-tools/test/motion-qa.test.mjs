@@ -277,6 +277,76 @@ describe("judging one item", () => {
   });
 });
 
+describe("timing measured on screen and compared with a reference", () => {
+  const { measureMotion, timingAgainst } = qa;
+  /** Polled samples of an element whose opacity follows `curve` for `ms`, started `delay` ms after the first poll. */
+  const polled = (curve, ms, every = 17, delay = 7) => {
+    const out = [];
+    for (let t = 1000; t <= 1000 + ms + 400; t += every + ((t / every) % 3)) {
+      const x = Math.min(1, Math.max(0, (t - 1000 - delay) / ms));
+      out.push({ found: true, now: t, values: { opacity: String(curve(x)), transform: "none", filter: "none" } });
+    }
+    return out;
+  };
+  const easeOutCubic = (x) => 1 - (1 - x) ** 3;
+
+  it("measures script-driven motion: what moved, how long, on which curve", () => {
+    const m = measureMotion(polled(easeOutCubic, 300));
+    expect(m).toMatchObject({ property: "opacity", from: 0, to: 1, easing: "easeOutCubic / power2.out" });
+    expect(Math.abs(m.durationMs - 300)).toBeLessThanOrEqual(33);
+    // nothing moved, or it was already moving at the first sample: nothing to measure
+    expect(measureMotion(polled(() => 1, 300))).toBeNull();
+    expect(measureMotion(polled(easeOutCubic, 300).slice(3), { stillFirst: true })).toBeNull();
+    expect(measureMotion(polled(easeOutCubic, 300, 17, 40), { stillFirst: true })?.property).toBe("opacity");
+  });
+
+  it("passes within one frame on the brief's own curve, fails outside it, and can't verify a curve it can't draw", () => {
+    const m = measureMotion(polled(easeOutCubic, 300));
+    expect(timingAgainst(m, 300, "power2.out").status).toBe("pass");
+    expect(timingAgainst(m, 320, "cubic-bezier(0.33, 1, 0.68, 1)").status).toBe("pass");
+    expect(timingAgainst(m, 400, "power2.out").status).toBe("fail");
+    expect(timingAgainst(m, 300, "linear").status).toBe("fail");
+    expect(timingAgainst(m, 300, "steps(4)").status).toBe("not verified");
+    expect(timingAgainst(m, 300, "power2.out").detail).toContain("measured on screen");
+  });
+
+  it("judges script-driven motion by what was measured, and compares an item with the reference the brief cites", () => {
+    const m = measureMotion(polled(easeOutCubic, 300));
+    const timed = item({ expect: { ...item().expect, durationMs: 300, easing: "power2.out" } });
+    const scripted = obs({ declared: [], measured: m });
+    expect(statusOf(judgeItem(timed, runs([scripted, scripted], [still(), still()]), DESKTOP), "measured timing")).toBe(
+      "pass",
+    );
+    const slow = item({ expect: { ...item().expect, durationMs: 450, easing: "power2.out" } });
+    expect(statusOf(judgeItem(slow, runs([scripted, scripted], [still(), still()]), DESKTOP), "measured timing")).toBe(
+      "fail",
+    );
+    const cites = (reference) => item({ expect: { ...item().expect, reference } });
+    const declared = obs({ declared: [{ name: "rise", durationMs: 400, easing: "ease-out" }] });
+    const judge = (ref, o = declared) =>
+      statusOf(judgeItem(cites(ref), runs([o, o], [still(), still()]), DESKTOP), "matches reference");
+    expect(
+      judge({ label: "Linear M3", durationMs: 410, easing: "cubic-bezier(0, 0, 0.58, 1)", source: "measured" }),
+    ).toBe("pass");
+    expect(judge({ label: "Linear M3", durationMs: 333, easing: "ease-out" })).toBe("fail");
+    expect(judge({ label: "Linear M3", durationMs: 400, easing: "ease-in" })).toBe("fail");
+    expect(judge({ label: "Resend M1", durationMs: 400, easing: "spring" })).toBe("not verified");
+    expect(judge({ label: "Linear M3", durationMs: 300, easing: "easeOutCubic" }, scripted)).toBe("pass");
+    expect(judge({ label: "Linear M3", durationMs: 300 }, still())).toBe("not verified");
+  });
+
+  it("a plan's reference needs a label and something to compare", () => {
+    const plan = (reference) => ({
+      target: { url: "http://127.0.0.1:5173/" },
+      items: [item({ expect: { ...item().expect, reference } })],
+    });
+    expect(validatePlan(plan({ label: "Linear M3", durationMs: 333 })).errors).toEqual([]);
+    expect(validatePlan(plan({ durationMs: 333 })).errors.join()).toContain("needs a label");
+    expect(validatePlan(plan({ label: "Linear M3" })).errors.join()).toContain("durationMs or easing");
+    expect(validatePlan(plan({ label: "Linear M3", durationMs: -1 })).errors.join()).toContain("positive number");
+  });
+});
+
 describe("overall status", () => {
   const traced = { checked: true, missing: [], extra: [], unnamed: 0, tagMismatch: [] };
   const it2 = (id, tag, result) => ({ id, tag, result });
@@ -597,6 +667,8 @@ describe("in a browser", () => {
     try {
       const copy = path.join(dir, "motion-qa.mjs");
       fs.copyFileSync(scriptPath, copy);
+      // it travels with the motion fitting code it imports (the plugin and pivot-studio ship both)
+      fs.copyFileSync(path.join(path.dirname(scriptPath), "motion-fit.mjs"), path.join(dir, "motion-fit.mjs"));
       fs.writeFileSync(path.join(dir, "plan.json"), JSON.stringify({ target: { file: copy }, items: [item()] }));
       // a data folder no PIVOT has started with, so there is no install.json to follow either
       const env = { ...process.env, PIVOT_DATA_DIR: path.join(dir, "data") };
@@ -624,6 +696,10 @@ describe("in a browser", () => {
       const copy = path.join(dir, "scripts", "motion-qa.mjs");
       fs.mkdirSync(path.dirname(copy));
       fs.copyFileSync(scriptPath, copy);
+      fs.copyFileSync(
+        path.join(path.dirname(scriptPath), "motion-fit.mjs"),
+        path.join(path.dirname(copy), "motion-fit.mjs"),
+      );
       const { playwrightBases } = await import(pathToFileURL(copy).href);
       const data = path.join(dir, "data");
       fs.mkdirSync(data);
@@ -936,6 +1012,50 @@ document.getElementById("go").addEventListener("click", () => {
       },
       240_000,
     );
+
+  it("measures a script-driven hover on screen and judges it against the brief", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "motion-qa-measured-"));
+    try {
+      const page = path.join(dir, "page.html");
+      fs.writeFileSync(
+        page,
+        `<!doctype html><html><body style="margin:0"><button id="grow" style="margin:80px;width:200px;height:80px">Grow</button>
+<script>
+const grow = document.getElementById("grow");
+grow.addEventListener("mouseenter", () => {
+  const start = performance.now();
+  const step = (now) => {
+    const x = Math.min(1, (now - start) / 300);
+    grow.style.transform = "scale(" + (1 + 0.2 * (1 - (1 - x) ** 3)) + ")";
+    if (x < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+});
+</script></body></html>`,
+      );
+      const scale = (id, durationMs) => ({
+        id,
+        name: "Grow",
+        tag: "essential",
+        trigger: "hover",
+        target: "#grow",
+        expect: { animates: true, properties: ["transform"], durationMs, easing: "power2.out" },
+      });
+      const report = await qa.runPlan(
+        { target: { file: page }, viewports: ["desktop"], items: [scale("M1", 300), scale("M2", 600)] },
+        { out: path.join(dir, "qa") },
+      );
+      const check = (id) => report.items.find((i) => i.id === id).checks.find((c) => c.check === "measured timing");
+      expect(check("M1").status, check("M1").detail).toBe("pass");
+      expect(check("M2").status).toBe("fail");
+      expect(check("M1").detail).toContain("measured on screen: scale 1→1.2");
+      expect(fs.readFileSync(path.join(dir, "qa", "report.md"), "utf8")).toContain(
+        "measured on screen (within one frame, 33 ms)",
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }, 120_000);
 
   it("on the fixture page: catches the defects, repeats on Replay, keeps evidence with its provenance", async () => {
     const out = fs.mkdtempSync(path.join(os.tmpdir(), "motion-qa-test-"));

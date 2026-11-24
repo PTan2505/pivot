@@ -34,6 +34,7 @@ import {
   type CommentTool,
 } from "@/components/mockup-feedback";
 import { Button } from "@/components/ui/button";
+import { frameDocument, keepLinkInPage } from "@/lib/element-map";
 import { cn } from "@/lib/utils";
 
 /**
@@ -105,19 +106,45 @@ function Pill({ active, className, ...props }: React.ComponentProps<"button"> & 
 
 /**
  * The mockup at the window's own size (Desktop) or at its device width, centred, full height (Tablet, Phone), scaled
- * down only when the window is narrower than the device. Served sandboxed: no scripts, no other hosts.
+ * down only when the window is narrower than the device. It is a script-free copy of the version that PIVOT's page can
+ * read (same origin, so comment mode works on the live page at its real size): a CSP inside it blocks every request,
+ * the sandbox blocks scripts, forms and popups, and links other than `#…` don't navigate it.
  */
 function FullFrame({
   mockup,
   width,
   run,
   onScale,
+  onFrame,
+  commenting,
 }: {
   mockup: DesignMockupDTO;
   width: Width;
   run: number;
   onScale: (scale: number) => void;
+  /** The frame once its document has loaded (null while it changes). */
+  onFrame: (frame: HTMLIFrameElement | null) => void;
+  /** Comment mode is on: the frame leaves the tab order (the comment layer takes the keys). */
+  commenting: boolean;
 }) {
+  const [html, setHtml] = useState<{ id: string; text: string } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    onFrame(null);
+    fetch(`/api/design/mockups/${mockup.id}`)
+      .then((r) => (r.ok ? r.text() : ""))
+      .catch(() => "")
+      .then((text) => !cancelled && setHtml({ id: mockup.id, text }));
+    return () => {
+      cancelled = true;
+    };
+  }, [mockup.id, run, onFrame]);
+  const srcDoc = html?.id === mockup.id ? frameDocument(html.text) : null;
+  // read by the frame's link guard, added once per document: while commenting a link click makes a note, not a scroll
+  const commentingRef = useRef(commenting);
+  useEffect(() => {
+    commentingRef.current = commenting;
+  }, [commenting]);
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   useLayoutEffect(() => {
@@ -132,14 +159,27 @@ function FullFrame({
   useEffect(() => onScale(scale), [scale, onScale]);
   return (
     <div ref={box} className="fixed inset-0 overflow-hidden bg-canvas">
-      {size.w > 0 && (
+      {size.w > 0 && srcDoc !== null && (
         <iframe
           // a new key loads a fresh document: Replay restarts its motion with nothing left from the last run
           key={`${mockup.id}:${run}`}
-          src={`/api/design/mockups/${mockup.id}`}
+          srcDoc={srcDoc}
           title={`Version ${mockup.n}: ${mockup.title}`}
-          sandbox=""
+          sandbox="allow-same-origin"
           referrerPolicy="no-referrer"
+          tabIndex={commenting ? -1 : undefined}
+          onLoad={(e) => {
+            const frame = e.currentTarget;
+            // links stay on the page: a `#…` link scrolls it (by hand: a srcdoc resolves it against PIVOT's address)
+            frame.contentDocument?.addEventListener(
+              "click",
+              (ev) => {
+                keepLinkInPage(ev, { scroll: !commentingRef.current });
+              },
+              true,
+            );
+            onFrame(frame);
+          }}
           className="mx-auto block origin-top border-0 bg-white"
           style={{ width: device, height: size.h / scale, transform: scale < 1 ? `scale(${scale})` : undefined }}
         />
@@ -197,6 +237,8 @@ export function MockupStage({
   // feedback: drafts by version, pin mode, and a pin the drawer asked to show
   const drafts = useFeedbackDrafts(s.id);
   const [pinMode, setPinMode] = useState(false);
+  /** The full-screen frame once its document has loaded: comment mode works on it. */
+  const [frame, setFrame] = useState<HTMLIFrameElement | null>(null);
   const [focusPin, setFocusPin] = useState<number | null>(null);
   const [tool, setToolState] = useState<CommentTool>(() => (stored(TOOL_KEY) === "pin" ? "pin" : "select"));
   const setTool = (t: CommentTool) => {
@@ -342,7 +384,6 @@ export function MockupStage({
   if (!current) return null;
   const count = versions.length;
   const draft = drafts.get(current.id);
-  const renderWidth = width === "desktop" ? WIDTHS.desktop : WIDTHS[width];
   const pinCount = draft.pins.length;
   const thisRound = s.rounds?.find((r) => r.round === round);
   const enterPins = (show: number | null = null) => {
@@ -393,18 +434,24 @@ export function MockupStage({
 
   return (
     <div>
-      {/* under the pin layer, the mockup's frame leaves the tab order */}
-      <div inert={pinMode && !phone}>
-        <FullFrame mockup={current} width={width} run={run} onScale={setScale} />
-      </div>
+      <FullFrame
+        mockup={current}
+        width={width}
+        run={run}
+        onScale={setScale}
+        onFrame={setFrame}
+        commenting={pinMode && !phone}
+      />
       {pinMode && !phone && (
         <PinLayer
-          // a new version or width starts a fresh layer: no hover, selection or note carried over
-          key={`${current.id}:${renderWidth}`}
+          // a new version, width or document starts a fresh layer: no hover, selection or note carried over
+          key={`${current.id}:${width}:${run}`}
           mockup={current}
-          renderWidth={renderWidth}
-          // up to the drawer's left edge (its width and right inset), so nothing of the frame shows in between
-          inset={open ? DRAWER_SPACE - 12 : 0}
+          frame={frame}
+          // the drawer floats over the right of the page: the layer keeps its toolbar and notes clear of it
+          inset={open ? DRAWER_SPACE : 0}
+          onHidePanel={() => setDrawer(false, { focus: false })}
+          viewLabel={WIDTH_LABEL[width]}
           barOnTop={bar === "top"}
           draft={draft}
           onChange={(fn) => drafts.update(current.id, fn)}

@@ -4,7 +4,7 @@ import { ChevronDown, FolderPlus, Link2, Plus, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef } from "react";
 import { toast } from "sonner";
-import { TYPE_DEFS, visibleTypes, type ResourceType } from "@pivot/core/types";
+import { addableTypes, TYPE_DEFS, type ResourceType } from "@pivot/core/types";
 import { TypeIcon } from "@/components/type-icon";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,7 +70,7 @@ export function AddMenu({
   const invalidate = useInvalidate();
   const { openAddUrl } = useUi();
   const createOfType = useCreateOfType();
-  const newTypes = visibleTypes(useShowOther());
+  const newTypes = addableTypes(useShowOther());
 
   const pickFile = (type?: ResourceType) => {
     forcedType.current = type ?? null;

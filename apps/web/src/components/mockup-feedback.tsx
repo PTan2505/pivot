@@ -3,6 +3,7 @@
 import {
   ChevronDown,
   CircleAlert,
+  EyeOff,
   Eye,
   FileText,
   Loader2,
@@ -13,13 +14,14 @@ import {
   Send,
   Trash2,
 } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { DesignMockupDTO, DesignRoundDTO, DesignSessionDetailDTO } from "@pivot/core/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
+import { hitAt, liveBox, mapDocument, type MapElement } from "@/lib/element-map";
 import { cn } from "@/lib/utils";
 
 /**
@@ -51,8 +53,12 @@ export interface DraftPin {
 export interface FeedbackDraft {
   scope: "version" | "round";
   text: string;
-  /** The render width the pins sit on (pins belong to one version and one width). */
+  /** The page width the notes sit on (notes belong to one version and one width). */
   width: number | null;
+  /** The frame's viewport height when the notes were made (`100vh` depends on it). */
+  vh?: number | null;
+  /** The view and width the notes were made at, as shown: `Tablet 834` (the page's own width may be a scrollbar less). */
+  label?: string;
   pins: DraftPin[];
 }
 
@@ -99,23 +105,6 @@ export function useFeedbackDrafts(sessionId: string) {
   return { get, update, clear };
 }
 
-/** One element of a version's render, from `GET /api/design/mockups/[id]/elements` (render pixels). */
-interface MapElement {
-  i: number;
-  /** The nearest ancestor in the map, or -1. */
-  p: number;
-  tag: string;
-  id?: string;
-  cls?: string[];
-  text?: string;
-  label?: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  sel: string;
-}
-
 const clip = (t: string, max = 24) => (t.length > max ? `${t.slice(0, max - 1)}…` : t);
 const words = (e: { text?: string; label?: string }) => (e.text ?? e.label ?? "").trim();
 const tagName = (e: { tag: string; id?: string; cls?: string[]; classes?: string[] }) => {
@@ -151,112 +140,179 @@ const asDraft = (e: MapElement): DraftElement => ({
 });
 const sameBox = (a: MapElement, b: MapElement) => a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
 
-/** The deepest element at a point: the smallest box holding it (a later one wins a tie, being nested deeper). */
-function hitAt(els: MapElement[], x: number, y: number) {
-  let best = -1;
-  let area = Infinity;
-  for (const e of els)
-    if (x >= e.x && x <= e.x + e.w && y >= e.y && y <= e.y + e.h && e.w * e.h <= area) {
-      area = e.w * e.h;
-      best = e.i;
-    }
-  return best;
-}
-
 const NUDGE = 8;
-const UNAVAILABLE = "Couldn’t read this version’s elements. Pin only.";
-/** Space the toolbar takes at the top of the layer (more when the quick bar sits above it). */
+const UNAVAILABLE = "Couldn’t read this version’s page. Leave and write your feedback as text.";
+/** Space the toolbar takes at the top of the window (more when the quick bar sits above it). */
 const toolbarSpace = (barOnTop: boolean) => (barOnTop ? 128 : 64);
 
+/** A width as the drawer names it: `Desktop 1512`, `Tablet 834`, `Phone 390`. */
+export const widthName = (w: number | null | undefined) =>
+  !w ? "" : w === 834 ? `Tablet ${w}` : w === 390 ? `Phone ${w}` : `Desktop ${w}`; // design-mockups WIDTHS
+
+/** Where the frame is and how it is scrolled, read again whenever it scrolls or the window resizes. */
+interface Geo {
+  /** The frame's box in the window, and its scale (Tablet and Phone shrink in a narrow window). */
+  left: number;
+  top: number;
+  w: number;
+  h: number;
+  scale: number;
+  /** The page's own scroll, width (its CSS pixels, the notes' width) and viewport height. */
+  sx: number;
+  sy: number;
+  pageW: number;
+  vh: number;
+}
+
+function measure(frame: HTMLIFrameElement): Geo | null {
+  const doc = frame.contentDocument;
+  const win = frame.contentWindow;
+  if (!doc?.documentElement || !win) return null;
+  const r = frame.getBoundingClientRect();
+  const scale = frame.offsetWidth ? r.width / frame.offsetWidth : 1;
+  return {
+    left: r.left,
+    top: r.top,
+    w: r.width,
+    h: Math.min(r.height, window.innerHeight - Math.max(0, r.top)),
+    scale,
+    sx: win.scrollX,
+    sy: win.scrollY,
+    pageW: doc.documentElement.clientWidth,
+    vh: win.innerHeight,
+  };
+}
+
 /**
- * Comment mode: the version's full-page render at `renderWidth`, scaled to the space left (never up), scrolling like
- * the site, with two tools.
- * - Select: the element under the cursor is outlined with a chip naming it; a click comments on it. With the page
- *   focused, arrows walk the elements (↑ parent, ↓ first child, ← → siblings) and Enter comments.
+ * Comment mode on the live page: the version stays exactly as shown (its size, its scroll, its own hover styles) and
+ * the layer draws over it, with two tools.
+ * - Select: the element under the cursor is outlined with a chip naming it, and a strip under the toolbar shows its
+ *   path (each part jumps to that element); a click comments on it. Arrows walk the elements from the outlined one,
+ *   with no click or Tab first (↑ parent, ↓ first child, ← → siblings; from the middle of the view when nothing is
+ *   outlined) and Enter comments; moving the pointer hands the outline back to it. The picker (a tab stop after the
+ *   toolbar) starts a walk for keyboard users.
  * - Pin: a click drops a numbered note on that spot.
- * Notes are buttons: Tab between them, Enter opens the note, Delete removes it; a spot also moves with the arrows
- * (Shift for 40px). Esc closes the note, then leaves the mode.
+ * Clicks, presses and submits stop inside the page, before it sees them; scrolling and hover go on. Notes are buttons:
+ * Tab between them, Enter opens the note, Delete removes it; a spot also moves with the arrows (Shift for 40px). Esc
+ * closes the note, then ends a walk, then leaves the mode.
  */
 export function PinLayer({
   mockup,
-  renderWidth,
+  frame,
   inset,
+  onHidePanel,
   draft,
   onChange,
   onExit,
   focusPin,
-  reduce,
   barOnTop = false,
   tool,
   onTool,
+  viewLabel = "Desktop",
 }: {
+  /** The view the page is shown at (Desktop, Tablet, Phone), for the notes' width labels. */
+  viewLabel?: string;
   mockup: DesignMockupDTO;
-  renderWidth: number;
-  /** Space on the right the drawer covers, so no pin hides under it. */
+  /** The full-screen frame (a same-origin, script-free copy of the version), once loaded. */
+  frame: HTMLIFrameElement | null;
+  /** Space on the right the drawer covers, so the toolbar and notes stay clear of it. */
   inset: number;
+  onHidePanel: () => void;
   draft: FeedbackDraft;
   onChange: (fn: (d: FeedbackDraft) => FeedbackDraft) => void;
   onExit: () => void;
   /** A pin to scroll to and open (from the drawer's Show). */
   focusPin: number | null;
-  reduce: boolean | null;
+  reduce?: boolean | null;
   /** The quick bar sits at the top edge: the toolbar goes below it. */
   barOnTop?: boolean;
   tool: CommentTool;
   onTool: (tool: CommentTool) => void;
 }) {
-  const scroller = useRef<HTMLDivElement>(null);
-  const page = useRef<HTMLDivElement>(null);
-  const [avail, setAvail] = useState(0);
-  const [loaded, setLoaded] = useState<{ src: string; h: number } | null>(null);
   const [open, setOpen] = useState<number | null>(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  const scrollFrame = useRef(0);
+  const [geo, setGeo] = useState<Geo | null>(null);
+  // the page's elements and their live nodes; undefined while reading, null when the page can't be read
+  const [map, setMap] = useState<{ els: MapElement[]; nodes: Element[] } | null | undefined>(undefined);
+  const els = map === undefined ? undefined : map ? map.els : null;
+  const nodes = map?.nodes;
+  const picker = useRef<HTMLDivElement>(null);
   /** Set by a pointer press on the page, so the focus it brings doesn't start the keyboard walk. */
   const pointerFocus = useRef(false);
-  /** Where the page starts inside the scroller (below the toolbar and any message). */
-  const [pageTop, setPageTop] = useState(0);
-  const src = `/api/design/mockups/${mockup.id}/render?width=${renderWidth}`;
-  const mapSrc = `/api/design/mockups/${mockup.id}/elements?width=${renderWidth}`;
-  // pins placed at another width aren't shown on this render
-  const pins = draft.width === null || draft.width === renderWidth ? draft.pins : [];
-  const other = draft.pins.length > 0 && draft.width !== null && draft.width !== renderWidth;
 
-  // the element map of this render: what Select hovers and picks
-  const [map, setMap] = useState<{ src: string; els: MapElement[] | null } | null>(null);
-  /** What the live region says: element moves, edges, and when the elements are ready. */
+  /** What the live region says: element moves, edges, tools and readiness. */
   const [say, setSay] = useState("");
   /** Says it in the live region, even when it is the same words again (cleared first, set on the next frame). */
   const announce = (text: string) => {
     setSay("");
     requestAnimationFrame(() => setSay(text));
   };
+
+  // the page's place and scroll, and its elements: read once loaded, again on scroll and resize (once a frame)
   useEffect(() => {
-    let cancelled = false;
-    api<{ elements: MapElement[] }>(mapSrc)
-      .then((r) => {
-        if (cancelled) return;
-        // an empty map is no better than none: Select has nothing to pick
-        setMap({ src: mapSrc, els: r.elements.length ? r.elements : null });
-        announce(r.elements.length ? "Elements ready." : UNAVAILABLE);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setMap({ src: mapSrc, els: null });
-        announce(UNAVAILABLE);
+    if (!frame) return;
+    const win = frame.contentWindow;
+    let raf = 0;
+    let mapTimer = 0;
+    const update = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        setGeo(measure(frame));
       });
-    return () => {
-      cancelled = true;
     };
-  }, [mapSrc]);
-  const els = map?.src === mapSrc ? map.els : undefined; // undefined: loading; null: unavailable
+    const remap = () => {
+      clearTimeout(mapTimer);
+      mapTimer = window.setTimeout(async () => {
+        const doc = frame.contentDocument;
+        // read the page once its entrance motion has settled (at most 1.5 s), so boxes aren't caught mid-animation
+        const motion = doc?.getAnimations?.() ?? [];
+        if (motion.length)
+          await Promise.race([
+            Promise.all(motion.map((a) => a.finished.catch(() => null))),
+            new Promise((r) => setTimeout(r, 1500)),
+          ]);
+        const read = doc ? mapDocument(doc) : { els: [], nodes: [] };
+        setMap(read.els.length ? read : null);
+        setGeo(measure(frame));
+      }, 0);
+    };
+    remapRef.current = remap;
+    remap();
+    const ro = new ResizeObserver(() => {
+      update();
+      remap();
+    });
+    ro.observe(frame);
+    win?.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(mapTimer);
+      ro.disconnect();
+      win?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [frame]);
+
+  const pageW = geo?.pageW ?? 0;
+  /** Each mapped node's place in the map, for hit-testing the live page. */
+  const index = useMemo(() => new Map((nodes ?? []).map((n, i) => [n, i])), [nodes]);
+  /** An element's box now (fixed and sticky ones move with the scroll), or its mapped box when the node is gone. */
+  const boxOf = (i: number) => (nodes?.[i]?.isConnected ? liveBox(nodes[i]) : els?.[i]);
+  /** The element the keyboard or Show reached under the drawer: its hint stays until another element is reached. */
+  const [behindSel, setBehindSel] = useState<string | null>(null);
+  const remapRef = useRef<() => void>(() => {});
+  const isBehind = (e: { x: number }) =>
+    !!geo && inset > 0 && geo.left + (e.x - geo.sx) * geo.scale > window.innerWidth - inset - 24;
   const reading = els === undefined;
-  const noMap = els === null;
-  // without elements the mode works as Pin, but the owner's choice of tool is kept for next time
-  const active: CommentTool = noMap ? "pin" : tool;
+  const noMap = els === null || !frame?.contentDocument;
+  const active: CommentTool = tool;
+  // notes made at another width aren't drawn on this one
+  const pins = draft.width === null || draft.width === pageW ? draft.pins : [];
+  const other = draft.pins.length > 0 && draft.width !== null && pageW > 0 && draft.width !== pageW;
+
   /** Switches the tool (the radios and the V and P keys) and says so. */
   const chooseTool = (t: CommentTool) => {
-    if (t === "select" && noMap) return announce(UNAVAILABLE);
     onTool(t);
     announce(t === "select" ? "Select tool." : "Pin tool.");
   };
@@ -273,33 +329,6 @@ export function PinLayer({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
-
-  useLayoutEffect(() => {
-    const el = scroller.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setAvail(e.contentRect.width));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const scale = avail ? Math.min(1, (avail - 32) / renderWidth) : 1;
-
-  // the render is decoded before it shows, so the swap never flashes blank
-  useEffect(() => {
-    let cancelled = false;
-    const img = new Image();
-    img.src = src;
-    img
-      .decode()
-      .then(() => !cancelled && setLoaded({ src, h: img.naturalHeight }))
-      .catch(() => !cancelled && setLoaded({ src, h: 0 }));
-    return () => {
-      cancelled = true;
-    };
-  }, [src]);
-  const ready = loaded?.src === src;
-  useLayoutEffect(() => {
-    if (page.current) setPageTop(page.current.offsetTop);
-  }, [avail, other, ready]);
 
   // A note closed with no text is dropped when it is on an element (an outline with nothing to say is noise).
   const showNote = (next: number | null) => {
@@ -320,37 +349,38 @@ export function PinLayer({
   useEffect(() => () => dropEmpty.current(), []);
 
   const nextN = () => Math.max(0, ...draft.pins.map((p) => p.n)) + 1;
-  /** A draft's pins sit on one render width: never drop them for a note at another. */
+  /** A draft's notes sit on one width: never drop them for a note at another. */
   const wrongWidth = () => {
     if (!other) return false;
-    toast(`This draft's notes are on the ${draft.width}px render`, {
+    toast(`This draft's notes were made at ${draft.label ?? widthName(draft.width)}`, {
       description: "Switch back to that width to add more, or send them first.",
     });
     return true;
   };
+  const stamp = () => ({
+    width: pageW,
+    vh: geo?.vh ?? null,
+    label: `${viewLabel} ${Math.round(frame?.offsetWidth ?? pageW)}`,
+  });
   const addAt = (x: number, y: number) => {
-    if (wrongWidth()) return;
+    if (wrongWidth() || !pageW) return;
     const n = nextN();
-    onChange((d) => ({
-      ...d,
-      width: renderWidth,
-      pins: [...d.pins, { n, x: Math.round(x), y: Math.round(y), text: "" }],
-    }));
+    onChange((d) => ({ ...d, ...stamp(), pins: [...d.pins, { n, x: Math.round(x), y: Math.round(y), text: "" }] }));
     // its note opens with the focus, ready for typing; Esc then returns the focus to the pin
     showNote(n);
   };
   /** Comments on an element: opens its note when it has one, else adds one at the point. */
   const commentOn = (i: number, x: number, y: number) => {
     const e = els?.[i];
-    if (!e) return;
+    if (!e || !pageW) return;
     const has = pins.find((p) => p.element?.selector === e.sel);
     if (has) return showNote(has.n);
     if (wrongWidth()) return;
     const n = nextN();
     onChange((d) => ({
       ...d,
-      width: renderWidth,
-      pins: [...d.pins, { n, x: Math.round(x), y: Math.round(y), text: "", element: asDraft(e) }],
+      ...stamp(),
+      pins: [...d.pins, { n, x: Math.round(x), y: Math.round(y), text: "", element: asDraft({ ...e, ...boxOf(i)! }) }],
     }));
     showNote(n);
   };
@@ -359,11 +389,7 @@ export function PinLayer({
       ...d,
       pins: d.pins.map((p) =>
         p.n === n
-          ? {
-              ...p,
-              x: Math.round(Math.max(0, Math.min(renderWidth, x))),
-              y: Math.round(Math.max(0, Math.min(loaded?.h || 12000, y))),
-            }
+          ? { ...p, x: Math.round(Math.max(0, Math.min(pageW, x))), y: Math.round(Math.max(0, Math.min(12000, y))) }
           : p,
       ),
     }));
@@ -381,20 +407,33 @@ export function PinLayer({
   const setText = (n: number, text: string) =>
     onChange((d) => ({ ...d, pins: d.pins.map((p) => (p.n === n ? { ...p, text } : p)) }));
 
-  // Show from the drawer: scroll to the note, focus it and open it
+  const scrollPageTo = (y: number) => frame?.contentWindow?.scrollTo({ top: Math.max(0, y), behavior: "instant" });
+
+  // Show from the drawer: scroll the page to the note, then open it
   useEffect(() => {
-    if (focusPin === null || !ready) return;
+    if (focusPin === null || !geo) return;
     const p = draft.pins.find((x) => x.n === focusPin);
     if (!p) return;
     const y = p.element ? p.element.box.y : p.y;
-    scroller.current?.scrollTo({ top: Math.max(0, y * scale - 200), behavior: "instant" });
+    scrollPageTo(y - (toolbarSpace(barOnTop) + 120) / geo.scale);
     // the note opens with the focus (its field is autofocused); Esc returns it to the pin
-    const raf = requestAnimationFrame(() => showNote(focusPin));
+    const raf = requestAnimationFrame(() => {
+      setBehindSel(p.element && isBehind(p.element.box) ? p.element.selector : null);
+      showNote(focusPin);
+    });
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when asked to show a pin
-  }, [focusPin, ready]);
+  }, [focusPin, !!geo]);
 
-  // Esc in layers: the open note first, then the mode
+  // ---- Select: hover, and the keyboard walk ----
+  const [hover, setHover] = useState(-1);
+  const [walk, setWalk] = useState<{ i: number; on: boolean }>({ i: -1, on: false });
+  const shown = active === "select" && els ? (walk.on ? walk.i : hover) : -1;
+  /** Where the pointer last was over the page, and where it was when the keys took the outline from it. */
+  const lastPt = useRef<{ x: number; y: number } | null>(null);
+  const walkPt = useRef<{ x: number; y: number } | null>(null);
+
+  // Esc in layers: the open note first, then a walk, then the mode
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || (e.target as HTMLElement | null)?.closest("[role=dialog]")) return;
@@ -403,31 +442,105 @@ export function PinLayer({
         const n = open;
         showNote(null);
         document.getElementById(`pin-${n}`)?.focus();
+      } else if (walk.on && active === "select") {
+        setWalk((w) => ({ ...w, on: false }));
+        announce("Back to the pointer.");
       } else exit();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  // ---- Select: hover, and the keyboard walk ----
-  const [hover, setHover] = useState(-1);
-  const [walk, setWalk] = useState<{ i: number; on: boolean }>({ i: -1, on: false });
-  const shown = active === "select" && els ? (walk.on ? walk.i : hover) : -1;
-  const pointAt = (e: React.PointerEvent | React.MouseEvent) => {
-    const box = e.currentTarget.getBoundingClientRect();
-    return { x: (e.clientX - box.left) / scale, y: (e.clientY - box.top) / scale };
-  };
-  const onPageMove = (e: React.PointerEvent) => {
-    if (active !== "select" || !els || drag.current) return;
-    const { x, y } = pointAt(e);
-    const i = hitAt(els, x, y);
-    if (i !== hover) setHover(i);
-  };
+  // The page's own events, while commenting: presses, clicks and submits stop inside it before it sees them (they
+  // make notes instead); the pointer is read for Select. Scrolling and the page's hover styles go on.
+  const live = useRef({ active, els, hover, walkOn: walk.on, commentOn, addAt, setHover, setWalk, index });
+  // refreshed after every render on purpose: the page's listeners, added once, always call the latest handlers
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    live.current = { active, els, hover, walkOn: walk.on, commentOn, addAt, setHover, setWalk, index };
+  });
+  useEffect(() => {
+    const doc = frame?.contentDocument;
+    const win = frame?.contentWindow;
+    if (!doc || !win) return;
+    const at = (e: MouseEvent) => ({ x: e.clientX + win.scrollX, y: e.clientY + win.scrollY });
+    const stop = (e: Event) => {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    };
+    let lastRemap = 0;
+    /** The mapped element under a point of the page's viewport: the live hit, or its nearest mapped ancestor. */
+    const pick = (cx: number, cy: number) => {
+      const hit = doc.elementFromPoint(cx, cy);
+      let el: Element | null = hit;
+      while (el && !live.current.index.has(el)) el = el.parentElement;
+      // an element the map missed (shown by a hover style, or added since): read the page again, at most twice a second
+      if (hit && hit !== el && hit !== doc.body && hit !== doc.documentElement && Date.now() - lastRemap > 500) {
+        lastRemap = Date.now();
+        remapRef.current();
+      }
+      return el ? live.current.index.get(el)! : -1;
+    };
+    const onMove = (e: PointerEvent) => {
+      const l = live.current;
+      if (l.active !== "select" || !l.els) return;
+      lastPt.current = { x: e.clientX, y: e.clientY };
+      // after a key step the outline stays with the keys until the pointer really moves (a few pixels)
+      if (l.walkOn) {
+        const s = walkPt.current;
+        if (!s) walkPt.current = lastPt.current;
+        if (!s || Math.hypot(e.clientX - s.x, e.clientY - s.y) <= 4) return;
+        l.setWalk((w) => ({ ...w, on: false }));
+      }
+      const i = pick(e.clientX, e.clientY);
+      if (i !== l.hover) l.setHover(i);
+    };
+    // the page never takes the focus while commenting: it goes to the picker, where the keys work
+    const keepOut = () => (picker.current ?? document.getElementById("tool-select"))?.focus();
+    const onOut = (e: PointerEvent) => {
+      if (!e.relatedTarget) live.current.setHover(-1);
+    };
+    const onClick = (e: MouseEvent) => {
+      stop(e);
+      if (e.button !== 0) return;
+      const l = live.current;
+      const { x, y } = at(e);
+      if (l.active === "pin") return l.addAt(x, y);
+      if (!l.els) return;
+      l.setWalk({ i: -1, on: false });
+      const i = pick(e.clientX, e.clientY);
+      if (i >= 0) l.commentOn(i, x, y);
+      else toast("No element here", { description: "Pin a spot instead (P)." });
+    };
+    const blocked = ["mousedown", "pointerdown", "mouseup", "auxclick", "dblclick", "submit", "dragstart"];
+    for (const t of blocked) doc.addEventListener(t, stop, true);
+    doc.addEventListener("click", onClick, true);
+    doc.addEventListener("pointermove", onMove, true);
+    doc.addEventListener("pointerout", onOut, true);
+    doc.addEventListener("focusin", keepOut, true);
+    // the cursor says which tool is on, over every element of the page
+    const style = doc.createElement("style");
+    style.textContent = `html.pivot-commenting, html.pivot-commenting * { cursor: ${active === "pin" ? "crosshair" : "default"} !important; }`;
+    doc.head?.append(style);
+    doc.documentElement.classList.add("pivot-commenting");
+    return () => {
+      for (const t of blocked) doc.removeEventListener(t, stop, true);
+      doc.removeEventListener("click", onClick, true);
+      doc.removeEventListener("pointermove", onMove, true);
+      doc.removeEventListener("pointerout", onOut, true);
+      doc.removeEventListener("focusin", keepOut, true);
+      style.remove();
+      doc.documentElement.classList.remove("pivot-commenting");
+    };
+  }, [frame, active]);
+
+  const visRight = geo ? Math.min(geo.left + geo.w, window.innerWidth - inset) : 0;
   const centreOfView = () => {
-    const el = scroller.current;
-    const top = page.current?.offsetTop ?? 0;
-    const y = ((el?.scrollTop ?? 0) + (el?.clientHeight ?? 800) / 2 - top) / scale;
-    return { x: renderWidth / 2, y: Math.max(0, Math.min(loaded?.h || y, y)) };
+    if (!geo) return { x: 0, y: 0 };
+    return {
+      x: geo.sx + (visRight - geo.left) / 2 / geo.scale,
+      y: geo.sy + geo.vh / 2,
+    };
   };
   const describe = (i: number) => {
     const e = els?.[i];
@@ -436,22 +549,19 @@ export function PinLayer({
     const note = pins.find((p) => p.element?.selector === e.sel);
     return `${tagName(e)}${t ? `, ${clip(t, 60)}` : ""}, ${e.w} by ${e.h}${note ? `, has note ${note.n}` : ""}.`;
   };
-  /** Moves the keyboard selection, keeping it in view below the toolbar. */
+  /** Moves the keyboard selection, keeping it in view below the toolbar and above a bottom quick bar. */
   const walkTo = (i: number) => {
-    if (!els?.[i]) return;
+    const e = els?.[i] && { ...els[i], ...boxOf(i)! };
+    if (!e || !geo) return;
     setWalk({ i, on: true });
+    walkPt.current = lastPt.current;
+    setBehindSel(isBehind(e) ? e.sel : null);
     announce(describe(i));
-    const el = scroller.current;
-    const e = els[i];
-    if (!el) return;
-    const top = (page.current?.offsetTop ?? 0) + e.y * scale;
-    const bottom = top + e.h * scale;
-    const space = toolbarSpace(barOnTop) + 32;
-    // and clear of the quick bar when it sits at the bottom
-    const below = 24 + (barOnTop ? 0 : 68);
-    if (top < el.scrollTop + space) el.scrollTo({ top: Math.max(0, top - space), behavior: "instant" });
-    else if (bottom > el.scrollTop + el.clientHeight - below && e.h * scale < el.clientHeight - space - below)
-      el.scrollTo({ top: bottom - el.clientHeight + below, behavior: "instant" });
+    const above = (toolbarSpace(barOnTop) + 32) / geo.scale;
+    const below = (24 + (barOnTop ? 0 : 68)) / geo.scale;
+    if (e.y < geo.sy + above) scrollPageTo(e.y - above);
+    else if (e.y + e.h > geo.sy + geo.vh - below && e.h < geo.vh - above - below)
+      scrollPageTo(e.y + e.h - geo.vh + below);
   };
   const kids = (i: number) => els!.filter((e) => e.p === i);
   const parentOf = (i: number) => {
@@ -464,14 +574,34 @@ export function PinLayer({
     while (c && sameBox(c, els![i])) c = kids(c.i)[0];
     return c?.i ?? -1;
   };
-  const onPageKey = (e: React.KeyboardEvent) => {
-    if (e.target !== e.currentTarget || active !== "select" || !els?.length) return;
-    const i = els[walk.i] ? walk.i : 0;
+  /** The element in the middle of the view, else the first one. */
+  const centreEl = () => {
+    const c = centreOfView();
+    const i = els ? hitAt(els, c.x, c.y) : -1;
+    return i >= 0 ? i : 0;
+  };
+  /**
+   * The walk's keys, from the outlined element (walked to, or under the pointer): arrows move, Enter and Space comment
+   * (only where the focus is the page's: the picker or nothing, never on a control). True when the key was used.
+   */
+  const walkKey = (e: { key: string; preventDefault: () => void }, onPage: boolean) => {
+    if (active !== "select" || !els?.length || open !== null) return false;
+    const from = walk.on && els[walk.i] ? walk.i : hover >= 0 && els[hover] ? hover : -1;
     if (e.key === "Enter" || e.key === " ") {
+      if (!onPage) return false;
       e.preventDefault();
-      if (i >= 0) commentOn(i, els[i].x + els[i].w / 2, els[i].y + els[i].h / 2);
-      return;
+      const i = from >= 0 ? from : centreEl();
+      commentOn(i, els[i].x + els[i].w / 2, els[i].y + els[i].h / 2);
+      return true;
     }
+    if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) return false;
+    e.preventDefault();
+    // nothing outlined: the first arrow outlines the element in the middle of the view
+    if (from < 0) {
+      walkTo(centreEl());
+      return true;
+    }
+    const i = from;
     const step: Record<string, () => number | string> = {
       ArrowUp: () => (parentOf(i) >= 0 ? parentOf(i) : "Top element."),
       ArrowDown: () => (childOf(i) >= 0 ? childOf(i) : "No child elements."),
@@ -486,12 +616,46 @@ export function PinLayer({
         return k >= 0 && k < sib.length - 1 ? sib[k + 1].i : "Last element here.";
       },
     };
-    if (!step[e.key]) return;
-    e.preventDefault();
     const to = step[e.key]();
     if (typeof to === "number") walkTo(to);
-    else announce(to);
+    else {
+      // at an edge the outline stays where it is, now held by the keys
+      if (!walk.on) walkTo(i);
+      announce(to);
+    }
+    return true;
   };
+  const onPickerKey = (e: React.KeyboardEvent) => {
+    if (e.target !== e.currentTarget || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    walkKey(e, true);
+  };
+  // the same keys anywhere else that doesn't use them itself: no click or Tab needed after pointing at an element
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      const t = e.target instanceof HTMLElement ? e.target : null;
+      if (t === picker.current) return;
+      if (
+        t?.closest(
+          "input, textarea, select, [contenteditable], [role=dialog], [role=radiogroup], [role=tablist], [role=listbox], [role=menu], [role=slider]",
+        )
+      )
+        return;
+      // the keys take the page: an arrow moves the focus onto the picker (quietly), so Enter then comments instead of
+      // pressing the button that had the focus
+      if (
+        walkKey(e, !t || t === document.body) &&
+        e.key.startsWith("Arrow") &&
+        picker.current &&
+        document.activeElement !== picker.current
+      ) {
+        pointerFocus.current = true;
+        picker.current.focus({ preventScroll: true });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   // dragging a spot, past a few pixels so a click stays a click (a note on an element stays on its element)
   const drag = useRef<{ n: number; sx: number; sy: number; moved: boolean } | null>(null);
@@ -504,11 +668,10 @@ export function PinLayer({
   };
   const onPinMove = (e: React.PointerEvent) => {
     const d = drag.current;
-    if (!d) return;
+    if (!d || !geo) return;
     if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 4) return;
     d.moved = true;
-    const box = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
-    move(d.n, (e.clientX - box.left) / scale, (e.clientY - box.top) / scale);
+    move(d.n, geo.sx + (e.clientX - geo.left) / geo.scale, geo.sy + (e.clientY - geo.top) / geo.scale);
   };
   /** Set when a pointer gesture just moved a pin, so the click that ends it doesn't open the note. */
   const dragged = useRef(false);
@@ -557,70 +720,80 @@ export function PinLayer({
     requestAnimationFrame(() => document.getElementById(`pin-note-${n}`)?.focus());
   };
 
+  // ---- geometry on the window: page pixels → the frame's box, scrolled and scaled ----
+  const k = geo?.scale ?? 1;
+  const px = (x: number) => (x - (geo?.sx ?? 0)) * k; // inside the clipped overlay, which sits on the frame's box
+  const py = (y: number) => (y - (geo?.sy ?? 0)) * k;
   const space = toolbarSpace(barOnTop);
   // an element that already has a note is known by its marker: the pointer doesn't outline it again (the keyboard does)
-  const shownEl = shown >= 0 ? els?.[shown] : undefined;
+  const shownEl = shown >= 0 && els?.[shown] ? { ...els[shown], ...boxOf(shown)! } : undefined;
   const hoverEl = shownEl && (walk.on || !pins.some((p) => p.element?.selector === shownEl.sel)) ? shownEl : undefined;
+  const boxW = geo?.w ?? 0;
   // the chip sits above the element, or below it when that would be under the toolbar
-  const chipBelow = hoverEl ? pageTop + hoverEl.y * scale - 28 < scrollTop + space : false;
+  const chipBelow = hoverEl && geo ? geo.top + py(hoverEl.y) - 28 < space : false;
+  /** A note's element where it is now (found again by its selector), or where it was when the note was made. */
+  const noteBox = (p: DraftPin) => {
+    if (!p.element) return null;
+    const node = frame?.contentDocument?.querySelector(p.element.selector);
+    return node ? liveBox(node) : p.element.box;
+  };
   const markerAt = (p: DraftPin) =>
     p.element
-      ? {
-          left: Math.max(14, p.element.box.x * scale - 14),
-          top: Math.max(14, p.element.box.y * scale - 14),
-        }
-      : { left: p.x * scale, top: p.y * scale };
-  // the chip starts after a marker sitting where it would start (an element note on the same corner)
-  const pageW = renderWidth * scale;
-  const chipLeft = hoverEl ? Math.min(hoverEl.x * scale, pageW - 8) : 0;
+      ? { left: Math.max(14, px(noteBox(p)!.x) - 14), top: Math.max(14, py(noteBox(p)!.y) - 14) }
+      : { left: px(p.x), top: py(p.y) };
+  const chipLeft = hoverEl ? Math.min(px(hoverEl.x), boxW - 8) : 0;
   // near the right edge the chip ends where the element ends (never past the page) instead of starting with it
-  const chipRight =
-    hoverEl && hoverEl.x * scale > pageW * 0.6 ? Math.max(4, pageW - (hoverEl.x + hoverEl.w) * scale) : null;
-  const chipTop = hoverEl ? (chipBelow ? (hoverEl.y + hoverEl.h) * scale + 6 : hoverEl.y * scale - 26) : 0;
+  const chipRight = hoverEl && px(hoverEl.x) > boxW * 0.6 ? Math.max(4, boxW - px(hoverEl.x + hoverEl.w)) : null;
+  const chipTop = hoverEl ? (chipBelow ? py(hoverEl.y + hoverEl.h) + 6 : py(hoverEl.y) - 26) : 0;
+  // the chip starts after a marker sitting where it would start (an element note on the same corner)
   const chipShift = pins.some((p) => {
     const m = p.element && markerAt(p);
     return !!m && Math.abs(m.left - chipLeft) < 24 && m.top - 14 < chipTop + 20 && m.top + 14 > chipTop;
   })
     ? 22
     : 0;
-  const popW = Math.min(300, renderWidth * scale - 16);
+  // the note opens below its element or spot, on the side away from the drawer
+  const popW = Math.min(300, Math.max(200, visRight - (geo?.left ?? 0) - 16));
   const popAt = (p: DraftPin) => {
+    if (!geo) return { left: 8, top: 8 };
     const b = p.element?.box;
-    const x = b ? b.x * scale : p.x * scale + 18;
-    const y = b ? (b.h * scale > 240 ? b.y * scale + 18 : (b.y + b.h) * scale + 12) : p.y * scale + 18;
-    return { left: Math.max(8, Math.min(x, renderWidth * scale - popW - 8)), top: y };
+    const x = geo.left + (b ? px(b.x) : px(p.x) + 18);
+    const y = geo.top + (b ? (b.h * k > 240 ? py(b.y) + 18 : py(b.y + b.h) + 12) : py(p.y) + 18);
+    return {
+      left: Math.max(8, Math.min(x, visRight - popW - 8)),
+      top: Math.max(space, Math.min(y, window.innerHeight - 240)),
+    };
   };
+  // the outlined element's path, under the toolbar: up to three ancestors (as the walk counts them), then the element
+  const path: MapElement[] = [];
+  if (hoverEl && open === null) {
+    for (let p = parentOf(shown); p >= 0 && path.length < 3; p = parentOf(p)) path.unshift(els![p]);
+    path.push(els![shown]);
+  }
+  // an element the keyboard (or Show) reached under the drawer: offer to hide it
+  const behind = behindSel && inset > 0 ? els?.find((e) => e.sel === behindSel) : undefined;
   const hint = noMap
-    ? "Couldn’t read this version’s elements · Pin only"
+    ? UNAVAILABLE
     : active === "pin"
       ? "Click the page to pin a note · Esc to leave"
       : reading
         ? "Reading the page’s elements…"
         : walk.on
           ? "Arrows move · Enter comments · Esc to leave"
-          : "Click an element to comment · Esc to leave";
+          : shown >= 0
+            ? "Click to comment · Arrows move · Esc to leave"
+            : "Click an element to comment · Esc to leave";
 
   return (
-    <div
-      ref={scroller}
-      onScroll={(e) => {
-        const el = e.currentTarget;
-        if (scrollFrame.current) return;
-        scrollFrame.current = requestAnimationFrame(() => {
-          scrollFrame.current = 0;
-          setScrollTop(el.scrollTop);
-        });
-      }}
-      className="fixed inset-y-0 left-0 z-20 [scroll-padding-block:96px] overflow-y-auto bg-canvas"
-      style={{ right: inset }}
-    >
+    <div className="pointer-events-none fixed inset-0 z-20">
       <div
         role="toolbar"
         aria-label="Comment on the page"
         className={cn(
-          "glass-strong sticky z-30 mx-auto mt-3 flex w-max max-w-[calc(100%-24px)] flex-wrap items-center gap-2 rounded-full py-1 pr-1 pl-1 text-[13px] text-ink",
+          "glass-strong pointer-events-auto fixed z-30 flex w-max max-w-[calc(100%-24px)] -translate-x-1/2 flex-wrap items-center gap-2 rounded-full py-1 pr-1 pl-1 text-[13px] text-ink",
           barOnTop ? "top-[76px]" : "top-3",
         )}
+        style={{ left: `calc((100vw - ${inset}px) / 2)` }}
       >
         <div
           role="radiogroup"
@@ -631,14 +804,11 @@ export function PinLayer({
             e.preventDefault();
             const from = (e.target as HTMLElement).id === "tool-select" ? "select" : "pin";
             const to = from === "select" ? "pin" : "select";
-            // an unavailable Select can still be reached, to hear why
-            if (!(to === "select" && noMap)) chooseTool(to);
-            else announce(UNAVAILABLE);
+            chooseTool(to);
             requestAnimationFrame(() => document.getElementById(`tool-${to}`)?.focus());
           }}
         >
           {(["select", "pin"] as const).map((t) => {
-            const off = t === "select" && noMap;
             const on = active === t;
             return (
               <button
@@ -647,16 +817,20 @@ export function PinLayer({
                 type="button"
                 role="radio"
                 aria-checked={on}
-                aria-disabled={off || undefined}
                 aria-keyshortcuts={t === "select" ? "V" : "P"}
-                aria-describedby={off ? "comment-hint" : undefined}
-                title={off ? "Couldn’t read this version’s elements" : undefined}
                 tabIndex={on ? 0 : -1}
-                onClick={() => chooseTool(t)}
+                onClick={(e) => {
+                  chooseTool(t);
+                  // picked with the pointer: the focus goes to the page (without starting a walk), so the arrows
+                  // walk from the element pointed at next instead of switching the tool back
+                  if (t === "select" && e.detail > 0 && picker.current) {
+                    pointerFocus.current = true;
+                    picker.current.focus();
+                  }
+                }}
                 className={cn(
                   "flex h-[30px] items-center gap-1.5 rounded-full px-2.5 font-medium outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text focus-visible:outline-solid",
                   on ? "bg-inverse text-on-inverse" : "text-ink-secondary hover:text-ink",
-                  off && "text-ink-muted hover:text-ink-muted",
                 )}
               >
                 {t === "select" ? (
@@ -676,13 +850,13 @@ export function PinLayer({
           })}
         </div>
         <span id="comment-hint" className="flex items-center gap-1.5 px-1 text-ink-muted max-sm:hidden">
-          {noMap && <CircleAlert className="size-3.5" aria-hidden />}
+          {noMap && !reading && <CircleAlert className="size-3.5" aria-hidden />}
           {hint}
         </span>
         <Button
           size="sm"
           variant="secondary"
-          disabled={active === "select" && reading}
+          disabled={!geo || (active === "select" && (reading || noMap))}
           onClick={() => {
             const c = centreOfView();
             if (active === "pin") return addAt(c.x, c.y);
@@ -701,198 +875,230 @@ export function PinLayer({
         {say}
       </p>
       {other && (
-        <p className="mx-auto mt-2 w-max rounded-full bg-surface px-3 py-1 text-[13px] text-ink-muted">
-          This draft&rsquo;s notes are on the {draft.width}px render: switch to that width to see them.
+        <p
+          className="glass-strong pointer-events-auto fixed z-30 w-max -translate-x-1/2 rounded-full px-3 py-1 text-[13px] text-ink-secondary"
+          style={{ left: `calc((100vw - ${inset}px) / 2)`, top: space }}
+        >
+          This draft&rsquo;s notes were made at {draft.label ?? widthName(draft.width)}: switch back to that width to
+          see them.
         </p>
       )}
-      {ready && loaded?.h === 0 && (
-        <p role="alert" className="mx-auto mt-8 max-w-md text-center text-[14px] text-ink-muted">
-          PIVOT couldn&rsquo;t make the picture of this version to comment on. Leave this mode and write your feedback
-          as text, or try again.
-        </p>
+      {behind && (
+        <button
+          type="button"
+          onClick={() => {
+            setBehindSel(null);
+            onHidePanel();
+            // the button goes away with the drawer: the focus returns to the page's picker
+            requestAnimationFrame(() => picker.current?.focus());
+          }}
+          className="glass-strong pointer-events-auto fixed z-30 flex h-10 -translate-x-1/2 items-center gap-2 rounded-full py-1 pr-1 pl-3 text-[13px] text-ink outline-none focus-visible:outline-2 focus-visible:outline-accent-text focus-visible:outline-solid"
+          style={{ left: `calc((100vw - ${inset}px) / 2)`, top: space + (other ? 36 : 0) }}
+        >
+          <EyeOff className="size-3.5 text-ink-muted" aria-hidden />
+          <span>{elementName({ ...behind, box: behind })} is behind the panel</span>
+          <span className="flex h-8 items-center rounded-full bg-inverse px-3 font-medium text-on-inverse">
+            Hide panel
+          </span>
+        </button>
       )}
-      <div
-        ref={page}
-        tabIndex={active === "select" && els?.length ? 0 : -1}
-        role="application"
-        aria-roledescription="element picker"
-        aria-label={`Version ${mockup.n}: ${mockup.title}, full page at ${renderWidth}px`}
-        aria-describedby="comment-hint"
-        onPointerDown={() => {
-          pointerFocus.current = true;
-        }}
-        onFocus={(e) => {
-          if (e.target !== e.currentTarget || !els?.length) return;
-          if (pointerFocus.current) {
-            pointerFocus.current = false;
-            return;
-          }
-          const c = centreOfView();
-          const i = walk.i >= 0 ? walk.i : hitAt(els, c.x, c.y);
-          walkTo(i >= 0 ? i : 0);
-        }}
-        onBlur={(e) => e.target === e.currentTarget && setWalk((w) => ({ ...w, on: false }))}
-        onKeyDown={onPageKey}
-        onPointerMove={onPageMove}
-        onPointerLeave={() => setHover(-1)}
-        className={cn(
-          "relative mx-auto my-4 bg-white transition-opacity duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text focus-visible:outline-solid motion-reduce:transition-none",
-          active === "pin" ? "cursor-crosshair" : "cursor-default",
-          ready && loaded?.h ? "opacity-100" : "opacity-0",
-          reduce && "transition-none",
-        )}
-        style={{ width: renderWidth * scale, height: (loaded?.h || 900) * scale }}
-        onClick={(e) => {
-          pointerFocus.current = false;
-          if (e.target !== e.currentTarget && !(e.target as HTMLElement).dataset.render) return;
-          const { x, y } = pointAt(e);
-          if (active === "pin") return addAt(x, y);
-          if (!els) return;
-          setWalk({ i: -1, on: false });
-          const i = hitAt(els, x, y);
-          if (i >= 0) commentOn(i, x, y);
-          else toast("No element here", { description: "Pin a spot instead (P)." });
-        }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element -- PIVOT's own render, sized by the page */}
-        <img
-          data-render="1"
-          src={src}
-          alt=""
-          width={renderWidth * scale}
-          className="block select-none"
-          draggable={false}
-        />
-        {/* notes on elements keep a thin outline; the open one, a solid one */}
-        {pins.map(
-          (p) =>
-            p.element && (
-              <div
-                key={`box-${p.n}`}
-                aria-hidden
-                className={cn(
-                  "pointer-events-none absolute rounded-[2px] shadow-[0_0_0_3px_var(--canvas)]",
-                  open === p.n ? "outline-2 outline-ink outline-solid" : "outline-[1.5px] outline-ink/75 outline-solid",
-                )}
-                style={{
-                  left: p.element.box.x * scale,
-                  top: p.element.box.y * scale,
-                  width: p.element.box.w * scale,
-                  height: p.element.box.h * scale,
-                }}
-              />
-            ),
-        )}
-        {hoverEl && (
-          <>
-            <div
-              aria-hidden
-              className="pointer-events-none absolute rounded-[2px] shadow-[0_0_0_3px_var(--canvas)] outline-2 outline-ink outline-solid"
-              style={{
-                left: hoverEl.x * scale,
-                top: hoverEl.y * scale,
-                width: hoverEl.w * scale,
-                height: hoverEl.h * scale,
-              }}
-            />
-            <div
-              aria-hidden
-              className="pointer-events-none absolute rounded-[6px] bg-inverse px-[7px] font-mono text-[12px] leading-[18px] font-medium whitespace-nowrap text-on-inverse shadow-[0_0_0_1px_var(--canvas)]"
-              style={
-                chipRight !== null ? { right: chipRight, top: chipTop } : { left: chipLeft + chipShift, top: chipTop }
-              }
-            >
-              {words(hoverEl) ? `${tagName(hoverEl)} “${clip(words(hoverEl))}”` : tagName(hoverEl)}
-              <span className="opacity-65">
-                {" "}
-                · {hoverEl.w}×{hoverEl.h}
+      {path.length > 0 && (
+        <nav
+          aria-label="Element path"
+          className="glass-strong pointer-events-auto fixed z-30 flex h-[30px] -translate-x-1/2 items-center justify-end overflow-hidden rounded-full px-1.5 whitespace-nowrap"
+          style={{
+            left: `calc((100vw - ${inset}px) / 2)`,
+            maxWidth: `calc(100vw - ${inset}px - 32px)`,
+            top: space + (other ? 36 : 0) + (behind ? 48 : 0),
+          }}
+        >
+          {path.map((c, k) =>
+            k === path.length - 1 ? (
+              <b key={c.i} aria-current="true" className="shrink-0 px-1.5 font-mono text-[12px] font-medium text-ink">
+                {tagName(c)}
+              </b>
+            ) : (
+              <span key={c.i} className="flex min-w-0 items-center">
+                <button
+                  type="button"
+                  title={`Outline ${tagName(c)}`}
+                  onClick={() => {
+                    walkTo(c.i);
+                    // back to the page's picker, quietly: Enter then comments on it, the arrows go on walking
+                    pointerFocus.current = true;
+                    picker.current?.focus();
+                  }}
+                  className="flex min-h-6 min-w-0 items-center truncate rounded-full px-1.5 font-mono text-[12px] text-ink-secondary outline-none hover:bg-surface-raised hover:text-ink focus-visible:outline-2 focus-visible:outline-accent-text focus-visible:outline-solid"
+                >
+                  {tagName(c)}
+                </button>
+                <span aria-hidden className="text-ink-muted">
+                  ›
+                </span>
               </span>
-            </div>
-          </>
-        )}
-        {pins.map((p) => (
-          <button
-            key={p.n}
-            id={`pin-${p.n}`}
-            type="button"
-            aria-label={`Note ${p.n}${p.element ? ` on ${elementName(p.element)}` : ""}${p.text ? `: ${p.text.slice(0, 60)}` : ", no text yet"}`}
-            aria-expanded={open === p.n}
-            aria-controls={open === p.n ? `pin-note-${p.n}` : undefined}
-            onPointerDown={(e) => onPinDown(e, p)}
-            onPointerMove={onPinMove}
-            onPointerUp={onPinUp}
-            onPointerCancel={onPinUp}
-            onLostPointerCapture={onPinUp}
-            onKeyDown={(e) => onPinKey(e, p)}
-            onClick={(e) => {
-              e.stopPropagation();
-              // a click, Enter or Space opens the note; the end of a drag doesn't
-              if (dragged.current) dragged.current = false;
-              else showNote(open === p.n ? null : p.n);
-            }}
-            className="absolute -mt-3.5 -ml-3.5 grid size-7 touch-none place-items-center rounded-full bg-inverse font-mono text-[13px] font-medium text-on-inverse shadow-[0_0_0_2px_var(--canvas),0_24px_64px_rgb(0_0_0/0.6),0_2px_8px_rgb(0_0_0/0.35)] outline-none focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-text focus-visible:outline-solid motion-safe:animate-[pin-in_150ms_cubic-bezier(0.23,1,0.32,1)]"
-            style={markerAt(p)}
-          >
-            {p.n}
-          </button>
-        ))}
-        {openPin && (
-          <div
-            className="glass-strong absolute z-10 origin-top-left rounded-[14px] p-3 text-[13px] text-ink motion-safe:animate-[pop-in_150ms_cubic-bezier(0.23,1,0.32,1)]"
-            style={{ width: popW, ...popAt(openPin) }}
-          >
-            {crumbs.length > 0 && (
+            ),
+          )}
+        </nav>
+      )}
+      {geo && (
+        <div
+          // the picker: the page's stand-in in the tab order, for the keyboard walk (the pointer passes through it)
+          ref={picker}
+          tabIndex={active === "select" && els?.length ? 0 : -1}
+          role="application"
+          aria-roledescription="element picker"
+          aria-label={`Version ${mockup.n}: ${mockup.title}, at ${widthName(pageW)}`}
+          aria-describedby="comment-hint"
+          onPointerDown={() => {
+            pointerFocus.current = true;
+          }}
+          onFocus={(e) => {
+            if (e.target !== e.currentTarget || !els?.length) return;
+            if (pointerFocus.current) {
+              pointerFocus.current = false;
+              return;
+            }
+            const c = centreOfView();
+            const i = hover >= 0 && els[hover] ? hover : els[walk.i] ? walk.i : hitAt(els, c.x, c.y);
+            walkTo(i >= 0 ? i : 0);
+          }}
+          onBlur={(e) => e.target === e.currentTarget && setWalk((w) => ({ ...w, on: false }))}
+          onKeyDown={onPickerKey}
+          className="fixed rounded-[2px] outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-text focus-visible:outline-solid"
+          style={{ left: geo.left, top: geo.top, width: visRight - geo.left, height: geo.h }}
+        />
+      )}
+      {geo && (
+        // everything drawn on the page, clipped to the frame's box so nothing spills over the window's chrome
+        <div className="fixed overflow-hidden" style={{ left: geo.left, top: geo.top, width: geo.w, height: geo.h }}>
+          {/* notes on elements keep a thin outline; the open one, a solid one */}
+          {pins.map(
+            (p) =>
+              p.element && (
+                <div
+                  key={`box-${p.n}`}
+                  aria-hidden
+                  className={cn(
+                    "absolute rounded-[2px] shadow-[0_0_0_3px_var(--canvas)]",
+                    open === p.n
+                      ? "outline-2 outline-ink outline-solid"
+                      : "outline-[1.5px] outline-ink/75 outline-solid",
+                  )}
+                  style={{
+                    left: px(noteBox(p)!.x),
+                    top: py(noteBox(p)!.y),
+                    width: noteBox(p)!.w * k,
+                    height: noteBox(p)!.h * k,
+                  }}
+                />
+              ),
+          )}
+          {hoverEl && (
+            <>
               <div
-                role="group"
-                aria-label="Comment on a parent instead"
-                className="-mt-1 mb-1.5 -ml-1.5 flex flex-wrap items-center"
+                aria-hidden
+                className="absolute rounded-[2px] shadow-[0_0_0_3px_var(--canvas)] outline-2 outline-ink outline-solid"
+                style={{ left: px(hoverEl.x), top: py(hoverEl.y), width: hoverEl.w * k, height: hoverEl.h * k }}
+              />
+              <div
+                aria-hidden
+                className="absolute rounded-[6px] bg-inverse px-[7px] font-mono text-[12px] leading-[18px] font-medium whitespace-nowrap text-on-inverse shadow-[0_0_0_1px_var(--canvas)]"
+                style={
+                  chipRight !== null ? { right: chipRight, top: chipTop } : { left: chipLeft + chipShift, top: chipTop }
+                }
               >
-                {crumbs.map((c) => {
-                  const taken = pins.find((p) => p.element?.selector === c.sel);
-                  return (
-                    <span key={c.i} className="flex items-center">
-                      <button
-                        type="button"
-                        disabled={!!taken}
-                        title={taken ? `Already has note ${taken.n}` : `Move this note to ${tagName(c)}`}
-                        onClick={() => moveNote(openPin.n, c)}
-                        className="flex min-h-6 items-center rounded-full px-1.5 font-mono text-[12px] text-ink-secondary outline-none hover:bg-surface-raised hover:text-ink focus-visible:outline-2 focus-visible:outline-accent-text focus-visible:outline-solid disabled:text-ink-muted disabled:hover:bg-transparent"
-                      >
-                        {tagName(c)}
-                      </button>
-                      <span aria-hidden className="text-ink-muted">
-                        ›
-                      </span>
-                    </span>
-                  );
-                })}
-                <b aria-current="true" className="px-1.5 font-mono text-[12px] font-medium">
-                  {tagName(openPin.element!)}
-                </b>
+                {words(hoverEl) ? `${tagName(hoverEl)} “${clip(words(hoverEl))}”` : tagName(hoverEl)}
+                <span className="opacity-65">
+                  {" "}
+                  · {hoverEl.w}×{hoverEl.h}
+                </span>
               </div>
-            )}
-            <label htmlFor={`pin-note-${openPin.n}`} className="mb-1.5 block text-[12px] text-ink-muted">
-              {openPin.element ? `Note on ${elementName(openPin.element)}` : `Note for pin ${openPin.n}`}
-            </label>
-            <textarea
-              id={`pin-note-${openPin.n}`}
-              autoFocus
-              rows={3}
-              maxLength={1000}
-              value={openPin.text}
-              onChange={(e) => setText(openPin.n, e.target.value)}
-              placeholder={openPin.element ? "What should change on it?" : "What should change here?"}
-              className="w-full resize-none rounded-xl bg-surface px-3 py-2 text-[14px] text-ink outline-none placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-accent-text focus-visible:outline-solid"
-            />
-            <div className="mt-2 flex items-center justify-between text-[12px] text-ink-muted">
-              <span>Saved in your draft</span>
-              <Button size="xs" variant="ghost" onClick={() => remove(openPin.n)}>
-                <Trash2 /> Delete
-              </Button>
+            </>
+          )}
+          {pins.map((p) => (
+            <button
+              key={p.n}
+              id={`pin-${p.n}`}
+              type="button"
+              aria-label={`Note ${p.n}${p.element ? ` on ${elementName(p.element)}` : ""}${p.text ? `: ${p.text.slice(0, 60)}` : ", no text yet"}`}
+              aria-expanded={open === p.n}
+              aria-controls={open === p.n ? `pin-note-${p.n}` : undefined}
+              onPointerDown={(e) => onPinDown(e, p)}
+              onPointerMove={onPinMove}
+              onPointerUp={onPinUp}
+              onPointerCancel={onPinUp}
+              onLostPointerCapture={onPinUp}
+              onKeyDown={(e) => onPinKey(e, p)}
+              onClick={(e) => {
+                e.stopPropagation();
+                // a click, Enter or Space opens the note; the end of a drag doesn't
+                if (dragged.current) dragged.current = false;
+                else showNote(open === p.n ? null : p.n);
+              }}
+              className="pointer-events-auto absolute -mt-3.5 -ml-3.5 grid size-7 touch-none place-items-center rounded-full bg-inverse font-mono text-[13px] font-medium text-on-inverse shadow-[0_0_0_2px_var(--canvas),0_24px_64px_rgb(0_0_0/0.6),0_2px_8px_rgb(0_0_0/0.35)] outline-none focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-text focus-visible:outline-solid motion-safe:animate-[pin-in_150ms_cubic-bezier(0.23,1,0.32,1)]"
+              style={markerAt(p)}
+            >
+              {p.n}
+            </button>
+          ))}
+        </div>
+      )}
+      {openPin && (
+        <div
+          className="glass-strong pointer-events-auto fixed z-30 origin-top-left rounded-[14px] p-3 text-[13px] text-ink motion-safe:animate-[pop-in_150ms_cubic-bezier(0.23,1,0.32,1)]"
+          style={{ width: popW, ...popAt(openPin) }}
+        >
+          {crumbs.length > 0 && (
+            <div
+              role="group"
+              aria-label="Comment on a parent instead"
+              className="-mt-1 mb-1.5 -ml-1.5 flex flex-wrap items-center"
+            >
+              {crumbs.map((c) => {
+                const taken = pins.find((p) => p.element?.selector === c.sel);
+                return (
+                  <span key={c.i} className="flex items-center">
+                    <button
+                      type="button"
+                      disabled={!!taken}
+                      title={taken ? `Already has note ${taken.n}` : `Move this note to ${tagName(c)}`}
+                      onClick={() => moveNote(openPin.n, c)}
+                      className="flex min-h-6 items-center rounded-full px-1.5 font-mono text-[12px] text-ink-secondary outline-none hover:bg-surface-raised hover:text-ink focus-visible:outline-2 focus-visible:outline-accent-text focus-visible:outline-solid disabled:text-ink-muted disabled:hover:bg-transparent"
+                    >
+                      {tagName(c)}
+                    </button>
+                    <span aria-hidden className="text-ink-muted">
+                      ›
+                    </span>
+                  </span>
+                );
+              })}
+              <b aria-current="true" className="px-1.5 font-mono text-[12px] font-medium">
+                {tagName(openPin.element!)}
+              </b>
             </div>
+          )}
+          <label htmlFor={`pin-note-${openPin.n}`} className="mb-1.5 block text-[12px] text-ink-muted">
+            {openPin.element ? `Note on ${elementName(openPin.element)}` : `Note for pin ${openPin.n}`}
+          </label>
+          <textarea
+            id={`pin-note-${openPin.n}`}
+            autoFocus
+            rows={3}
+            maxLength={1000}
+            value={openPin.text}
+            onChange={(e) => setText(openPin.n, e.target.value)}
+            placeholder={openPin.element ? "What should change on it?" : "What should change here?"}
+            className="w-full resize-none rounded-xl bg-surface px-3 py-2 text-[14px] text-ink outline-none placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-accent-text focus-visible:outline-solid"
+          />
+          <div className="mt-2 flex items-center justify-between text-[12px] text-ink-muted">
+            <span>Saved in your draft</span>
+            <Button size="xs" variant="ghost" onClick={() => remove(openPin.n)}>
+              <Trash2 /> Delete
+            </Button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -938,7 +1144,6 @@ export function FeedbackSection({
   const pins = draft.pins;
   const canSend = exploring && hasContent(draft) && !sending;
   const past = (s.feedback ?? []).filter((f) => f.round === round).reverse();
-  const widthLabel = (w: number | null) => (w === 1440 ? "Desktop" : w === 834 ? "Tablet" : w === 390 ? "Phone" : "");
 
   const send = async () => {
     if (!canSend) return;
@@ -961,6 +1166,7 @@ export function FeedbackSection({
             mockupId: mockup.id,
             text: draft.scope === "version" ? text : "",
             width: withPins.length ? draft.width : null,
+            ...(withPins.length && draft.vh ? { height: draft.vh } : {}),
             // each note keeps its number, so "pin 3" in the text still names it; an element is sent by its selector
             // (PIVOT finds the rest in its own map of the render)
             pins: withPins.map(({ n, x, y, text: t, element }) => ({
@@ -1042,7 +1248,7 @@ export function FeedbackSection({
                     <span className="min-w-0 flex-1 text-[13px] leading-snug text-ink-secondary">
                       <span className="line-clamp-2">{p.text || <i className="text-ink-muted">No note yet</i>}</span>
                       <small className="block font-mono text-[12px] text-ink-muted">
-                        {[p.element ? elementName(p.element) : "Spot", widthLabel(draft.width)]
+                        {[p.element ? elementName(p.element) : "Spot", draft.label ?? widthName(draft.width)]
                           .filter(Boolean)
                           .join(" · ")}
                       </small>

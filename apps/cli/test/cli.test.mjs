@@ -15,7 +15,7 @@ import { installExtension } from "../lib/extension.mjs";
 import { linkExternals } from "../lib/externals.mjs";
 import { writeInstallInfo } from "../lib/install-info.mjs";
 import { dist, resolveDataDir } from "../lib/paths.mjs";
-import { serverEnv } from "../lib/start.mjs";
+import { previewPortFor, serverEnv } from "../lib/start.mjs";
 import { packageFiles } from "../release-check.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -43,6 +43,18 @@ const listen = (handler) =>
     const server = http.createServer(handler);
     server.listen(0, "127.0.0.1", () => resolve(server));
   });
+
+/**
+ * `count` distinct ports that were free a moment ago: all held open together, then released. A start that gets past
+ * the port checks needs two (PIVOT's and PIVOT_PREVIEW_PORT); PIVOT's + 1 can't be assumed free while other packages'
+ * tests run in parallel.
+ */
+async function freePorts(count) {
+  const servers = await Promise.all(Array.from({ length: count }, () => listen()));
+  const ports = servers.map((s) => s.address().port);
+  await Promise.all(servers.map((s) => new Promise((resolve) => s.close(resolve))));
+  return ports;
+}
 
 describe("options", () => {
   it("parses each command's options and refuses anything else before doing anything", () => {
@@ -101,13 +113,10 @@ describe("start refuses before it serves anything", () => {
   it("when the data folder belongs to a library in Postgres but DATABASE_URL is missing", async () => {
     const data = dir("neon");
     fs.writeFileSync(path.join(data, "api-token"), "t");
-    const port = await new Promise((resolve) => {
-      const s = http.createServer().listen(0, "127.0.0.1", () => {
-        const p = s.address().port;
-        s.close(() => resolve(p));
-      });
+    const [port, previewPort] = await freePorts(2);
+    const r = await cli(["start", "--port", String(port), "--data-dir", data], {
+      env: { PIVOT_PREVIEW_PORT: String(previewPort) },
     });
-    const r = await cli(["start", "--port", String(port), "--data-dir", data]);
     expect(r.code).toBe(1);
     expect(r.out).toMatch(/probably in Neon.*Nothing was started/);
     expect(fs.existsSync(path.join(data, "db"))).toBe(false);
@@ -121,6 +130,12 @@ describe("start refuses before it serves anything", () => {
     expect(env.PIVOT_PREVIEW_SCRIPT).toBe(path.join(dist.scripts, "preview.mjs"));
     expect(serverEnv({ PIVOT_PREVIEW_SCRIPT: "/own.mjs" }, 1).PIVOT_PREVIEW_SCRIPT).toBe("/own.mjs");
   });
+
+  it("puts component previews on their own port: PIVOT's + 1, or PIVOT_PREVIEW_PORT", () => {
+    expect(serverEnv({}, 4410).PIVOT_PREVIEW_PORT).toBe("4411");
+    expect(serverEnv({ PIVOT_PREVIEW_PORT: "5000" }, 4410).PIVOT_PREVIEW_PORT).toBe("5000");
+    expect(previewPortFor({}, "4321")).toBe("4322");
+  });
 });
 
 describe("the native packages", () => {
@@ -130,12 +145,15 @@ describe("the native packages", () => {
       [
         "@aws-sdk/client-s3",
         "@electric-sql/pglite",
+        // the component preview build (packages/core/src/preview-build.ts)
+        "esbuild",
         "next",
         "playwright",
         "postgres",
         "react",
         "react-dom",
         "sharp",
+        "tailwindcss",
       ].sort(),
     );
   });

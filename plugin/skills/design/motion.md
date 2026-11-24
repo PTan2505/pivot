@@ -38,6 +38,7 @@ A screenshot can't show motion. For every reference that informs motion, say wha
 | Evidence                   | Meaning                                                                                                  |
 | -------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `observed live`            | You opened the page in a browser tool (with the user's permission) and triggered the behaviour yourself. |
+| `motion table`             | You read the reference's motion table in PIVOT (`get_reference`): numbers, not pictures.                 |
 | `keyframes`                | You looked at the reference's motion keyframes in PIVOT.                                                 |
 | `video exists, not viewed` | PIVOT holds a motion recording (`motionEvidence` says observed) but you didn't look at its keyframes.    |
 | `screenshot`               | Only still images.                                                                                       |
@@ -51,10 +52,37 @@ A screenshot can't show motion. For every reference that informs motion, say wha
   - `classification: "unknown"` when there is no recording: every reference saved without motion capture. Anything you
     write about its motion is **inferred** (or observed live, if you open it);
   - PIVOT never labels anything inferred itself: that label is yours, in the brief.
+- **The motion table** (a recording made since motion tracks exist): `get_reference` adds `motion`, one line per
+  item, most visible first: trigger (load, a scroll position, a scroll range), the element, properties from → to,
+  duration, delay, easing, stagger, pin or parallax. Each item says where its numbers come from:
+  - `exact`: the page declared it (a CSS transition or animation, a Web Animation, a GSAP tween or ScrollTrigger).
+    Use its numbers as they are;
+  - `measured`: PIVOT watched the element change frame by frame and fitted the samples. Durations are within about
+    one frame (33 ms) and read slightly short for motion run by scripts; the easing is named with its fit error, and
+    `custom` when no standard curve fits;
+  - `seen`: a canvas or video whose pixels move while the page rests. Only where and when, no numbers: what it does
+    is in its filmstrip, or inferred.
+
+  **Hover and click** (under their own heading): PIVOT tried one element of each kind (a nav link, a card, a tab,
+  a disclosure…), so an item there is the observed hover or click of that kind, not of every element. It never
+  pressed links, forms or anything that buys, signs in or sends, so what those do is still unknown.
+
+  **Filmstrips:** items ending in `filmstrip` have one, about 400 tokens: `get_reference_images` with
+  `which: "motion"` and `item: "M3"` shows five frames of that motion, cropped to where it happens, with their times.
+  Look at one only when the numbers leave the look open (what a reveal uncovers, how a `seen` canvas moves); the
+  page may scroll between its frames.
+
+  Read the table before the filmstrips and keyframes, and look at keyframes only for what neither can say (how a
+  section looks mid-motion). Cite items by reference and id in the brief's Motion block ("Linear M3: fade + rise 8px, 333 ms,
+  cubic-bezier(.23,1,.32,1), measured"). An item from the table counts as observed evidence for its numbers; what it
+  can't show (hover or click on elements PIVOT didn't try, the timing of a `seen` item, the look of motion without a
+  filmstrip) is still inferred
+  unless seen another way; a filmstrip you looked at counts as observed for what it shows.
+
 - **Look at it:** `get_reference_images` with `which: "keyframes"` sends the keyframes (page with `fromSlice`), and
   `which: "states"` the interaction-state stills. They count toward the image budget. The video can't be viewed
   through MCP.
-- **What keyframes prove:** what was on screen at each scroll position, while PIVOT scrolled top to bottom with no
+- **What keyframes prove** (without a motion table): what was on screen at each scroll position, while PIVOT scrolled top to bottom with no
   pointer. Not timing, easing, or what happens between two frames (inferred); nothing about hover, click or focus
   (not exercised). A state still shows how a state looks, not how it moves.
 - **Name the gaps:** when an essential motion item has no observed evidence, say so in the brief's Motion block
@@ -253,7 +281,13 @@ intended, what was observed running, what is inferred or unverified, and what de
    - `trigger`: `load`, `scroll` (`{ "type": "scroll", "to": "<selector>" }`), `hover`, `click` or `focus` (`"on"`
      names the element to act on when it isn't the one that moves), or `other` when no automatic input can start it.
    - `expect`: whether it moves, the properties that must change, the final computed values. `durationMs` and `easing`
-     only when the brief states them; they are compared exactly with what the running animation declares.
+     only when the brief states them; they are compared exactly with what the running animation declares, and when it
+     declares none (motion run by a script) with what is measured on screen, within one frame (33 ms) on the brief's
+     own curve.
+   - `expect.reference`, when the brief's Motion block cites a reference item for this motion (from PIVOT's motion
+     table): `{ "label": "Linear M3", "durationMs": 333, "easing": "cubic-bezier(.23,1,.32,1)", "source": "measured" }`,
+     its numbers copied from the table. The build is compared with it within one frame and by curve ("matches
+     reference"). Only when the brief means to match it; a deliberate difference is a decision, not a check.
    - `reduced`: what the brief's Reduced motion cell says: `animates: false`, or a briefed alternative
      (`animates: true`, `properties: ["opacity"]`, `notProperties: ["transform"]`), and where it ends. Without it the
      item can't pass: turning everything off isn't assumed to be right, and content must still reach its final state.
@@ -302,9 +336,13 @@ intended, what was observed running, what is inferred or unverified, and what de
    - **Not Verified** when anything couldn't run or be observed: the element wasn't found or was covered, the trigger
      can't be performed (`other`) or scrolling never reached it, the page never settled, the motion had already
      finished when watching began or didn't settle in the window, the element disappeared, the replay didn't run, the
-     brief gives no reduced-motion behaviour, or the motion declares no timing to compare.
-   - A final state alone never proves the trigger: the element must be seen moving after it. Timing is what the
-     animation declares, not measured on screen.
+     brief gives no reduced-motion behaviour, the motion declares no timing and couldn't be measured (it started before
+     watching, or nothing watched moved enough), or its easing has no single curve to compare (`steps()`, a spring).
+   - A final state alone never proves the trigger: the element must be seen moving after it.
+   - **Timing evidence** comes in two kinds, and the report counts both: `declared timing` is what the running
+     animation declares (exact), `measured timing` is what was measured on screen for motion that declares none (read
+     in every animation frame and fitted with PIVOT's own code, within one frame). Say which in the QA summary, with
+     what stayed Not Verified. Smoothness (dropped frames) isn't measured.
    - The **overall** status is Pass only when every essential item of the approved brief passed, with every brief item
      traced to a check. A failed detail item is listed but doesn't decide it.
    - If the script couldn't run (exit 3: no Playwright or Chromium), every item is Not Verified. Say so; never put

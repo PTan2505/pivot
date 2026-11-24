@@ -14,6 +14,9 @@ const nextConfig: NextConfig = {
     "sharp",
     "postgres",
     "@aws-sdk/client-s3",
+    // the component preview build (packages/core/src/preview-build.ts)
+    "esbuild",
+    "tailwindcss",
   ],
   experimental: {
     // The proxy buffers request bodies; uploads can be up to 200 MB.

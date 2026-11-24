@@ -38,6 +38,16 @@ export const API_FEATURES = [
    * and a pin's `element: { selector }`, stored with the element's tag, box and HTML.
    */
   "design.feedback.elements",
+  /**
+   * Renders, element maps and feedback at any width from 320 to 2560, and live notes from the interactive preview: a
+   * pin's `live: true` with the element as the preview saw it and its `capture` (a crop, kept by its sha256).
+   */
+  "design.feedback.live",
+  /**
+   * Components saved with their code: `POST /api/components` (save, by 21st id) and `GET /api/components/lookup`
+   * (`?id=`, `?url=` or `?resourceId=`), each with PIVOT's scan of the code.
+   */
+  "components",
 ] as const;
 
 export type ApiFeature = (typeof API_FEATURES)[number];

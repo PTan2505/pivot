@@ -5,6 +5,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getAsset, readAssetBytes, saveAsset } from "./assets";
 import { expandHome, paths } from "./config";
 import { resolveWriteTarget, WriteTargetError } from "./write-target";
+import { writeStore } from "./storage";
 import { getDb } from "./db/client";
 import { designSystemDigest, mockupDigest } from "./design";
 import {
@@ -34,6 +35,7 @@ export const BACKUP_FORMAT = "pivot-backup";
 export const BACKUP_VERSION = 1;
 const MAX_DATA_BYTES = 200 * 1024 * 1024;
 const ASSET_FILE = /^[0-9a-f]{64}\.[a-z0-9]{1,8}$/;
+const CAPTURE_SHA = /^[0-9a-f]{64}$/;
 
 type Rows<T extends { $inferSelect: unknown }> = T["$inferSelect"][];
 
@@ -59,6 +61,8 @@ export interface BackupData {
   /** Missing in backups made before mockup feedback (2026-11-20). */
   designRounds?: Rows<typeof designRounds>;
   designFeedback?: Rows<typeof designFeedback>;
+  /** The crops live feedback notes keep (files `captures/<sha256>.jpg`), by sha256. */
+  designCaptures?: string[];
   suggestions: Rows<typeof resourceSuggestions>;
   settings: Rows<typeof appSettings>;
 }
@@ -121,6 +125,25 @@ export async function createBackup({ targetDir }: { targetDir?: string } = {}) {
     await fs.writeFile(path.join(root, "assets", file), bytes);
     const { storagePath: _p, storage: _s, ...rest } = row;
     data.assets.push({ ...rest, file });
+  }
+  // the crops of live feedback notes are the owner's data, not a cache: they go with the backup
+  const shas = [
+    ...new Set(
+      (data.designFeedback ?? []).flatMap((f) => (f.pins ?? []).flatMap((p) => (p.capture ? [p.capture.sha256] : []))),
+    ),
+  ].filter((sha) => CAPTURE_SHA.test(sha));
+  if (shas.length) await fs.mkdir(path.join(root, "captures"), { recursive: true });
+  data.designCaptures = [];
+  for (const sha of shas) {
+    const bytes = await writeStore()
+      .get(`design-captures/${sha}.jpg`)
+      .catch(() => null);
+    if (!bytes) {
+      missing++;
+      continue;
+    }
+    await fs.writeFile(path.join(root, "captures", `${sha}.jpg`), bytes);
+    data.designCaptures.push(sha);
   }
   const counts = {
     resources: data.resources.length,
@@ -489,6 +512,23 @@ export async function restoreBackup(
       .insert(designFeedback)
       .values({ ...f, createdAt: new Date(f.createdAt) })
       .onConflictDoNothing();
+  }
+  // live notes' crops: a file is taken only when its bytes match its name's sha256
+  for (const sha of data.designCaptures ?? []) {
+    if (!CAPTURE_SHA.test(sha)) continue;
+    const file = path.join(root, "captures", `${sha}.jpg`);
+    const st = await fs.lstat(file).catch(() => null);
+    if (!st?.isFile()) {
+      summary.skippedFiles++;
+      continue;
+    }
+    const bytes = await fs.readFile(file);
+    if (crypto.createHash("sha256").update(bytes).digest("hex") !== sha) {
+      summary.skippedFiles++;
+      continue;
+    }
+    await writeStore().put(`design-captures/${sha}.jpg`, bytes, "image/jpeg");
+    summary.files++;
   }
   return summary;
 }

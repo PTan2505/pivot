@@ -8,9 +8,12 @@ import { HttpError, json, route, type IdParams } from "@/lib/server/http";
  * once per content and width.
  */
 export const GET = route(async (req: Request, { params }: IdParams) => {
-  const width = Number(new URL(req.url).searchParams.get("width") ?? 1440);
+  const q = new URL(req.url).searchParams;
+  const width = Number(q.get("width") ?? 1440);
+  // the viewport height `100vh` resolves against (the owner's frame), 900 when not given
+  const height = Number(q.get("height") ?? 900);
   try {
-    const elements = await mockupElements((await params).id, width);
+    const elements = await mockupElements((await params).id, width, height);
     if (!elements) throw new HttpError(404, "Mockup not found.");
     return json({ width, elements }, { headers: { "Cache-Control": "private, max-age=3600" } });
   } catch (err) {

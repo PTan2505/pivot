@@ -21,6 +21,7 @@ import type {
   SourceCategory,
   TagDTO,
 } from "@pivot/core/types";
+import type { MotionTrack } from "@pivot/core/motion-track";
 import type { ImagePart, PageSlices } from "./images";
 
 /**
@@ -43,6 +44,11 @@ export interface PivotSource {
   /** `count` slices of a full-page screenshot from slice `from`, 960px wide, prepared by the app. */
   agentSlices(assetId: string, from: number, count: number): Promise<PageSlices>;
   /**
+   * A reference's motion track (the `motion-track` asset's JSON), or null when it can't be read. Optional: a source
+   * without it serves the motion evidence alone.
+   */
+  motionTrack?(assetId: string): Promise<MotionTrack | null>;
+  /**
    * Hybrid search, external side: free public catalogs searched by the app, plus search links for other sites.
    * Optional, so an older app (or a source without it) makes `search_external` say so instead of failing.
    */
@@ -58,6 +64,16 @@ export interface PivotSource {
    * without it (or an app that predates the setting) shows everything.
    */
   uiSettings?(): Promise<UiSettings>;
+  /**
+   * A component saved with its code, by its 21st id, its 21st page or its PIVOT id; null when PIVOT doesn't hold it.
+   * Optional: an app from before the component store has none, and the tool then says nothing is saved.
+   */
+  findComponent?(q: {
+    provider: "21st";
+    providerId?: number;
+    pageUrl?: string;
+    resourceId?: string;
+  }): Promise<ResourceDetailDTO | null>;
 }
 
 /**
@@ -156,6 +172,13 @@ export interface PivotWriter {
     suggestions: { kind: SuggestionKind; value: Record<string, unknown>; reason?: string }[],
   ): Promise<{ added: SuggestionDTO[]; skipped: { kind: string; value: Record<string, unknown>; why: string }[] }>;
   annotate(resourceId: string, note: string): Promise<{ line: string }>;
+  /**
+   * Saves a component with its code (upsert by 21st id): right after the fetch, and again once it is built. Optional:
+   * an app from before the component store makes the tool say so.
+   */
+  saveComponent?(
+    input: Record<string, unknown>,
+  ): Promise<{ outcome: "created" | "updated" | "unchanged"; resource: ResourceDetailDTO }>;
   saveReference(input: {
     url: string;
     type?: string;

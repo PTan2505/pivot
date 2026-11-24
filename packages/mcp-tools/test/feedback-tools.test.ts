@@ -237,4 +237,35 @@ describe("mockup feedback over MCP", () => {
     expect(images).toContain(`Pin 3 ${place}: "make this the outline style"`);
     expect(images).toContain('```html\n<a class="btn primary" href="#">Start free</a>\n```');
   });
+
+  it("marks a live note as seen in the preview with scripts running", async () => {
+    const live: DesignFeedbackDTO = {
+      ...feedback,
+      pins: [
+        {
+          x: 300,
+          y: 900,
+          text: "the open menu",
+          n: 1,
+          live: true,
+          element: { selector: "nav > ul.menu", tag: "ul", classes: ["menu"], box: { x: 280, y: 880, w: 240, h: 300 } },
+          capture: { sha256: "a".repeat(64), region: { left: 0, top: 700, width: 960, height: 720 } },
+        },
+        {
+          x: 10,
+          y: 10,
+          text: "spot",
+          n: 2,
+          live: true,
+          capture: { sha256: "b".repeat(64), region: { left: 0, top: 0, width: 960, height: 720 } },
+        },
+      ],
+    };
+    const { src } = source({ getDesignSession: async () => ({ ...session, feedback: [live] }) });
+    const out = textOf(await runTool(tool("get_design_session"), src, { sessionId: SID }));
+    expect(out).toContain(
+      "1. on element ul.menu (selector `nav > ul.menu`, box 280,880 240×300) [live: seen in the preview with scripts running]",
+    );
+    expect(out).toContain("2. at (10, 10) [live: seen in the preview with scripts running]");
+  });
 });

@@ -7,9 +7,12 @@ import { HttpError, route, type IdParams } from "@/lib/server/http";
  * `X-Image-Width` / `X-Image-Height`: what the owner places feedback pins on. Made once per content and width.
  */
 export const GET = route(async (req: Request, { params }: IdParams) => {
-  const width = Number(new URL(req.url).searchParams.get("width") ?? 1440);
+  const q = new URL(req.url).searchParams;
+  const width = Number(q.get("width") ?? 1440);
+  // the viewport height `100vh` resolves against (the owner's frame), 900 when not given
+  const height = Number(q.get("height") ?? 900);
   try {
-    const img = await renderMockup((await params).id, width);
+    const img = await renderMockup((await params).id, width, height);
     if (!img) throw new HttpError(404, "Mockup not found.");
     return new Response(new Uint8Array(img.data), {
       headers: {
