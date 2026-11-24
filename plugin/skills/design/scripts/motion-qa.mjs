@@ -1122,11 +1122,41 @@ async function observeOnce(page, scopeOf, item, ctx, label) {
           const el = document.querySelector(sel);
           const frames = [];
           let on = true;
-          window.__motionQaStop = () => ((on = false), frames);
-          const tick = (t) => {
-            if (!on) return;
+          const read = (t) => {
             const cs = el && el.isConnected ? getComputedStyle(el) : null;
             if (cs) frames.push({ t, values: Object.fromEntries(props.map((p) => [p, cs.getPropertyValue(p)])) });
+          };
+          // A value is read at the end of its frame, after every animation-frame callback of the page: a callback
+          // of ours runs before the page's own (it was registered first), so it would read what the page drew in the
+          // frame before, under this frame's time. A ResizeObserver reports after the frame's callbacks and layout,
+          // so a hidden sentinel that changes size each frame gives that moment.
+          let pending = null;
+          let sentinel = null;
+          let observer = null;
+          if (typeof ResizeObserver === "function") {
+            sentinel = document.createElement("div");
+            sentinel.setAttribute("aria-hidden", "true");
+            sentinel.style.cssText =
+              "position:fixed;left:0;top:0;width:1px;height:1px;visibility:hidden;pointer-events:none;contain:strict";
+            document.documentElement.appendChild(sentinel);
+            observer = new ResizeObserver(() => {
+              if (pending !== null) read(pending);
+              pending = null;
+            });
+            observer.observe(sentinel);
+          }
+          window.__motionQaStop = () => {
+            on = false;
+            observer?.disconnect();
+            sentinel?.remove();
+            return frames;
+          };
+          const tick = (t) => {
+            if (!on) return;
+            if (sentinel) {
+              pending = t;
+              sentinel.style.width = sentinel.style.width === "1px" ? "2px" : "1px";
+            } else read(t);
             if (frames.length < 900) requestAnimationFrame(tick);
           };
           requestAnimationFrame(tick);
