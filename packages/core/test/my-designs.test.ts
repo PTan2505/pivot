@@ -257,6 +257,33 @@ describe("finding a saved design", () => {
   });
 });
 
+describe("searching saved designs (Phase 2)", () => {
+  it("the agent search finds them, says whose work each is (never its code), and filters by organisation", async () => {
+    const search = await import("../src/search");
+    const odin = await designs.saveMyDesign(
+      input({ name: "Orbit mark ODIN", ownership: "company", organisation: "ODIN" }),
+    );
+    const pulse = await designs.saveMyDesign(
+      input({ name: "Orbit mark Pulse", ownership: "company", organisation: "The Pulse" }),
+    );
+    const mine = await designs.saveMyDesign(input({ name: "Orbit mark mine" }));
+    const all = await search.searchResources({ query: "orbit mark", types: ["my_design"] });
+    expect(all.results.map((h) => h.id).sort()).toEqual([odin.resource.id, pulse.resource.id, mine.resource.id].sort());
+    const hit = all.results.find((h) => h.id === odin.resource.id)!;
+    expect(hit.myDesign).toEqual({ kind: "3d", ownership: "company", organisation: "ODIN" });
+    expect(all.results.find((h) => h.id === mine.resource.id)!.myDesign).toEqual({ kind: "3d", ownership: "personal" });
+    expect(JSON.stringify(all)).not.toContain("WebGLRenderer");
+    const byOrg = await search.searchResources({ query: "orbit", types: ["my_design"], organisation: "odin" });
+    expect(byOrg.results.map((h) => h.id)).toEqual([odin.resource.id]);
+    expect(byOrg.total).toBe(1);
+    const none = await search.searchResources({ types: ["my_design"], organisation: "Nobody" });
+    expect(none.total).toBe(0);
+    // the My designs section searches them too
+    const section = await search.searchResources({ query: "orbit mark pulse", section: "my-designs" });
+    expect(section.results.map((h) => h.id)).toEqual([pulse.resource.id]);
+  });
+});
+
 describe("only PIVOT makes and changes saved designs", () => {
   it("refuses one made by hand, a type change, and an edit of its code; strips meta.myDesign", async () => {
     await expect(resources.createResource({ type: "my_design", title: "By hand" })).rejects.toThrow(/save_my_design/);

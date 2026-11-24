@@ -59,8 +59,14 @@ const clip = (s: string, max: number) =>
 const text = (t: string) => ({ type: "text" as const, text: t });
 const image = (p: ImagePart) => ({ type: "image" as const, data: p.data.toString("base64"), mimeType: p.mimeType });
 
+/** "Yours" marks the owner's own designs; company work names its organisation. */
+const mineText = (h: SearchHit) =>
+  h.myDesign
+    ? ` — Yours (${h.myDesign.kind}, ${h.myDesign.ownership === "company" ? `company: ${h.myDesign.organisation ?? "unnamed"}` : "personal"})`
+    : "";
+
 const hitLine = (h: SearchHit, i: number) =>
-  `${i + 1}. ${h.title} — ${h.host ?? TYPE_DEFS[h.type].label}${
+  `${i + 1}. ${h.title} — ${h.host ?? TYPE_DEFS[h.type].label}${mineText(h)}${
     h.facets.length
       ? ` — ${h.facets.map((f) => (f.kind === "tag" ? f.name : `${TAG_KIND_LABELS[f.kind]}: ${f.name}`)).join(", ")}`
       : ""
@@ -80,7 +86,7 @@ const searchInput = {
     .array(z.enum(RESOURCE_TYPES))
     .optional()
     .describe(
-      'Resource types to search. Default ["reference"] (UI references); "source" finds sites to browse for more.',
+      'Resource types to search. Default ["reference"] (UI references); "source" finds sites to browse for more; "my_design" finds the owner\'s own saved designs (My designs: their code is in get_my_design).',
     ),
   section: z
     .enum(SECTIONS.map((s) => s.id) as [string, ...string[]])
@@ -99,6 +105,14 @@ const searchInput = {
     .max(200)
     .optional()
     .describe("Only things saved from this source, by its id or host (dribbble.com)."),
+  organisation: z
+    .string()
+    .min(1)
+    .max(120)
+    .optional()
+    .describe(
+      'Only the owner\'s designs marked as work of this organisation ("ODIN"), any case. Searches My designs unless types says otherwise.',
+    ),
   sort: z
     .enum(SEARCH_SORTS)
     .optional()
@@ -110,7 +124,7 @@ const searchInput = {
 const searchReferences: PivotTool<typeof searchInput> = {
   name: "search_references",
   title: "Search the PIVOT library",
-  description: `Search the user's PIVOT library of saved UI references (screenshots of real websites with page type, domain, style and pattern facets) and design sources. Start here to find references for a screen you are designing: query by what the page is ("pricing", "sign in", "docs sidebar") and narrow with facets. Returns compact results with ids; use get_reference for details and get_reference_images to look at them. ${UNTRUSTED}`,
+  description: `Search the user's PIVOT library of saved UI references (screenshots of real websites with page type, domain, style and pattern facets), design sources and the owner's own saved designs (types ["my_design"], marked "Yours", with organisation for company work). Start here to find references for a screen you are designing: query by what the page is ("pricing", "sign in", "docs sidebar") and narrow with facets. Returns compact results with ids; use get_reference for details and get_reference_images to look at them. ${UNTRUSTED}`,
   inputSchema: searchInput,
   async run(source, input) {
     // the types outside design stay hidden from agents while the user hides them in PIVOT
@@ -161,7 +175,8 @@ const searchReferences: PivotTool<typeof searchInput> = {
     }
     const page = await source.search({
       query: input.query,
-      types: input.types,
+      types: input.types ?? (input.organisation && !input.section ? ["my_design"] : undefined),
+      ...(input.organisation ? { organisation: input.organisation } : {}),
       section: input.section as (typeof SECTIONS)[number]["id"] | undefined,
       facets: input.facets,
       collectionId,
@@ -200,6 +215,9 @@ const ROLE_LABEL: Record<string, string> = {
   "motion-keyframe": "motion keyframe",
   state: "interaction state",
   attachment: "attachment",
+  "design-shot": "screenshot of the original",
+  "design-asset": "design file",
+  "design-video": "video of the original",
 };
 
 function screenshotsOf(r: ResourceDetailDTO) {
@@ -495,6 +513,12 @@ const getReference: PivotTool<typeof idInput> = {
           .join("; ")}`,
       r.type === "component" &&
         "A component saved with its code: get_saved_component (resourceId) gives all its files, dependencies, PIVOT's scan and the review, and spends no 21st retrieval.",
+      r.type === "my_design" &&
+        `One of the owner's own designs, saved to be rebuilt exactly: get_my_design (id ${r.id}) gives its files, usage, tokens, dependencies and install steps, and writes them into a project with writeTo; get_reference_images with which "shots" shows how the original looks.${
+          (r.meta.myDesign as { ownership?: string; organisation?: string } | undefined)?.ownership === "company"
+            ? ` Company work (${(r.meta.myDesign as { organisation?: string }).organisation ?? "unnamed"}): its code goes only into projects of the same organisation; elsewhere it is a visual reference.`
+            : ""
+        }`,
       r.content && `Content:\n${content.text}`,
     ].filter(Boolean);
     return { content: [text(lines.join("\n"))], structuredContent: detail };
@@ -561,10 +585,10 @@ const listFacets: PivotTool<Record<string, never>> = {
 const imagesInput = {
   id: idInput.id,
   which: z
-    .enum(["cover", "fullpage", "all", "keyframes", "states", "motion"])
+    .enum(["cover", "fullpage", "all", "keyframes", "states", "motion", "shots"])
     .optional()
     .describe(
-      "cover: the first screen as saved (default). fullpage: the whole page, top to bottom, in slices. all: both. keyframes: stills from PIVOT's scroll recording, in scroll order (motion evidence). states: stills of interaction states. motion: filmstrips of motion-table items (the frames of one motion, cropped to where it happens, side by side with their times); pass item for one.",
+      "cover: the first screen as saved (default). fullpage: the whole page, top to bottom, in slices. all: both. keyframes: stills from PIVOT's scroll recording, in scroll order (motion evidence). states: stills of interaction states. motion: filmstrips of motion-table items (the frames of one motion, cropped to where it happens, side by side with their times); pass item for one. shots: the screenshots of one of the owner's saved designs (desktop and phone), to compare a rebuild with.",
     ),
   item: z
     .string()
@@ -618,6 +642,7 @@ const getReferenceImages: PivotTool<typeof imagesInput> = {
       );
     }
     if (which === "motion") return motionStrips(source, r, item, fromSlice, maxImages);
+    if (which === "shots") return designShots(source, r, fromSlice, maxImages);
     if (which === "keyframes" || which === "states") {
       const motion = motionEvidenceOf(r);
       const total = which === "keyframes" ? motion.keyframesTotal : motion.statesTotal;
@@ -683,6 +708,52 @@ const getReferenceImages: PivotTool<typeof imagesInput> = {
     };
   },
 };
+
+/** `which: "shots"`: the screenshots saved with one of the owner's designs, desktop first. */
+async function designShots(
+  source: PivotSource,
+  r: ResourceDetailDTO,
+  fromSlice: number,
+  maxImages: number,
+): Promise<ToolResult> {
+  const all = r.assets
+    .filter((a) => a.role === "design-shot" && !a.missing)
+    .map((a) => ({
+      assetId: a.id,
+      viewport: typeof metaOf(a).viewport === "string" ? (metaOf(a).viewport as string) : null,
+    }))
+    .sort((a, b) => Number(a.viewport === "mobile") - Number(b.viewport === "mobile"));
+  if (!all.length)
+    throw new ToolError(
+      "no_images",
+      r.type === "my_design"
+        ? `${r.title} has no screenshots of the original.`
+        : `${r.title} isn't one of the owner's saved designs; use cover or fullpage.`,
+    );
+  const picked = all.slice(fromSlice, fromSlice + maxImages);
+  const parts: ToolResult["content"] = [];
+  const notes: string[] = [];
+  for (const [i, shot] of picked.entries()) {
+    const img = await source.agentImage(shot.assetId);
+    parts.push(image(img));
+    notes.push(
+      `Screenshot ${fromSlice + i + 1} of ${all.length}${shot.viewport ? ` (${shot.viewport})` : ""}, sent at ${img.width}×${img.height} (~${imageTokens(img.width, img.height)} tokens).`,
+    );
+  }
+  if (!picked.length) notes.push(`There are ${all.length} screenshots; fromSlice ${fromSlice} is past the end.`);
+  else if (fromSlice + picked.length < all.length)
+    notes.push(`Call again with fromSlice ${fromSlice + picked.length} for the rest.`);
+  return {
+    content: [text(`${r.title}\n${notes.join("\n")}`), ...parts],
+    structuredContent: {
+      which: "shots",
+      total: all.length,
+      returned: picked.map((x) => x.assetId),
+      images: picked.map((x) => ({ assetId: x.assetId, viewport: x.viewport })),
+      next: picked.length && fromSlice + picked.length < all.length ? fromSlice + picked.length : null,
+    },
+  };
+}
 
 /** `which: "motion"`: the filmstrips stored with a recording's motion track, one item or all, in item order. */
 async function motionStrips(

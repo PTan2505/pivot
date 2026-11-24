@@ -35,16 +35,16 @@ const ordered = (text: string, words: string[]) => {
 describe("skills name real MCP tools and values", () => {
   const tools = all(/name: "([a-z_]+)"/g, src);
 
-  it("packages/mcp-tools defines 20 tools", () => {
-    expect(tools.size).toBe(20);
+  it("packages/mcp-tools defines 22 tools", () => {
+    expect(tools.size).toBe(22);
   });
 
   // get_reference_images' `which` values, from the tool's own schema
   const whichValues = new Set(
     [...(/which: z\s*\.enum\(\[([^\]]*)\]/.exec(src)?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1]),
   );
-  it("get_reference_images offers keyframes, states and motion filmstrips", () => {
-    expect([...whichValues]).toEqual(["cover", "fullpage", "all", "keyframes", "states", "motion"]);
+  it("get_reference_images offers keyframes, states, motion filmstrips and a saved design's shots", () => {
+    expect([...whichValues]).toEqual(["cover", "fullpage", "all", "keyframes", "states", "motion", "shots"]);
   });
   const milestones = enumValues("DESIGN_MILESTONES");
   const kinds = enumValues("DESIGN_DECISION_KINDS");

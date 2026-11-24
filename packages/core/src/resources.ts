@@ -89,6 +89,8 @@ export interface ListFilters {
   url?: string;
   /** Only resources whose URL is on this host (subdomains included). */
   host?: string;
+  /** Only the owner's designs marked as work of this organisation (any case). */
+  organisation?: string;
   trash?: boolean;
   /** `created` is newest first, `oldest` is by creation date the other way. */
   sort?: "updated" | "created" | "oldest" | "title";
@@ -208,6 +210,12 @@ async function listQuery(filters: ListFilters) {
     const host = filters.host.toLowerCase().replace(/^www\./, "");
     where.push(
       sql`lower(coalesce(${resources.sourceUrl}, '')) ~ ${`^https?://([^/]*\\.)?${host.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(:\\d+)?(/|$)`}`,
+    );
+  }
+
+  if (filters.organisation) {
+    where.push(
+      sql`lower(${resources.meta}->'myDesign'->>'organisation') = ${filters.organisation.trim().toLowerCase()}`,
     );
   }
 
