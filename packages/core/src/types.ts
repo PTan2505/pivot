@@ -15,6 +15,7 @@ export const RESOURCE_TYPES = [
   "checklist",
   "mcp",
   "source",
+  "my_design",
 ] as const;
 
 export type ResourceType = (typeof RESOURCE_TYPES)[number];
@@ -374,6 +375,20 @@ export const TYPE_DEFS: Record<ResourceType, ResourceTypeDef> = {
     ],
     exportDir: "sources",
   },
+  my_design: {
+    type: "my_design",
+    label: "My design",
+    plural: "My designs",
+    blurb: "Designs you or Claude made, kept to rebuild exactly",
+    group: "visual",
+    icon: "gem",
+    visual: true,
+    url: "optional",
+    content: "code",
+    facets: ["pageType", "uiPattern", "visualStyle", "technology"],
+    fields: [],
+    exportDir: "my-designs",
+  },
 };
 
 /** The app's top-level sections, shown in the navbar. Every type belongs to exactly one. */
@@ -383,6 +398,7 @@ export const SECTIONS = [
     label: "Library",
     types: ["reference", "library", "component", "media", "icon", "animation", "typography"],
   },
+  { id: "my-designs", label: "My designs", types: ["my_design"] },
   { id: "knowledge", label: "Knowledge", types: ["prompt", "snippet", "rule", "checklist", "mcp"] },
   { id: "sources", label: "Sources", types: ["source"] },
   { id: "skills", label: "Skills", types: ["skill"] },
@@ -433,10 +449,11 @@ export function visibleTypes(showOther: boolean): ResourceType[] {
 }
 
 /**
- * Types PIVOT creates itself: a component is saved with its code by the agent (`save_component`), never added or
- * changed into by hand. They show and filter like the others, but aren't offered to add.
+ * Types PIVOT creates itself: a component (`save_component`) and one of the owner's designs (`save_my_design`) are
+ * saved with their code by the agent, never added or changed into by hand. They show and filter like the others, but
+ * aren't offered to add.
  */
-export const AGENT_TYPES = ["component"] as const satisfies readonly ResourceType[];
+export const AGENT_TYPES = ["component", "my_design"] as const satisfies readonly ResourceType[];
 
 export function isAgentType(type: ResourceType): boolean {
   return (AGENT_TYPES as readonly ResourceType[]).includes(type);
@@ -488,6 +505,12 @@ export type AssetRole =
    * as a page on PIVOT's own origin (its file is stored as text/plain).
    */
   | "component-preview"
+  /** One of a saved design's own files that isn't code (SVG, font, model, image); its path is in `meta.myDesign.assets`. */
+  | "design-asset"
+  /** A screenshot of a saved design as it looked when saved (`meta.viewport` on the link's asset: desktop or mobile). */
+  | "design-shot"
+  /** A short recording of a saved design that moves. */
+  | "design-video"
   | "attachment";
 /** `partial`: the first screen was saved but the full page wasn't. `cancelled`: stopped by the user. */
 export type CaptureStatus = "pending" | "done" | "partial" | "failed" | "cancelled";
@@ -1159,4 +1182,72 @@ export interface ComponentMeta {
     builtAt?: string;
     error?: string;
   };
+}
+
+// ---- My designs (added 2026-11-24, docs/my-designs-plan.md) -----------------------------------------------------
+
+export const MY_DESIGN_KINDS = [
+  "component",
+  "section",
+  "page",
+  "effect",
+  "animation",
+  "3d",
+  "logo",
+  "theme",
+  "email",
+] as const;
+export type MyDesignKind = (typeof MY_DESIGN_KINDS)[number];
+/** `component`: the design itself; `demo`: a page that shows it; `style`: CSS and tokens it needs; `support`: helpers. */
+export const MY_DESIGN_FILE_ROLES = ["component", "demo", "style", "support"] as const;
+export type MyDesignFileRole = (typeof MY_DESIGN_FILE_ROLES)[number];
+export const OWNERSHIPS = ["personal", "company"] as const;
+export type Ownership = (typeof OWNERSHIPS)[number];
+
+export interface MyDesignFile {
+  path: string;
+  role: MyDesignFileRole;
+  language: string;
+  code: string;
+}
+
+/** A non-code file of the design, stored in the blob store and written back to `path` on reuse. */
+export interface MyDesignAsset {
+  path: string;
+  assetId: string;
+  sha256: string;
+  size: number;
+}
+
+/** `meta.myDesign` of a `my_design` resource. Written only by PIVOT (`packages/core/src/my-designs.ts`). */
+export interface MyDesignMeta {
+  kind: MyDesignKind;
+  ownership: Ownership;
+  /** The company, for company work ("ODIN", "The Pulse"). */
+  organisation?: string;
+  files: MyDesignFile[];
+  /** Exact versions, read from the source project. */
+  dependencies: { name: string; version: string }[];
+  /** Steps to install or set it up, in order. */
+  install: string[];
+  /** Markdown: where it mounts, the context it needs (DOM, CSS, fonts), props, and what to adapt in another project. */
+  usage: string;
+  /** The CSS custom properties it relies on, with their values in the source project. */
+  tokens: { name: string; value: string }[];
+  source: {
+    project?: string;
+    /** The source project's folder on the machine it was saved from (text only: PIVOT never reads it). */
+    folder?: string;
+    /** The files' original paths, relative to the project. */
+    paths?: string[];
+    sessionIds?: string[];
+    mockupId?: string;
+  };
+  assets: MyDesignAsset[];
+  /** sha256 of all its code files (path order). */
+  codeSha256: string;
+  scan: ComponentScan;
+  savedAt: string;
+  /** When the code was last replaced. */
+  codeSavedAt: string;
 }

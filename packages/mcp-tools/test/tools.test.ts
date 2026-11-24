@@ -200,7 +200,7 @@ describe("PIVOT MCP tools", () => {
     const hidden = fakeSource({ counts, uiSettings: async () => ({ showOtherTypes: false }) });
     const r = await runTool(tool("list_facets"), hidden.source, {});
     const sections = (r.structuredContent!.sections as { id: string }[]).map((s) => s.id);
-    expect(sections).toEqual(["library", "sources"]);
+    expect(sections).toEqual(["library", "my-designs", "sources"]);
     expect(text(r)).not.toMatch(/Prompts|Skills/);
     for (const input of [{ section: "knowledge" }, { types: ["reference", "prompt"] }]) {
       const s = await runTool(tool("search_references"), hidden.source, input);
@@ -212,7 +212,7 @@ describe("PIVOT MCP tools", () => {
     for (const over of [{ counts, uiSettings: async () => ({ showOtherTypes: true }) }, { counts }]) {
       const shown = fakeSource(over);
       const all = await runTool(tool("list_facets"), shown.source, {});
-      expect((all.structuredContent!.sections as unknown[]).length).toBe(4);
+      expect((all.structuredContent!.sections as unknown[]).length).toBe(5);
       expect(text(all)).toContain("Prompts & Briefs 3");
       await runTool(tool("search_references"), shown.source, { section: "knowledge" });
       expect(shown.searches).toHaveLength(1);

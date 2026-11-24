@@ -6,6 +6,7 @@ import {
   Blocks,
   BookOpen,
   ChevronDown,
+  Gem,
   Globe,
   Layers,
   Lightbulb,
@@ -46,6 +47,7 @@ import { cn } from "@/lib/utils";
 
 export const SECTION_ICONS: Record<SectionId, LucideIcon> = {
   library: Layers,
+  "my-designs": Gem,
   knowledge: BookOpen,
   sources: Globe,
   skills: Sparkles,

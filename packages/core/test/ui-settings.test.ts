@@ -39,7 +39,7 @@ describe("other resource types (design focus)", () => {
   });
 
   it("hide from the sections and types unless shown", () => {
-    expect(visibleSections(false).map((s) => s.id)).toEqual(["library", "sources"]);
+    expect(visibleSections(false).map((s) => s.id)).toEqual(["library", "my-designs", "sources"]);
     expect(visibleSections(true).map((s) => s.id)).toEqual(SECTIONS.map((s) => s.id));
     expect(visibleTypes(false)).toEqual([
       "reference",
@@ -50,10 +50,13 @@ describe("other resource types (design focus)", () => {
       "animation",
       "typography",
       "source",
+      "my_design",
     ]);
-    // a component is a design type, but only the agent saves one (save_component): never offered to add by hand
-    expect(addableTypes(false)).toEqual(visibleTypes(false).filter((t) => t !== "component"));
+    // a component and a saved design are design types, but only the agent saves them (save_component,
+    // save_my_design): never offered to add by hand
+    expect(addableTypes(false)).toEqual(visibleTypes(false).filter((t) => t !== "component" && t !== "my_design"));
     expect(addableTypes(true)).not.toContain("component");
+    expect(addableTypes(true)).not.toContain("my_design");
     expect(visibleTypes(true)).toEqual([...RESOURCE_TYPES]);
   });
 

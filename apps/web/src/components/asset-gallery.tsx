@@ -53,6 +53,9 @@ const ROLE_LABEL: Record<AssetDTO["role"], string> = {
   "motion-strip": "Motion filmstrip",
   state: "State",
   "component-preview": "Component preview",
+  "design-asset": "Design file",
+  "design-shot": "Design screenshot",
+  "design-video": "Design recording",
   attachment: "File",
 };
 

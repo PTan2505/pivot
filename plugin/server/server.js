@@ -36657,7 +36657,8 @@ var RESOURCE_TYPES = [
   "rule",
   "checklist",
   "mcp",
-  "source"
+  "source",
+  "my_design"
 ];
 var TAG_KINDS = ["tag", "pageType", "domain", "visualStyle", "uiPattern", "technology"];
 var TAG_KIND_LABELS = {
@@ -36899,6 +36900,20 @@ var TYPE_DEFS = {
       { key: "whenToUse", label: "When to use", kind: "textarea", placeholder: "What do you come here for?" }
     ],
     exportDir: "sources"
+  },
+  my_design: {
+    type: "my_design",
+    label: "My design",
+    plural: "My designs",
+    blurb: "Designs you or Claude made, kept to rebuild exactly",
+    group: "visual",
+    icon: "gem",
+    visual: true,
+    url: "optional",
+    content: "code",
+    facets: ["pageType", "uiPattern", "visualStyle", "technology"],
+    fields: [],
+    exportDir: "my-designs"
   }
 };
 var SECTIONS = [
@@ -36907,6 +36922,7 @@ var SECTIONS = [
     label: "Library",
     types: ["reference", "library", "component", "media", "icon", "animation", "typography"]
   },
+  { id: "my-designs", label: "My designs", types: ["my_design"] },
   { id: "knowledge", label: "Knowledge", types: ["prompt", "snippet", "rule", "checklist", "mcp"] },
   { id: "sources", label: "Sources", types: ["source"] },
   { id: "skills", label: "Skills", types: ["skill"] }
@@ -36929,7 +36945,7 @@ function isOtherSection(id) {
 function visibleSections(showOther) {
   return showOther ? SECTIONS : SECTIONS.filter((s) => !isOtherSection(s.id));
 }
-var AGENT_TYPES = ["component"];
+var AGENT_TYPES = ["component", "my_design"];
 function isAgentType(type) {
   return AGENT_TYPES.includes(type);
 }
