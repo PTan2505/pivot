@@ -51,8 +51,7 @@ export const API_FEATURES = [
   /**
    * The owner's own designs, saved to be rebuilt exactly: `POST /api/my-designs` (save, or update with `id`; 409 on
    * different code without `replaceCode`), `GET /api/my-designs/lookup` (`?id=` or `?name=`),
-   * `POST /api/my-designs/[id]/assets` (a file, screenshot or video), and the agent search's `organisation` filter
-   * (`GET /api/resources?paged=1&organisation=`).
+   * and `POST /api/my-designs/[id]/assets` (a file, screenshot or video).
    */
   "my-designs",
 ] as const;

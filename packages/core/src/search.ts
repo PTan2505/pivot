@@ -60,17 +60,11 @@ function httpOnly(url: string | null) {
   }
 }
 
-/** A saved design's kind and owner for its search hit; its code never goes into a hit. */
+/** A saved design's kind for its search hit; its code never goes into a hit. */
 function myDesignHit(r: ResourceDTO): Pick<SearchHit, "myDesign"> {
   const d = r.type === "my_design" ? (r.meta?.myDesign as MyDesignMeta | undefined) : undefined;
   if (!d) return {};
-  return {
-    myDesign: {
-      kind: d.kind,
-      ownership: d.ownership,
-      ...(d.ownership === "company" && d.organisation ? { organisation: d.organisation } : {}),
-    },
-  };
+  return { myDesign: { kind: d.kind } };
 }
 
 export function toSearchHit(r: ResourceDTO): SearchHit {
@@ -118,7 +112,6 @@ export async function searchResources(req: SearchRequest): Promise<SearchPage> {
     tagIds,
     collectionId: req.collectionId,
     via: req.sourceId,
-    organisation: req.organisation?.trim() || undefined,
     // relevance is the list's own order with a query: its tiers come first, then recently edited
     sort: sort === "relevance" ? "updated" : sort,
   };

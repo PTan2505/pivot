@@ -665,8 +665,6 @@ export interface SearchRequest {
   collectionId?: string;
   /** Only resources saved from this source (a source resource id). */
   sourceId?: string;
-  /** Only the owner's designs marked as work of this organisation (any case). */
-  organisation?: string;
   /** `relevance` (the default with a query) ranks title, then tag, then description matches; otherwise recently edited. */
   sort?: SearchSort;
   /** 1–50, default 20. */
@@ -689,8 +687,8 @@ export interface SearchHit {
   /** Facets first, then plain tags; at most 8. */
   facets: { kind: TagKind; name: string }[];
   hasScreenshot: boolean;
-  /** One of the owner's designs: its kind, and whose work it is (never its code). */
-  myDesign?: { kind: MyDesignKind; ownership: Ownership; organisation?: string };
+  /** One of the owner's designs: its kind (never its code). */
+  myDesign?: { kind: MyDesignKind };
   createdAt: string;
   updatedAt: string;
 }
@@ -1208,8 +1206,6 @@ export type MyDesignKind = (typeof MY_DESIGN_KINDS)[number];
 /** `component`: the design itself; `demo`: a page that shows it; `style`: CSS and tokens it needs; `support`: helpers. */
 export const MY_DESIGN_FILE_ROLES = ["component", "demo", "style", "support"] as const;
 export type MyDesignFileRole = (typeof MY_DESIGN_FILE_ROLES)[number];
-export const OWNERSHIPS = ["personal", "company"] as const;
-export type Ownership = (typeof OWNERSHIPS)[number];
 
 export interface MyDesignFile {
   path: string;
@@ -1229,9 +1225,6 @@ export interface MyDesignAsset {
 /** `meta.myDesign` of a `my_design` resource. Written only by PIVOT (`packages/core/src/my-designs.ts`). */
 export interface MyDesignMeta {
   kind: MyDesignKind;
-  ownership: Ownership;
-  /** The company, for company work ("ODIN", "The Pulse"). */
-  organisation?: string;
   files: MyDesignFile[];
   /** Exact versions, read from the source project. */
   dependencies: { name: string; version: string }[];

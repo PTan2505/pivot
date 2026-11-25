@@ -5,7 +5,7 @@
 // Code tabs and Install in the main column, then Usage; the design's facts at the top of the side panel. The code is
 // read-only: PIVOT keeps it as saved, and reuse goes through get_my_design or Download zip.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Eye, FileCode, Hammer, Image as ImageIcon, Loader2, Play, User, XCircle } from "lucide-react";
+import { Eye, FileCode, Hammer, Image as ImageIcon, Loader2, Play, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useId, useRef, useState } from "react";
@@ -43,24 +43,6 @@ export const KIND_LABEL: Record<MyDesignKind, string> = {
   email: "Email",
 };
 
-/** Personal or company work, as a chip: icon and words. Company work names its organisation. */
-export function OwnerChip({ d, className }: { d: MyDesignMeta; className?: string }) {
-  const company = d.ownership === "company";
-  const Icon = company ? Building2 : User;
-  return (
-    <span className={cn(CHIP, className)}>
-      <Icon className="size-3.5 text-ink-secondary" aria-hidden />
-      {company ? (
-        <>
-          <span className="font-normal text-ink-secondary">Company</span> {d.organisation ?? "unnamed"}
-        </>
-      ) : (
-        "Personal"
-      )}
-    </span>
-  );
-}
-
 const ROLE_ORDER = { component: 0, demo: 1, style: 2, support: 3 } as const;
 const ROLE_LABEL = { component: "Component", demo: "Demo", style: "Style", support: "Support" } as const;
 const orderedFiles = (files: MyDesignMeta["files"]) =>
@@ -88,14 +70,13 @@ function useDesignView(d: MyDesignMeta) {
   return { tab, file, line, files, go };
 }
 
-/** Under the title: its kind, whose work it is, and the project it came from. */
+/** Under the title: its kind and the project it came from. */
 export function MyDesignIdentity({ d }: { d: MyDesignMeta }) {
   return (
     <div className="-mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-muted">
       <span className={CHIP}>
         <span className="font-normal text-ink-secondary">Kind</span> {KIND_LABEL[d.kind]}
       </span>
-      <OwnerChip d={d} />
       {d.source.project && (
         <span>
           From <span className="text-ink-secondary">{d.source.project}</span>
@@ -521,10 +502,6 @@ export function MyDesignFacts({ d }: { d: MyDesignMeta }) {
   return (
     <div className="space-y-3">
       <dl className="grid grid-cols-[84px_1fr] gap-x-3 gap-y-2 text-sm">
-        <dt className="text-ink-subtle">Owner</dt>
-        <dd className="min-w-0 text-ink-secondary">
-          {d.ownership === "company" ? `Company work (${d.organisation ?? "unnamed"})` : "Personal work"}
-        </dd>
         {d.source.project && (
           <>
             <dt className="text-ink-subtle">Project</dt>

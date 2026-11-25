@@ -1,6 +1,6 @@
 // The owner's own designs, saved to be rebuilt exactly (docs/my-designs-plan.md, Phase 1): saved with their exact code,
 // usage, tokens and files when the owner asks; files that can hold secrets refused; found again by id or name; never
-// made or changed by hand; company work leaving PIVOT as its name only. The code here is written for these tests.
+// made or changed by hand; never their code leaving PIVOT. The code here is written for these tests.
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -55,7 +55,6 @@ const meta = (r: ResourceDetailDTO) => r.meta.myDesign as MyDesignMeta;
 const input = (over: Record<string, unknown> = {}) => ({
   name: "Halo hero",
   kind: "3d",
-  ownership: "personal",
   files: [
     { path: "src/halo.ts", role: "component", code: SCENE },
     { path: "src/halo.css", role: "style", code: STYLE },
@@ -90,19 +89,18 @@ describe("saving a design", () => {
     expect(m.files[0].code).toBe(SCENE);
     expect(m).toMatchObject({
       kind: "3d",
-      ownership: "personal",
       dependencies: [{ name: "three", version: "0.170.0" }],
       tokens: [{ name: "--halo-glow", value: "#3d75d8" }],
       source: { project: "halo-site", sessionIds: ["11111111-1111-4111-8111-111111111111"] },
       assets: [],
     });
-    expect(m.organisation).toBeUndefined();
+    expect(m).not.toHaveProperty("ownership");
     expect(m.codeSha256).toMatch(/^[0-9a-f]{64}$/);
     expect(m.scan.flags).toEqual([]);
     expect(resource.tags.map((t) => t.name)).toContain("Three.js");
   });
 
-  it("refuses files that can hold secrets, paths out of the folder, code holding a key, and company work with no organisation", async () => {
+  it("refuses files that can hold secrets, paths out of the folder, and code holding a key", async () => {
     const withFile = (p: string, code = "x") => input({ files: [{ path: p, role: "component", code }] });
     for (const p of [
       ".env",
@@ -120,7 +118,12 @@ describe("saving a design", () => {
     const leaky = withFile("src/pay.ts", `const key = "sk_live_${"a".repeat(24)}";\n`);
     await expect(designs.saveMyDesign(leaky)).rejects.toThrow(/src\/pay.ts line 1 seems to hold a credential/);
     await expect(designs.saveMyDesign(leaky)).rejects.not.toThrow(/sk_live/);
-    await expect(designs.saveMyDesign(input({ ownership: "company" }))).rejects.toBeInstanceOf(ZodError);
+    // an older client still sends whose work it is: accepted, and not stored
+    const legacy = await designs.saveMyDesign(
+      input({ name: "Halo legacy", ownership: "company", organisation: "Acme" }),
+    );
+    expect(meta(legacy.resource)).not.toHaveProperty("ownership");
+    expect(meta(legacy.resource)).not.toHaveProperty("organisation");
     await expect(
       designs.saveMyDesign(input({ files: [{ path: "a.css", role: "style", code: STYLE }] })),
     ).rejects.toThrow(/role "component" or "demo"/);
@@ -258,26 +261,15 @@ describe("finding a saved design", () => {
 });
 
 describe("searching saved designs (Phase 2)", () => {
-  it("the agent search finds them, says whose work each is (never its code), and filters by organisation", async () => {
+  it("the agent search finds them and says their kind, never their code", async () => {
     const search = await import("../src/search");
-    const odin = await designs.saveMyDesign(
-      input({ name: "Orbit mark ODIN", ownership: "company", organisation: "ODIN" }),
-    );
-    const pulse = await designs.saveMyDesign(
-      input({ name: "Orbit mark Pulse", ownership: "company", organisation: "The Pulse" }),
-    );
-    const mine = await designs.saveMyDesign(input({ name: "Orbit mark mine" }));
+    const odin = await designs.saveMyDesign(input({ name: "Orbit mark ODIN" }));
+    const pulse = await designs.saveMyDesign(input({ name: "Orbit mark Pulse", kind: "logo" }));
     const all = await search.searchResources({ query: "orbit mark", types: ["my_design"] });
-    expect(all.results.map((h) => h.id).sort()).toEqual([odin.resource.id, pulse.resource.id, mine.resource.id].sort());
-    const hit = all.results.find((h) => h.id === odin.resource.id)!;
-    expect(hit.myDesign).toEqual({ kind: "3d", ownership: "company", organisation: "ODIN" });
-    expect(all.results.find((h) => h.id === mine.resource.id)!.myDesign).toEqual({ kind: "3d", ownership: "personal" });
+    expect(all.results.map((h) => h.id).sort()).toEqual([odin.resource.id, pulse.resource.id].sort());
+    expect(all.results.find((h) => h.id === odin.resource.id)!.myDesign).toEqual({ kind: "3d" });
+    expect(all.results.find((h) => h.id === pulse.resource.id)!.myDesign).toEqual({ kind: "logo" });
     expect(JSON.stringify(all)).not.toContain("WebGLRenderer");
-    const byOrg = await search.searchResources({ query: "orbit", types: ["my_design"], organisation: "odin" });
-    expect(byOrg.results.map((h) => h.id)).toEqual([odin.resource.id]);
-    expect(byOrg.total).toBe(1);
-    const none = await search.searchResources({ types: ["my_design"], organisation: "Nobody" });
-    expect(none.total).toBe(0);
     // the My designs section searches them too
     const section = await search.searchResources({ query: "orbit mark pulse", section: "my-designs" });
     expect(section.results.map((h) => h.id)).toEqual([pulse.resource.id]);
@@ -297,11 +289,11 @@ describe("only PIVOT makes and changes saved designs", () => {
     const patch = skills.withoutServerOwnedMeta({
       title: "Renamed",
       content: resource.content,
-      meta: { myDesign: { ownership: "company" }, other: 1 },
+      meta: { myDesign: { kind: "logo" }, other: 1 },
     });
     expect(patch.meta).toEqual({ other: 1 });
     const after = (await resources.updateResource(resource.id, patch))!;
-    expect(meta(after).ownership).toBe("personal");
+    expect(meta(after).kind).toBe("3d");
   });
 });
 
@@ -315,49 +307,8 @@ describe("what leaves PIVOT", () => {
     return out;
   };
 
-  it("company work: its name, kind and organisation only, in Export, copied context and Share", async () => {
-    const { resource } = await designs.saveMyDesign(
-      input({ name: "Company Halo", ownership: "company", organisation: "Acme", notes: "secret plans" }),
-    );
-    await designs.addMyDesignAsset(resource.id, {
-      data: await png(),
-      fileName: "shot.png",
-      role: "design-shot",
-    });
-    const out = await context.exportBundle({
-      targetDir: path.join(tmp, "exports"),
-      bundleName: "company",
-      resourceIds: [resource.id],
-    });
-    const files = await walk(out.path);
-    expect(files.map((f) => path.basename(f))).toEqual(["context.md"]);
-    const md = await fs.readFile(files[0], "utf8");
-    expect(md).toContain("Company Halo");
-    expect(md).toContain("Company work (Acme)");
-    for (const leak of ["WebGLRenderer", "secret plans", "Mount on a full-width", "halo-site"]) {
-      expect(md).not.toContain(leak);
-    }
-    const clip = await context.buildClipboardContext([resource.id]);
-    expect(clip.markdown).not.toContain("WebGLRenderer");
-    expect(clip.markdown).not.toContain("Mount on a full-width");
-
-    const pack = await share.createSharePackage([resource.id], {
-      targetDir: path.join(tmp, "shares"),
-      includeNotes: true,
-    });
-    const shared = await walk(pack.path);
-    expect(shared.some((f) => f.includes(`${path.sep}images${path.sep}`))).toBe(false);
-    const json = await fs.readFile(path.join(pack.path, "share.json"), "utf8");
-    expect(JSON.parse(json).items[0]).toMatchObject({
-      title: "Company Halo",
-      owner: "Company work (Acme)",
-      images: [],
-    });
-    expect(json).not.toContain("secret plans");
-  });
-
-  it("personal work: its usage and screenshots, never the code", async () => {
-    const { resource } = await designs.saveMyDesign(input({ name: "Personal Halo" }));
+  it("its usage and screenshots, never the code, in Export, copied context and Share", async () => {
+    const { resource } = await designs.saveMyDesign(input({ name: "Shared Halo", notes: "my notes" }));
     await designs.addMyDesignAsset(resource.id, {
       data: await png(10, 7),
       fileName: "shot.png",
@@ -365,7 +316,7 @@ describe("what leaves PIVOT", () => {
     });
     const out = await context.exportBundle({
       targetDir: path.join(tmp, "exports"),
-      bundleName: "personal",
+      bundleName: "design",
       resourceIds: [resource.id],
     });
     const files = await walk(out.path);
@@ -375,12 +326,23 @@ describe("what leaves PIVOT", () => {
     expect(md).toContain("get_my_design");
     expect(md).not.toContain("WebGLRenderer");
     for (const f of files) expect(await fs.readFile(f, "latin1")).not.toContain("WebGLRenderer");
+    const clip = await context.buildClipboardContext([resource.id]);
+    expect(clip.markdown).toContain("Mount on a full-width");
+    expect(clip.markdown).not.toContain("WebGLRenderer");
+
+    const pack = await share.createSharePackage([resource.id], {
+      targetDir: path.join(tmp, "shares"),
+      includeNotes: true,
+    });
+    const item = JSON.parse(await fs.readFile(path.join(pack.path, "share.json"), "utf8")).items[0];
+    expect(item).toMatchObject({ title: "Shared Halo", notes: "my notes" });
+    expect(item).not.toHaveProperty("owner");
+    expect(item.images).toHaveLength(1);
+    for (const f of await walk(pack.path)) expect(await fs.readFile(f, "latin1")).not.toContain("WebGLRenderer");
   });
 
-  it("a backup keeps everything, company work included", async () => {
-    const { resource } = await designs.saveMyDesign(
-      input({ name: "Backed-up Halo", ownership: "company", organisation: "Acme" }),
-    );
+  it("a backup keeps everything", async () => {
+    const { resource } = await designs.saveMyDesign(input({ name: "Backed-up Halo" }));
     await designs.addMyDesignAsset(resource.id, {
       data: Buffer.from("font-bytes"),
       fileName: "brand.woff2",
@@ -393,7 +355,7 @@ describe("what leaves PIVOT", () => {
     await backup.restoreBackup(made.path);
     const back = (await designs.findMyDesign({ name: "Backed-up Halo" }))!;
     expect(back.content).toBe(SCENE);
-    expect(meta(back).organisation).toBe("Acme");
+    expect(meta(back).kind).toBe("3d");
     expect(meta(back).assets.map((a) => a.path)).toEqual(["public/fonts/brand.woff2"]);
     const row = await assets.getAsset(meta(back).assets[0].assetId);
     expect((await assets.readAssetBytes(row!))?.toString()).toBe("font-bytes");

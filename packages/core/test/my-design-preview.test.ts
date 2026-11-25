@@ -88,7 +88,6 @@ const SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle
 const htmlDesign = (over: Record<string, unknown> = {}) => ({
   name: "Greeting page",
   kind: "page",
-  ownership: "personal",
   files: [
     { path: "index.html", role: "demo", code: HTML },
     { path: "src/main.js", role: "component", code: MAIN },
@@ -145,7 +144,6 @@ describe("a saved design's live preview", () => {
     const { resource } = await designs.saveMyDesign({
       name: "Plain page",
       kind: "page",
-      ownership: "personal",
       files: [{ path: "demo/index.html", role: "demo", code: "<!doctype html><p>Plain</p>" }],
       usage: "Open it.",
     });
@@ -161,8 +159,6 @@ describe("a saved design's live preview", () => {
     const { resource } = await designs.saveMyDesign({
       name: "Greeting card",
       kind: "component",
-      ownership: "company",
-      organisation: "ODIN",
       files: [
         {
           path: "Greeting.tsx",
@@ -216,7 +212,6 @@ describe("a saved design's live preview", () => {
     const vue = await designs.saveMyDesign({
       name: "Vue card",
       kind: "component",
-      ownership: "personal",
       files: [{ path: "Card.vue", role: "component", code: "<template><p>Card</p></template>\n" }],
       usage: "Use <Card />.",
     });
@@ -229,7 +224,6 @@ describe("a saved design's live preview", () => {
     const { resource } = await designs.saveMyDesign({
       name: "Kept page",
       kind: "page",
-      ownership: "personal",
       files: [{ path: "index.html", role: "demo", code: "<!doctype html><p>Kept</p>" }],
       usage: "Open it.",
     });
@@ -241,7 +235,6 @@ describe("a saved design's live preview", () => {
       id: resource.id,
       name: "Kept page",
       kind: "page",
-      ownership: "personal",
       files: [{ path: "index.html", role: "demo", code: "<!doctype html><p>Kept</p>" }],
       usage: "Open it, then scroll.",
     });

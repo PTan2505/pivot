@@ -59,11 +59,8 @@ const clip = (s: string, max: number) =>
 const text = (t: string) => ({ type: "text" as const, text: t });
 const image = (p: ImagePart) => ({ type: "image" as const, data: p.data.toString("base64"), mimeType: p.mimeType });
 
-/** "Yours" marks the owner's own designs; company work names its organisation. */
-const mineText = (h: SearchHit) =>
-  h.myDesign
-    ? ` — Yours (${h.myDesign.kind}, ${h.myDesign.ownership === "company" ? `company: ${h.myDesign.organisation ?? "unnamed"}` : "personal"})`
-    : "";
+/** "Yours" marks the owner's own designs. */
+const mineText = (h: SearchHit) => (h.myDesign ? ` — Yours (${h.myDesign.kind})` : "");
 
 const hitLine = (h: SearchHit, i: number) =>
   `${i + 1}. ${h.title} — ${h.host ?? TYPE_DEFS[h.type].label}${mineText(h)}${
@@ -105,14 +102,6 @@ const searchInput = {
     .max(200)
     .optional()
     .describe("Only things saved from this source, by its id or host (dribbble.com)."),
-  organisation: z
-    .string()
-    .min(1)
-    .max(120)
-    .optional()
-    .describe(
-      'Only the owner\'s designs marked as work of this organisation ("ODIN"), any case. Searches My designs unless types says otherwise.',
-    ),
   sort: z
     .enum(SEARCH_SORTS)
     .optional()
@@ -124,7 +113,7 @@ const searchInput = {
 const searchReferences: PivotTool<typeof searchInput> = {
   name: "search_references",
   title: "Search the PIVOT library",
-  description: `Search the user's PIVOT library of saved UI references (screenshots of real websites with page type, domain, style and pattern facets), design sources and the owner's own saved designs (types ["my_design"], marked "Yours", with organisation for company work). Start here to find references for a screen you are designing: query by what the page is ("pricing", "sign in", "docs sidebar") and narrow with facets. Returns compact results with ids; use get_reference for details and get_reference_images to look at them. ${UNTRUSTED}`,
+  description: `Search the user's PIVOT library of saved UI references (screenshots of real websites with page type, domain, style and pattern facets), design sources and the owner's own saved designs (types ["my_design"], marked "Yours"). Start here to find references for a screen you are designing: query by what the page is ("pricing", "sign in", "docs sidebar") and narrow with facets. Returns compact results with ids; use get_reference for details and get_reference_images to look at them. ${UNTRUSTED}`,
   inputSchema: searchInput,
   async run(source, input) {
     // the types outside design stay hidden from agents while the user hides them in PIVOT
@@ -175,8 +164,7 @@ const searchReferences: PivotTool<typeof searchInput> = {
     }
     const page = await source.search({
       query: input.query,
-      types: input.types ?? (input.organisation && !input.section ? ["my_design"] : undefined),
-      ...(input.organisation ? { organisation: input.organisation } : {}),
+      types: input.types,
       section: input.section as (typeof SECTIONS)[number]["id"] | undefined,
       facets: input.facets,
       collectionId,
@@ -514,11 +502,7 @@ const getReference: PivotTool<typeof idInput> = {
       r.type === "component" &&
         "A component saved with its code: get_saved_component (resourceId) gives all its files, dependencies, PIVOT's scan and the review, and spends no 21st retrieval.",
       r.type === "my_design" &&
-        `One of the owner's own designs, saved to be rebuilt exactly: get_my_design (id ${r.id}) gives its files, usage, tokens, dependencies and install steps, and writes them into a project with writeTo; get_reference_images with which "shots" shows how the original looks.${
-          (r.meta.myDesign as { ownership?: string; organisation?: string } | undefined)?.ownership === "company"
-            ? ` Company work (${(r.meta.myDesign as { organisation?: string }).organisation ?? "unnamed"}): its code goes only into projects of the same organisation; elsewhere it is a visual reference.`
-            : ""
-        }`,
+        `One of the owner's own designs, saved to be rebuilt exactly: get_my_design (id ${r.id}) gives its files, usage, tokens, dependencies and install steps, and writes them into a project with writeTo; get_reference_images with which "shots" shows how the original looks.`,
       r.content && `Content:\n${content.text}`,
     ].filter(Boolean);
     return { content: [text(lines.join("\n"))], structuredContent: detail };

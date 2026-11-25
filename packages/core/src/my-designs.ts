@@ -29,7 +29,6 @@ import { getResource, setResourceFields, setResourceTags } from "./resources";
 import {
   MY_DESIGN_FILE_ROLES,
   MY_DESIGN_KINDS,
-  OWNERSHIPS,
   TAG_KINDS,
   type AssetRole,
   type MyDesignAsset,
@@ -98,65 +97,58 @@ const storedPath = relativePath.refine((p) => !refusedFileReason(p), {
   message: "is a file PIVOT never stores (environment files, keys, node_modules, .git)",
 });
 
-export const myDesignInput = z
-  .object({
-    /** Update this saved design instead of creating one. */
-    id: z.string().regex(UUID).optional(),
-    name: z.string().trim().min(1).max(200),
-    kind: z.enum(MY_DESIGN_KINDS),
-    ownership: z.enum(OWNERSHIPS),
-    organisation: z.string().trim().min(1).max(120).optional(),
-    files: z
-      .array(
-        z.object({
-          path: storedPath,
-          role: z.enum(MY_DESIGN_FILE_ROLES),
-          language: z.string().trim().min(1).max(20).optional(),
-          code: z.string().max(MY_DESIGN_LIMITS.fileBytes),
-        }),
-      )
-      .min(1)
-      .max(MY_DESIGN_LIMITS.files),
-    dependencies: z
-      .array(
-        z.object({
-          name: z.string().regex(NPM_NAME, "isn't an npm package name"),
-          version: z.string().regex(NPM_VERSION, "must be a registry version or range"),
-        }),
-      )
-      .max(MY_DESIGN_LIMITS.deps)
-      .optional(),
-    install: z.array(z.string().trim().min(1).max(500)).max(20).optional(),
-    usage: z.string().trim().min(1).max(20_000),
-    tokens: z
-      .array(
-        z.object({
-          name: z.string().regex(/^--[A-Za-z0-9_-]{1,100}$/, "must be a CSS custom property like --color-ink"),
-          value: z.string().trim().max(500),
-        }),
-      )
-      .max(400)
-      .optional(),
-    source: z
-      .object({
-        project: z.string().trim().max(200).optional(),
-        folder: z.string().trim().max(500).optional(),
-        paths: z.array(z.string().trim().min(1).max(300)).max(MY_DESIGN_LIMITS.files).optional(),
-        sessionId: z.string().regex(UUID).optional(),
-        mockupId: z.string().regex(UUID).optional(),
-      })
-      .optional(),
-    facets: z
-      .array(z.object({ kind: z.enum(TAG_KINDS), name: z.string().trim().min(1).max(80) }))
-      .max(20)
-      .optional(),
-    notes: z.string().max(5000).optional(),
-    replaceCode: z.boolean().optional(),
-  })
-  .refine((v) => v.ownership !== "company" || !!v.organisation, {
-    message: "company work needs its organisation (e.g. ODIN, The Pulse)",
-    path: ["organisation"],
-  });
+export const myDesignInput = z.object({
+  /** Update this saved design instead of creating one. */
+  id: z.string().regex(UUID).optional(),
+  name: z.string().trim().min(1).max(200),
+  kind: z.enum(MY_DESIGN_KINDS),
+  files: z
+    .array(
+      z.object({
+        path: storedPath,
+        role: z.enum(MY_DESIGN_FILE_ROLES),
+        language: z.string().trim().min(1).max(20).optional(),
+        code: z.string().max(MY_DESIGN_LIMITS.fileBytes),
+      }),
+    )
+    .min(1)
+    .max(MY_DESIGN_LIMITS.files),
+  dependencies: z
+    .array(
+      z.object({
+        name: z.string().regex(NPM_NAME, "isn't an npm package name"),
+        version: z.string().regex(NPM_VERSION, "must be a registry version or range"),
+      }),
+    )
+    .max(MY_DESIGN_LIMITS.deps)
+    .optional(),
+  install: z.array(z.string().trim().min(1).max(500)).max(20).optional(),
+  usage: z.string().trim().min(1).max(20_000),
+  tokens: z
+    .array(
+      z.object({
+        name: z.string().regex(/^--[A-Za-z0-9_-]{1,100}$/, "must be a CSS custom property like --color-ink"),
+        value: z.string().trim().max(500),
+      }),
+    )
+    .max(400)
+    .optional(),
+  source: z
+    .object({
+      project: z.string().trim().max(200).optional(),
+      folder: z.string().trim().max(500).optional(),
+      paths: z.array(z.string().trim().min(1).max(300)).max(MY_DESIGN_LIMITS.files).optional(),
+      sessionId: z.string().regex(UUID).optional(),
+      mockupId: z.string().regex(UUID).optional(),
+    })
+    .optional(),
+  facets: z
+    .array(z.object({ kind: z.enum(TAG_KINDS), name: z.string().trim().min(1).max(80) }))
+    .max(20)
+    .optional(),
+  notes: z.string().max(5000).optional(),
+  replaceCode: z.boolean().optional(),
+});
 export type MyDesignInput = z.infer<typeof myDesignInput>;
 
 export const myDesignOf = (r: { meta: Record<string, unknown> | null }) =>
@@ -230,8 +222,6 @@ export async function saveMyDesign(raw: unknown): Promise<{ outcome: MyDesignOut
   if (!input.id) {
     const meta: MyDesignMeta = {
       kind: input.kind,
-      ownership: input.ownership,
-      ...(input.ownership === "company" && input.organisation ? { organisation: input.organisation } : {}),
       files,
       dependencies: input.dependencies ?? [],
       install: input.install ?? [],
@@ -280,8 +270,6 @@ export async function saveMyDesign(raw: unknown): Promise<{ outcome: MyDesignOut
   const next: MyDesignMeta = {
     ...current,
     kind: input.kind,
-    ownership: input.ownership,
-    organisation: input.ownership === "company" ? input.organisation : undefined,
     files: codeChanged ? files : current.files,
     dependencies: input.dependencies ?? current.dependencies,
     install: input.install ?? current.install,
@@ -299,7 +287,6 @@ export async function saveMyDesign(raw: unknown): Promise<{ outcome: MyDesignOut
     scan: codeChanged ? scanOf(files) : current.scan,
     codeSavedAt: codeChanged ? now : current.codeSavedAt,
   };
-  if (next.organisation === undefined) delete next.organisation;
   const unchanged = JSON.stringify(current) === JSON.stringify(next);
   await db
     .update(resources)
@@ -434,17 +421,12 @@ export async function findMyDesign(raw: unknown): Promise<ResourceDetailDTO | nu
 }
 
 /**
- * What may leave PIVOT about a saved design (Share package, Export, copied context). Company work: only that it exists,
- * its kind and organisation. Personal work: also its usage notes. Never the code: reuse goes through `get_my_design`.
+ * What may leave PIVOT about a saved design besides its title, notes and usage notes (Share package, Export, copied
+ * context). Never the code: reuse goes through `get_my_design`.
  */
 export function myDesignCredit(d: MyDesignMeta): string[] {
-  const owner = d.ownership === "company" ? `Company work (${d.organisation ?? "unnamed"})` : "Personal work";
-  return [`**Kind:** ${d.kind}`, `**Owner:** ${owner}`];
+  return [`**Kind:** ${d.kind}`];
 }
-
-/** Company work carries its name only outside PIVOT (Share package, Export, copied context). */
-export const isCompanyDesign = (r: { type: string; meta: Record<string, unknown> | null }) =>
-  r.type === "my_design" && myDesignOf(r)?.ownership === "company";
 
 // ---- download as zip ---------------------------------------------------------------------------------------------
 
