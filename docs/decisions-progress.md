@@ -2,6 +2,17 @@
 
 Tracks [decisions-plan.md](decisions-plan.md). Newest first.
 
+## My designs (2026-11-24)
+
+Tracks [my-designs-plan.md](my-designs-plan.md), approved by the owner on 2026-11-24 (a new My designs section, saved only when the owner asks, company work leaving PIVOT as its name only). Details per phase are in that file's Progress.
+
+| Phase | Name                     | Status                                        |
+| ----- | ------------------------ | --------------------------------------------- |
+| 1     | Core and API             | Done (PR #166)                                |
+| 2     | MCP tools and the skill  | Done (PR #167)                                |
+| 3     | The page and its preview | Done on `feat/my-designs-page`, not committed |
+| 4     | Release and first saves  | To do                                         |
+
 ## Component store (2026-11-23)
 
 Tracks [component-store-plan.md](component-store-plan.md), approved by the owner on 2026-11-23 (preview built locally, option A). Details per phase are in that file's Progress.

@@ -3,18 +3,30 @@
 // `component-preview` and served only by the preview origin (preview-server.ts). It runs only when the owner asks
 // (Build preview), never on save, because it downloads the component's npm packages: from registry.npmjs.org only,
 // with install scripts off, into <data folder>/component-builds/<hash>/, removed afterwards.
+//
+// A saved design (docs/my-designs-plan.md, Phase 3) builds the same way: a React design like a component (with its
+// exact dependency versions), and a design with an HTML demo (three.js, GSAP, plain HTML) by bundling that page's
+// scripts and styles and inlining them, its files as data URLs.
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
+import * as cheerio from "cheerio";
 import { eq } from "drizzle-orm";
-import { MAX_PREVIEW_BYTES, PreviewError, setComponentPreview } from "./component-preview";
+import { getAsset, readAssetBytes, resolveMime } from "./assets";
+import { MAX_PREVIEW_BYTES, PreviewError, previewHolder, setComponentPreview } from "./component-preview";
 import { componentOf } from "./components";
 import { dataDir } from "./config";
 import { getDb } from "./db/client";
 import { resources } from "./db/schema";
-import type { ComponentFile, ComponentMeta } from "./types";
+import { myDesignPreviewPlan } from "./preview-plan";
+import type { ComponentMeta, MyDesignMeta, PreviewState } from "./types";
+
+export { myDesignPreviewPlan };
+
+/** A code file to build from: a component's or a saved design's. */
+type BuildFile = { path: string; role: string; code: string };
 
 const REGISTRY = "https://registry.npmjs.org/";
 const NPM_TIMEOUT_MS = 180_000;
@@ -128,7 +140,7 @@ export async function tailwindCss(candidates: string[]) {
 const ENTRY = "__pivot_entry.js";
 
 /** What renders: the demo's default export (else its first exported function), else the component's. */
-function entrySource(file: ComponentFile) {
+function entrySource(file: { path: string }) {
   const spec = `./${file.path.replace(/\.(tsx|ts|jsx|js)$/, "")}`;
   return `import * as M from ${JSON.stringify(spec)};
 import { createElement } from "react";
@@ -145,9 +157,11 @@ requestAnimationFrame(() => requestAnimationFrame(() => parent.postMessage({ typ
 const inlineSafe = (s: string, tag: "script" | "style") => s.replace(new RegExp(`</${tag}`, "gi"), `<\\/${tag}`);
 
 /** Bundles the files in `dir` (already installed) into one HTML page. */
-export async function bundlePage(dir: string, c: Pick<ComponentMeta, "files">) {
+export async function bundlePage(dir: string, c: { files: BuildFile[] }) {
   const files = c.files;
-  const target = files.find((f) => f.role === "demo") ?? files.find((f) => f.role === "component");
+  const script = (f: BuildFile) => /\.(tsx|ts|jsx|js|mjs)$/.test(f.path);
+  const target =
+    files.find((f) => f.role === "demo" && script(f)) ?? files.find((f) => f.role === "component" && script(f));
   if (!target) throw new PreviewError("There is no demo or component file to render.");
   await fs.writeFile(path.join(dir, ENTRY), entrySource(target));
   const esbuild = await import("esbuild");
@@ -205,26 +219,40 @@ export async function bundlePage(dir: string, c: Pick<ComponentMeta, "files">) {
 }
 
 /** The build folder's name: a hash of everything that goes into it. */
-function buildKey(c: ComponentMeta) {
-  return createHash("sha256")
-    .update(JSON.stringify({ files: c.files, deps: c.npmDependencies }))
-    .digest("hex")
-    .slice(0, 24);
+function buildKey(files: BuildFile[], deps: { name: string; version?: string }[]) {
+  return createHash("sha256").update(JSON.stringify({ files, deps })).digest("hex").slice(0, 24);
+}
+
+/** `rel` inside `dir`, or a PreviewError naming it. */
+function inside(dir: string, rel: string) {
+  const file = path.resolve(dir, rel);
+  const r = path.relative(dir, file);
+  if (r.startsWith("..") || path.isAbsolute(r))
+    throw new PreviewError(`The file ${rel} would land outside the build folder.`);
+  return file;
 }
 
 /** Writes the files, the package.json, .npmrc and tsconfig into a fresh folder. */
-async function prepare(dir: string, c: ComponentMeta) {
+async function prepare(
+  dir: string,
+  files: BuildFile[],
+  deps: { name: string; version?: string }[],
+  opts: { react?: boolean; binary?: { path: string; data: Buffer }[] } = {},
+) {
   await fs.rm(dir, { recursive: true, force: true });
   await fs.mkdir(dir, { recursive: true });
-  for (const f of c.files) {
-    const file = path.resolve(dir, f.path);
-    if (path.relative(dir, file).startsWith("..") || path.isAbsolute(path.relative(dir, file)))
-      throw new PreviewError(`The file ${f.path} would land outside the build folder.`);
+  for (const f of opts.binary ?? []) {
+    const file = inside(dir, f.path);
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, f.data);
+  }
+  for (const f of files) {
+    const file = inside(dir, f.path);
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, f.code);
   }
-  const dependencies: Record<string, string> = { react: "^19", "react-dom": "^19" };
-  for (const d of c.npmDependencies) dependencies[d.name] = d.version || "latest";
+  const dependencies: Record<string, string> = opts.react === false ? {} : { react: "^19", "react-dom": "^19" };
+  for (const d of deps) dependencies[d.name] = d.version || "latest";
   await fs.writeFile(
     path.join(dir, "package.json"),
     JSON.stringify({ name: "pivot-component-preview", private: true, dependencies }, null, 2),
@@ -239,17 +267,18 @@ async function prepare(dir: string, c: ComponentMeta) {
   );
 }
 
-async function setPreviewState(resourceId: string, preview: NonNullable<ComponentMeta["preview"]>) {
+async function setPreviewState(resourceId: string, preview: PreviewState) {
   const db = await getDb();
   const [row] = await db.select().from(resources).where(eq(resources.id, resourceId)).limit(1);
-  const c = row && componentOf(row as { meta: Record<string, unknown> });
-  if (!row || !c) return;
+  const holder = row && previewHolder(row);
+  if (!row || !holder) return;
+  const c = holder.value;
   // keep the last good preview showing while a new one builds or fails
   const keep =
     c.preview?.status === "ready" || c.preview?.sha256 ? { assetId: c.preview.assetId, sha256: c.preview.sha256 } : {};
   await db
     .update(resources)
-    .set({ meta: { ...(row.meta ?? {}), component: { ...c, preview: { ...keep, ...preview } } } })
+    .set({ meta: { ...(row.meta ?? {}), [holder.key]: { ...c, preview: { ...keep, ...preview } } } })
     .where(eq(resources.id, resourceId));
 }
 
@@ -271,23 +300,33 @@ export async function startComponentPreviewBuild(resourceId: string) {
   if (!row || row.type !== "component" || !c) throw new PreviewError("No such component.");
   if (c.review?.verdict === "rejected" && c.review.codeSha256 === c.codeSha256)
     throw new PreviewError("This component was rejected in its review; PIVOT doesn't build it.");
+  return runBuild(resourceId, c.codeSha256, buildKey(c.files, c.npmDependencies), async (dir) => {
+    await prepare(dir, c.files, c.npmDependencies);
+    await buildDeps.npmInstall(dir);
+    return bundlePage(dir, c);
+  });
+}
+
+/**
+ * Runs one build: marks it building, runs `work` in a fresh build folder, stores the page it returns (at most 5 MB)
+ * or the error, and removes the folder. One build at a time in this process.
+ */
+async function runBuild(resourceId: string, codeSha256: string, key: string, work: (dir: string) => Promise<string>) {
   if (running) throw new PreviewError("Another preview is building; try again when it's done.");
   const startedAt = new Date().toISOString();
-  await setPreviewState(resourceId, { status: "building", builtFrom: c.codeSha256, builtAt: startedAt });
+  await setPreviewState(resourceId, { status: "building", builtFrom: codeSha256, builtAt: startedAt });
   const done = (async () => {
-    const dir = path.join(buildDeps.buildsDir(), buildKey(c));
+    const dir = path.join(buildDeps.buildsDir(), key);
     try {
-      await prepare(dir, c);
-      await buildDeps.npmInstall(dir);
-      const html = await bundlePage(dir, c);
+      const html = await work(dir);
       if (Buffer.byteLength(html) > MAX_PREVIEW_BYTES)
         throw new PreviewError("The built preview is over 5 MB; PIVOT doesn't keep it.");
-      await setComponentPreview(resourceId, html, { builtFrom: c.codeSha256 });
+      await setComponentPreview(resourceId, html, { builtFrom: codeSha256 });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       await setPreviewState(resourceId, {
         status: "failed",
-        builtFrom: c.codeSha256,
+        builtFrom: codeSha256,
         builtAt: startedAt,
         error: msg.slice(0, ERROR_CHARS),
       });
@@ -298,4 +337,183 @@ export async function startComponentPreviewBuild(resourceId: string) {
   })();
   running = { resourceId, done };
   return { status: "building" as const, done };
+}
+
+// ---- saved designs ------------------------------------------------------------------------------------------------
+
+const DATA_EXT = /\.(png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf|mp4|webm|mp3|wav|ogg|glb|gltf|hdr|bin|json)$/i;
+const isRemote = (ref: string) => /^([a-z][a-z0-9+.-]*:|\/\/)/i.test(ref);
+
+/**
+ * Bundles a design's HTML demo into one page: each local module script bundled with esbuild (its npm packages from the
+ * build folder) and moved to the end of the body, as a module would run; classic scripts and stylesheets inlined; local
+ * images, media and fonts as data URLs. A script loaded from the network fails the build: the preview has none.
+ */
+export async function bundleHtmlPage(dir: string, htmlPath: string) {
+  const htmlFile = inside(dir, htmlPath);
+  const $ = cheerio.load(await fs.readFile(htmlFile, "utf8"));
+  const base = path.dirname(htmlFile);
+  const local = (ref: string) => {
+    const clean = ref.split(/[?#]/)[0];
+    if (!clean || isRemote(ref)) return null;
+    return inside(dir, clean.startsWith("/") ? clean.slice(1) : path.relative(dir, path.resolve(base, clean)));
+  };
+  const exists = async (f: string) => !!(await fs.stat(f).catch(() => null))?.isFile();
+  const dataUrl = async (f: string) => `data:${resolveMime(f)};base64,${(await fs.readFile(f)).toString("base64")}`;
+  const esbuild = await import("esbuild");
+  const loader = Object.fromEntries(
+    [
+      "png",
+      "jpg",
+      "jpeg",
+      "gif",
+      "webp",
+      "avif",
+      "svg",
+      "woff",
+      "woff2",
+      "ttf",
+      "otf",
+      "glb",
+      "hdr",
+      "bin",
+      "mp3",
+      "wav",
+      "mp4",
+      "webm",
+    ].map((e) => [`.${e}`, "dataurl" as const]),
+  );
+  const bundle = async (entry: string) => {
+    try {
+      const r = await esbuild.build({
+        entryPoints: [entry],
+        absWorkingDir: dir,
+        bundle: true,
+        write: false,
+        outdir: path.join(dir, "out"),
+        format: "iife",
+        platform: "browser",
+        target: "es2020",
+        minify: true,
+        jsx: "automatic",
+        define: {
+          "process.env.NODE_ENV": '"production"',
+          "import.meta.env": '{"MODE":"production","PROD":true,"DEV":false,"BASE_URL":"/"}',
+        },
+        loader,
+        logLevel: "silent",
+      });
+      return {
+        js: r.outputFiles
+          .filter((f) => f.path.endsWith(".js"))
+          .map((f) => f.text)
+          .join("\n"),
+        css: r.outputFiles
+          .filter((f) => f.path.endsWith(".css"))
+          .map((f) => f.text)
+          .join("\n"),
+      };
+    } catch (err) {
+      const msgs = (err as { errors?: { text: string }[] }).errors?.map((e) => e.text) ?? [String(err)];
+      const bare = msgs.map((m) => /Could not resolve "([^"./][^"]*)"/.exec(m)?.[1]).find(Boolean);
+      throw new PreviewError(
+        `Bundling failed: ${msgs.slice(0, 3).join("; ")}${
+          bare ? `. Save "${bare}" with its exact version in the design's dependencies.` : ""
+        }`,
+      );
+    }
+  };
+
+  const tail: string[] = [];
+  let n = 0;
+  for (const el of $("script").toArray()) {
+    const s = $(el);
+    const type = (s.attr("type") ?? "").trim().toLowerCase();
+    const src = s.attr("src");
+    if (type === "importmap") {
+      s.remove(); // bare imports resolve from the build folder's packages instead
+      continue;
+    }
+    const isModule = type === "module";
+    if (type && !isModule && type !== "text/javascript" && type !== "application/javascript") continue; // shaders, JSON
+    if (src && isRemote(src))
+      throw new PreviewError(
+        `The demo loads ${src} from the network, and the preview has none. Save that library in the design's dependencies (an exact version) and import it, or save the file with the design.`,
+      );
+    const file = src ? local(src) : null;
+    if (src && (!file || !(await exists(file))))
+      throw new PreviewError(`The demo's script ${src} isn't among the design's saved files.`);
+    if (!isModule) {
+      // a classic script keeps its globals: inlined as it is, where it was
+      const code = file ? await fs.readFile(file, "utf8") : (s.html() ?? "");
+      s.replaceWith(`<script>${inlineSafe(code, "script")}</script>`);
+      continue;
+    }
+    let entry = file;
+    if (!entry) {
+      entry = path.join(base, `__pivot_inline_${n++}.mjs`);
+      await fs.writeFile(entry, s.html() ?? "");
+    }
+    const out = await bundle(entry);
+    if (out.css) $("head").append(`<style>${inlineSafe(out.css, "style")}</style>`);
+    tail.push(`<script>${inlineSafe(out.js, "script")}</script>`);
+    s.remove();
+  }
+  for (const el of $('link[rel~="stylesheet"][href]').toArray()) {
+    const l = $(el);
+    const file = local(l.attr("href")!);
+    if (!file) continue; // a stylesheet from the network (web fonts): the preview's policy blocks it, the page still renders
+    if (!(await exists(file)))
+      throw new PreviewError(`The demo's stylesheet ${l.attr("href")} isn't among the design's saved files.`);
+    const out = await bundle(file);
+    l.replaceWith(`<style>${inlineSafe(out.css, "style")}</style>`);
+  }
+  const media: [string, string][] = [
+    ["img", "src"],
+    ["source", "src"],
+    ["video", "src"],
+    ["video", "poster"],
+    ["audio", "src"],
+    ["link[rel~='icon']", "href"],
+    ["image", "href"],
+  ];
+  for (const [sel, attr] of media) {
+    for (const el of $(`${sel}[${attr}]`).toArray()) {
+      const ref = $(el).attr(attr)!;
+      const file = local(ref);
+      if (file && DATA_EXT.test(file) && (await exists(file))) $(el).attr(attr, await dataUrl(file));
+    }
+  }
+  const ready = `<script>requestAnimationFrame(()=>requestAnimationFrame(()=>parent.postMessage({type:"21st-preview-ready"},"*")))</script>`;
+  $("body").append(tail.join("") + ready);
+  return $.html();
+}
+
+/**
+ * Starts building a saved design's preview and returns at once; the page follows `meta.myDesign.preview.status`. An
+ * HTML demo installs npm packages only when the design lists some (exact versions); a React design always does.
+ */
+export async function startMyDesignPreviewBuild(resourceId: string) {
+  const db = await getDb();
+  const [row] = await db.select().from(resources).where(eq(resources.id, resourceId)).limit(1);
+  const d = row && !row.deletedAt && row.type === "my_design" ? (row.meta?.myDesign as MyDesignMeta | undefined) : null;
+  if (!row || !d) throw new PreviewError("No such design.");
+  const plan = myDesignPreviewPlan(d);
+  if (plan.kind === "none") throw new PreviewError(plan.reason);
+  const deps = d.dependencies;
+  return runBuild(resourceId, d.codeSha256, buildKey(d.files, [...deps, { name: plan.kind }]), async (dir) => {
+    const binary: { path: string; data: Buffer }[] = [];
+    for (const a of d.assets) {
+      const row = await getAsset(a.assetId);
+      const data = row && (await readAssetBytes(row));
+      if (data) binary.push({ path: a.path, data });
+    }
+    await prepare(dir, d.files, deps, { react: plan.kind === "react", binary });
+    if (plan.kind === "react") {
+      await buildDeps.npmInstall(dir);
+      return bundlePage(dir, d);
+    }
+    if (deps.length) await buildDeps.npmInstall(dir);
+    return bundleHtmlPage(dir, plan.file);
+  });
 }

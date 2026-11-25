@@ -5,6 +5,7 @@ import { getAsset, listResourceAssets, materializeAsset, readAssetBytes } from "
 import { pluginsDir, skillsDir } from "./config";
 import { resolveWriteTarget, within } from "./write-target";
 import { componentCredit, componentOf } from "./components";
+import { isCompanyDesign, myDesignCredit, myDesignOf } from "./my-designs";
 import { getResourcesByIds } from "./resources";
 import type { SkillMeta } from "./skills";
 import { estimateImageTokens, estimateTextTokens, scaledImageSize, CLAUDE_MAX_IMAGE_EDGE } from "./tokens";
@@ -83,7 +84,7 @@ function relevantAssets(assets: AssetDTO[], opts: ContextOptions) {
   return assets.filter(
     (a) =>
       !a.missing &&
-      ["screenshot", "screenshot-full", "state", "attachment"].includes(a.role) &&
+      ["screenshot", "screenshot-full", "state", "attachment", "design-shot"].includes(a.role) &&
       (a.role !== "screenshot-full" || opts.includeFullScreenshots) &&
       a.kind !== "font",
   );
@@ -106,9 +107,17 @@ function sectionFor(r: ResourceDTO, index: number, planned: PlannedAsset[], file
   if (typeof meta.whenToUse === "string" && meta.whenToUse) facts.push(`- **When to use:** ${meta.whenToUse}`);
   const component = r.type === "component" ? componentOf(r) : null;
   if (component) facts.push(...componentCredit(component).map((l) => `- ${l}`));
+  const design = r.type === "my_design" ? myDesignOf(r) : null;
+  if (design) facts.push(...myDesignCredit(design).map((l) => `- ${l}`));
+  if (design?.ownership === "company") {
+    // company work leaves PIVOT as its name only (docs/my-designs-plan.md)
+    lines.push(...facts, "", "**Code and details:** kept in PIVOT; an agent reads them with `get_my_design`.", "");
+    return lines.join("\n");
+  }
   if (facts.length) lines.push(...facts, "");
   if (r.description) lines.push(r.description.trim(), "");
   if (r.notes.trim()) lines.push("**Notes**", "", r.notes.trim(), "");
+  if (design) lines.push("**Usage**", "", design.usage.trim(), "");
 
   if (r.type === "skill") {
     const skillName = (meta as SkillMeta).skillName;
@@ -119,6 +128,8 @@ function sectionFor(r: ResourceDTO, index: number, planned: PlannedAsset[], file
   } else if (component) {
     // never the code: a component's code is third-party, kept for the owner's own reuse (docs/component-store-plan.md)
     lines.push("**Code:** saved in PIVOT, not included here; an agent reads it with `get_saved_component`.", "");
+  } else if (design) {
+    lines.push("**Code:** saved in PIVOT; an agent writes it exactly into a project with `get_my_design`.", "");
   } else if (r.content.trim()) {
     const content = r.content;
     if (def.content === "code") lines.push(fence(content, String(meta.language ?? "")), "");
@@ -163,7 +174,7 @@ export async function buildClipboardContext(resourceIds: string[], opts: Context
   const sections: string[] = [];
   const allPlanned: PlannedAsset[] = [];
   for (const [i, r] of items.entries()) {
-    const assets = relevantAssets(await listResourceAssets(r.id), opts);
+    const assets = isCompanyDesign(r) ? [] : relevantAssets(await listResourceAssets(r.id), opts);
     const planned: PlannedAsset[] = [];
     for (const a of assets) {
       const row = await getAsset(a.id);
@@ -272,7 +283,7 @@ export async function exportBundle(opts: ExportOptions) {
 
     // Assets → assets/<slug>.<ext>
     const planned: PlannedAsset[] = [];
-    for (const a of relevantAssets(await listResourceAssets(r.id), opts)) {
+    for (const a of isCompanyDesign(r) ? [] : relevantAssets(await listResourceAssets(r.id), opts)) {
       const row = await getAsset(a.id);
       const data = row && (await readAssetBytes(row));
       if (!row || !data) continue;
@@ -299,7 +310,7 @@ export async function exportBundle(opts: ExportOptions) {
       await fs.writeFile(path.join(dest, "SKILL.md"), r.content, "utf8");
       fileRef = `skills/${skillName}/SKILL.md`;
       fileCount++;
-    } else if (r.content.trim() && def.content !== "none" && r.type !== "component") {
+    } else if (r.content.trim() && def.content !== "none" && r.type !== "component" && r.type !== "my_design") {
       const ext =
         def.content === "json"
           ? ".json"

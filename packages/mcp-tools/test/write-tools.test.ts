@@ -79,6 +79,8 @@ describe("PIVOT MCP write tools", () => {
       "save_reference",
       "save_component",
       "get_saved_component",
+      "save_my_design",
+      "get_my_design",
     ]);
     for (const name of [
       "save_design_brief",

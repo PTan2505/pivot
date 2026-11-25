@@ -89,6 +89,8 @@ export interface ListFilters {
   url?: string;
   /** Only resources whose URL is on this host (subdomains included). */
   host?: string;
+  /** Only the owner's designs marked as work of this organisation (any case). */
+  organisation?: string;
   trash?: boolean;
   /** `created` is newest first, `oldest` is by creation date the other way. */
   sort?: "updated" | "created" | "oldest" | "title";
@@ -208,6 +210,12 @@ async function listQuery(filters: ListFilters) {
     const host = filters.host.toLowerCase().replace(/^www\./, "");
     where.push(
       sql`lower(coalesce(${resources.sourceUrl}, '')) ~ ${`^https?://([^/]*\\.)?${host.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(:\\d+)?(/|$)`}`,
+    );
+  }
+
+  if (filters.organisation) {
+    where.push(
+      sql`lower(${resources.meta}->'myDesign'->>'organisation') = ${filters.organisation.trim().toLowerCase()}`,
     );
   }
 
@@ -397,7 +405,9 @@ export async function createResource(input: ResourceInput): Promise<ResourceDeta
   const data = resourceInput.parse(input);
   if (isAgentType(data.type)) {
     throw new ResourceRuleError(
-      "Components are saved with their code by the agent (save_component), not added by hand.",
+      data.type === "my_design"
+        ? "Your designs are saved with their code by the agent (save_my_design), not added by hand."
+        : "Components are saved with their code by the agent (save_component), not added by hand.",
     );
   }
   const db = await getDb();
@@ -434,10 +444,16 @@ export async function updateResource(id: string, patch: ResourcePatch): Promise<
   if (!current) return null;
   const type = current.type as ResourceType;
   if (data.type !== undefined && data.type !== type && (isAgentType(data.type) || isAgentType(type))) {
-    throw new ResourceRuleError("A component's type can't be changed, and nothing can be changed into a component.");
+    throw new ResourceRuleError(
+      "A component's or saved design's type can't be changed, and nothing can be changed into one.",
+    );
   }
   if (isAgentType(type) && data.content !== undefined && data.content !== current.content) {
-    throw new ResourceRuleError("A component's code is kept as it was fetched; it can't be edited here.");
+    throw new ResourceRuleError(
+      type === "my_design"
+        ? "A saved design's code is kept exactly as it was saved; it can't be edited here."
+        : "A component's code is kept as it was fetched; it can't be edited here.",
+    );
   }
 
   const set: Partial<typeof resources.$inferInsert> = { updatedAt: new Date() };

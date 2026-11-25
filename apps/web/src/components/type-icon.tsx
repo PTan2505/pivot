@@ -2,6 +2,7 @@ import {
   Blocks,
   Code,
   Compass,
+  Gem,
   Globe,
   Image as ImageIcon,
   Library,
@@ -32,6 +33,7 @@ const ICONS: Record<string, LucideIcon> = {
   "list-checks": ListChecks,
   plug: Plug,
   compass: Compass,
+  gem: Gem,
 };
 
 export function TypeIcon({ type, className }: { type: ResourceType; className?: string }) {

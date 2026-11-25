@@ -4,7 +4,8 @@ import path from "node:path";
 import { appOutdated, missingAppFeatures, REQUIRED_APP_FEATURES, UPDATE_APP } from "@pivot/mcp-tools/app-compat";
 import type { MotionTrack } from "@pivot/core/motion-track";
 import type { ImagePart, PageSlices } from "@pivot/mcp-tools/images";
-import { ToolError, type PivotSource, type PivotWriter } from "@pivot/mcp-tools/source";
+import { ToolError, type MyDesignUploadInput, type PivotSource, type PivotWriter } from "@pivot/mcp-tools/source";
+import type { ApiFeature } from "@pivot/core/capabilities";
 import type {
   DesignCandidateDTO,
   DesignFeedbackDTO,
@@ -38,6 +39,11 @@ function readToken() {
     return "";
   }
 }
+
+const featuresOf = (caps: unknown) => {
+  const listed = (caps as { features?: unknown } | null)?.features;
+  return new Set(Array.isArray(listed) ? listed.filter((f): f is string => typeof f === "string") : []);
+};
 
 /** PivotSource over the running PIVOT app's HTTP API, so the app keeps its own database, storage and access rules. */
 export class HttpSource implements PivotSource, PivotWriter {
@@ -74,9 +80,30 @@ export class HttpSource implements PivotSource, PivotWriter {
     // every PIVOT that has the features this server needs has /api/capabilities
     if (res.status === 404) throw appOutdated(this.base, REQUIRED_APP_FEATURES);
     if (!res.ok) return;
-    const missing = missingAppFeatures(await res.json().catch(() => null));
+    const caps = await res.json().catch(() => null);
+    const missing = missingAppFeatures(caps);
     if (missing.length) throw appOutdated(this.base, missing);
+    this.features = featuresOf(caps);
     this.compatible = true;
+  }
+
+  /** The app's features, as its last `/api/capabilities` answer listed them. */
+  private features = new Set<string>();
+
+  /**
+   * Refuses a call that needs a feature beyond the required ones (`app_outdated`), so a missing route of an older app
+   * isn't taken for a missing item. Asked again while it is missing, so an updated app is seen without a new session.
+   */
+  private async requireFeature(feature: ApiFeature) {
+    await this.checkApp();
+    if (this.features.has(feature)) return;
+    try {
+      const res = await fetch(`${this.base}/api/capabilities`, { signal: AbortSignal.timeout(5_000) });
+      if (res.ok) this.features = featuresOf(await res.json().catch(() => null));
+    } catch {
+      throw this.unreachable();
+    }
+    if (!this.features.has(feature)) throw appOutdated(this.base, [feature]);
   }
 
   private async call(pathAndQuery: string, init: RequestInit = {}): Promise<Response | null> {
@@ -119,6 +146,8 @@ export class HttpSource implements PivotSource, PivotWriter {
   }
 
   async search(req: SearchRequest): Promise<SearchPage> {
+    // an older app would ignore the filter and answer every design
+    if (req.organisation) await this.requireFeature("my-designs");
     const sp = new URLSearchParams({ paged: "1" });
     if (req.query) sp.set("q", req.query);
     if (req.types?.length) sp.set("types", req.types.join(","));
@@ -126,6 +155,7 @@ export class HttpSource implements PivotSource, PivotWriter {
     for (const f of req.facets ?? []) sp.append("facet", `${f.kind}:${f.name}`);
     if (req.collectionId) sp.set("collection", req.collectionId);
     if (req.sourceId) sp.set("via", req.sourceId);
+    if (req.organisation) sp.set("organisation", req.organisation);
     if (req.sort) sp.set("sort", req.sort);
     if (req.limit) sp.set("limit", String(req.limit));
     if (req.cursor) sp.set("cursor", req.cursor);
@@ -281,6 +311,39 @@ export class HttpSource implements PivotSource, PivotWriter {
       );
     }
     return (await res.json()) as { outcome: "created" | "updated" | "unchanged"; resource: ResourceDetailDTO };
+  }
+
+  async findMyDesign(q: { id?: string; name?: string }) {
+    await this.requireFeature("my-designs");
+    const sp = new URLSearchParams();
+    if (q.id) sp.set("id", q.id);
+    else if (q.name) sp.set("name", q.name);
+    return this.json<ResourceDetailDTO>(`/api/my-designs/lookup?${sp}`);
+  }
+
+  async saveMyDesign(input: Record<string, unknown>) {
+    await this.requireFeature("my-designs");
+    return this.post<{ outcome: "created" | "updated" | "unchanged"; resource: ResourceDetailDTO }>(
+      "/api/my-designs",
+      input,
+    );
+  }
+
+  async addMyDesignAsset(id: string, upload: MyDesignUploadInput) {
+    await this.requireFeature("my-designs");
+    const form = new FormData();
+    form.set("file", new Blob([new Uint8Array(upload.data)], { type: upload.mimeType }), upload.fileName);
+    form.set("role", upload.role);
+    if (upload.path) form.set("path", upload.path);
+    if (upload.viewport) form.set("viewport", upload.viewport);
+    const res = await this.call(`/api/my-designs/${encodeURIComponent(id)}/assets`, { method: "POST", body: form });
+    if (!res) throw new ToolError("not_found", "There is no saved design with that id.");
+    return (await res.json()) as ResourceDetailDTO;
+  }
+
+  async assetData(assetId: string) {
+    const res = await this.call(`/api/assets/${encodeURIComponent(assetId)}`);
+    return res ? Buffer.from(await res.arrayBuffer()) : null;
   }
 
   /** Through the extension's endpoint, so duplicates, the Inbox and the background capture work the same way. */

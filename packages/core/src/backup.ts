@@ -254,6 +254,21 @@ export async function previewRestore(dir: string) {
  * the choice is: keep (default; nothing changes), new (a separate copy), or merge (fills only empty fields and adds
  * missing facets, collections, files and notes; never overwrites what you have). Running it twice adds nothing twice.
  */
+/**
+ * A saved design lists its files by asset id in meta.myDesign.assets; a restore can give a file a new id (one with the
+ * same bytes was already here), so those ids follow the restore's map. A file the backup didn't hold is dropped.
+ */
+function withRestoredAssetIds<R extends { meta?: unknown }>(r: R, assetMap: Map<string, string>): R {
+  const meta = r.meta as Record<string, unknown> | null | undefined;
+  const design = meta?.myDesign as { assets?: { assetId: string }[] } | undefined;
+  if (!design?.assets?.length) return r;
+  const assets = design.assets.flatMap((a) => {
+    const id = assetMap.get(a.assetId);
+    return id ? [{ ...a, assetId: id }] : [];
+  });
+  return { ...r, meta: { ...meta, myDesign: { ...design, assets } } };
+}
+
 export async function restoreBackup(
   dir: string,
   { conflicts = "keep", overrides = {} }: { conflicts?: RestoreChoice; overrides?: Record<string, RestoreChoice> } = {},
@@ -326,7 +341,10 @@ export async function restoreBackup(
 
   const resourceMap = new Map<string, string>();
   for (const item of plan.items) {
-    const r = data.resources.find((x) => x.id === item.id)!;
+    const r = withRestoredAssetIds(
+      data.resources.find((x) => x.id === item.id)!,
+      assetMap,
+    );
     const choice = item.status === "new" ? "import" : (overrides[item.id] ?? conflicts);
     if (choice === "keep") {
       summary.kept++;

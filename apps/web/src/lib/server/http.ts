@@ -4,6 +4,7 @@ import { ZodError } from "zod";
 import { AssetError } from "@pivot/core/assets";
 import { ComponentConflictError, ComponentError } from "@pivot/core/components";
 import { PreviewError } from "@pivot/core/component-preview";
+import { MyDesignConflictError, MyDesignError } from "@pivot/core/my-designs";
 import { retryOnConnectionError } from "@pivot/core/db/connection";
 import { UnsafeUrlError } from "@pivot/core/net-guard";
 import { ResourceRuleError } from "@pivot/core/resources";
@@ -50,11 +51,13 @@ export function route<Args extends unknown[]>(fn: (...args: Args) => Promise<Res
         err instanceof UnsafeUrlError ||
         err instanceof AssetError ||
         err instanceof ComponentError ||
+        err instanceof MyDesignError ||
         err instanceof PreviewError ||
         err instanceof ResourceRuleError
       )
         return json({ error: err.message }, { status: 400 });
-      if (err instanceof ComponentConflictError) return json({ error: err.message, conflict: true }, { status: 409 });
+      if (err instanceof ComponentConflictError || err instanceof MyDesignConflictError)
+        return json({ error: err.message, conflict: true }, { status: 409 });
       if (err instanceof SkillConflictError) return json({ error: err.message, conflict: true }, { status: 409 });
       console.error("[pivot]", err);
       return json({ error: err instanceof Error ? err.message : "Something went wrong" }, { status: 500 });
