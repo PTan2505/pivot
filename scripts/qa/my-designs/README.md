@@ -8,7 +8,7 @@ An end-to-end run of My designs, Phase 2 ([docs/my-designs-plan.md](../../../doc
 4. Different code without `replaceCode` is refused (409); the same code again doesn't send the SVG again.
 5. `get_my_design` with `writeTo` writes the files and the SVG into another folder, and their sha256 equal the originals'.
 6. `writeTo` over a folder where `tokens.css` differs writes nothing and lists it.
-7. `search_references` finds it with the `organisation` filter (any case), not with another organisation, and marks it "Yours"; `get_reference` points to `get_my_design`; `get_reference_images` with `which: "shots"` shows the desktop and phone screenshots.
+7. `search_references` in My designs finds it and marks it "Yours"; `get_reference` points to `get_my_design`; `get_reference_images` with `which: "shots"` shows the desktop and phone screenshots.
 
 The design is a small three.js fixture (a component, a tokens CSS with CRLF line ends, a demo page and an SVG) written for this run into a temporary folder, with a fake `.env` and a link out of the project. The screenshots and the video are taken by Playwright from the demo page. Nothing is installed and nothing leaves the machine.
 

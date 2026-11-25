@@ -1,8 +1,8 @@
 // End-to-end run of My designs, Phase 2 (docs/my-designs-plan.md) against a SCRATCH PIVOT (README.md): the agent's
 // part over the real MCP server (plugin/server/server.js, over stdio, as Claude Code runs it). A three.js design with
 // an SVG and a tokens CSS, written for this run into a temporary project, is saved with save_my_design (its files read
-// from disk), rebuilt into another folder with get_my_design writeTo (sha256 compared), found by search_references
-// with the organisation filter, and its screenshots looked at. Plus the failure paths: a link out of the project, an
+// from disk), rebuilt into another folder with get_my_design writeTo (sha256 compared), found by search_references,
+// and its screenshots looked at. Plus the failure paths: a link out of the project, an
 // environment file, different code without replaceCode, a rebuild over a file that differs.
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -31,8 +31,6 @@ const BASE = (process.env.PIVOT_URL ?? "").replace(/\/+$/, "");
 const DATA = process.env.PIVOT_DATA_DIR ?? "";
 const OUT = process.env.E2E_OUT ?? fs.mkdtempSync(path.join(os.tmpdir(), "pivot-my-designs-out-"));
 const RUN = Math.random().toString(36).slice(2, 8);
-/** A made-up organisation, unique to this run, so a filter can only match this run's design. */
-const ORG = `E2E Org ${RUN}`;
 const NAME = `E2E orbit logo ${RUN}`;
 
 // ---- the fixture: a small three.js design, written for this run ----------------------------------------------
@@ -108,8 +106,6 @@ const textOf = (r: ToolResult) => r.content.map((c) => c.text ?? "").join("\n");
 const saveInput = (over: Record<string, unknown> = {}) => ({
   name: NAME,
   kind: "3d",
-  ownership: "company",
-  organisation: ORG,
   root: project,
   files: FILES,
   assets: ["public/orbit-mark.svg"],
@@ -210,7 +206,7 @@ describe("My designs, end to end", () => {
       expect(r.isError, p).toBe(true);
       expect(textOf(r), p).toMatch(why);
     }
-    const found = await call("search_references", { query: "orbit", organisation: ORG });
+    const found = await call("search_references", { query: NAME, types: ["my_design"] });
     expect(found.structuredContent).toMatchObject({ total: 0 });
     note("2. refused before any save: a link to a file outside the project, and .env; nothing was saved");
   });
@@ -268,7 +264,7 @@ describe("My designs, end to end", () => {
     fs.mkdirSync(target);
     const r = await call("get_my_design", { id: designId, writeTo: target });
     expect(r.isError, textOf(r)).toBeFalsy();
-    expect(textOf(r)).toContain("Company work (" + ORG + ")");
+    expect(textOf(r)).toContain(`${NAME} — 3d · saved `);
     expect(textOf(r)).toContain("three@0.170.0");
     for (const p of [...FILES.map((f) => f.path), "public/orbit-mark.svg"])
       expect(sha(path.join(target, p)), p).toBe(sha(path.join(project, p)));
@@ -284,21 +280,17 @@ describe("My designs, end to end", () => {
     note("6. writeTo over a folder with a different tokens.css → nothing written, the file listed, left as it was");
   });
 
-  it("search_references finds it, filtered by organisation, marked Yours; its screenshots can be looked at", async () => {
-    const found = await call("search_references", { query: "orbit logo", organisation: ORG.toUpperCase() });
-    expect(found.structuredContent).toMatchObject({ total: 1 });
-    expect(textOf(found)).toContain(`${NAME} — My design — Yours (3d, company: ${ORG})`);
-    const elsewhere = await call("search_references", { query: "orbit logo", organisation: `Other ${RUN}` });
-    expect(elsewhere.structuredContent).toMatchObject({ total: 0 });
-    const all = await call("search_references", { query: NAME, types: ["my_design"] });
-    expect((all.structuredContent as { results: { id: string }[] }).results.map((h) => h.id)).toContain(designId);
+  it("search_references finds it, marked Yours; its screenshots can be looked at", async () => {
+    const found = await call("search_references", { query: NAME, types: ["my_design"] });
+    expect((found.structuredContent as { results: { id: string }[] }).results.map((h) => h.id)).toContain(designId);
+    expect(textOf(found)).toContain(`${NAME} — My design — Yours (3d)`);
     const ref = await call("get_reference", { id: designId });
     expect(textOf(ref)).toMatch(/get_my_design \(id .*\) gives its files/);
     const images = await call("get_reference_images", { id: designId, which: "shots" });
     expect(images.content.filter((c) => c.type === "image")).toHaveLength(2);
     expect(textOf(images)).toMatch(/\(desktop\)[\s\S]*\(mobile\)/);
     note(
-      "7. search_references: organisation filter (any case) → 1, another organisation → 0, the hit marked Yours (company); get_reference points to get_my_design; get_reference_images shots → desktop and mobile",
+      "7. search_references in My designs → found, marked Yours (3d); get_reference points to get_my_design; get_reference_images shots → desktop and mobile",
     );
   });
 });

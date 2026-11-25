@@ -454,13 +454,12 @@ A component saved with its code (type `component`) keeps the detail page's heade
 
 No layout of its own (the owner's choice: designs are shown the way references and components are). A saved design (type `my_design`) uses the **Component page** above, part for part; the stage, live preview, code viewer and copy button are shared from `components/code-stage.tsx`. What differs:
 
-- **Header:** Copy is **Copy code**, plus **Download zip** (secondary, download icon). Under the title: a `Kind Section` chip, the owner chip, "From <project>" and "Saved <date>" in mono, ink-muted.
-- **Owner chip** (also on the card, leading the chips like the review chip): 24px, ink at 8%; a user icon and **Personal**, or a building icon, "Company" in ink-secondary and the organisation in ink.
+- **Header:** Copy is **Copy code**, plus **Download zip** (secondary, download icon). Under the title: a `Kind Section` chip, "From <project>" and "Saved <date>" in mono, ink-muted.
 - **Preview:** the live preview when built (pills **Reload**, **Build/Rebuild preview**, **Show screenshots**), else the saved screenshots on the same stage (desktop `object-cover` from the top, mobile `object-contain`), with a secondary xs pill per shot (Desktop, Mobile, numbered when there are several of one) and **Video** (`aria-pressed` on the one shown; muted, controls, no autoplay under reduced motion). Build preview is offered only when PIVOT can build this design; otherwise the note under the stage says why. Nothing saved: the empty box with **Show code**.
 - **Code:** file tabs with their role (Component, Demo, Style, Support), then "Other files, written to these paths on reuse": surface-raised rows, the path as an accent-text download link and the size in ink-subtle.
 - **Install:** the `npm install name@version …` command with **Copy command**, the install steps as a numbered list, then the dependency chips with exact versions. **Usage:** a surface panel with the usage Markdown, then "Tokens it relies on" as a mono list on surface-raised (name in ink, value in ink-muted). No ember fill anywhere on the page.
-- **Side panel:** the Source group holds the facts list (Owner, Project, Folder in mono, Sessions as accent links, Saved, Code saved) and "PIVOT's scan · N flags" with the Component page's flag rows. No Review or Used in groups.
-- **Card:** the first screenshot is the cover; the meta line reads `Section · odin-web`.
+- **Side panel:** the Source group holds the facts list (Project, Folder in mono, Sessions as accent links, Saved, Code saved) and "PIVOT's scan · N flags" with the Component page's flag rows. No Review or Used in groups.
+- **Card:** the first screenshot is the cover; the meta line reads `Section · odin-web`; no owner chip (removed 2026-11-25 with the personal or company distinction).
 
 ### Links — `components/resource-links.tsx`
 

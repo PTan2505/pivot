@@ -146,8 +146,6 @@ export class HttpSource implements PivotSource, PivotWriter {
   }
 
   async search(req: SearchRequest): Promise<SearchPage> {
-    // an older app would ignore the filter and answer every design
-    if (req.organisation) await this.requireFeature("my-designs");
     const sp = new URLSearchParams({ paged: "1" });
     if (req.query) sp.set("q", req.query);
     if (req.types?.length) sp.set("types", req.types.join(","));
@@ -155,7 +153,6 @@ export class HttpSource implements PivotSource, PivotWriter {
     for (const f of req.facets ?? []) sp.append("facet", `${f.kind}:${f.name}`);
     if (req.collectionId) sp.set("collection", req.collectionId);
     if (req.sourceId) sp.set("via", req.sourceId);
-    if (req.organisation) sp.set("organisation", req.organisation);
     if (req.sort) sp.set("sort", req.sort);
     if (req.limit) sp.set("limit", String(req.limit));
     if (req.cursor) sp.set("cursor", req.cursor);

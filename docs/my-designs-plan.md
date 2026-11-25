@@ -16,7 +16,7 @@ An exact rebuild needs three things kept together:
 
 - **A new "My designs" section**, separate from 21st components. Its code reuses the component store's parts.
 - **Saved only when the owner asks** in a session ("lưu cái 3D logo này vào PIVOT").
-- **Personal or company:** company designs are marked with the organisation; Share, Export and copied context carry the name, kind and owner only; a backup keeps everything.
+- **One owner** (updated 2026-11-25, the owner: "Tôi muốn bỏ phân biêt personal và company đi, vì tất cả đều là của tôi design mà?"): no personal or company distinction; every design is reused in any project; Share, Export and copied context carry its facts, usage and screenshots, never the code; a backup keeps everything. (Until then: company designs named their organisation and left PIVOT as their name only.)
 - **Later, not now:** the extension's "select an element and save it", whole-project snapshots, version history.
 
 ## Design
@@ -24,7 +24,7 @@ An exact rebuild needs three things kept together:
 ### Data: the type `my_design` (no migration)
 
 - In `RESOURCE_TYPES` and `TYPE_DEFS` (label "My design", icon `gem`, facets pageType, uiPattern, visualStyle, technology, export folder `my-designs`), its own `SECTIONS` entry "My designs" (`/?type=my_design` until Phase 3 gives it a page), and in `AGENT_TYPES`: never made, retyped or code-edited by hand.
-- `meta.myDesign` (`MyDesignMeta` in `packages/core/src/types.ts`): `kind`, `ownership`, `organisation`, `files` (path, role `component`/`demo`/`style`/`support`, language, code), `dependencies` (name and exact version), `install`, `usage`, `tokens`, `source` (project, folder, original paths, session ids, mockup id), `assets` (path, asset id, sha256, size), `codeSha256`, `scan`, `savedAt`, `codeSavedAt`.
+- `meta.myDesign` (`MyDesignMeta` in `packages/core/src/types.ts`): `kind`, `files` (path, role `component`/`demo`/`style`/`support`, language, code), `dependencies` (name and exact version), `install`, `usage`, `tokens`, `source` (project, folder, original paths, session ids, mockup id), `assets` (path, asset id, sha256, size), `codeSha256`, `scan`, `savedAt`, `codeSavedAt`.
 - Files in the blob store: `design-asset` (a non-code file with the path it goes to), `design-shot` (desktop or mobile screenshot), `design-video`.
 - Limits: 80 files, 1 MB per file, 4 MB of code; 60 files, 12 screenshots, 3 videos, 25 MB each, 100 MB per design.
 - Always refused: `.env*`, keys and certificates, `node_modules`, `.git`, package-manager credentials, paths outside the folder, and code holding a credential.
@@ -36,19 +36,19 @@ React designs use the existing local build (`preview-build.ts`). Non-React desig
 
 ### MCP tools (Phase 2)
 
-- `save_my_design { id?, name, kind, ownership, organisation?, root, files: [{ path, role }], assets?, screenshots?, video?, dependencies?, install?, usage, tokens?, sourceProject?, sessionId?, mockupId?, facets?, notes?, replaceCode? }`: the MCP server reads the files from disk under `root`, so the code is the original's bytes, never retyped.
+- `save_my_design { id?, name, kind, root, files: [{ path, role }], assets?, screenshots?, video?, dependencies?, install?, usage, tokens?, sourceProject?, sessionId?, mockupId?, facets?, notes?, replaceCode? }`: the MCP server reads the files from disk under `root`, so the code is the original's bytes, never retyped.
 - `get_my_design { id | name, writeTo? }`: the files, usage, tokens, dependencies, install steps and screenshot list; with `writeTo` it writes the files and assets byte for byte at their relative paths.
-- `search_references` finds `my_design`; an `organisation` filter is added.
+- `search_references` finds `my_design` (its `organisation` filter was removed on 2026-11-25 with the ownership distinction).
 
 ### Skill rules (Phase 2)
 
 - Saving, only when asked: find every file the design needs, read exact dependency versions, write the usage notes, screenshot desktop and phone (and record a video when it moves), call `save_my_design`, list what was saved.
 - Reusing: at gate 1 search My designs first ("Yours"); on a pick, `get_my_design` with `writeTo`; install the stored versions; change only import paths and token names; compare with the stored shots (and `motion-qa.mjs` for motion) and report differences.
-- Company code is copied only into projects of the same organisation; elsewhere it is a visual reference.
+- A saved design is rebuilt in any project (updated 2026-11-25).
 
 ### UI (Phase 3)
 
-No new layout (the owner, 2026-11-25: "không cần design mới, hãy lưu các design như các lưu các ref và component"): the Library's grid and card (cover, name, kind, a Personal or Company · Org chip, its search and facet filters) and the component page (Preview / Code stage, Install, then Usage with the tokens; other files under Code; source project and session links in the side panel; Download zip in the header). DESIGN.md updated.
+No new layout (the owner, 2026-11-25: "không cần design mới, hãy lưu các design như các lưu các ref và component"): the Library's grid and card (cover, name, kind, its facets; the Personal or Company · Org chip was removed on 2026-11-25; its search and facet filters) and the component page (Preview / Code stage, Install, then Usage with the tokens; other files under Code; source project and session links in the side panel; Download zip in the header). DESIGN.md updated.
 
 ## Phases
 

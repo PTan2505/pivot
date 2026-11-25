@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { getAsset, readAssetBytes } from "./assets";
 import { componentOf } from "./components";
-import { myDesignOf } from "./my-designs";
 import { resolveWriteTarget, WriteTargetError } from "./write-target";
 import { getResource } from "./resources";
 import { TAG_KIND_LABELS, TYPE_DEFS } from "./types";
@@ -40,20 +39,6 @@ export async function createSharePackage(
     if (!r || r.deletedAt) continue;
     if (r.meta.privatePage === true && !includePrivate) {
       left.push({ id, title: r.title, why: "saved from a private page" });
-      continue;
-    }
-    const design = r.type === "my_design" ? myDesignOf(r) : null;
-    if (design?.ownership === "company") {
-      // company work leaves PIVOT as its name only: no screenshots, link, notes or code
-      items.push({
-        title: r.title,
-        type: TYPE_DEFS[r.type].label,
-        url: null,
-        description: "",
-        facets: [],
-        owner: `Company work (${design.organisation ?? "unnamed"})`,
-        images: [],
-      });
       continue;
     }
     const component = r.type === "component" ? componentOf(r) : null;

@@ -1,6 +1,6 @@
 // My designs, Phase 2 (docs/my-designs-plan.md): save_my_design reads the files from disk under root (never retyped),
 // refuses what leaves the folder or can hold secrets, and get_my_design writes them back byte for byte without ever
-// overwriting a file that differs. search_references finds the owner's designs and filters them by organisation.
+// overwriting a file that differs. search_references finds the owner's designs and marks them as Yours.
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -82,8 +82,6 @@ function fakePivot() {
       }
       const meta = {
         kind: input.kind,
-        ownership: input.ownership,
-        ...(input.organisation ? { organisation: input.organisation } : {}),
         files: files.map((f) => ({ ...f, language: f.path.split(".").pop() })),
         dependencies: (input.dependencies as unknown[]) ?? [],
         install: (input.install as unknown[]) ?? [],
@@ -148,7 +146,7 @@ function fakePivot() {
             description: "",
             facets: [],
             hasScreenshot: true,
-            myDesign: { kind: "3d", ownership: "company", organisation: "ODIN" },
+            myDesign: { kind: "3d" },
             createdAt: "",
             updatedAt: "",
           },
@@ -178,8 +176,6 @@ function fakePivot() {
 const base = () => ({
   name: "ODIN 3D logo hero",
   kind: "3d",
-  ownership: "company",
-  organisation: "ODIN",
   root,
   files: [
     { path: "src/hero/hero.js", role: "component" },
@@ -212,9 +208,10 @@ describe("save_my_design", () => {
     ]);
     expect(files[0].code).toBe(HERO);
     expect(files[1].code).toBe(TOKENS);
+    expect(pivot.saves[0]).not.toHaveProperty("organisation");
     expect(pivot.saves[0]).toMatchObject({
-      ownership: "company",
-      organisation: "ODIN",
+      // an app before pivot-studio 0.7.0 still requires it; a newer one ignores it
+      ownership: "personal",
       source: {
         project: "odin-web",
         folder: root,
@@ -230,7 +227,7 @@ describe("save_my_design", () => {
     expect(pivot.uploads[0].data.equals(SVG)).toBe(true);
     const t = textOf(res);
     expect(t).toContain(`Saved "ODIN 3D logo hero" in My designs: http://127.0.0.1:4400/r/${ID}`);
-    expect(t).toContain("Company work (ODIN)");
+    expect(t).toContain(`PIVOT id ${ID} · 3d\n`);
     expect(t).toContain("- src/hero/hero.js (component, ");
     expect(t).toContain("Dependencies: three@0.170.0");
     expect(t).toContain(
@@ -282,13 +279,9 @@ describe("save_my_design", () => {
     expect(pivot.uploads).toEqual([]);
   });
 
-  it("refuses a relative root and company work without its organisation", async () => {
+  it("refuses a relative root", async () => {
     expect(textOf(await runTool(tool("save_my_design"), pivot.source, { ...base(), root: "project" }))).toMatch(
       /root must be an absolute path/,
-    );
-    const { organisation: _o, ...noOrg } = base();
-    expect(textOf(await runTool(tool("save_my_design"), pivot.source, noOrg))).toMatch(
-      /Company work needs its organisation/,
     );
     expect(pivot.saves).toEqual([]);
   });
@@ -329,11 +322,11 @@ describe("get_my_design", () => {
     out = await fs.mkdtemp(path.join(tmp, "rebuild-"));
   });
 
-  it("returns the files, usage, tokens, exact versions, install steps, owner and screenshots", async () => {
+  it("returns the files, usage, tokens, exact versions, install steps and screenshots", async () => {
     const res = await runTool(tool("get_my_design"), pivot.source, { name: "odin 3d LOGO hero" });
     const t = textOf(res);
-    expect(t).toContain("ODIN 3D logo hero — 3d · Company work (ODIN)");
-    expect(t).toMatch(/copy its code and files only into a project of the same organisation/);
+    expect(t).toContain("ODIN 3D logo hero — 3d · saved ");
+    expect(t).not.toMatch(/organisation|Company work/);
     expect(t).toContain("Dependencies (install exactly these versions): three@0.170.0");
     expect(t).toContain("1. npm install three@0.170.0");
     expect(t).toContain("- --color-ember: #ff5a1f");
@@ -393,14 +386,12 @@ describe("get_my_design", () => {
 });
 
 describe("the owner's designs in search and in the reference tools", () => {
-  it("search_references filters by organisation (My designs unless types say otherwise) and marks designs as Yours", async () => {
+  it("search_references searches the owner's designs and marks them as Yours", async () => {
     const pivot = fakePivot();
-    const res = await runTool(tool("search_references"), pivot.source, { query: "logo", organisation: "odin" });
-    expect(pivot.searches.at(-1)).toMatchObject({ query: "logo", organisation: "odin", types: ["my_design"] });
-    expect(textOf(res)).toContain("ODIN 3D logo hero — My design — Yours (3d, company: ODIN)");
-    await runTool(tool("search_references"), pivot.source, { query: "logo", types: ["reference", "my_design"] });
-    expect(pivot.searches.at(-1)).toMatchObject({ types: ["reference", "my_design"] });
-    expect(pivot.searches.at(-1)).not.toHaveProperty("organisation");
+    const res = await runTool(tool("search_references"), pivot.source, { query: "logo", types: ["my_design"] });
+    expect(pivot.searches.at(-1)).toMatchObject({ query: "logo", types: ["my_design"] });
+    expect(textOf(res)).toContain("ODIN 3D logo hero — My design — Yours (3d)");
+    expect(tool("search_references").inputSchema).not.toHaveProperty("organisation");
   });
 
   it("get_reference on a saved design points to get_my_design, and get_reference_images shows its shots", async () => {
@@ -410,7 +401,7 @@ describe("the owner's designs in search and in the reference tools", () => {
     Object.assign(r, { description: "", notes: "", content: "", collections: [], annotations: [], sourceUrl: null });
     const ref = await runTool(tool("get_reference"), pivot.source, { id: ID });
     expect(textOf(ref)).toMatch(/get_my_design \(id .*\) gives its files/);
-    expect(textOf(ref)).toMatch(/its code goes only into projects of the same organisation/);
+    expect(textOf(ref)).not.toMatch(/organisation/);
     const shots = await runTool(tool("get_reference_images"), pivot.source, { id: ID, which: "shots" });
     expect(shots.isError).toBeFalsy();
     expect(shots.content.filter((c) => c.type === "image")).toHaveLength(2);
