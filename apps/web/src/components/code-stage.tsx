@@ -18,7 +18,17 @@ export type CodeFile = { path: string; role: string; code: string };
 
 export const baseName = (p: string) => p.split("/").pop() ?? p;
 
+/** The height of a stage that has nothing to preview (an empty or failed state). */
 export const STAGE_H = "h-[min(46vh,420px)]";
+
+/**
+ * The preview stage: a screen's proportions (16:10 from sm up, 4:5 on phones) and never taller than 75% of the window,
+ * so a preview keeps its own shape instead of being squeezed into a strip or cropped.
+ */
+export const STAGE = "aspect-[4/5] max-h-[75vh] w-full sm:aspect-[16/10]";
+
+/** A wide stage at least this many px shows a page at its `viewport` width, scaled down to fit. */
+const SCALE_FROM = 640;
 
 /** The stage's controls: over its top-right corner from sm up, a row under it on phones (the owner's change). */
 export function StageControls({ children }: { children: React.ReactNode }) {
@@ -32,7 +42,18 @@ export function StageControls({ children }: { children: React.ReactNode }) {
  * same-origin is that origin, never PIVOT's; never `srcDoc` (it would inherit PIVOT's origin). PIVOT sends nothing in
  * and reads only "ready" from that frame (previewMessage).
  */
-export function LivePreview({ sha256, title, extra }: { sha256: string; title: string; extra?: React.ReactNode }) {
+export function LivePreview({
+  sha256,
+  title,
+  extra,
+  viewport,
+}: {
+  sha256: string;
+  title: string;
+  extra?: React.ReactNode;
+  /** Render at this width (a page designed for a desktop screen) and scale it down to the stage; phones show it as is. */
+  viewport?: number;
+}) {
   const { data, isError } = useQuery({
     queryKey: ["preview-origin"],
     queryFn: () => api<{ port: number }>("/api/components/preview-origin"),
@@ -42,6 +63,16 @@ export function LivePreview({ sha256, title, extra }: { sha256: string; title: s
   const ref = useRef<HTMLIFrameElement>(null);
   const [run, setRun] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    const el = box.current;
+    if (!el || !viewport) return;
+    const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [viewport]);
+  const scale = viewport && size && size.w >= SCALE_FROM && size.w < viewport ? size.w / viewport : 1;
   useEffect(() => {
     if (!origin) return;
     const on = (e: MessageEvent) => {
@@ -52,7 +83,7 @@ export function LivePreview({ sha256, title, extra }: { sha256: string; title: s
   }, [origin]);
   return (
     <div className="relative rounded-[14px] bg-surface p-3">
-      <div className={cn("relative overflow-hidden rounded-[10px] bg-canvas", STAGE_H)}>
+      <div ref={box} className={cn("relative overflow-hidden rounded-[10px] bg-canvas", STAGE)}>
         {origin && (
           <iframe
             key={run}
@@ -63,7 +94,17 @@ export function LivePreview({ sha256, title, extra }: { sha256: string; title: s
             referrerPolicy="no-referrer"
             title={`Live preview of ${title}`}
             onLoad={() => setLoaded(true)}
-            className="block size-full border-0"
+            className={cn("block border-0", scale === 1 && "size-full")}
+            style={
+              scale === 1
+                ? undefined
+                : {
+                    width: viewport,
+                    height: size!.h / scale,
+                    transform: `scale(${scale})`,
+                    transformOrigin: "0 0",
+                  }
+            }
           />
         )}
         {(!loaded || isError) && (

@@ -21,7 +21,7 @@ import {
   CodeView,
   CopyButton,
   LivePreview,
-  STAGE_H,
+  STAGE,
   StageControls,
   StageEmpty,
   useReducedMotion,
@@ -108,6 +108,7 @@ function Stage({
         <LivePreview
           sha256={live.sha256!}
           title={title}
+          viewport={1440}
           extra={
             <>
               {build}
@@ -212,7 +213,7 @@ function ShotStage({
         <video
           key={current.id}
           src={`/api/assets/${current.id}`}
-          className={cn("block w-full rounded-[10px] bg-canvas object-contain", STAGE_H)}
+          className={cn("block rounded-[10px] bg-canvas object-contain", STAGE)}
           controls
           muted
           playsInline
@@ -221,17 +222,21 @@ function ShotStage({
           aria-label={`Video of ${title}`}
         />
       ) : (
-        // eslint-disable-next-line @next/next/no-img-element -- a stored screenshot, served by PIVOT's asset route
-        <img
+        // a screen-shaped window that scrolls: a shot keeps its own proportions, and a full-page one scrolls in it
+        <div
           key={current.id}
-          src={`/api/assets/${current.id}`}
-          alt={`${labels.get(current.id) ?? "Screenshot"} of ${title}`}
-          className={cn(
-            "block w-full rounded-[10px] bg-canvas object-top",
-            viewportOf(current) === "mobile" ? "object-contain" : "object-cover",
-            STAGE_H,
-          )}
-        />
+          tabIndex={0}
+          role="region"
+          aria-label={`${labels.get(current.id) ?? "Screenshot"}, scrolls`}
+          className={cn("overflow-y-auto overscroll-contain rounded-[10px] bg-canvas", STAGE)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- a stored screenshot, served by PIVOT's asset route */}
+          <img
+            src={`/api/assets/${current.id}`}
+            alt={`${labels.get(current.id) ?? "Screenshot"} of ${title}`}
+            className={cn("block h-auto", viewportOf(current) === "mobile" ? "mx-auto w-full max-w-[390px]" : "w-full")}
+          />
+        </div>
       )}
       {extra && <StageControls>{extra}</StageControls>}
       {media.length > 1 && (
