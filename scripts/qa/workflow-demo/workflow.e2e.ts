@@ -424,9 +424,7 @@ describe("D · interactive preview and approval (gate 2)", () => {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     await page.goto(`${BASE}/design/${state.sessionId}?round=1`);
     await page.getByRole("tab", { name: /Live tea shop/ }).click();
-    await page.getByText("Interactive version.").waitFor();
-    const digestLine = await page.getByText(/Version 3 · digest/).textContent();
-    expect(digestLine).toContain(state.mockups[2].digest.slice(0, 12));
+    await page.getByText("Interactive version: its motion runs in the interactive preview.").waitFor();
     // the frame shows the version's static rendering (its scripts don't run here): wait until it has loaded
     await page.frameLocator("#mockup-panel iframe").locator("h1").waitFor();
     await page.screenshot({ path: shot("pivot-session-interactive.png") });
@@ -435,6 +433,8 @@ describe("D · interactive preview and approval (gate 2)", () => {
     await page.getByLabel(/Note for the build/).fill("TEST-ONLY approval by the workflow demo, not by the owner.");
     await page.getByLabel("Owner passphrase").fill(PASS); // TEST-ONLY: the scratch instance's passphrase
     await page.getByRole("dialog").waitFor({ state: "visible" });
+    // the dialog names the digest of the copy the page shows: the one the approval binds to
+    expect(await page.getByRole("dialog").textContent()).toContain(state.mockups[2].digest.slice(0, 12));
     await page.waitForTimeout(400); // let the dialog finish fading in before the evidence screenshot
     await page.screenshot({ path: shot("pivot-approve-dialog.png") });
     await page.getByRole("button", { name: /^Approve$/ }).click();
@@ -635,14 +635,47 @@ describe("F · QA", () => {
     );
   });
 
-  it("done, and the session reads back after an interruption", async () => {
+  it("done only after the QA is recorded, and the session reads back after an interruption", async () => {
+    // the QA gate (SPEC §15 "QA record"): done before a QA record is refused
+    const early = await call("set_design_status", { sessionId: state.sessionId, status: "done" });
+    expect(early.isError).toBe(true);
+    expect(textOf(early)).toMatch(/record_design_qa/);
+    // TEST-ONLY: the agent's QA report for this demo; what the run didn't check stays unverified
+    const qaRes = await call("record_design_qa", {
+      sessionId: state.sessionId,
+      level: "new",
+      summary: "TEST-ONLY demo QA: functional, responsive, visual, axe and motion checks passed; nothing left.",
+      slopCheck: {
+        detector: {
+          status: "not_installed",
+          result: "TEST-ONLY: the workflow demo doesn't install or run impeccable's detector.",
+        },
+        checklist: "TEST-ONLY: the build matches the approved mockup within 1% at 1440 and 390; no findings.",
+        critique: "TEST-ONLY: no critique run; the synthetic page only exercises the workflow's mechanics.",
+      },
+      specialists: [
+        {
+          name: "none",
+          phase: "mockups",
+          run: "none",
+          outcome: "TEST-ONLY: the mockups are fixtures; no specialist ran.",
+        },
+        { name: "none", phase: "qa", run: "none", outcome: "TEST-ONLY: no QA audit specialist ran in the demo." },
+      ],
+      unverified: ["impeccable's slop detector (not run)", "the text critique against critique.md (not run)"],
+    });
+    expect(qaRes.isError).toBeFalsy();
+    const qaId = (qaRes.structuredContent as { id: string }).id;
     const done = await call("set_design_status", { sessionId: state.sessionId, status: "done" });
     expect(done.isError).toBeFalsy();
     const fresh = new HttpSource(BASE); // a new agent session picking the work up
     const s = (await fresh.getDesignSession(state.sessionId))!;
     expect(s.status).toBe("done");
+    expect(s.currentQaId).toBe(qaId);
     expect(s.decisions.find((d) => d.kind === "approval")).toMatchObject({ binding: { status: "bound" } });
-    note("F · Status done; a fresh client reads the session back: status done, approval still bound.");
+    note(
+      `F · Done before QA → refused ("${textOf(early).slice(0, 60)}…"); TEST-ONLY QA recorded (${qaId.slice(0, 8)}), then status done; a fresh client reads the session back: status done, QA current, approval still bound.`,
+    );
   });
 });
 
