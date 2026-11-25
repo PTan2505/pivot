@@ -1,8 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { AppWindow, Check, ExternalLink, Info, Loader2, Maximize2, RotateCcw, X } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import {
+  AppWindow,
+  Check,
+  Ellipsis,
+  ExternalLink,
+  Info,
+  Loader2,
+  Maximize2,
+  MessageSquarePlus,
+  RotateCcw,
+  X,
+} from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -18,6 +28,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -393,13 +410,18 @@ export function useMockupNav(s: DesignSessionDetailDTO, asked: { round?: number;
 }
 
 /**
- * The session's mockup rounds: version tabs (1–9, ←/→), a width switch, the sandboxed mockup, "Open alone", "Open full
- * screen", and while the session is exploring, "Approve this version". The latest round shows first; `?round=` picks
- * another.
+ * The session's mockup rounds: version tabs (1–9, ←/→), a width switch, Full screen as the one visible tool (Replay, Open
+ * alone, the interactive preview and the motion note sit under "More mockup actions"), the sandboxed mockup, and while
+ * the session is exploring, the way into comments. The status bar above holds "Approve this version" (same `nav`). The
+ * latest round shows first; `?round=` picks another.
  */
-export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO }) {
-  const asked = Number(useSearchParams().get("round"));
-  const nav = useMockupNav(s, { round: asked || undefined });
+export function DesignMockups({
+  session: s,
+  nav,
+}: {
+  session: DesignSessionDetailDTO;
+  nav: ReturnType<typeof useMockupNav>;
+}) {
   const {
     rounds,
     latest,
@@ -427,21 +449,13 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
   const reduce = useReducedMotion();
 
   if (!current) return null;
+  const fullScreen = `/design/${s.id}/mockups?round=${round}&v=${current.n}`;
 
   return (
     <section aria-labelledby="mockups-title" className="space-y-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 id="mockups-title" className="text-xl font-medium tracking-[-0.02em]">
-          Mockups
-        </h2>
-        <p className="text-sm text-ink-muted">
-          Round {round} · {versions.length} version{versions.length === 1 ? "" : "s"}
-          {(() => {
-            const answers = s.rounds?.find((r) => r.round === round)?.addressesFeedback.length ?? 0;
-            return answers ? ` · answers ${answers} feedback` : "";
-          })()}
-        </p>
-      </div>
+      <h2 id="mockups-title" className="sr-only">
+        Mockups
+      </h2>
 
       {rounds.length > 1 && (
         <div role="radiogroup" aria-label="Round" className="flex flex-wrap gap-1.5">
@@ -463,75 +477,89 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
         </div>
       )}
 
-      <div role="tablist" aria-label="Versions" className="flex gap-1.5 overflow-x-auto pb-1">
-        {versions.map((m) => {
-          const approved = isApproved(m);
-          return (
-            <Pill
-              key={m.id}
-              role="tab"
-              id={`version-tab-${m.n}`}
-              aria-selected={m.id === current.id}
-              aria-controls="mockup-panel"
-              aria-keyshortcuts={m.n <= 9 ? String(m.n) : undefined}
-              tabIndex={m.id === current.id ? 0 : -1}
-              active={m.id === current.id}
-              onClick={() => setN(m.n)}
-            >
-              <span className="font-mono tabular-nums opacity-70">{m.n}</span>
-              {m.title}
-              {mixed && m.interactive && (
-                <span className="rounded-full bg-surface-raised px-1.5 text-[12px] text-ink-secondary">
-                  Interactive
-                </span>
-              )}
-              {approved && (
-                <span className="flex items-center gap-1 rounded-full bg-success px-1.5 text-[12px] text-on-inverse">
-                  <Check className="size-3" aria-hidden /> Approved
-                </span>
-              )}
-            </Pill>
-          );
-        })}
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div role="radiogroup" aria-label="Width" className="flex gap-1.5">
-          {(Object.keys(WIDTHS) as Width[]).map((w) => (
-            <Pill key={w} role="radio" aria-checked={w === width} active={w === width} onClick={() => setWidth(w)}>
-              {WIDTH_LABEL[w]}
-            </Pill>
-          ))}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div role="tablist" aria-label="Versions" className="-my-1 flex min-w-0 gap-1.5 overflow-x-auto py-1">
+          {versions.map((m) => {
+            const approved = isApproved(m);
+            return (
+              <Pill
+                key={m.id}
+                role="tab"
+                id={`version-tab-${m.n}`}
+                aria-selected={m.id === current.id}
+                aria-controls="mockup-panel"
+                aria-keyshortcuts={m.n <= 9 ? String(m.n) : undefined}
+                tabIndex={m.id === current.id ? 0 : -1}
+                active={m.id === current.id}
+                onClick={() => setN(m.n)}
+              >
+                <span className="font-mono tabular-nums opacity-70">{m.n}</span>
+                {m.title}
+                {mixed && m.interactive && (
+                  <span className="rounded-full bg-surface-raised px-1.5 text-[12px] text-ink-secondary">
+                    Interactive
+                  </span>
+                )}
+                {approved && (
+                  <span className="flex items-center gap-1 rounded-full bg-success px-1.5 text-[12px] text-on-inverse">
+                    <Check className="size-3" aria-hidden /> Approved
+                  </span>
+                )}
+              </Pill>
+            );
+          })}
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Button size="sm" variant="ghost" onClick={() => setRun((r) => r + 1)}>
-            <RotateCcw /> Replay
-          </Button>
-          <Button size="sm" variant="ghost" asChild>
-            <a href={`/api/design/mockups/${current.id}`} target="_blank" rel="noopener noreferrer">
-              Open alone <ExternalLink />
-            </a>
-          </Button>
-          <Button size="sm" variant="secondary" asChild>
-            <Link href={`/design/${s.id}/mockups?round=${round}&v=${current.n}`}>
-              <Maximize2 /> Open full screen
+        <div className="ml-auto flex flex-wrap items-center gap-1 sm:gap-1.5">
+          <div role="radiogroup" aria-label="Width" className="flex gap-1 sm:gap-1.5">
+            {(Object.keys(WIDTHS) as Width[]).map((w) => (
+              <Pill
+                key={w}
+                role="radio"
+                aria-checked={w === width}
+                active={w === width}
+                onClick={() => setWidth(w)}
+                className="max-sm:px-2.5"
+              >
+                {WIDTH_LABEL[w]}
+              </Pill>
+            ))}
+          </div>
+          <Button size="sm" variant="secondary" asChild className="[@media(pointer:coarse)]:h-11">
+            <Link href={fullScreen}>
+              <Maximize2 /> Full screen
             </Link>
           </Button>
-          <Button size="sm" variant="secondary" disabled={opening} onClick={openPreview}>
-            {opening ? <Loader2 className="animate-spin" /> : <AppWindow />}
-            {preview.data?.open && preview.data.round === round ? "Preview open" : "Open interactive preview"}
-          </Button>
-          {canApprove && (
-            <Button
-              size="sm"
-              variant="secondary"
-              className="rounded-full bg-inverse text-on-inverse hover:bg-inverse/90 hover:text-on-inverse"
-              data-approve-trigger
-              onClick={() => setApproving(true)}
-            >
-              <Check /> Approve this version
-            </Button>
-          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label="More mockup actions"
+                className="[@media(pointer:coarse)]:size-11"
+              >
+                {opening ? <Loader2 className="animate-spin" /> : <Ellipsis />}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={6} className="w-60">
+              <DropdownMenuItem onSelect={() => setRun((r) => r + 1)}>
+                <RotateCcw /> Replay
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <a href={`/api/design/mockups/${current.id}`} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink /> Open alone
+                  <span className="sr-only">(opens in a new tab)</span>
+                </a>
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={opening} onSelect={() => void openPreview()}>
+                <AppWindow />
+                {preview.data?.open && preview.data.round === round ? "Preview open" : "Open interactive preview"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => setAboutMotion((o) => !o)}>
+                <Info /> {aboutMotion ? "Hide the motion note" : "About motion"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -569,42 +597,35 @@ export function DesignMockups({ session: s }: { session: DesignSessionDetailDTO 
           </span>
         </div>
       )}
-      <div className="space-y-2">
-        <p className="flex items-center gap-2 text-[13px] text-ink-muted">
-          {interactiveCount === versions.length
-            ? `${versions.length === 1 ? "This version is" : "All versions are"} interactive: ${versions.length === 1 ? "its" : "their"} motion runs in the interactive preview.`
-            : current.interactive
-              ? "Interactive version: its motion runs in the interactive preview."
-              : "Motion follows your browser’s setting."}
-          <button
-            type="button"
-            aria-label="About motion and reduced motion"
-            aria-expanded={aboutMotion}
-            aria-controls="about-motion"
-            onClick={() => setAboutMotion((o) => !o)}
-            className="inline-grid size-6 shrink-0 place-items-center rounded-full bg-surface text-ink-secondary outline-none hover:bg-surface-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text focus-visible:outline-solid"
-          >
-            <Info className="size-3.5" aria-hidden />
-          </button>
-        </p>
-        <p
-          id="about-motion"
-          hidden={!aboutMotion}
-          className="max-w-xl rounded-xl bg-surface px-3.5 py-2.5 text-[13px] text-ink-muted"
-        >
-          Motion follows your browser
-          {reduce !== null && (
-            <>
-              , which has reduced motion <b className="font-medium text-ink">{reduce ? "on" : "off"}</b>
-            </>
-          )}
-          . To preview the other setting, switch Reduce motion in your system settings, or use Motion: reduced in the
-          interactive preview, then press Replay.
-        </p>
-      </div>
+      <p
+        id="about-motion"
+        hidden={!aboutMotion}
+        className="max-w-xl rounded-xl bg-surface px-3.5 py-2.5 text-[13px] text-ink-muted"
+      >
+        {interactiveCount === versions.length
+          ? `${versions.length === 1 ? "This version is" : "All versions are"} interactive: ${versions.length === 1 ? "its" : "their"} motion runs in the interactive preview. `
+          : current.interactive
+            ? "Interactive version: its motion runs in the interactive preview. "
+            : ""}
+        Motion follows your browser
+        {reduce !== null && (
+          <>
+            , which has reduced motion <b className="font-medium text-ink">{reduce ? "on" : "off"}</b>
+          </>
+        )}
+        . To preview the other setting, switch Reduce motion in your system settings, or use Motion: reduced in the
+        interactive preview, then press Replay.
+      </p>
       <div id="mockup-panel" role="tabpanel" aria-label={`Version ${current.n}: ${current.title}`}>
         <Frame mockup={current} width={width} run={run} />
       </div>
+      {canApprove && (
+        <Button size="sm" variant="ghost" asChild className="-ml-3 [@media(pointer:coarse)]:h-11">
+          <Link href={fullScreen}>
+            <MessageSquarePlus /> Comment in full screen
+          </Link>
+        </Button>
+      )}
 
       <ApproveDialog
         mockup={current}

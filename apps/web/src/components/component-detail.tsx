@@ -3,7 +3,9 @@
 // The page of a component saved with its code (type `component`, docs/component-store-plan.md Phase 3). Design
 // session 118304e2, version 3 "Today's layout, component stage", approved by the owner: the visual types' grid kept,
 // with a stage holding Preview / Code tabs and Install in the main column, and Review and Used in at the top of the
-// side panel. The code is read-only: PIVOT keeps it as fetched.
+// side panel. The code is read-only: PIVOT keeps it as fetched. Declutter (direction C "Inspector", 2026-11-25): Install
+// is a third tab, the stage loses the overlay that repeated a header action, and the side panel's rows are rendered
+// by resource-detail.tsx's inspector from the parts exported here.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -30,9 +32,9 @@ import {
   baseName,
   CHIP,
   CodeView,
+  BuildFailed,
   CopyButton,
   LivePreview,
-  PanelGroup,
   STAGE_H,
   StageControls,
   StageEmpty,
@@ -47,18 +49,21 @@ export const componentMeta = (meta: Record<string, unknown>) => (meta?.component
 const date = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
+type ComponentTab = "preview" | "code" | "install";
+
 /** The tab, file and line on show live in the URL (`?tab=code&file=…&line=…`), so a flag can open them. */
 function useComponentView(c: ComponentMeta) {
   const params = useSearchParams();
-  const tab = params.get("tab") === "code" ? "code" : "preview";
+  const asked = params.get("tab");
+  const tab: ComponentTab = asked === "code" || asked === "install" ? asked : "preview";
   const files = orderedFiles(c.files);
   const file = files.find((f) => f.path === params.get("file"))?.path ?? files[0]?.path ?? "";
   const line = Number(params.get("line")) || 0;
   // the native history API: Next keeps useSearchParams in step, with no server round trip (the tabs switch at once)
-  const go = (next: { tab?: "preview" | "code"; file?: string; line?: number }) => {
+  const go = (next: { tab?: ComponentTab; file?: string; line?: number }) => {
     const sp = new URLSearchParams(window.location.search);
     const t = next.tab ?? tab;
-    if (t === "code") sp.set("tab", "code");
+    if (t !== "preview") sp.set("tab", t);
     else sp.delete("tab");
     sp.delete("line");
     if (next.file !== undefined) sp.set("file", next.file);
@@ -85,7 +90,7 @@ const TONE_TEXT: Record<Tone, string> = {
   none: "text-ink-muted",
 };
 
-function reviewState(c: ComponentMeta): { tone: Tone; icon: LucideIcon; label: string; short: string } {
+export function reviewState(c: ComponentMeta): { tone: Tone; icon: LucideIcon; label: string; short: string } {
   const r = c.review;
   if (!r) return { tone: "none", icon: ShieldQuestion, label: "Not reviewed yet", short: "Not reviewed" };
   if (r.codeSha256 !== c.codeSha256)
@@ -113,46 +118,8 @@ export function ReviewChip({ c, className }: { c: ComponentMeta; className?: str
   );
 }
 
-function licenceText(c: ComponentMeta) {
+export function licenceText(c: ComponentMeta) {
   return c.licence.spdx || c.licence.name || null;
-}
-
-/** Under the title: who made it, its licence, the review, and its page on 21st.dev. */
-export function ComponentIdentity({ c }: { c: ComponentMeta }) {
-  const licence = licenceText(c);
-  return (
-    <div className="-mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-muted">
-      <span className="inline-flex items-center gap-2">
-        <span
-          aria-hidden
-          className="grid size-5 place-items-center rounded-[6px] bg-surface-raised text-xs text-ink-secondary uppercase"
-        >
-          {(c.author.name || c.author.username).slice(0, 1)}
-        </span>
-        {c.author.name && <span className="text-ink-secondary">{c.author.name}</span>}
-        <span className="font-mono">@{c.author.username}</span>
-      </span>
-      {licence ? (
-        <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-ink/8 px-2.5 text-xs font-medium text-ink">
-          <span className="font-normal text-ink-secondary">Licence</span> {licence}
-        </span>
-      ) : (
-        <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-ink/8 px-2.5 text-xs font-medium text-warning">
-          <AlertTriangle className="size-3.5" aria-hidden /> Licence unknown
-        </span>
-      )}
-      <ReviewChip c={c} />
-      <a
-        href={c.pageUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="min-w-0 break-all text-accent-text hover:underline"
-      >
-        {c.pageUrl.replace(/^https:\/\/(www\.)?/, "")}
-        <span className="sr-only"> (opens in a new tab)</span>
-      </a>
-    </div>
-  );
 }
 
 // ---- main column: stage, code, install -----------------------------------------------------------------------
@@ -181,7 +148,6 @@ function Stage({ c, id, title, onShowCode }: { c: ComponentMeta; id: string; tit
               )}
             </>
           }
-          open={<OpenOn21st c={c} />}
         />
         <p className="mt-2 text-xs text-ink-subtle">
           PIVOT’s live preview, running on its own origin with no network.
@@ -264,16 +230,7 @@ function BuildNotes({ c }: { c: ComponentMeta }) {
         bundling it on this machine…
       </p>
     );
-  if (p?.status === "failed")
-    return (
-      <div role="status" className="mt-2 flex gap-2 rounded-[10px] bg-surface p-3 text-danger">
-        <XCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-        <p className="min-w-0 text-xs text-ink-secondary">
-          <span className="block font-medium text-danger">The preview build failed</span>
-          <span className="font-mono break-words whitespace-pre-wrap text-ink-muted">{p.error}</span>
-        </p>
-      </div>
-    );
+  if (p?.status === "failed") return <BuildFailed error={p.error} />;
   return null;
 }
 
@@ -301,6 +258,7 @@ function ImageStage({
   const [video, setVideo] = useState(false);
   const [failed, setFailed] = useState(false);
   const reduced = useReducedMotion();
+  // Open on 21st.dev is in the header's "More actions"; the empty states keep it, where it is the way forward
   const open = <OpenOn21st c={c} />;
   if (!c.previewImageUrl && !c.videoUrl) {
     return (
@@ -362,9 +320,54 @@ function ImageStage({
             <Play /> {video ? "Show image" : "Play video"}
           </Button>
         )}
-        {open}
       </StageControls>
     </div>
+  );
+}
+
+// The key's placeholder in the install command, with the query parameter that carries it.
+const KEY_PARAM = /([?&]api_key=)\$API_KEY_21ST/;
+
+/**
+ * The install command, with `?api_key=$API_KEY_21ST` shown as a short "api key" chip. The real text stays in the DOM
+ * (screen-reader only) and the chip is not selectable, so a selection copies exactly what Copy command copies.
+ */
+function InstallCommand({ command, codeRef }: { command: string; codeRef: React.RefObject<HTMLElement | null> }) {
+  const m = command.match(KEY_PARAM);
+  if (!m || m.index === undefined)
+    return (
+      <code
+        ref={codeRef}
+        className="min-w-0 flex-1 pt-0.5 font-mono text-[12.5px] leading-relaxed break-all text-ink-secondary"
+      >
+        {command.split("$API_KEY_21ST").map((p, i, all) => (
+          <Fragment key={i}>
+            {p}
+            {i < all.length - 1 && (
+              <span className="rounded-[6px] bg-surface px-1.5 py-px text-ink">$API_KEY_21ST</span>
+            )}
+          </Fragment>
+        ))}
+      </code>
+    );
+  const before = command.slice(0, m.index);
+  const after = command.slice(m.index + m[0].length);
+  return (
+    <code
+      ref={codeRef}
+      className="min-w-0 flex-1 pt-0.5 font-mono text-[12.5px] leading-relaxed break-all text-ink-secondary"
+    >
+      {before}
+      <span className="sr-only">{m[0]}</span>
+      <span
+        aria-hidden
+        title={`${m[0]}: the copied command carries this placeholder`}
+        className="mx-0.5 rounded-[6px] bg-surface px-1.5 py-px text-ink select-none"
+      >
+        ?api_key=…
+      </span>
+      {after}
+    </code>
   );
 }
 
@@ -378,32 +381,20 @@ function InstallPanel({ c }: { c: ComponentMeta }) {
     window.getSelection()?.removeAllRanges();
     window.getSelection()?.addRange(r);
   };
-  const parts = c.installCommand?.split("$API_KEY_21ST") ?? [];
   return (
     <section aria-labelledby={headingId} className="space-y-3 rounded-[14px] bg-surface p-4">
-      <h2 id={headingId} className="text-xs text-ink-subtle">
+      <h2 id={headingId} className="sr-only">
         Install
       </h2>
       {c.installCommand ? (
         <>
           <div className="flex items-start gap-2 rounded-[10px] bg-surface-raised py-2 pr-2 pl-3">
-            <code
-              ref={cmdRef}
-              className="min-w-0 flex-1 pt-0.5 font-mono text-[12.5px] leading-relaxed break-all text-ink-secondary"
-            >
-              {parts.map((p, i) => (
-                <Fragment key={i}>
-                  {p}
-                  {i < parts.length - 1 && (
-                    <span className="rounded-[6px] bg-surface px-1.5 py-px text-ink">$API_KEY_21ST</span>
-                  )}
-                </Fragment>
-              ))}
-            </code>
+            <InstallCommand command={c.installCommand} codeRef={cmdRef} />
             <CopyButton text={c.installCommand} label="Copy command" name="install command" selectOnFail={select} />
           </div>
           <p className="text-xs text-ink-subtle">
-            Replace <span className="rounded-[6px] bg-surface-raised px-1.5 font-mono text-ink">$API_KEY_21ST</span>{" "}
+            The copied command holds{" "}
+            <span className="rounded-[6px] bg-surface-raised px-1.5 font-mono text-ink">$API_KEY_21ST</span>: replace it
             with your 21st API key, or skip the install and copy the files: PIVOT holds them, so no 21st retrieval is
             spent.
           </p>
@@ -446,44 +437,32 @@ function RejectedBanner({ c }: { c: ComponentMeta }) {
   );
 }
 
-/** The main column: Preview / Code over one stage, then Install. */
+export const TAB_CLASS =
+  "px-4 focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-text";
+const PANEL_CLASS = "motion-safe:animate-in motion-safe:duration-150 motion-safe:fade-in-0";
+
+/** The main column: Preview / Code / Install over one stage. */
 export function ComponentMain({ c, id, title }: { c: ComponentMeta; id: string; title: string }) {
   const view = useComponentView(c);
   const rejected = c.review?.verdict === "rejected" && c.review.codeSha256 === c.codeSha256;
   return (
-    <div className="min-w-0 space-y-6">
-      <Tabs value={view.tab} onValueChange={(t) => view.go({ tab: t as "preview" | "code" })} className="gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <TabsList aria-label="Preview or code">
-            <TabsTrigger
-              value="preview"
-              className="px-4 focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-text"
-            >
-              Preview
-            </TabsTrigger>
-            <TabsTrigger
-              value="code"
-              className="px-4 focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-text"
-            >
-              Code
-            </TabsTrigger>
-          </TabsList>
-          <span className="text-xs text-ink-subtle">
-            {c.files.length} {c.files.length === 1 ? "file" : "files"}
-          </span>
-        </div>
-        <TabsContent
-          value="preview"
-          tabIndex={-1}
-          className="motion-safe:animate-in motion-safe:duration-150 motion-safe:fade-in-0"
-        >
+    <div className="min-w-0 space-y-4">
+      <Tabs value={view.tab} onValueChange={(t) => view.go({ tab: t as ComponentTab })} className="gap-3">
+        <TabsList aria-label="Preview, code or install" className="max-sm:w-full">
+          <TabsTrigger value="preview" className={TAB_CLASS}>
+            Preview
+          </TabsTrigger>
+          <TabsTrigger value="code" className={TAB_CLASS}>
+            Code
+          </TabsTrigger>
+          <TabsTrigger value="install" className={TAB_CLASS}>
+            Install
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="preview" tabIndex={-1} className={PANEL_CLASS}>
           <Stage c={c} id={id} title={title} onShowCode={() => view.go({ tab: "code" })} />
         </TabsContent>
-        <TabsContent
-          value="code"
-          tabIndex={-1}
-          className="rounded-[14px] bg-surface p-4 motion-safe:animate-in motion-safe:duration-150 motion-safe:fade-in-0"
-        >
+        <TabsContent value="code" tabIndex={-1} className={cn("rounded-[14px] bg-surface p-4", PANEL_CLASS)}>
           <CodeView
             files={view.files}
             file={view.file}
@@ -492,26 +471,68 @@ export function ComponentMain({ c, id, title }: { c: ComponentMeta; id: string; 
             roleLabel={(role) => ROLE_LABEL[role as keyof typeof ROLE_LABEL] ?? role}
           />
         </TabsContent>
+        <TabsContent value="install" tabIndex={-1} className={PANEL_CLASS}>
+          <InstallPanel c={c} />
+        </TabsContent>
       </Tabs>
       {rejected && <RejectedBanner c={c} />}
-      <InstallPanel c={c} />
     </div>
   );
 }
 
-// ---- side panel: review, used in, source --------------------------------------------------------------------
+// ---- inspector rows: review, used in, about --------------------------------------------------------------------
 
-export function ComponentReviewGroup({ c }: { c: ComponentMeta }) {
+/** The Review row's one-line summary: the verdict with its icon, and the scan's flag count. */
+export function ReviewSummary({ c }: { c: ComponentMeta }) {
+  const s = reviewState(c);
+  const n = c.scan?.flags?.length ?? 0;
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      <s.icon className={cn("size-3.5 shrink-0", TONE_TEXT[s.tone])} aria-hidden />
+      <span className={cn("truncate", TONE_TEXT[s.tone])}>{s.short}</span>
+      {n > 0 && <span className="shrink-0 text-warning">· {n === 1 ? "1 flag" : `${n} flags`}</span>}
+    </span>
+  );
+}
+
+/** The verdict's notes, often a long paragraph: four lines until you ask for all of it. */
+function ReviewNotes({ children, long }: { children: React.ReactNode; long: boolean }) {
+  const [all, setAll] = useState(false);
+  const id = useId();
+  return (
+    <>
+      <span id={id} className={cn("block", long && !all && "line-clamp-4")}>
+        {children}
+      </span>
+      {long && (
+        <Button
+          variant="ghost"
+          size="xs"
+          className="-ml-2.5 text-accent-text"
+          aria-expanded={all}
+          aria-controls={id}
+          onClick={() => setAll((a) => !a)}
+        >
+          {all ? "Show less" : "Show all"}
+        </Button>
+      )}
+    </>
+  );
+}
+
+/** The Review row: the verdict, PIVOT's scan and its flags (each opens the Code tab at its line), and the hosts. */
+export function ComponentReview({ c }: { c: ComponentMeta }) {
   const view = useComponentView(c);
   const s = reviewState(c);
   const r = c.review;
   const flags = c.scan?.flags ?? [];
   const inFiles = new Set(c.files.map((f) => f.path));
+  const notesLong = !!r && r.codeSha256 === c.codeSha256 && `${r.notes} ${r.userWords ?? ""}`.length > 220;
   return (
-    <PanelGroup title="Review">
+    <>
       <div className={cn("flex gap-2.5 rounded-[10px] bg-surface-raised p-3", TONE_TEXT[s.tone])}>
         <s.icon className="mt-0.5 size-4 shrink-0" aria-hidden />
-        <p className="min-w-0 text-sm text-ink-secondary">
+        <div className="min-w-0 text-sm text-ink-secondary">
           <span className={cn("block font-medium", TONE_TEXT[s.tone])}>{s.label}</span>
           {!r ? (
             <>
@@ -524,7 +545,7 @@ export function ComponentReviewGroup({ c }: { c: ComponentMeta }) {
               again before the next build.
             </>
           ) : (
-            <>
+            <ReviewNotes long={notesLong}>
               {date(r.reviewedAt)}: {r.notes}
               {r.userWords && (
                 <>
@@ -532,9 +553,9 @@ export function ComponentReviewGroup({ c }: { c: ComponentMeta }) {
                   You said: <q className="text-ink">{r.userWords}</q>
                 </>
               )}
-            </>
+            </ReviewNotes>
           )}
-        </p>
+        </div>
       </div>
       <h3 className="pt-1 text-xs text-ink-subtle">
         PIVOT’s scan · {flags.length ? `${flags.length} ${flags.length === 1 ? "flag" : "flags"}` : "found nothing"}
@@ -573,8 +594,24 @@ export function ComponentReviewGroup({ c }: { c: ComponentMeta }) {
           Hosts named in the code: <span className="break-all text-ink-muted">{c.scan.hosts.join(", ")}</span>
         </p>
       )}
-    </PanelGroup>
+    </>
   );
+}
+
+/** One row per session or project, newest first, with its latest status. */
+function usedInRows(c: ComponentMeta) {
+  const rows = new Map<string, (typeof c.origins)[number]>();
+  for (const o of [...c.origins].reverse()) {
+    const key = o.sessionId ?? `project:${o.project ?? ""}`;
+    if (!rows.has(key)) rows.set(key, o);
+  }
+  return [...rows.values()].filter((o) => o.sessionId || o.project).slice(0, 10);
+}
+
+/** The Used in row's summary: how many sessions or projects. */
+export function usedInSummary(c: ComponentMeta) {
+  const n = usedInRows(c).length;
+  return n === 0 ? "Not used yet" : n === 1 ? "1 place" : `${n} places`;
 }
 
 export function ComponentUsedIn({ c }: { c: ComponentMeta }) {
@@ -584,42 +621,50 @@ export function ComponentUsedIn({ c }: { c: ComponentMeta }) {
     staleTime: 60_000,
   });
   const titles = new Map((data?.sessions ?? []).map((s) => [s.id, s.title]));
-  // newest first, one row per session or project, with its latest status
-  const rows = new Map<string, (typeof c.origins)[number]>();
-  for (const o of [...c.origins].reverse()) {
-    const key = o.sessionId ?? `project:${o.project ?? ""}`;
-    if (!rows.has(key)) rows.set(key, o);
-  }
-  const list = [...rows.values()].filter((o) => o.sessionId || o.project).slice(0, 10);
-  return (
-    <PanelGroup title="Used in">
-      {list.length === 0 ? (
-        <p className="text-sm text-ink-muted">Not used yet.</p>
-      ) : (
-        <ul className="space-y-1.5">
-          {list.map((o, i) => (
-            <li key={i} className="rounded-[10px] bg-surface-raised p-2.5 text-sm text-ink-secondary">
-              {o.sessionId ? (
-                <Link href={`/design/${o.sessionId}`} className="text-accent-text hover:underline">
-                  {titles.get(o.sessionId) ?? "Design session"}
-                </Link>
-              ) : (
-                <span className="text-ink">{o.project}</span>
-              )}
-              {o.candidateN && <> · picked as #{o.candidateN}</>}
-              <span className="block text-xs text-ink-subtle">
-                {o.status === "built" ? `Built${o.project ? ` in ${o.project}` : ""}` : "Fetched, not built"} ·{" "}
-                {date(o.savedAt)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </PanelGroup>
+  const list = usedInRows(c);
+  return list.length === 0 ? (
+    <p className="text-sm text-ink-muted">Not used yet.</p>
+  ) : (
+    <ul className="space-y-1.5">
+      {list.map((o, i) => (
+        <li key={i} className="rounded-[10px] bg-surface-raised p-2.5 text-sm text-ink-secondary">
+          {o.sessionId ? (
+            <Link href={`/design/${o.sessionId}`} className="text-accent-text hover:underline">
+              {titles.get(o.sessionId) ?? "Design session"}
+            </Link>
+          ) : (
+            <span className="text-ink">{o.project}</span>
+          )}
+          {o.candidateN && <> · picked as #{o.candidateN}</>}
+          <span className="block text-xs text-ink-subtle">
+            {o.status === "built" ? `Built${o.project ? ` in ${o.project}` : ""}` : "Fetched, not built"} ·{" "}
+            {date(o.savedAt)}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
-/** Where it came from, in the Source group: the facts PIVOT keeps, read-only. */
+/** The About row's summary: the author, and the licence (a warning when unknown). */
+export function ComponentAboutSummary({ c }: { c: ComponentMeta }) {
+  const licence = licenceText(c);
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      <span className="truncate">@{c.author.username}</span>
+      {licence ? (
+        <span className="shrink-0">· {licence}</span>
+      ) : (
+        <span className="inline-flex shrink-0 items-center gap-1 text-warning">
+          · <AlertTriangle className="size-3.5" aria-hidden /> Licence unknown
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Where it came from, in the About row: the facts PIVOT keeps, read-only (its 21st id and fetch date are in
+ * Technical details). */
 export function ComponentFacts({ c }: { c: ComponentMeta }) {
   const licence = licenceText(c);
   const read = {
@@ -629,7 +674,7 @@ export function ComponentFacts({ c }: { c: ComponentMeta }) {
     unknown: "",
   }[c.licence.source];
   return (
-    <dl className="grid grid-cols-[84px_1fr] gap-x-3 gap-y-2 text-sm">
+    <dl className="grid grid-cols-[72px_1fr] gap-x-3 gap-y-2 text-sm">
       <dt className="text-ink-subtle">Original</dt>
       <dd className="min-w-0 break-all">
         <a href={c.pageUrl} target="_blank" rel="noopener noreferrer" className="text-accent-text hover:underline">
@@ -647,10 +692,6 @@ export function ComponentFacts({ c }: { c: ComponentMeta }) {
         {licence ?? <span className="text-warning">Unknown: check before you ship it</span>}
         {licence && read && <span className="text-ink-subtle"> · {read}</span>}
       </dd>
-      <dt className="text-ink-subtle">21st id</dt>
-      <dd className="font-mono text-ink-secondary">{c.providerId}</dd>
-      <dt className="text-ink-subtle">Fetched</dt>
-      <dd className="font-mono text-ink-secondary">{c.fetchedAt.slice(0, 10)}</dd>
     </dl>
   );
 }

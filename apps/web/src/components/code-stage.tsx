@@ -4,7 +4,7 @@
 // preview stage and its controls, the live preview on the preview origin, the read-only code viewer with file tabs, and
 // the copy button. Moved out of component-detail.tsx unchanged (docs/my-designs-plan.md, Phase 3).
 import { useQuery } from "@tanstack/react-query";
-import { Check, Copy, FileCode, ImageOff, RotateCcw } from "lucide-react";
+import { Check, Copy, FileCode, ImageOff, RotateCcw, XCircle } from "lucide-react";
 import { Fragment, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { previewMessage, previewOriginFor } from "@pivot/core/preview-messages";
@@ -32,17 +32,7 @@ export function StageControls({ children }: { children: React.ReactNode }) {
  * same-origin is that origin, never PIVOT's; never `srcDoc` (it would inherit PIVOT's origin). PIVOT sends nothing in
  * and reads only "ready" from that frame (previewMessage).
  */
-export function LivePreview({
-  sha256,
-  title,
-  extra,
-  open,
-}: {
-  sha256: string;
-  title: string;
-  extra?: React.ReactNode;
-  open?: React.ReactNode;
-}) {
+export function LivePreview({ sha256, title, extra }: { sha256: string; title: string; extra?: React.ReactNode }) {
   const { data, isError } = useQuery({
     queryKey: ["preview-origin"],
     queryFn: () => api<{ port: number }>("/api/components/preview-origin"),
@@ -94,7 +84,6 @@ export function LivePreview({
           <RotateCcw /> Reload
         </Button>
         {extra}
-        {open}
       </StageControls>
     </div>
   );
@@ -316,14 +305,58 @@ export function CodeView({
 
 export const CHIP = "inline-flex h-6 items-center gap-1.5 rounded-full bg-ink/8 px-2.5 text-xs font-medium text-ink";
 
-export function PanelGroup({ title, children }: { title: string; children: React.ReactNode }) {
+/** The first useful line of a build error, for the one-line summary (the raw text stays behind "Show details"). */
+function summariseBuildError(error: string) {
+  const unresolved = error.match(/Could not resolve/g)?.length ?? 0;
+  if (unresolved)
+    return `${unresolved} ${unresolved === 1 ? "import" : "imports"} couldn’t be found. A file it imports may not be saved.`;
+  const first = error.split(/\n|; /)[0]?.trim() ?? "";
+  return first || "No reason given.";
+}
+
+/** A failed preview build: one line that says what went wrong, the raw bundler output behind "Show details". */
+export function BuildFailed({ error }: { error?: string }) {
+  const [open, setOpen] = useState(false);
   const id = useId();
+  const raw = error?.trim() ?? "";
   return (
-    <section aria-labelledby={id} className="space-y-3 rounded-[14px] bg-surface p-4">
-      <h2 id={id} className="text-xs text-ink-subtle">
-        {title}
-      </h2>
-      {children}
-    </section>
+    <div role="status" className="mt-2 rounded-[10px] bg-surface px-3 py-2.5">
+      <div className="flex items-start gap-2 text-xs">
+        <XCircle className="mt-px size-4 shrink-0 text-danger" aria-hidden />
+        <p className="min-w-0 flex-1 pt-0.5 text-ink-secondary">
+          <span className="font-medium text-danger">The preview build failed:</span>{" "}
+          {raw ? summariseBuildError(raw) : "No reason given."}
+        </p>
+        {raw && (
+          <Button
+            variant="ghost"
+            size="xs"
+            aria-expanded={open}
+            aria-controls={id}
+            onClick={() => setOpen((o) => !o)}
+            className="shrink-0 text-ink-muted max-sm:h-11"
+          >
+            {open ? "Hide details" : "Show details"}
+          </Button>
+        )}
+      </div>
+      {raw && (
+        <pre id={id} hidden={!open} className="mt-2 font-mono text-xs break-words whitespace-pre-wrap text-ink-muted">
+          {raw}
+        </pre>
+      )}
+    </div>
   );
+}
+
+/** The warning row's one line, shown whenever PIVOT's scan has flags (null when it found nothing). */
+export function scanWarning(scan?: { flags?: { kind: string; what: string }[] }) {
+  const flags = scan?.flags ?? [];
+  if (!flags.length) return null;
+  if (flags.every((f) => f.kind === "host")) {
+    const hosts = [...new Set(flags.map((f) => f.what))];
+    const more = hosts.length - 1;
+    return `Reaches ${hosts[0]}${more ? ` and ${more} other ${more === 1 ? "host" : "hosts"}` : ""}`;
+  }
+  return `PIVOT’s scan: ${flags.length} ${flags.length === 1 ? "flag" : "flags"}`;
 }

@@ -252,7 +252,7 @@ describe("feedback rounds", () => {
 describe("a pick from the interactive preview", () => {
   it("pivot:design treats Choose this version as a pick, then asks before recording a chat approval", () => {
     expect(d).toContain("**Choose this version** in a preview you started sends the user's pick to you");
-    expect(d).toContain("the session page has **Open interactive preview**");
+    expect(d).toContain("the session page has **Open interactive preview** (in the mockups' ⋯ menu)");
     expect(spec).toContain("**Open the preview from PIVOT**");
     expect(d).toContain("That is the user's pick, not an approval");
     expect(spec).toContain("The **Choose this version** button sends the user's choice");

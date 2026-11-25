@@ -11,7 +11,14 @@ import { cn } from "@/lib/utils";
  * PIVOT's own capture of an external page), where each came from, and why it fits. The user picks by number in Claude
  * Code. Once picked, only the picked ones show, as a row; "Show all" opens the full set with the user's words.
  */
-export function DesignCandidates({ candidates }: { candidates: DesignCandidateDTO[] }) {
+export function DesignCandidates({
+  candidates,
+  bare = false,
+}: {
+  candidates: DesignCandidateDTO[];
+  /** Inside the session page's collapsed References row, which already names the section and counts the picks. */
+  bare?: boolean;
+}) {
   const picked = candidates.filter((c) => c.selected);
   const [showAll, setShowAll] = useState(false);
   // the link Claude gives ends in #references, but the section only exists once the session has loaded
@@ -20,18 +27,25 @@ export function DesignCandidates({ candidates }: { candidates: DesignCandidateDT
   }, []);
   const full = !picked.length || showAll;
   return (
-    <section id="references" aria-labelledby="references-heading" className="scroll-mt-28 space-y-4">
-      <div className="max-w-4xl space-y-1">
-        <div className="flex flex-wrap items-baseline gap-x-3">
-          <h2 id="references-heading" className="text-xl font-medium tracking-[-0.02em] text-ink">
-            References
-          </h2>
-          {picked.length > 0 && (
-            <span className="text-sm text-ink-muted">
-              {picked.length} picked of {candidates.length}
-            </span>
-          )}
-        </div>
+    <section
+      id="references"
+      aria-labelledby={bare ? undefined : "references-heading"}
+      aria-label={bare ? "References" : undefined}
+      className="scroll-mt-28 space-y-4"
+    >
+      <div className="max-w-4xl space-y-1 empty:hidden">
+        {!bare && (
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <h2 id="references-heading" className="text-xl font-medium tracking-[-0.02em] text-ink">
+              References
+            </h2>
+            {picked.length > 0 && (
+              <span className="text-sm text-ink-muted">
+                {picked.length} picked of {candidates.length}
+              </span>
+            )}
+          </div>
+        )}
         {!picked.length && (
           <p className="text-sm text-ink-muted">
             Proposed by Claude. Tell Claude Code which numbers to use; nothing outside your library is saved to it.

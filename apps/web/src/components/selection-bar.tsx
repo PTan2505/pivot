@@ -151,7 +151,7 @@ export function SelectionBar({
       {mode === "library" ? (
         <>
           <Button variant="ghost" onClick={() => copyContext(ids)}>
-            <ClipboardCopy /> Copy context
+            <ClipboardCopy /> Copy for Claude
           </Button>
           {showOther && (
             <>

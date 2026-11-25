@@ -198,17 +198,22 @@ try { window.open("about:blank"); } catch {}
     expect(await page.textContent("#identity")).toBe(
       `Version 1 · static · id ${stat.id} · digest ${stat.digest.slice(0, 12)} (checked against PIVOT's stored copy)`,
     );
-    expect(await page.locator("[role=tab]").allTextContents()).toEqual(["1 · Staticstatic", "2 · Toggleinteractive"]);
+    expect(await page.locator("#tabs [role=tab]").allTextContents()).toEqual([
+      "1 · Staticstatic",
+      "2 · Toggleinteractive",
+    ]);
     expect(await page.inputValue("#pivot")).toBe(`http://127.0.0.1:4321/design/${SID}`);
+    expect(await page.getAttribute("#approve", "href")).toBe(`http://127.0.0.1:4321/design/${SID}`);
   });
 
   it("runs no scripts in a static version", async () => {
-    await page.click("[data-tab='0']");
+    await pickVersion(page, 0);
     expect(await page.frameLocator("iframe").locator("#t").textContent()).toBe("static");
   });
 
   it("runs an interactive version: clicks, width and reduced motion reach it", async () => {
-    await page.click("[data-tab='1']");
+    await pickVersion(page, 1);
+    await tab(page, "view");
     await page.click("[data-width='phone']");
     const f = page.frameLocator("iframe");
     await f.locator("#b").click();
@@ -221,10 +226,11 @@ try { window.open("about:blank"); } catch {}
     await page.waitForFunction(() => document.getElementById("media")?.textContent === "This window: reduced motion");
     await page.click("[data-motion='no-preference']");
     await page.click("[data-width='desktop']");
+    await tab(page, "versions");
   });
 
   it("keeps the mockup out of the preview's page and its privileged control", async () => {
-    await page.click("[data-tab='1']");
+    await pickVersion(page, 1);
     const f = page.frameLocator("iframe");
     expect(await f.locator("#p").textContent()).toBe("parent blocked");
     expect(await page.textContent("#identity")).toContain(`digest ${toggle.digest.slice(0, 12)}`);
@@ -237,7 +243,7 @@ try { window.open("about:blank"); } catch {}
   });
 
   it("fills the window with the version; the quick bar steps through versions and toggles the controls drawer", async () => {
-    await page.click("[data-tab='0']");
+    await pickVersion(page, 0);
     const win = await page.evaluate(() => ({ w: innerWidth, h: innerHeight }));
     const box = await page.locator("iframe").boundingBox();
     expect([box.x, box.y, box.width, box.height]).toEqual([0, 0, win.w, win.h]);
@@ -260,15 +266,18 @@ try { window.open("about:blank"); } catch {}
     expect(await page.evaluate(() => document.activeElement?.id)).toBe("toggle");
     // the bar folds into a dot and comes back
     await page.click("#toggle");
+    await tab(page, "view");
     await page.click("[data-place='dot']");
     expect(await page.getAttribute("#bar-place", "class")).toBe("bar-place dot");
     expect(await page.textContent("#dot")).toBe("1/2");
     await page.click("[data-place='bottom']");
     expect(await page.getAttribute("#bar-place", "class")).toBe("bar-place bottom");
+    await tab(page, "versions");
   });
 
   it("sends the user's feedback for the version shown to PIVOT, and keeps the window open", async () => {
-    await page.click("[data-tab='1']");
+    await pickVersion(page, 1);
+    await tab(page, "comment");
     expect(await page.isDisabled("#fb-send")).toBe(true);
     await page.fill("#fb-text", "  The toggle should be larger  ");
     await page.click("#fb-send");
@@ -293,12 +302,14 @@ try { window.open("about:blank"); } catch {}
   });
 
   it("compares versions side by side and replays", async () => {
+    await tab(page, "view");
     await page.click("#compare");
     expect(await page.locator("iframe").count()).toBe(2);
     await page.click("#compare");
     const before = await page.getAttribute("iframe", "src");
     await page.click("#replay");
     expect(await page.getAttribute("iframe", "src")).not.toBe(before);
+    await tab(page, "versions");
   });
 
   it("recovers from a crashed page with the same checked versions", async () => {
@@ -309,11 +320,11 @@ try { window.open("about:blank"); } catch {}
     expect(events.map((e) => e.event)).toEqual(expect.arrayContaining(["crashed", "reloaded"]));
     page = preview.page();
     await page.waitForSelector("body[data-ready=true]");
-    expect(await page.locator("[role=tab]").count()).toBe(2);
+    expect(await page.locator("#tabs [role=tab]").count()).toBe(2);
     // it doesn't reload the version that crashed: it waits for a pick
     expect(await page.isVisible("#crashed")).toBe(true);
     expect(await page.locator("iframe").count()).toBe(0);
-    await page.click("[data-tab='0']");
+    await pickVersion(page, 0);
     expect(await page.locator("iframe").count()).toBe(1);
   }, 30_000);
 
@@ -369,15 +380,21 @@ try { window.open("about:blank"); } catch {}
     const pg = p4.page();
     await pg.waitForSelector("body[data-ready=true]");
     // nothing to pick while comparing
+    await tab(pg, "view");
     await pg.click("#compare");
     expect(await pg.isDisabled("#choose")).toBe(true);
     await pg.click("#compare");
-    await pg.click("[data-tab='1']");
+    await tab(pg, "versions");
+    await pickVersion(pg, 1);
     await pg.click("#choose");
-    expect(await pg.textContent("#chosen")).toBe(`version 2 · Toggle (digest ${toggle.digest.slice(0, 12)})`);
+    expect(await pg.textContent("#chosen")).toBe("version 2 · Toggle");
+    expect(await pg.getAttribute("#chosen", "title")).toBe(`Digest ${toggle.digest.slice(0, 12)}`);
+    // the confirm step stands in for the button: one ember button at a time
+    expect(await pg.isHidden("#choose")).toBe(true);
     // Cancel sends nothing
     await pg.click("#cancel");
     expect(await pg.isHidden("#confirm")).toBe(true);
+    expect(await pg.isVisible("#choose")).toBe(true);
     await pg.click("#choose");
     await pg.fill("#note", "  keep the hover lift  ");
     await pg.click("#send");
@@ -393,6 +410,63 @@ try { window.open("about:blank"); } catch {}
         note: "keep the hover lift",
       },
     ]);
+  }, 30_000);
+
+  it("splits the drawer into Versions, Comment and View tabs; their arrows never switch versions", async () => {
+    const opened = [];
+    const p5 = await startPreview({
+      session,
+      versions: [stat, toggle],
+      pivotPage: `http://127.0.0.1:4321/design/${SID}?round=1`,
+      headless: true,
+      openPage: async (url) => (opened.push(url), true),
+    });
+    try {
+      const pg = p5.page();
+      await pg.waitForSelector("body[data-ready=true]");
+      const selected = () => pg.evaluate(() => document.querySelector("#tabs [aria-selected=true]")?.dataset.tab);
+      expect(await pg.locator("#dtabs [role=tab]").allTextContents()).toEqual(["Versions", "Comment", "View"]);
+      expect(await pg.isVisible("#tabs")).toBe(true);
+      expect(await pg.isHidden("#panel-view")).toBe(true);
+      // manual activation: the arrows move the focus along the tabs only; Enter opens one
+      await pg.focus("#dtab-versions");
+      await pg.keyboard.press("ArrowRight");
+      expect(await pg.evaluate(() => document.activeElement?.id)).toBe("dtab-comment");
+      expect(await pg.getAttribute("#dtab-versions", "aria-selected")).toBe("true");
+      expect(await selected()).toBe("0");
+      await pg.keyboard.press("ArrowRight");
+      await pg.keyboard.press("Enter");
+      expect(await pg.getAttribute("#dtab-view", "aria-selected")).toBe("true");
+      expect(await pg.isVisible("[data-width='phone']")).toBe(true);
+      await pg.keyboard.press("ArrowLeft");
+      await pg.keyboard.press("End");
+      expect(await pg.evaluate(() => document.activeElement?.id)).toBe("dtab-view");
+      expect(await selected()).toBe("0");
+      // digits still pick a version from the tabs, and the arrows elsewhere still step through them
+      await pg.keyboard.press("2");
+      expect(await selected()).toBe("1");
+      await pg.focus("#replay");
+      await pg.keyboard.press("ArrowLeft");
+      expect(await selected()).toBe("0");
+      // the key hints live in the tooltip and aria-keyshortcuts
+      expect(await pg.getAttribute("[data-tab='0']", "aria-keyshortcuts")).toBe("1");
+      expect(await pg.getAttribute("[data-tab='0']", "title")).toBe("Key 1 · ← → step through the versions");
+      // the technical details keep the id, the digest and the link to copy, folded away
+      expect(await pg.isVisible("#identity")).toBe(false);
+      await pg.click("details.tech summary");
+      expect(await pg.isVisible("#identity")).toBe(true);
+      expect(await pg.isVisible("#copy")).toBe(true);
+      // Approve in PIVOT opens the session's page in the user's browser, through this process
+      await pg.click("#approve");
+      await pg.waitForFunction(
+        () => document.getElementById("approve-status")?.textContent === "Opened in your browser.",
+      );
+      expect(opened).toEqual([`http://127.0.0.1:4321/design/${SID}?round=1`]);
+      expect(p5.context.pages()).toHaveLength(1);
+      expect(pg.url()).toBe(`${p5.origin}/`);
+    } finally {
+      await p5.close();
+    }
   }, 30_000);
 
   it("stops after three crashes in a minute instead of crashing forever", async () => {
@@ -571,6 +645,13 @@ async function loaded(page) {
   throw new Error("the version's frame didn't load");
 }
 const versionFrame = (page) => page.frames().find((f) => f.parentFrame() === page.mainFrame());
+/** Opens one of the drawer's tabs: versions, comment or view. */
+const tab = (page, name) => page.click(`#dtab-${name}`);
+/** Picks a version from the drawer's Versions tab (Comment mode opens the Comment tab). */
+async function pickVersion(page, i) {
+  await tab(page, "versions");
+  await page.click(`[data-tab='${i}']`);
+}
 const commenting = (page) => page.evaluate(() => document.body.classList.contains("commenting"));
 /** The centre of an element of the version, in the window (the frame is unscaled at Desktop). */
 async function centreOf(page, sel) {
@@ -605,7 +686,11 @@ describe("comment mode in the preview window", () => {
     );
     await page.click("#qmode [data-mode=comment]");
     expect(await commenting(page)).toBe(true);
-    expect(await page.getAttribute("#dmode [data-mode=comment]", "aria-checked")).toBe("true");
+    expect(await page.getAttribute("#qmode [data-mode=comment]", "aria-checked")).toBe("true");
+    // the drawer shows the Comment tab, with the tools in it
+    expect(await page.getAttribute("#dtab-comment", "aria-selected")).toBe("true");
+    expect(await page.isVisible("#dtools-row")).toBe(true);
+    expect(await page.isHidden("#cstart")).toBe(true);
     expect(await page.textContent("#chint")).toBe("Commenting · page paused · Esc to use it");
     // the shield covers exactly the version's box, under the drawer and the bars
     const shield = await page.locator("#cshield").boundingBox();
@@ -646,7 +731,7 @@ describe("comment mode in the preview window", () => {
 
   it("reads the element under the pointer in its own world, on a static version (no scripts)", async () => {
     const { page } = c;
-    await page.click("[data-tab='1']");
+    await pickVersion(page, 1);
     await loaded(page);
     expect(await page.frameLocator("iframe").locator("#t").textContent()).toBe("Hello static");
     await page.click("#qmode [data-mode=comment]");
@@ -658,7 +743,7 @@ describe("comment mode in the preview window", () => {
 
   it("comments on what a script opened: a menu opened in Use, commented on in Comment, clicks never reaching it", async () => {
     const { page, pv } = c;
-    await page.click("[data-tab='0']");
+    await pickVersion(page, 0);
     await loaded(page);
     const f = page.frameLocator("iframe");
     // a link within the page first (a same-document navigation: the guard stays single, ⌥C switches once)
@@ -748,7 +833,7 @@ describe("comment mode in the preview window", () => {
 
   it("sends the notes and the text together with one Send to Claude, crops and all", async () => {
     const { page, pv, sent, events } = c;
-    await page.click("#dmode [data-mode=comment]");
+    await page.click("#qmode [data-mode=comment]");
     // a spot with Pin, after scrolling the version with the wheel over the shield
     await page.keyboard.press("p");
     await page.mouse.move(500, 500);
@@ -854,6 +939,7 @@ describe("comment mode in the preview window", () => {
     await page.waitForSelector("#pop:not([hidden])");
     await page.keyboard.type("Desktop note");
     await page.keyboard.press("Escape");
+    await tab(page, "view");
     await page.click("[data-width='phone']");
     expect(await commenting(page)).toBe(true);
     expect(await page.textContent("#notes li small")).toBe("button#open “Menu” · made at Desktop 1500 · live");
@@ -864,7 +950,9 @@ describe("comment mode in the preview window", () => {
     await page.keyboard.press("Escape");
     expect(await page.locator("#notes li small").nth(1).textContent()).toMatch(/ · Phone 390 · live$/);
     expect(await page.locator(".mk").count()).toBe(1);
+    expect(await page.textContent("#dtab-comment")).toBe("Comment · 2 notes");
     const n = sent.length;
+    await tab(page, "comment");
     await page.click("#fb-send");
     await page.waitForFunction(() => document.getElementById("fb-status")?.textContent === "Sent · waiting for Claude");
     expect(sent.slice(n).map((b) => [b.width, b.pins.map((x) => x.text), b.text])).toEqual([
@@ -875,12 +963,14 @@ describe("comment mode in the preview window", () => {
       [1, 1500],
       [1, 390],
     ]);
+    await tab(page, "view");
     await page.click("[data-width='desktop']");
+    await tab(page, "comment");
   }, 30_000);
 
   it("keeps every crop under PIVOT's limits, even of a page that can't compress", async () => {
     const { page, pv } = c;
-    await page.click("[data-tab='2']");
+    await pickVersion(page, 2);
     await loaded(page);
     expect(await commenting(page)).toBe(true);
     await page.waitForFunction(() => true);
@@ -907,7 +997,7 @@ describe("comment mode in the preview window", () => {
   }, 30_000);
   it("keeps the keyboard out of the paused version: Tab and Shift+Tab never land in it", async () => {
     const { page } = c;
-    await page.click("[data-tab='0']");
+    await pickVersion(page, 0);
     await loaded(page);
     const f = page.frameLocator("iframe");
     // focus in the mockup, then ⌥C: focus comes out to the toolbar, and the version leaves the tab order
@@ -937,8 +1027,9 @@ describe("comment mode in the preview window", () => {
     try {
       await page.waitForFunction(() => innerWidth === 300);
       await loaded(page);
-      // the quick bar hides while the drawer is a bottom sheet: the drawer's switch
-      await page.click("#dmode [data-mode=comment]");
+      // the quick bar hides while the drawer is a bottom sheet: the Comment tab's button
+      await tab(page, "comment");
+      await page.click("#cstart");
       await page.waitForFunction(() => document.body.classList.contains("commenting"));
       expect(await page.isHidden("#chint")).toBe(true);
       // a 300px page can't take notes (PIVOT takes 320 to 2560): the reason is shown, and announced

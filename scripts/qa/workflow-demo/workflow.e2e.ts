@@ -288,6 +288,8 @@ describe("D · interactive preview and approval (gate 2)", () => {
       expect(await f.locator("#panel-black").isVisible()).toBe(true);
       await page.waitForTimeout(500);
       await page.screenshot({ path: shot("preview-desktop.png") });
+      // width, motion and compare are in the drawer's View tab
+      await page.click("#dtab-view");
       await page.click("[data-width='phone']");
       f = page.frameLocator("iframe");
       await f.locator("#menu-button").click();
@@ -424,6 +426,9 @@ describe("D · interactive preview and approval (gate 2)", () => {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     await page.goto(`${BASE}/design/${state.sessionId}?round=1`);
     await page.getByRole("tab", { name: /Live tea shop/ }).click();
+    // the motion note sits behind the mockups' "More mockup actions" menu
+    await page.getByRole("button", { name: "More mockup actions" }).click();
+    await page.getByRole("menuitem", { name: /About motion/ }).click();
     await page.getByText("Interactive version: its motion runs in the interactive preview.").waitFor();
     // the frame shows the version's static rendering (its scripts don't run here): wait until it has loaded
     await page.frameLocator("#mockup-panel iframe").locator("h1").waitFor();

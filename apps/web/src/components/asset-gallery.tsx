@@ -3,18 +3,26 @@
 import {
   Camera,
   ChevronDown,
+  Clapperboard,
   Download,
   ExternalLink,
+  File as FileIcon,
+  Film,
+  GitCompare,
+  History,
   ImageUp,
   Info,
   Loader2,
   Maximize2,
   MessageSquarePlus,
+  MoreHorizontal,
   Plus,
   Star,
   Trash2,
+  Type as FontIcon,
+  X,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { AssetDTO, CaptureAttemptDTO, CaptureOptions, ResourceDetailDTO } from "@pivot/core/types";
 import { AnnotationLayer } from "@/components/annotation-layer";
@@ -29,6 +37,9 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -154,6 +165,110 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
   const annotationCount = (resource.annotations ?? []).filter((a) => a.assetId === selected?.id).length;
   // On phones the full gallery's row keeps only the icons; the words stay for screen readers.
   const rowLabel = (text: string) => <span className={cn(!compact && "max-sm:sr-only")}>{text}</span>;
+
+  // The full gallery (the detail page's main column) keeps its capture tools in one "⋯" on the stage, and its file
+  // details, comparison and capture history as panels you open from there (direction C "Inspector", 2026-11-25).
+  const [panels, setPanels] = useState({ file: false, compare: false, history: false });
+  // a panel opened from the menu gets the focus when the menu closes, instead of the menu's trigger
+  const openingPanel = useRef<keyof typeof panels | null>(null);
+  const toggle = (k: keyof typeof panels) => {
+    openingPanel.current = panels[k] ? null : k;
+    setPanels((p) => ({ ...p, [k]: !p[k] }));
+  };
+  const { data: attemptData } = useQuery({
+    queryKey: ["capture-attempts", resource.id, resource.captureStatus],
+    queryFn: () => api<{ attempts: CaptureAttemptDTO[] }>(`/api/resources/${resource.id}/capture`),
+    enabled: capturable && !compact,
+  });
+  const attempts = attemptData?.attempts ?? [];
+  const latestDone = attempts.find((a) => a.status === "completed" || a.status === "partial");
+  const hasMotion = assets.some((a) => a.role === "motion-video");
+  const suggestMotion = latestDone?.context.motionLikely === true && !latestDone.context.motion && !hasMotion;
+  const hasOriginal = capturable && assets.some((a) => a.role === "screenshot-original");
+  const captured = resource.captureStatus === "done" || resource.captureStatus === "partial";
+
+  const stageMenu = !compact && (capturable || annotatable || selected) && (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="secondary" size="icon" aria-label="More screenshot actions" className="bg-surface-raised">
+          <MoreHorizontal />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="min-w-64"
+        onCloseAutoFocus={(e) => {
+          const k = openingPanel.current;
+          openingPanel.current = null;
+          if (!k) return;
+          e.preventDefault();
+          requestAnimationFrame(() => document.getElementById(`gallery-panel-${k}`)?.focus());
+        }}
+      >
+        {annotatable && (
+          <DropdownMenuItem onSelect={() => setAnnotating((a) => !a)}>
+            <MessageSquarePlus />
+            {annotating ? "Done annotating" : `Annotate${annotationCount ? ` (${annotationCount})` : ""}`}
+          </DropdownMenuItem>
+        )}
+        {capturable && (
+          <>
+            <DropdownMenuItem disabled={capturing} onSelect={() => shotRef.current?.click()}>
+              <ImageUp /> Replace screenshot…
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={capturing} onSelect={() => recapture()}>
+              <Camera /> {captured ? "Retake screenshot" : "Capture screenshot"}
+            </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger disabled={capturing}>
+                <Camera /> {captured ? "Retake once with" : "Capture once with"}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="min-w-56">
+                <DropdownMenuItem onSelect={() => recapture({ expandContent: true })}>
+                  Expand content (click “Load more”)
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => recapture({ theme: "light" })}>Light theme</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => recapture({ theme: "dark" })}>Dark theme</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => recapture({ theme: "both" })}>Both themes</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => recapture({ viewports: ["tablet", "mobile"] })}>
+                  Tablet and mobile too
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => recapture({ defer: true })}>Capture later…</DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuItem disabled={capturing} onSelect={() => recapture({ motion: true })}>
+              <Clapperboard />
+              <span>
+                Record motion (video and keyframes)
+                {suggestMotion && (
+                  <span className="block text-xs text-ink-muted">The last capture saw animation on this page</span>
+                )}
+              </span>
+            </DropdownMenuItem>
+          </>
+        )}
+        {(selected || hasOriginal || (capturable && attempts.length > 0)) && <DropdownMenuSeparator />}
+        {selected && (
+          <DropdownMenuItem onSelect={() => toggle("file")}>
+            <Info /> {panels.file ? "Hide file details" : "File details"}
+          </DropdownMenuItem>
+        )}
+        {hasOriginal && (
+          <DropdownMenuItem onSelect={() => toggle("compare")}>
+            <GitCompare /> {panels.compare ? "Hide the comparison" : "Compare Original and Latest"}
+          </DropdownMenuItem>
+        )}
+        {capturable && attempts.length > 0 && (
+          <DropdownMenuItem onSelect={() => toggle("history")}>
+            <History /> {panels.history ? "Hide capture history" : `Capture history (${attempts.length})`}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
   const annotateButton = annotatable && (
     <Button
@@ -302,7 +417,28 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
       )}
 
       {selected && annotating && selected.kind === "image" && !selected.missing ? (
-        <AnnotationLayer resourceId={resource.id} asset={selected} annotations={resource.annotations ?? []} />
+        compact ? (
+          <AnnotationLayer resourceId={resource.id} asset={selected} annotations={resource.annotations ?? []} />
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 rounded-full bg-surface py-1.5 pr-1.5 pl-4 text-xs text-ink-muted">
+              <MessageSquarePlus className="size-3.5 shrink-0" aria-hidden />
+              <span className="min-w-0 flex-1">
+                Annotating{annotationCount ? ` · ${annotationCount} ${annotationCount === 1 ? "note" : "notes"}` : ""}
+              </span>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="bg-surface-raised max-sm:h-11"
+                onClick={() => setAnnotating(false)}
+              >
+                Done
+              </Button>
+              {stageMenu}
+            </div>
+            <AnnotationLayer resourceId={resource.id} asset={selected} annotations={resource.annotations ?? []} />
+          </div>
+        )
       ) : selected ? (
         <div className="relative">
           <div className={cn("overflow-auto rounded-[14px] bg-surface", compact ? "max-h-80" : "max-h-[75vh]")}>
@@ -321,20 +457,23 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
               )}
             </div>
           </div>
-          {selected.kind === "image" && !selected.missing && (
-            <>
-              {/* solid, like the card controls: nothing see-through on the screenshot */}
+          {/* solid, like the card controls: nothing see-through on the screenshot */}
+          <div className="absolute top-3 right-3 flex gap-2">
+            {selected.kind === "image" && !selected.missing && (
               <Button
                 variant="secondary"
                 size="icon"
                 aria-label="View at full size"
-                className="absolute top-3 right-3 bg-surface-raised"
+                className="bg-surface-raised"
                 onClick={() => setViewing(true)}
               >
                 <Maximize2 />
               </Button>
-              <ScreenshotViewer asset={selected} open={viewing} onOpenChange={setViewing} />
-            </>
+            )}
+            {stageMenu}
+          </div>
+          {selected.kind === "image" && !selected.missing && (
+            <ScreenshotViewer asset={selected} open={viewing} onOpenChange={setViewing} />
           )}
         </div>
       ) : (
@@ -352,109 +491,164 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
         )
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        {assets.map((a) => (
-          <button
-            key={a.id}
-            type="button"
-            onClick={() => setSelectedId(a.id)}
-            aria-pressed={selected?.id === a.id}
-            aria-label={`${labelOf(a)}: ${a.fileName}`}
-            className={cn(
-              "relative size-14 overflow-hidden rounded-[10px] bg-surface transition-colors hover:bg-surface-raised",
-              selected?.id === a.id && "outline-2 outline-offset-2 outline-accent-text",
-            )}
+      {compact ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {assets.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => setSelectedId(a.id)}
+              aria-pressed={selected?.id === a.id}
+              aria-label={`${labelOf(a)}: ${a.fileName}`}
+              className={cn(
+                "relative size-14 overflow-hidden rounded-[10px] bg-surface transition-colors hover:bg-surface-raised",
+                selected?.id === a.id && "outline-2 outline-offset-2 outline-accent-text",
+              )}
+            >
+              {a.kind === "image" || a.kind === "svg" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={assetUrl(a.id, { thumb: a.kind === "image" })}
+                  alt=""
+                  className="size-full object-cover object-top"
+                />
+              ) : (
+                <span className="grid size-full place-items-center font-mono text-[12px] text-ink-subtle uppercase">
+                  {a.kind}
+                </span>
+              )}
+              {a.id === resource.coverAssetId && (
+                <Star className="absolute top-1 right-1 size-3 fill-ink text-ink drop-shadow" aria-label="Cover" />
+              )}
+            </button>
+          ))}
+          <Button
+            variant="secondary"
+            size="icon"
+            className="size-14 rounded-[10px]"
+            onClick={() => fileRef.current?.click()}
+            aria-label="Add files"
           >
-            {a.kind === "image" || a.kind === "svg" ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={assetUrl(a.id, { thumb: a.kind === "image" })}
-                alt=""
-                className="size-full object-cover object-top"
-              />
-            ) : (
-              <span className="grid size-full place-items-center font-mono text-[12px] text-ink-subtle uppercase">
-                {a.kind}
-              </span>
-            )}
-            {a.id === resource.coverAssetId && (
-              <Star className="absolute top-1 right-1 size-3 fill-ink text-ink drop-shadow" aria-label="Cover" />
-            )}
-          </button>
-        ))}
-        <Button
-          variant="secondary"
-          size="icon"
-          className="size-14 rounded-[10px]"
-          onClick={() => fileRef.current?.click()}
-          aria-label="Add files"
-        >
-          <Plus />
-        </Button>
-        {(capturable || (!compact && annotateButton)) && (
-          <div className="ml-auto flex flex-wrap gap-2">
-            {!compact && annotateButton}
-            {capturable && (
-              <>
-                <Button variant="secondary" onClick={() => shotRef.current?.click()} disabled={capturing}>
-                  <ImageUp /> {rowLabel(compact ? "Replace screenshot" : "Replace")}
-                </Button>
-                <div className="flex">
-                  <Button
-                    variant="secondary"
-                    className="rounded-r-none"
-                    onClick={() => recapture()}
-                    disabled={capturing}
-                  >
-                    <Camera />{" "}
-                    {rowLabel(
-                      resource.captureStatus === "done" || resource.captureStatus === "partial"
-                        ? compact
-                          ? "Retake screenshot"
-                          : "Retake"
-                        : compact
-                          ? "Capture screenshot"
-                          : "Capture",
-                    )}
+            <Plus />
+          </Button>
+          {(capturable || (!compact && annotateButton)) && (
+            <div className="ml-auto flex flex-wrap gap-2">
+              {!compact && annotateButton}
+              {capturable && (
+                <>
+                  <Button variant="secondary" onClick={() => shotRef.current?.click()} disabled={capturing}>
+                    <ImageUp /> {rowLabel(compact ? "Replace screenshot" : "Replace")}
                   </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        className="rounded-l-none border-l border-canvas"
-                        aria-label="Capture options"
-                        disabled={capturing}
-                      >
-                        <ChevronDown />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="min-w-60">
-                      <DropdownMenuLabel>Capture once with</DropdownMenuLabel>
-                      <DropdownMenuItem onSelect={() => recapture({ expandContent: true })}>
-                        Expand content (click “Load more”)
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onSelect={() => recapture({ theme: "light" })}>Light theme</DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => recapture({ theme: "dark" })}>Dark theme</DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => recapture({ theme: "both" })}>Both themes</DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onSelect={() => recapture({ viewports: ["tablet", "mobile"] })}>
-                        Tablet and mobile too
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => recapture({ motion: true })}>
-                        Record motion (video and keyframes)
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onSelect={() => recapture({ defer: true })}>Capture later…</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </div>
+                  <div className="flex">
+                    <Button
+                      variant="secondary"
+                      className="rounded-r-none"
+                      onClick={() => recapture()}
+                      disabled={capturing}
+                    >
+                      <Camera />{" "}
+                      {rowLabel(
+                        resource.captureStatus === "done" || resource.captureStatus === "partial"
+                          ? compact
+                            ? "Retake screenshot"
+                            : "Retake"
+                          : compact
+                            ? "Capture screenshot"
+                            : "Capture",
+                      )}
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          className="rounded-l-none border-l border-canvas"
+                          aria-label="Capture options"
+                          disabled={capturing}
+                        >
+                          <ChevronDown />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-60">
+                        <DropdownMenuLabel>Capture once with</DropdownMenuLabel>
+                        <DropdownMenuItem onSelect={() => recapture({ expandContent: true })}>
+                          Expand content (click “Load more”)
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => recapture({ theme: "light" })}>Light theme</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => recapture({ theme: "dark" })}>Dark theme</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => recapture({ theme: "both" })}>Both themes</DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => recapture({ viewports: ["tablet", "mobile"] })}>
+                          Tablet and mobile too
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => recapture({ motion: true })}>
+                          Record motion (video and keyframes)
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => recapture({ defer: true })}>Capture later…</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {assets.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => setSelectedId(a.id)}
+              aria-pressed={selected?.id === a.id}
+              aria-label={`${labelOf(a)}: ${a.fileName}`}
+              title={labelOf(a)}
+              className={cn(
+                "relative size-10 overflow-hidden rounded-[10px] bg-surface transition-colors hover:bg-surface-raised max-sm:size-11",
+                selected?.id === a.id && "outline-2 outline-offset-2 outline-accent-text",
+              )}
+            >
+              {a.kind === "image" || a.kind === "svg" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={assetUrl(a.id, { thumb: a.kind === "image" })}
+                  alt=""
+                  className="size-full object-cover object-top"
+                />
+              ) : (
+                <span className="grid size-full place-items-center text-ink-subtle">
+                  {a.kind === "video" ? (
+                    <Film className="size-4" aria-hidden />
+                  ) : a.kind === "font" ? (
+                    <FontIcon className="size-4" aria-hidden />
+                  ) : (
+                    <FileIcon className="size-4" aria-hidden />
+                  )}
+                </span>
+              )}
+              {a.id === resource.coverAssetId && (
+                <Star
+                  className="absolute top-0.5 right-0.5 size-2.5 fill-ink text-ink drop-shadow"
+                  aria-label="Cover"
+                />
+              )}
+            </button>
+          ))}
+          <Button
+            variant="secondary"
+            size="icon"
+            className="size-10 rounded-[10px] max-sm:size-11"
+            onClick={() => fileRef.current?.click()}
+            aria-label="Add files"
+          >
+            <Plus />
+          </Button>
+          {/* with nothing on the stage yet, its "⋯" sits at the end of the row */}
+          {!selected && stageMenu && <div className="ml-auto">{stageMenu}</div>}
+        </div>
+      )}
 
       {selected &&
         (compact ? (
@@ -466,31 +660,86 @@ export function AssetGallery({ resource, compact = false }: { resource: Resource
             <AssetNotes key={selected.id} asset={selected} resourceId={resource.id} />
           </div>
         ) : (
-          // The file's name, size, note and actions: rarely needed, so folded like the capture history.
-          <details key={selected.id} className="text-xs text-ink-muted">
-            <summary className="w-fit max-w-full cursor-pointer rounded-full px-2 py-1 hover:text-ink">
-              File details <span className="text-ink-subtle">· {labelOf(selected)} · </span>
-              <span className="text-ink-subtle [&>span]:mr-2">{fileMeta}</span>
-            </summary>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-ink-subtle">
-              <div className="flex items-center gap-0.5">{fileActions}</div>
-              <AssetNotes asset={selected} resourceId={resource.id} />
-            </div>
-          </details>
+          // The file's name, size, note and actions: rarely needed, so a panel opened from the stage's "⋯".
+          panels.file && (
+            <GalleryPanel id="gallery-panel-file" title="File details" onClose={() => toggle("file")}>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-ink-subtle">
+                <span className="rounded-full bg-surface-raised px-2.5 py-0.5 text-ink-secondary">
+                  {labelOf(selected)}
+                </span>
+                {fileMeta}
+                <div className="ml-auto flex items-center gap-0.5">{fileActions}</div>
+                <AssetNotes key={selected.id} asset={selected} resourceId={resource.id} />
+              </div>
+            </GalleryPanel>
+          )
         ))}
 
       <MotionTable assets={assets} />
-      {capturable && assets.some((a) => a.role === "screenshot-original") && (
-        <CompareOriginal resourceId={resource.id} />
+      {compact ? (
+        <>
+          {hasOriginal && <CompareOriginal resourceId={resource.id} />}
+          {capturable && (
+            <CaptureHistory
+              resourceId={resource.id}
+              status={resource.captureStatus}
+              hasMotion={hasMotion}
+              onRecordMotion={() => recapture({ motion: true })}
+            />
+          )}
+        </>
+      ) : (
+        <>
+          {hasOriginal && panels.compare && (
+            <GalleryPanel
+              id="gallery-panel-compare"
+              title="Compare Original and Latest"
+              onClose={() => toggle("compare")}
+            >
+              <CompareBody resourceId={resource.id} />
+            </GalleryPanel>
+          )}
+          {capturable && panels.history && attempts.length > 0 && (
+            <GalleryPanel
+              id="gallery-panel-history"
+              title={`Capture history (${attempts.length})`}
+              onClose={() => toggle("history")}
+            >
+              <AttemptList attempts={attempts} nested />
+            </GalleryPanel>
+          )}
+        </>
       )}
-      {capturable && (
-        <CaptureHistory
-          resourceId={resource.id}
-          status={resource.captureStatus}
-          hasMotion={assets.some((a) => a.role === "motion-video")}
-          onRecordMotion={() => recapture({ motion: true })}
-        />
-      )}
+    </section>
+  );
+}
+
+/** A panel under the full gallery, opened from the stage's "⋯": a heading and a close button. */
+function GalleryPanel({
+  id,
+  title,
+  onClose,
+  children,
+}: {
+  id: string;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  // it opens below the thumbnails, often out of view: bring it in (the menu that opened it then focuses its heading)
+  useEffect(() => heading.current?.scrollIntoView({ block: "nearest" }), []);
+  return (
+    <section aria-label={title} className="space-y-2 rounded-[14px] bg-surface p-3">
+      <div className="flex items-center gap-2">
+        <h3 ref={heading} id={id} tabIndex={-1} className="min-w-0 flex-1 text-xs text-ink-subtle outline-none">
+          {title}
+        </h3>
+        <Button size="icon-xs" variant="ghost" aria-label={`Close ${title.toLowerCase()}`} onClick={onClose}>
+          <X />
+        </Button>
+      </div>
+      {children}
     </section>
   );
 }
@@ -540,35 +789,57 @@ function CaptureHistory({
         <summary className="w-fit cursor-pointer rounded-full px-2 py-1 hover:text-ink">
           Capture history ({attempts.length})
         </summary>
-        <ol className="mt-2 space-y-1.5">
-          {attempts.map((a) => {
-            const ctx = a.context as {
-              theme?: string;
-              colorScheme?: string;
-              variantColorScheme?: string;
-              expandContent?: boolean;
-              retries?: number;
-            };
-            const details = [
-              [ctx.colorScheme ?? ctx.theme, ctx.variantColorScheme].filter(Boolean).join(" + "),
-              ctx.expandContent ? "expanded content" : null,
-              ctx.retries ? `${ctx.retries} retr${ctx.retries > 1 ? "ies" : "y"}` : null,
-              a.quality === "needs_review" ? "needs review" : null,
-            ].filter(Boolean);
-            return (
-              <li key={a.id} className="flex flex-wrap gap-x-2 rounded-[10px] bg-surface px-3 py-2">
-                <span className="text-ink-secondary">{ATTEMPT_STATUS[a.status]}</span>
-                <time className="font-mono tabular-nums" dateTime={a.requestedAt}>
-                  {new Date(a.requestedAt).toLocaleString()}
-                </time>
-                {details.length > 0 && <span>{details.join(" · ")}</span>}
-                {a.error && <span className="basis-full">{a.error}</span>}
-              </li>
-            );
-          })}
-        </ol>
+        <AttemptList attempts={attempts} className="mt-2" />
       </details>
     </>
+  );
+}
+
+/** Every capture run: status, time, scheme and options, and the error on its own line. */
+function AttemptList({
+  attempts,
+  className,
+  nested = false,
+}: {
+  attempts: CaptureAttemptDTO[];
+  className?: string;
+  /** Inside a surface panel: rows step up to surface-raised. */
+  nested?: boolean;
+}) {
+  return (
+    <ol className={cn("space-y-1.5 text-xs text-ink-muted", className)}>
+      {attempts.map((a) => {
+        const ctx = a.context as {
+          theme?: string;
+          colorScheme?: string;
+          variantColorScheme?: string;
+          expandContent?: boolean;
+          retries?: number;
+        };
+        const details = [
+          [ctx.colorScheme ?? ctx.theme, ctx.variantColorScheme].filter(Boolean).join(" + "),
+          ctx.expandContent ? "expanded content" : null,
+          ctx.retries ? `${ctx.retries} retr${ctx.retries > 1 ? "ies" : "y"}` : null,
+          a.quality === "needs_review" ? "needs review" : null,
+        ].filter(Boolean);
+        return (
+          <li
+            key={a.id}
+            className={cn(
+              "flex flex-wrap gap-x-2 rounded-[10px] px-3 py-2",
+              nested ? "bg-surface-raised" : "bg-surface",
+            )}
+          >
+            <span className="text-ink-secondary">{ATTEMPT_STATUS[a.status]}</span>
+            <time className="font-mono tabular-nums" dateTime={a.requestedAt}>
+              {new Date(a.requestedAt).toLocaleString()}
+            </time>
+            {details.length > 0 && <span>{details.join(" · ")}</span>}
+            {a.error && <span className="basis-full">{a.error}</span>}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -604,6 +875,22 @@ interface CompareSide {
  */
 function CompareOriginal({ resourceId }: { resourceId: string }) {
   const [open, setOpen] = useState(false);
+  return (
+    <details className="text-xs text-ink-muted" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary className="w-fit cursor-pointer rounded-full px-2 py-1 hover:text-ink">
+        Compare Original and Latest
+      </summary>
+      {open && (
+        <div className="mt-2 rounded-[14px] bg-surface p-3">
+          <CompareBody resourceId={resourceId} />
+        </div>
+      )}
+    </details>
+  );
+}
+
+/** The comparison itself; it asks for it when shown. */
+function CompareBody({ resourceId }: { resourceId: string }) {
   const [saving, setSaving] = useState(false);
   const { data, error, isLoading } = useQuery({
     queryKey: ["compare", resourceId],
@@ -611,7 +898,6 @@ function CompareOriginal({ resourceId }: { resourceId: string }) {
       api<{ changedRatio: number; redesignHint: boolean; a: CompareSide; b: CompareSide }>(
         `/api/resources/${resourceId}/compare`,
       ),
-    enabled: open,
   });
   const saveVersion = async () => {
     setSaving(true);
@@ -629,42 +915,37 @@ function CompareOriginal({ resourceId }: { resourceId: string }) {
   const when = (x: CompareSide) =>
     `${new Date(x.capturedAt ?? x.createdAt).toLocaleString()}${x.colorScheme ? ` · ${x.colorScheme}` : ""}`;
   return (
-    <details className="text-xs text-ink-muted" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
-      <summary className="w-fit cursor-pointer rounded-full px-2 py-1 hover:text-ink">
-        Compare Original and Latest
-      </summary>
-      <div className="mt-2 space-y-2 rounded-[14px] bg-surface p-3">
-        {isLoading && <Loader2 className="size-3.5 animate-spin" aria-label="Comparing" />}
-        {error && <p className="text-danger">{error.message}</p>}
-        {data && (
-          <>
-            <p className="text-ink">
-              {(data.changedRatio * 100).toFixed(1)}% of the pixels changed.{" "}
-              <span className="text-ink-muted">
-                Original {when(data.a)}; Latest {when(data.b)}. Dates, carousels and ads count as change too.
-              </span>
-            </p>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`/api/resources/${resourceId}/compare/image`}
-              alt="The Latest screenshot dimmed, with the pixels that changed since the Original in orange"
-              className="max-h-[60vh] w-full rounded-[10px] object-contain object-top"
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              {data.redesignHint && <span className="text-ink">This looks like a redesign.</span>}
-              <Button
-                size="xs"
-                variant={data.redesignHint ? "secondary" : "ghost"}
-                className={data.redesignHint ? "bg-surface-raised" : undefined}
-                disabled={saving}
-                onClick={saveVersion}
-              >
-                Save Latest as a new design version
-              </Button>
-            </div>
-          </>
-        )}
-      </div>
-    </details>
+    <div className="space-y-2 text-xs text-ink-muted">
+      {isLoading && <Loader2 className="size-3.5 animate-spin" aria-label="Comparing" />}
+      {error && <p className="text-danger">{error.message}</p>}
+      {data && (
+        <>
+          <p className="text-ink">
+            {(data.changedRatio * 100).toFixed(1)}% of the pixels changed.{" "}
+            <span className="text-ink-muted">
+              Original {when(data.a)}; Latest {when(data.b)}. Dates, carousels and ads count as change too.
+            </span>
+          </p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/resources/${resourceId}/compare/image`}
+            alt="The Latest screenshot dimmed, with the pixels that changed since the Original in orange"
+            className="max-h-[60vh] w-full rounded-[10px] object-contain object-top"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            {data.redesignHint && <span className="text-ink">This looks like a redesign.</span>}
+            <Button
+              size="xs"
+              variant={data.redesignHint ? "secondary" : "ghost"}
+              className={data.redesignHint ? "bg-surface-raised" : undefined}
+              disabled={saving}
+              onClick={saveVersion}
+            >
+              Save Latest as a new design version
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

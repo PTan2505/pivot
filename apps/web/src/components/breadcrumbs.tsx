@@ -10,14 +10,17 @@ export interface Crumb {
   href?: string;
 }
 
-/** Where this page sits: Section › Type › Item. The last crumb is the current page and is not a link. */
-export function Breadcrumbs({ items }: { items: Crumb[] }) {
+/**
+ * Where this page sits: Section › Type › Item. The last crumb is the current page and is not a link, unless
+ * `current` is false: then every crumb is a link up (the detail page shows only its parent; the title says the rest).
+ */
+export function Breadcrumbs({ items, current = true }: { items: Crumb[]; current?: boolean }) {
   if (!items.length) return null;
   return (
     <nav aria-label="Breadcrumb" className="min-w-0">
       <ol className="flex min-w-0 flex-wrap items-center gap-1 text-[14px] text-ink-subtle">
         {items.map((c, i) => {
-          const last = i === items.length - 1;
+          const last = current && i === items.length - 1;
           return (
             <Fragment key={i}>
               {i > 0 && (

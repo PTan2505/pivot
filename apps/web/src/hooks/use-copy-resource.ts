@@ -31,7 +31,7 @@ export async function copyContext(ids: string[], includeFullScreenshots = false)
     );
     await copyText(
       markdown,
-      `Context copied · ~${formatTokens(tokens.total)} tokens${tokens.imageCount ? ` incl. ${tokens.imageCount} image${tokens.imageCount > 1 ? "s" : ""}` : ""}`,
+      `Copied for Claude · ~${formatTokens(tokens.total)} tokens${tokens.imageCount ? ` incl. ${tokens.imageCount} image${tokens.imageCount > 1 ? "s" : ""}` : ""}`,
     );
   } catch (err) {
     toast.error(err instanceof Error ? err.message : "Could not build context");
