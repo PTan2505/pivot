@@ -450,6 +450,18 @@ A component saved with its code (type `component`) keeps the detail page's heade
 - **Card:** the cover is 21st's preview image by link (the blurred card art too); the meta line reads `21st.dev · @author · MIT`; the review chip leads the chips; a rejected component also carries a canvas badge with "Rejected" at the frame's bottom-left. On the Components list, the top bar keeps **Add** (never "New component": only the agent saves one).
 - Motion: the tab panels fade in for 150 ms (`motion-safe`); copy feedback swaps instantly; nothing else moves.
 
+### My design page — `components/my-design-detail.tsx` (added 2026-11-25, My designs Phase 3)
+
+No layout of its own (the owner's choice: designs are shown the way references and components are). A saved design (type `my_design`) uses the **Component page** above, part for part; the stage, live preview, code viewer and copy button are shared from `components/code-stage.tsx`. What differs:
+
+- **Header:** Copy is **Copy code**, plus **Download zip** (secondary, download icon). Under the title: a `Kind Section` chip, the owner chip, "From <project>" and "Saved <date>" in mono, ink-muted.
+- **Owner chip** (also on the card, leading the chips like the review chip): 24px, ink at 8%; a user icon and **Personal**, or a building icon, "Company" in ink-secondary and the organisation in ink.
+- **Preview:** the live preview when built (pills **Reload**, **Build/Rebuild preview**, **Show screenshots**), else the saved screenshots on the same stage (desktop `object-cover` from the top, mobile `object-contain`), with a secondary xs pill per shot (Desktop, Mobile, numbered when there are several of one) and **Video** (`aria-pressed` on the one shown; muted, controls, no autoplay under reduced motion). Build preview is offered only when PIVOT can build this design; otherwise the note under the stage says why. Nothing saved: the empty box with **Show code**.
+- **Code:** file tabs with their role (Component, Demo, Style, Support), then "Other files, written to these paths on reuse": surface-raised rows, the path as an accent-text download link and the size in ink-subtle.
+- **Install:** the `npm install name@version …` command with **Copy command**, the install steps as a numbered list, then the dependency chips with exact versions. **Usage:** a surface panel with the usage Markdown, then "Tokens it relies on" as a mono list on surface-raised (name in ink, value in ink-muted). No ember fill anywhere on the page.
+- **Side panel:** the Source group holds the facts list (Owner, Project, Folder in mono, Sessions as accent links, Saved, Code saved) and "PIVOT's scan · N flags" with the Component page's flag rows. No Review or Used in groups.
+- **Card:** the first screenshot is the cover; the meta line reads `Section · odin-web`.
+
 ### Links — `components/resource-links.tsx`
 
 In the detail sidebar: for visual types at the end of the **Source** group, otherwise above Classification. "Links" in ink-subtle with a ghost "+ Link" button. Each link is a surface row (10px radius; surface-raised inside a group): a link icon, the relation in ink-muted ("Part of", "Has section", "Same page as"…), the other reference's title as a link, and for a suggestion "suggested" with a ✓ to accept; a × removes it. "+ Link" opens a surface panel with the relation select, a search field and the matching titles.

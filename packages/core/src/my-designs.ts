@@ -5,7 +5,15 @@
 // and code holding a credential are refused.
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { attachAsset, deleteOrphanAssets, detachAsset, listResourceAssets, saveAsset } from "./assets";
+import {
+  attachAsset,
+  deleteOrphanAssets,
+  detachAsset,
+  getAsset,
+  listResourceAssets,
+  readAssetBytes,
+  saveAsset,
+} from "./assets";
 import {
   findSecretLine,
   filesSha,
@@ -30,6 +38,7 @@ import {
   type ResourceDetailDTO,
   type TagKind,
 } from "./types";
+import { zipFiles, type ZipEntry } from "./zip";
 
 /** Input PIVOT can't take: a refused file, a secret, too much code. The API answers 400. */
 export class MyDesignError extends Error {}
@@ -436,3 +445,59 @@ export function myDesignCredit(d: MyDesignMeta): string[] {
 /** Company work carries its name only outside PIVOT (Share package, Export, copied context). */
 export const isCompanyDesign = (r: { type: string; meta: Record<string, unknown> | null }) =>
   r.type === "my_design" && myDesignOf(r)?.ownership === "company";
+
+// ---- download as zip ---------------------------------------------------------------------------------------------
+
+/** The name of a design's archive: its title as a file name. */
+export const archiveName = (title: string) =>
+  `${
+    title
+      .normalize("NFKD")
+      .replace(/[^\w\s.-]/g, "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .toLowerCase() || "design"
+  }.zip`;
+
+/** The notes that go with the files: usage, install steps, exact dependencies and tokens, as Markdown. */
+export function myDesignNotes(title: string, d: MyDesignMeta) {
+  const out = [`# ${title}`, "", ...myDesignCredit(d), ""];
+  if (d.dependencies.length) {
+    out.push("## Dependencies", "", ...d.dependencies.map((x) => `- ${x.name}@${x.version}`), "");
+  }
+  if (d.install.length) out.push("## Install", "", ...d.install.map((s, i) => `${i + 1}. ${s}`), "");
+  if (d.tokens.length) out.push("## Tokens", "", ...d.tokens.map((t) => `- \`${t.name}\`: \`${t.value}\``), "");
+  out.push("## Usage", "", d.usage.trim(), "");
+  return out.join("\n");
+}
+
+/**
+ * A saved design as a zip: its code files and non-code files at their paths, byte for byte, and `_pivot/` with the
+ * notes (usage, install, dependencies, tokens) and the screenshots. Only the owner downloads it, from its page.
+ */
+export async function myDesignArchive(id: string): Promise<{ fileName: string; data: Buffer }> {
+  const row = await liveRow(id);
+  const d = row && myDesignOf(row);
+  if (!row || !d) throw new MyDesignError("There is no saved design with that id.");
+  const entries: ZipEntry[] = d.files.map((f) => ({ path: f.path, data: Buffer.from(f.code, "utf8") }));
+  const taken = new Set(d.files.map((f) => f.path));
+  for (const a of d.assets) {
+    const asset = await getAsset(a.assetId);
+    const data = asset && (await readAssetBytes(asset));
+    if (data && !taken.has(a.path)) {
+      entries.push({ path: a.path, data });
+      taken.add(a.path);
+    }
+  }
+  entries.push({ path: "_pivot/USAGE.md", data: Buffer.from(myDesignNotes(row.title, d), "utf8") });
+  const shots = (await listResourceAssets(id)).filter((a) => a.role === "design-shot" || a.role === "design-video");
+  for (const [i, s] of shots.entries()) {
+    const asset = await getAsset(s.id);
+    const data = asset && (await readAssetBytes(asset));
+    const viewport = (s.meta as { viewport?: string } | null)?.viewport;
+    const ext = s.fileName.includes(".") ? s.fileName.slice(s.fileName.lastIndexOf(".")) : "";
+    const label = viewport ?? (s.role === "design-video" ? "video" : "shot");
+    if (data) entries.push({ path: `_pivot/screenshots/${i + 1}-${label}${ext}`, data });
+  }
+  return { fileName: archiveName(row.title), data: zipFiles(entries) };
+}

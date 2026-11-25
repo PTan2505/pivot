@@ -48,20 +48,34 @@ React designs use the existing local build (`preview-build.ts`). Non-React desig
 
 ### UI (Phase 3)
 
-A My designs grid (cover, name, kind, Personal or Company · Org badge, filters, search) and a design page (preview stage, Preview / Code / Usage / Assets tabs, source project and session link, Download as zip). DESIGN.md updated.
+No new layout (the owner, 2026-11-25: "không cần design mới, hãy lưu các design như các lưu các ref và component"): the Library's grid and card (cover, name, kind, a Personal or Company · Org chip, its search and facet filters) and the component page (Preview / Code stage, Install, then Usage with the tokens; other files under Code; source project and session links in the side panel; Download zip in the header). DESIGN.md updated.
 
 ## Phases
 
 | Phase | Name            | Branch                 | Status                                   |
 | ----- | --------------- | ---------------------- | ---------------------------------------- |
 | 1     | Core and API    | `feat/my-designs`      | Done (PR #166)                           |
-| 2     | MCP and skill   | `feat/my-designs-mcp`  | Done, not committed                      |
-| 3     | UI and preview  | `feat/my-designs-page` | To do                                    |
+| 2     | MCP and skill   | `feat/my-designs-mcp`  | Done (PR #167)                           |
+| 3     | UI and preview  | `feat/my-designs-page` | Done, not committed                      |
 | 4     | Release + saves | release PR             | To do, when the owner asks for a release |
 
 Phase 4's first saves, one per session in its project folder: the ODIN 3D logo hero, the portfolio grid-scan, the ODIN layer timeline, the Pulse pricing scroll story, `story.html` A/B/C, the merchant-portal theme.
 
 ## Progress
+
+### Phase 3 — the page and its preview (2026-11-25)
+
+- Status: Done, not committed.
+- Decision: the owner asked for no new design ("không cần design mới, hãy lưu các design như các lưu các ref và component"), so the `pivot:redesign` session opened for this phase (`a0150b6e`) stopped at its reference list; nothing was mocked up, and the page reuses the component page part for part.
+- Existing functionality reused: the component page (its stage, live preview frame, code viewer, copy button and flag rows, moved unchanged into `code-stage.tsx` and shared), the visual types' card and side panel, `useResource`'s polling, the preview build (`prepare`, `runNpmInstall`, `bundlePage`, Tailwind), the preview store and origin (`setComponentPreview`, `findPreviewAsset`, `preview-server.ts`, its CSP), `readAssetBytes`, `listResourceAssets`, the Markdown renderer.
+- Files changed:
+  - core: `preview-build.ts` (`runBuild` shared by both kinds, `startMyDesignPreviewBuild`, `bundleHtmlPage`), new `preview-plan.ts` (`myDesignPreviewPlan`, no Node imports), `component-preview.ts` (`previewHolder`; a saved design's preview stored and served like a component's), `my-designs.ts` (`myDesignArchive`, `myDesignNotes`, `archiveName`), new `zip.ts`, `types.ts` (`PreviewState`, `MyDesignMeta.preview`);
+  - web: new routes `POST /api/my-designs/[id]/preview` and `GET /api/my-designs/[id]/zip`; new `components/code-stage.tsx` and `components/my-design-detail.tsx`; `component-detail.tsx` (imports the shared parts), `resource-detail.tsx` (the design's identity row, main column, facts and Download zip), `resource-card.tsx` (meta line and owner chip), `lib/api.ts` (follows a design's build);
+  - tests: new `packages/core/test/my-design-preview.test.ts`; SPEC §1 #39, §3 and §22; DESIGN.md "My design page".
+- Checks run and results: `my-design-preview.test.ts` 7/7 (an HTML demo bundled with its module scripts, CSS imports, npm package, classic script, shader block, `<img>` and `url()` as data URLs, network stylesheet left, import map dropped; no install without dependencies; a React design with its own React version and Tailwind; a network script fails clearly; a Vue design is refused; the preview survives a re-save and a new file and isn't served once trashed; the zip read back entry by entry with CRCs and by `unzip -t`; the archive's files byte for byte, its notes and screenshot); the component preview tests unchanged and passing; `pnpm check` exit 0 (cli 18, core 291, extension 12, mcp-tools 367).
+- Manual verification (scratch PIVOT from this branch, `/tmp/pivot-mydesigns-p3`, port 4400; the Phase 2 and component-store e2e runs as fixtures): the My designs grid shows the design's card with "3D · pivot-e2e-orbit" and its Company chip; its page shows the saved screenshots, Build preview installed three 0.170.0 from registry.npmjs.org and the three.js demo ran live in the sandboxed frame with no console errors; Rebuild went Building… → ready in about 2 s with no reload; the Code tab's URL state, file tabs and other files; Install, Usage and tokens; the side panel's facts; Download zip (`unzip -t` clean, files at their paths, `_pivot/USAGE.md`, screenshots and video); no horizontal scroll at 375 px; the component page (E2E Badge) unchanged.
+- Remaining issues: a design that fetches files at run time (a model loaded by URL, `fetch` of JSON) can't load them in the preview (no network): its screenshots and video stay the reference. Transitive npm dependencies float (`--no-package-lock`); the design's own versions are exact. No owner filter (Personal / Company) on the grid: the API has `organisation`, the page uses the facet filters only, as references do.
+- Next step: Phase 4 (release and the first saves), when the owner asks.
 
 ### Phase 2 — MCP tools and the skill (2026-11-24)
 
