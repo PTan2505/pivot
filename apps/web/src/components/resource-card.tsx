@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
 import { TAG_KIND_LABELS, TYPE_DEFS, type ResourceDTO } from "@pivot/core/types";
 import { componentMeta, ReviewChip } from "@/components/component-detail";
+import { KIND_LABEL, myDesignMeta, OwnerChip } from "@/components/my-design-detail";
 import { TypeIcon } from "@/components/type-icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCopyResource } from "@/hooks/use-copy-resource";
@@ -237,6 +238,8 @@ function metaLine(r: ResourceDTO) {
     const licence = c.licence.spdx || c.licence.name || "licence unknown";
     return [hostOf(r.sourceUrl) ?? "21st.dev", `@${c.author.username}`, licence].join(" · ");
   }
+  const d = r.type === "my_design" ? myDesignMeta(r.meta) : null;
+  if (d) return [KIND_LABEL[d.kind] ?? def.label, d.source.project].filter(Boolean).join(" · ");
   if (def.visual) return hostOf(r.sourceUrl) ?? def.label;
   if (r.type === "skill")
     return [(r.meta.invocation as string) || def.label, r.meta.readonly ? "plugin" : ""].filter(Boolean).join(" · ");
@@ -273,12 +276,14 @@ function Chips({ resource }: { resource: ResourceDTO }) {
   const tags = [...resource.tags].sort((a, b) => Number(a.kind === "tag") - Number(b.kind === "tag"));
   const chip = "inline-flex h-6 items-center gap-1 rounded-full bg-ink/8 px-2.5 text-xs font-medium text-ink";
   // a component's review leads its chips: icon and word, so a rejected one reads before it is opened
+  // a saved design leads with whose work it is (Personal, or Company and its organisation)
   const component = resource.type === "component" ? componentMeta(resource.meta) : null;
-  if (component) {
+  const design = resource.type === "my_design" ? myDesignMeta(resource.meta) : null;
+  if (component || design) {
     const shown = tags.slice(0, MAX_CHIPS - 1);
     return (
       <div className="flex flex-wrap gap-1.5">
-        <ReviewChip c={component} />
+        {component ? <ReviewChip c={component} /> : <OwnerChip d={design!} />}
         {shown.map((t) => (
           <span key={t.id} className={chip}>
             {t.kind !== "tag" && <span className="font-normal text-ink-secondary">{TAG_KIND_LABELS[t.kind]}</span>}

@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ClipboardCopy,
   Copy,
+  Download,
   ExternalLink,
   FolderInput,
   HardDriveDownload,
@@ -24,6 +25,7 @@ import {
   isAgentType,
   TYPE_DEFS,
   type ComponentMeta,
+  type MyDesignMeta,
   type MetaField,
   type ResourceDetailDTO,
   type ResourceType,
@@ -38,6 +40,7 @@ import {
   ComponentUsedIn,
   componentMeta,
 } from "@/components/component-detail";
+import { MyDesignFacts, MyDesignIdentity, MyDesignMain, myDesignMeta } from "@/components/my-design-detail";
 import { ConfirmButton } from "@/components/confirm-button";
 import { Markdown } from "@/components/markdown";
 import { AddToCollection } from "@/components/selection-bar";
@@ -580,7 +583,9 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
   const colors = Array.isArray(draft.meta.colors) ? (draft.meta.colors as string[]) : [];
   // a component saved with its code gets its own page body (component-detail.tsx); the header and panel stay
   const component = draft.type === "component" ? componentMeta(resource.meta) : null;
-  const showGallery = !component && (def.visual || resource.assets.length > 0);
+  // one of the owner's saved designs gets the same page body, with its own facts (my-design-detail.tsx)
+  const design = draft.type === "my_design" ? myDesignMeta(resource.meta) : null;
+  const showGallery = !component && !design && (def.visual || resource.assets.length > 0);
 
   // The page actions. Visual types get them as one icon row under the title on phones; labels stay as aria-labels.
   const actions = (iconOnly: boolean) => {
@@ -600,8 +605,15 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
           className={grow}
           onClick={() => flush().then(() => copy({ ...resource, content: draft.content, type: draft.type }))}
         >
-          <Copy /> {label(component ? "Copy code" : "Copy")}
+          <Copy /> {label(component || design ? "Copy code" : "Copy")}
         </Button>
+        {design && (
+          <Button variant="secondary" asChild className={grow}>
+            <a href={`/api/my-designs/${resource.id}/zip`} download>
+              <Download /> {label("Download zip")}
+            </a>
+          </Button>
+        )}
         <Button variant="secondary" className={grow} onClick={() => flush().then(() => copyContext([resource.id]))}>
           <ClipboardCopy /> {label("Context")}
         </Button>
@@ -649,6 +661,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
           placeholder="Untitled"
         />
         {component && <ComponentIdentity c={component} />}
+        {design && <MyDesignIdentity d={design} />}
         {def.visual && <div className="-mt-1 flex items-center gap-2 sm:hidden">{actions(true)}</div>}
       </header>
 
@@ -676,7 +689,10 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
           )}
           {showGallery && <AssetGallery resource={resource} compact={!def.visual} />}
           {component && <ComponentMain c={component} id={resource.id} title={draft.title || resource.title} />}
-          {def.content !== "none" && !component && (
+          {design && (
+            <MyDesignMain d={design} id={resource.id} title={draft.title || resource.title} assets={resource.assets} />
+          )}
+          {def.content !== "none" && !component && !design && (
             <ContentEditor
               draft={draft}
               change={change}
@@ -695,6 +711,7 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
             change={change}
             onRemoveFromCollection={removeFromCollection}
             component={component}
+            design={design}
           />
         ) : (
           <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start" aria-label="Details">
@@ -979,6 +996,7 @@ function VisualPanel({
   change,
   onRemoveFromCollection,
   component = null,
+  design = null,
 }: {
   resource: ResourceDetailDTO;
   draft: Draft;
@@ -986,6 +1004,8 @@ function VisualPanel({
   onRemoveFromCollection: (collectionId: string) => void;
   /** A component's review and uses lead the panel, and its source is the facts PIVOT keeps. */
   component?: ComponentMeta | null;
+  /** A saved design's source is the facts PIVOT keeps, like a component's. */
+  design?: MyDesignMeta | null;
 }) {
   const def = TYPE_DEFS[draft.type];
   return (
@@ -1012,6 +1032,8 @@ function VisualPanel({
       <PanelGroup title={component ? "Source & author" : "Source"}>
         {component ? (
           <ComponentFacts c={component} />
+        ) : design ? (
+          <MyDesignFacts d={design} />
         ) : (
           <>
             <Label htmlFor="url" className="sr-only">
@@ -1040,7 +1062,7 @@ function VisualPanel({
           <ExternalOriginInfo origin={draft.meta.externalOrigin as Record<string, unknown>} />
         )}
         <DescriptionField value={draft.description} onChange={(description) => change({ description })} />
-        {!component && <AttributionFields draft={draft} change={change} />}
+        {!component && !design && <AttributionFields draft={draft} change={change} />}
         {def.fields.map((f) => (
           <MetaFieldInput key={f.key} field={f} draft={draft} change={change} />
         ))}

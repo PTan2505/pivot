@@ -129,12 +129,15 @@ export function useResource(id: string) {
     queryKey: keys.resource(id),
     queryFn: () => api<ResourceDetailDTO>(`/api/resources/${id}`),
     enabled: !!id,
-    // a capture or a component's preview build is running: follow it
-    refetchInterval: (q) =>
-      q.state.data?.captureStatus === "pending" ||
-      (q.state.data?.meta?.component as { preview?: { status?: string } } | undefined)?.preview?.status === "building"
+    // a capture, or a component's or saved design's preview build, is running: follow it
+    refetchInterval: (q) => {
+      const meta = q.state.data?.meta;
+      const building = (m: unknown) =>
+        (m as { preview?: { status?: string } } | undefined)?.preview?.status === "building";
+      return q.state.data?.captureStatus === "pending" || building(meta?.component) || building(meta?.myDesign)
         ? 2000
-        : false,
+        : false;
+    },
   });
 }
 

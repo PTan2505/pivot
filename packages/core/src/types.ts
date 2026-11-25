@@ -1177,15 +1177,18 @@ export interface ComponentMeta {
   scan: ComponentScan;
   review?: ComponentReview;
   /** PIVOT's own preview (a single HTML file on the preview origin, by its sha256). */
-  preview?: {
-    status: "none" | "building" | "ready" | "failed";
-    assetId?: string;
-    sha256?: string;
-    /** The code it was built from (`codeSha256`), so a refresh of the code shows it is out of date. */
-    builtFrom?: string;
-    builtAt?: string;
-    error?: string;
-  };
+  preview?: PreviewState;
+}
+
+/** A live preview built on this machine and served by the preview origin (`preview-build.ts`). */
+export interface PreviewState {
+  status: "none" | "building" | "ready" | "failed";
+  assetId?: string;
+  sha256?: string;
+  /** The code it was built from (`codeSha256`), so a refresh of the code shows it is out of date. */
+  builtFrom?: string;
+  builtAt?: string;
+  error?: string;
 }
 
 // ---- My designs (added 2026-11-24, docs/my-designs-plan.md) -----------------------------------------------------
@@ -1254,4 +1257,6 @@ export interface MyDesignMeta {
   savedAt: string;
   /** When the code was last replaced. */
   codeSavedAt: string;
+  /** The live preview, built when the owner asks (Build preview on its page). */
+  preview?: PreviewState;
 }
