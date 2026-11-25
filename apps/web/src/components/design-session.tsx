@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Check, ChevronDown, Ellipsis, Loader2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -13,7 +14,7 @@ import type {
   DesignStatus,
 } from "@pivot/core/types";
 import { DesignCandidates } from "@/components/design-candidates";
-import { DesignMockups } from "@/components/design-mockups";
+import { DesignMockups, directionOf, useMockupNav } from "@/components/design-mockups";
 import { Markdown } from "@/components/markdown";
 import { elementName } from "@/components/mockup-feedback";
 import {
@@ -45,9 +46,8 @@ export const DESIGN_STATUS_LABEL: Record<DesignStatus, string> = {
   abandoned: "Abandoned",
 };
 
-const STEPS: DesignStatus[] = ["exploring", "approved", "building", "done"];
-const STEP_DOT: Record<DesignStatus, string> = {
-  exploring: "bg-ink-muted",
+const STATUS_DOT: Record<DesignStatus, string> = {
+  exploring: "bg-warning",
   approved: "bg-success",
   building: "bg-warning",
   done: "bg-ink",
@@ -63,140 +63,197 @@ const shortDate = (at: string) => new Date(at).toLocaleDateString(undefined, { d
 const dateTime = (at: string) =>
   new Date(at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 
-/** The lifecycle as a stepper. */
-function Stepper({ status, saving }: { status: DesignStatus; saving: boolean }) {
-  const current = STEPS.indexOf(status);
-  return (
-    <ol
-      aria-label="Status"
-      className={cn("flex flex-wrap items-center gap-y-1", status === "abandoned" && "opacity-50")}
-    >
-      {STEPS.map((st, i) => {
-        const isCurrent = st === status;
-        const isPast = current > i;
-        return (
-          <li key={st} className="flex items-center" aria-current={isCurrent ? "step" : undefined}>
-            {i > 0 && (
-              <span aria-hidden className={cn("h-0.5 w-3 sm:w-7", isPast || isCurrent ? "bg-success" : "bg-divider")} />
-            )}
-            <span
-              className={cn(
-                "flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[13px] sm:gap-2 sm:px-3",
-                isCurrent ? "bg-surface-raised font-medium text-ink" : isPast ? "text-ink-secondary" : "text-ink-muted",
-              )}
-            >
-              {isPast ? (
-                <Check className="size-3.5" aria-label="done" />
-              ) : isCurrent ? (
-                saving ? (
-                  <Loader2 className="size-3 animate-spin" aria-label="Saving" />
-                ) : (
-                  <span aria-hidden className={cn("size-2 rounded-full", STEP_DOT[st])} />
-                )
-              ) : null}
-              {DESIGN_STATUS_LABEL[st]}
-            </span>
-          </li>
-        );
-      })}
-      {status === "abandoned" && (
-        <li
-          aria-current="step"
-          className="ml-2 flex h-8 items-center gap-2 rounded-full bg-surface-raised px-3 text-[13px] font-medium text-ink"
-        >
-          {saving ? (
-            <Loader2 className="size-3 animate-spin" aria-label="Saving" />
-          ) : (
-            <span aria-hidden className="size-2 rounded-full bg-ink-subtle" />
-          )}
-          Abandoned
-        </li>
-      )}
-    </ol>
-  );
+/** The approval that counts now, and the version it names (by id, or by its direction's words for older ones). */
+function currentApproval(s: DesignSessionDetailDTO) {
+  const a = s.decisions.find((d) => d.id === s.currentApprovalId && d.kind === "approval");
+  const m = a
+    ? a.binding
+      ? s.mockups.find((x) => x.id === a.binding!.mockupId)
+      : s.mockups.find((x) => a.direction === directionOf(x))
+    : undefined;
+  return { approval: a, mockup: m };
 }
 
-/** One clause on where the session is, the one next move, and the rarer moves under More. */
-function StatusRow({
+/** Where the session stands, in one sentence (the session page's status bar and the full-screen drawer). */
+export function statusSentence(s: DesignSessionDetailDTO) {
+  switch (s.status) {
+    case "exploring":
+      return s.decisions.some((d) => d.kind === "approval")
+        ? "Changed since the last approval: approve again to go on"
+        : s.mockups.length
+          ? "Waiting for your approval"
+          : "Waiting for a version to approve";
+    case "approved": {
+      const { mockup: m } = currentApproval(s);
+      return m ? `Approved: version ${m.n} · ${m.title}` : "Approved. Ready to build";
+    }
+    case "building":
+      return "Being built";
+    case "done":
+      return "Built and checked";
+    case "abandoned":
+      return "Stopped. Kept for reference";
+  }
+}
+
+/**
+ * Where the session stands, in one bar: the sentence, a quiet summary that opens the details (the approval being built,
+ * the project, when it started), the one next move, and the rarer moves under "More actions".
+ */
+function StatusBar({
   session: s,
   saving,
   onChange,
+  summary,
+  action,
 }: {
   session: DesignSessionDetailDTO;
   saving: boolean;
   onChange: (status: DesignStatus) => void;
+  /** A few words on the mockups (round and versions), or nothing. */
+  summary?: string;
+  /** The decision, while the session is exploring: Approve this version. */
+  action?: React.ReactNode;
 }) {
   const [reopening, setReopening] = useState(false);
+  const [details, setDetails] = useState(false);
   const moreRef = useRef<HTMLButtonElement>(null);
-  const hadApproval = s.decisions.some((d) => d.kind === "approval");
-  const note: Record<DesignStatus, string> = {
-    exploring: hadApproval
-      ? "Changed since the last approval: approve again to go on."
-      : s.mockups.length
-        ? "Waiting for your approval."
-        : "Waiting for a version to approve.",
-    approved: "Approved. Ready to build.",
-    building: "Being built.",
-    done: "Built and checked.",
-    abandoned: "Stopped. Kept for reference.",
-  };
   const next = NEXT_STEP[s.status];
   const canReopen = s.status === "approved" || s.status === "building" || s.status === "done";
+  const { approval: a, mockup: m } = currentApproval(s);
+  const showApproval = !!a && ["approved", "building", "done"].includes(s.status);
+  const label =
+    summary ||
+    (s.candidates?.length
+      ? `${s.candidates.length} reference${s.candidates.length === 1 ? "" : "s"} proposed`
+      : "Details");
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <p className="mr-2 text-sm text-ink-muted" aria-live="polite">
-        {note[s.status]}
-      </p>
-      {next && (
-        <Button
-          size="sm"
-          variant="secondary"
-          className="rounded-full bg-inverse text-on-inverse hover:bg-inverse/90 hover:text-on-inverse"
-          disabled={saving}
-          onClick={() => onChange(next.to)}
-        >
-          {next.label} <ArrowRight />
-        </Button>
-      )}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          {/* stays enabled while a move saves, so focus stays on it after a menu choice */}
-          <Button ref={moreRef} size="sm" variant="ghost">
-            <Ellipsis /> More
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" sideOffset={6} className="w-52">
-          {s.status === "done" && (
-            <DropdownMenuItem disabled={saving} onSelect={() => onChange("building")}>
-              Back to building
-            </DropdownMenuItem>
-          )}
-          {s.status === "abandoned" ? (
-            // back to approved only when an approval still counts; otherwise it needs approving again
-            <DropdownMenuItem
+    <div className="rounded-[14px] bg-surface">
+      {/* on a phone the next move takes its own line, and More actions stays beside the sentence */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
+        <div className="order-1 flex min-w-0 flex-1 flex-wrap items-center gap-x-3">
+          <p className="flex min-h-8 items-center gap-2 text-sm font-medium text-ink" aria-live="polite">
+            {saving ? (
+              <Loader2 className="size-3.5 animate-spin text-ink-muted" aria-label="Saving" />
+            ) : s.status === "approved" || s.status === "done" ? (
+              <Check className={cn("size-4", s.status === "approved" ? "text-success" : "text-ink")} aria-hidden />
+            ) : (
+              <span aria-hidden className={cn("size-2 shrink-0 rounded-full", STATUS_DOT[s.status])} />
+            )}
+            {statusSentence(s)}
+          </p>
+          <button
+            type="button"
+            aria-expanded={details}
+            aria-controls="session-details"
+            onClick={() => setDetails((o) => !o)}
+            className="-mx-2 inline-flex min-h-8 items-center gap-1 rounded-full px-2 text-[13px] text-ink-muted outline-none hover:bg-surface-raised hover:text-ink-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text focus-visible:outline-solid [@media(pointer:coarse)]:min-h-11"
+          >
+            {label}
+            <span className="sr-only">, details</span>
+            <ChevronDown
+              aria-hidden
+              className={cn("size-3.5 transition-transform motion-reduce:transition-none", details && "rotate-180")}
+            />
+          </button>
+        </div>
+        <div className="order-3 flex items-center gap-1.5 empty:hidden max-sm:basis-full sm:order-2">
+          {action}
+          {next && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="rounded-full bg-inverse text-on-inverse hover:bg-inverse/90 hover:text-on-inverse [@media(pointer:coarse)]:h-11"
               disabled={saving}
-              onSelect={() => onChange(s.currentApprovalId ? "approved" : "exploring")}
+              onClick={() => onChange(next.to)}
             >
-              Restore
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem disabled={saving} onSelect={() => onChange("abandoned")}>
-              Abandon
-            </DropdownMenuItem>
+              {next.label} <ArrowRight />
+            </Button>
           )}
-          {canReopen && (
+        </div>
+        <div className="order-2 sm:order-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              {/* stays enabled while a move saves, so focus stays on it after a menu choice */}
+              <Button
+                ref={moreRef}
+                size="icon-sm"
+                variant="ghost"
+                aria-label="More actions"
+                className="[@media(pointer:coarse)]:size-11"
+              >
+                <Ellipsis />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={6} className="w-52">
+              {s.status === "done" && (
+                <DropdownMenuItem disabled={saving} onSelect={() => onChange("building")}>
+                  Back to building
+                </DropdownMenuItem>
+              )}
+              {s.status === "abandoned" ? (
+                // back to approved only when an approval still counts; otherwise it needs approving again
+                <DropdownMenuItem
+                  disabled={saving}
+                  onSelect={() => onChange(s.currentApprovalId ? "approved" : "exploring")}
+                >
+                  Restore
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem disabled={saving} onSelect={() => onChange("abandoned")}>
+                  Abandon
+                </DropdownMenuItem>
+              )}
+              {canReopen && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem disabled={saving} onSelect={() => setReopening(true)}>
+                    Reopen…
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+      <div id="session-details" hidden={!details} className="px-4 pb-3.5">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13px]">
+          {showApproval && (
             <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem disabled={saving} onSelect={() => setReopening(true)}>
-                Reopen…
-              </DropdownMenuItem>
+              <dt className="text-ink-muted">Approved</dt>
+              <dd className="[overflow-wrap:anywhere] text-ink">
+                {m ? `Version ${m.n} “${m.title}”` : a.direction || a.summary}
+                {a.source === "owner" && " in PIVOT"}
+                {a.source === "chat" && " in the chat"} · {shortDate(a.createdAt)}
+              </dd>
+              <dt className="text-ink-muted">Note</dt>
+              <dd className="[overflow-wrap:anywhere] text-ink-secondary">
+                {a.details ? (
+                  // a chat approval's details already quote the user's words
+                  a.source === "chat" ? (
+                    a.details
+                  ) : (
+                    <q>{a.details}</q>
+                  )
+                ) : (
+                  <span className="text-ink-muted">No note.</span>
+                )}
+              </dd>
             </>
           )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+          {s.targetProject && (
+            <>
+              <dt className="text-ink-muted">Project</dt>
+              <dd className="[overflow-wrap:anywhere] text-ink-secondary">{s.targetProject}</dd>
+            </>
+          )}
+          <dt className="text-ink-muted">Started</dt>
+          <dd className="text-ink-secondary">{shortDate(s.createdAt)}</dd>
+        </dl>
+      </div>
       <AlertDialog open={reopening} onOpenChange={setReopening}>
         <AlertDialogContent
-          // opened from the menu, it has no trigger of its own: focus goes back to More
+          // opened from the menu, it has no trigger of its own: focus goes back to More actions
           onCloseAutoFocus={(e) => {
             e.preventDefault();
             moreRef.current?.focus();
@@ -220,32 +277,55 @@ function StatusRow({
   );
 }
 
-/** The approval that counts, kept in view while the work is built: which version, where, when, and the owner's note. */
-function ApprovedBand({ session: s }: { session: DesignSessionDetailDTO }) {
-  const a = s.decisions.find((d) => d.id === s.currentApprovalId && d.kind === "approval");
-  if (!a || !["approved", "building", "done"].includes(s.status)) return null;
-  const m = a.binding && s.mockups.find((x) => x.id === a.binding!.mockupId);
+/** The status bar with the mockups below it: both follow the version shown (Approve this version approves it). */
+function SessionMockups({
+  session: s,
+  saving,
+  onChange,
+}: {
+  session: DesignSessionDetailDTO;
+  saving: boolean;
+  onChange: (status: DesignStatus) => void;
+}) {
+  const asked = Number(useSearchParams().get("round"));
+  const nav = useMockupNav(s, { round: asked || undefined });
+  const answers = s.rounds?.find((r) => r.round === nav.round)?.addressesFeedback.length ?? 0;
+  const summary = [
+    `Round ${nav.round}`,
+    `${nav.versions.length} version${nav.versions.length === 1 ? "" : "s"}`,
+    answers ? `answers ${answers} feedback` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const change = s.rounds?.find((r) => r.round === nav.round)?.designSystemChange;
   return (
-    <div className="flex max-w-4xl flex-wrap items-baseline gap-x-2.5 gap-y-1 rounded-[14px] bg-surface px-4 py-3 text-sm text-ink">
-      <span className="inline-flex items-center gap-1.5 font-medium text-success">
-        <Check className="size-3.5" aria-hidden /> Approved
-      </span>
-      <span>
-        {m ? `version ${m.n} “${m.title}”` : a.direction || a.summary}
-        {a.source === "owner" && " in PIVOT"}
-        {a.source === "chat" && " in the chat"} · {shortDate(a.createdAt)}
-      </span>
-      {a.details ? (
-        a.source === "chat" ? (
-          // a chat approval's details already quote the user's words
-          <span className="line-clamp-2 [overflow-wrap:anywhere] text-ink-secondary">{a.details}</span>
-        ) : (
-          <q className="[overflow-wrap:anywhere] text-ink-secondary">{a.details}</q>
-        )
-      ) : (
-        <span className="text-ink-muted">No note.</span>
-      )}
-    </div>
+    <>
+      <StatusBar
+        session={s}
+        saving={saving}
+        onChange={onChange}
+        summary={summary}
+        action={
+          nav.canApprove &&
+          nav.current && (
+            // inverse, not ember: the top bar's Add is this screen's one ember button (One Ember Rule)
+            <Button
+              size="sm"
+              variant="secondary"
+              data-approve-trigger
+              aria-describedby={[`version-tab-${nav.current.n}`, change ? "design-system-change-page" : ""]
+                .filter(Boolean)
+                .join(" ")}
+              onClick={() => nav.setApproving(true)}
+              className="rounded-full bg-inverse text-on-inverse hover:bg-inverse/90 hover:text-on-inverse [@media(pointer:coarse)]:h-11"
+            >
+              <Check /> Approve this version
+            </Button>
+          )
+        }
+      />
+      <DesignMockups session={s} nav={nav} />
+    </>
   );
 }
 
@@ -302,9 +382,10 @@ const chevron = (
 );
 
 /**
- * One design session, in the order you use it: where it is (and the approval being built), the mockups, the
- * references, the current brief, and the history on demand. Every brief and decision stays here, collapsed, each with its
- * own link (#brief-…, #decision-…).
+ * One design session, in the order you use it: where it stands (one status bar with its one action), the mockups, then
+ * the references, the current brief and the history as collapsed rows with a one-line summary. At the references step
+ * (no mockups yet) the proposed references stay open in full. Every brief and decision keeps its own link (#brief-…,
+ * #decision-…, #references), which opens the row it sits in.
  */
 export function DesignSessionView({ id }: { id: string }) {
   const qc = useQueryClient();
@@ -349,10 +430,11 @@ export function DesignSessionView({ id }: { id: string }) {
     if (!loaded) return;
     const openHash = () => {
       const el = document.getElementById(decodeURIComponent(window.location.hash.slice(1)));
-      if (el instanceof HTMLDetailsElement) {
-        el.open = true;
-        el.scrollIntoView({ block: "start" });
-      }
+      // the item itself, and the collapsed row it sits in (History, References)
+      let row = el?.closest("details");
+      if (!el || !row) return;
+      for (; row; row = row.parentElement?.closest("details")) row.open = true;
+      el.scrollIntoView({ block: "start" });
     };
     openHash();
     window.addEventListener("hashchange", openHash);
@@ -401,135 +483,173 @@ export function DesignSessionView({ id }: { id: string }) {
         ? "Feedback"
         : MILESTONE_LABEL[item.x.milestone];
 
+  const rowSummary =
+    "flex min-h-11 cursor-pointer list-none items-center gap-3 rounded-[14px] px-4 py-2.5 text-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text focus-visible:outline-solid [&::-webkit-details-marker]:hidden";
+  const rowHeading = "shrink-0 text-[15px] font-medium text-ink";
+  const rowLine = "min-w-0 flex-1 truncate text-ink-muted";
+  const candidates = s.candidates ?? [];
+  const picked = candidates.filter((c) => c.selected);
+  // at the references step (no mockups yet) the references are the page: they stay open and in full
+  const referencesFirst = s.mockups.length === 0 && candidates.length > 0;
+
   return (
-    <div className="mx-auto max-w-6xl space-y-8 px-4 pt-8 pb-16 md:px-10">
-      <div className="max-w-4xl space-y-3">
-        <Button variant="ghost" size="sm" asChild>
+    <div className="mx-auto max-w-6xl space-y-6 px-4 pt-8 pb-16 md:px-10">
+      <div className="space-y-2">
+        <Button variant="ghost" size="sm" asChild className="-ml-3">
           <Link href="/design">
             <ArrowLeft /> Design sessions
           </Link>
         </Button>
-        <h1 className="text-[clamp(32px,4.5vw,56px)] leading-[1] font-medium tracking-[-0.04em]">{s.title}</h1>
-        <p className="text-sm text-ink-muted">
-          {[s.targetProject, `started ${shortDate(s.createdAt)}`].filter(Boolean).join(" · ")}
-        </p>
-        <Stepper status={s.status} saving={saving} />
-        <StatusRow session={s} saving={saving} onChange={setStatus} />
+        <h1 className="text-3xl leading-tight font-medium tracking-[-0.015em] [overflow-wrap:anywhere]">{s.title}</h1>
       </div>
-      <ApprovedBand session={s} />
-      {s.mockups.length > 0 && <DesignMockups session={s} />}
-      {s.candidates?.length > 0 && <DesignCandidates candidates={s.candidates} />}
+      {s.mockups.length > 0 ? (
+        <SessionMockups session={s} saving={saving} onChange={setStatus} />
+      ) : (
+        <StatusBar session={s} saving={saving} onChange={setStatus} />
+      )}
+      {referencesFirst && <DesignCandidates candidates={candidates} />}
 
-      {brief && (
-        <section aria-labelledby="current-brief-heading" className="max-w-4xl space-y-3">
-          <h2 id="current-brief-heading" className="text-xl font-medium tracking-[-0.02em]">
-            Brief
-          </h2>
-          <details id={`brief-${brief.id}`} className="group scroll-mt-28 rounded-[14px] bg-surface">
-            <summary className="flex cursor-pointer list-none items-center gap-3 rounded-[14px] px-4 py-2.5 text-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text focus-visible:outline-solid [&::-webkit-details-marker]:hidden">
-              <span className="min-w-0 flex-1 text-ink sm:truncate">
-                {snapshotLine(brief)} · <span className="text-ink-secondary">{MILESTONE_LABEL[brief.milestone]}</span> ·{" "}
-                <span className="text-ink-muted">{shortDate(brief.createdAt)}</span>
+      <div className="space-y-2">
+        {candidates.length > 0 && !referencesFirst && (
+          <details className="group rounded-[14px] bg-surface">
+            <summary className={rowSummary}>
+              <h2 className={rowHeading}>References</h2>
+              <span className={rowLine}>
+                {picked.length
+                  ? `${picked.length} picked · ${picked.map((c) => c.title).join(", ")}`
+                  : `${candidates.length} proposed`}
               </span>
-              <span className="flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-ink-secondary">
-                <span className="group-open:hidden">Read brief</span>
-                <span className="hidden group-open:inline">Close</span>
-                {chevron}
-              </span>
+              {chevron}
             </summary>
-            <div className="px-4 pb-4">
+            <div className="px-4 pt-1 pb-4">
+              <DesignCandidates candidates={candidates} bare />
+            </div>
+          </details>
+        )}
+
+        {brief && (
+          <details id={`brief-${brief.id}`} className="group scroll-mt-28 rounded-[14px] bg-surface">
+            <summary className={rowSummary}>
+              <h2 className={rowHeading}>Brief</h2>
+              <span className={rowLine}>{briefTitle(brief.markdown)}</span>
+              {chevron}
+            </summary>
+            <div className="max-w-4xl px-4 pb-4">
+              <p className="mb-2 text-[13px] text-ink-muted">
+                {[
+                  brief.note,
+                  brief.referenceIds.length
+                    ? `${brief.referenceIds.length} reference${brief.referenceIds.length === 1 ? "" : "s"}`
+                    : "",
+                  MILESTONE_LABEL[brief.milestone],
+                  shortDate(brief.createdAt),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
               <SnapshotBody x={brief} />
             </div>
           </details>
-        </section>
-      )}
+        )}
 
-      {history.length > 0 && (
-        <section aria-labelledby="history-heading" className="max-w-4xl space-y-3">
-          <div className="flex flex-wrap items-baseline gap-x-3">
-            <h2 id="history-heading" className="text-xl font-medium tracking-[-0.02em]">
-              History
-            </h2>
-            <span className="text-sm text-ink-muted">
-              {history.length}
-              {history.length > 1 && " · newest first"}
-            </span>
-            {history.length > 1 && (
-              <Button size="sm" variant="ghost" className="ml-auto" onClick={expandAll}>
-                {expanded ? "Collapse all" : "Expand all"}
-              </Button>
-            )}
-          </div>
-          <ol ref={historyRef} className="space-y-0.5">
-            {history.map((item) => {
-              const key =
-                item.kind === "decision"
-                  ? `decision-${item.d.id}`
-                  : item.kind === "feedback"
-                    ? `feedback-${item.f.id}`
-                    : `brief-${item.x.id}`;
-              return (
-                <li key={key}>
-                  <details id={key} onToggle={syncExpanded} className="group scroll-mt-28 rounded-xl bg-surface">
-                    <summary className="flex cursor-pointer list-none items-start gap-3 rounded-xl px-3.5 py-2.5 text-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text focus-visible:outline-solid sm:grid sm:grid-cols-[150px_120px_1fr_16px] [&::-webkit-details-marker]:hidden">
-                      <span className="font-medium text-ink-secondary max-sm:hidden">{label(item)}</span>
-                      <span className="text-[13px] text-ink-muted max-sm:hidden">{dateTime(item.at)}</span>
-                      <span className="min-w-0 flex-1 text-ink group-open:whitespace-normal sm:truncate">
-                        <span className="text-ink-secondary sm:hidden">{label(item)} · </span>
-                        {item.kind === "decision"
-                          ? item.d.summary
-                          : item.kind === "feedback"
-                            ? feedbackLine(item.f)
-                            : snapshotLine(item.x)}
-                      </span>
-                      <span className="mt-0.5">{chevron}</span>
-                    </summary>
-                    <div className="space-y-2 px-3.5 pb-3.5 text-sm text-ink-secondary">
-                      <p className="text-[13px] text-ink-muted sm:hidden">{dateTime(item.at)}</p>
-                      {item.kind === "feedback" ? (
-                        <>
-                          {item.f.text && <p className="whitespace-pre-wrap text-ink">{item.f.text}</p>}
-                          {item.f.pins.length > 0 && (
-                            <ol className="space-y-1">
-                              {item.f.pins.map((p, i) => (
-                                <li key={i}>
-                                  <span className="font-mono text-ink-muted">{p.n ?? i + 1}</span> ·{" "}
-                                  {p.element ? (
-                                    <span className="font-mono text-ink">{elementName(p.element)}</span>
-                                  ) : (
-                                    <span className="text-ink-muted">
-                                      Spot at {p.x}, {p.y}
-                                    </span>
-                                  )}{" "}
-                                  — {p.text || "(no text)"}{" "}
-                                  <span className="text-[12px] text-ink-muted">({item.f.width}px render)</span>
-                                </li>
-                              ))}
-                            </ol>
+        {history.length > 0 && (
+          <details className="group/history rounded-[14px] bg-surface">
+            <summary className={rowSummary}>
+              <h2 className={rowHeading}>History</h2>
+              <span className={rowLine}>
+                {history.length} event{history.length === 1 ? "" : "s"} · last: {label(history[0]).toLowerCase()},{" "}
+                {shortDate(history[0].at)}
+              </span>
+              <ChevronDown
+                aria-hidden
+                className="size-4 shrink-0 text-ink-muted transition-transform group-open/history:rotate-180 motion-reduce:transition-none"
+              />
+            </summary>
+            <div className="max-w-4xl space-y-2 px-2 pb-3 sm:px-3">
+              {history.length > 1 && (
+                <div className="flex items-center justify-between gap-3 px-1.5">
+                  <span className="text-[13px] text-ink-muted">Newest first</span>
+                  <Button size="sm" variant="ghost" onClick={expandAll}>
+                    {expanded ? "Collapse all" : "Expand all"}
+                  </Button>
+                </div>
+              )}
+              <ol ref={historyRef} className="space-y-0.5">
+                {history.map((item) => {
+                  const key =
+                    item.kind === "decision"
+                      ? `decision-${item.d.id}`
+                      : item.kind === "feedback"
+                        ? `feedback-${item.f.id}`
+                        : `brief-${item.x.id}`;
+                  return (
+                    <li key={key}>
+                      <details
+                        id={key}
+                        onToggle={syncExpanded}
+                        className="group scroll-mt-28 rounded-xl bg-surface-raised"
+                      >
+                        <summary className="flex cursor-pointer list-none items-start gap-3 rounded-xl px-3.5 py-2.5 text-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text focus-visible:outline-solid sm:grid sm:grid-cols-[150px_120px_1fr_16px] [&::-webkit-details-marker]:hidden">
+                          <span className="font-medium text-ink-secondary max-sm:hidden">{label(item)}</span>
+                          <span className="text-[13px] text-ink-muted max-sm:hidden">{dateTime(item.at)}</span>
+                          <span className="min-w-0 flex-1 text-ink group-open:whitespace-normal sm:truncate">
+                            <span className="text-ink-secondary sm:hidden">{label(item)} · </span>
+                            {item.kind === "decision"
+                              ? item.d.summary
+                              : item.kind === "feedback"
+                                ? feedbackLine(item.f)
+                                : snapshotLine(item.x)}
+                          </span>
+                          <span className="mt-0.5">{chevron}</span>
+                        </summary>
+                        <div className="space-y-2 px-3.5 pb-3.5 text-sm text-ink-secondary">
+                          <p className="text-[13px] text-ink-muted sm:hidden">{dateTime(item.at)}</p>
+                          {item.kind === "feedback" ? (
+                            <>
+                              {item.f.text && <p className="whitespace-pre-wrap text-ink">{item.f.text}</p>}
+                              {item.f.pins.length > 0 && (
+                                <ol className="space-y-1">
+                                  {item.f.pins.map((p, i) => (
+                                    <li key={i}>
+                                      <span className="font-mono text-ink-muted">{p.n ?? i + 1}</span> ·{" "}
+                                      {p.element ? (
+                                        <span className="font-mono text-ink">{elementName(p.element)}</span>
+                                      ) : (
+                                        <span className="text-ink-muted">
+                                          Spot at {p.x}, {p.y}
+                                        </span>
+                                      )}{" "}
+                                      — {p.text || "(no text)"}{" "}
+                                      <span className="text-[12px] text-ink-muted">({item.f.width}px render)</span>
+                                    </li>
+                                  ))}
+                                </ol>
+                              )}
+                              <p className="text-[13px] text-ink-muted">
+                                {item.f.status === "open"
+                                  ? "Open: Claude answers it with a new round."
+                                  : `Answered in round ${item.f.addressedRound}.`}
+                              </p>
+                            </>
+                          ) : item.kind === "decision" ? (
+                            <>
+                              {item.d.direction && <p>Direction: {item.d.direction}</p>}
+                              {item.d.details && <Markdown>{item.d.details}</Markdown>}
+                              {!item.d.direction && !item.d.details && <p className="text-ink-muted">Nothing more.</p>}
+                            </>
+                          ) : (
+                            <SnapshotBody x={item.x} />
                           )}
-                          <p className="text-[13px] text-ink-muted">
-                            {item.f.status === "open"
-                              ? "Open: Claude answers it with a new round."
-                              : `Answered in round ${item.f.addressedRound}.`}
-                          </p>
-                        </>
-                      ) : item.kind === "decision" ? (
-                        <>
-                          {item.d.direction && <p>Direction: {item.d.direction}</p>}
-                          {item.d.details && <Markdown>{item.d.details}</Markdown>}
-                          {!item.d.direction && !item.d.details && <p className="text-ink-muted">Nothing more.</p>}
-                        </>
-                      ) : (
-                        <SnapshotBody x={item.x} />
-                      )}
-                    </div>
-                  </details>
-                </li>
-              );
-            })}
-          </ol>
-        </section>
-      )}
+                        </div>
+                      </details>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          </details>
+        )}
+      </div>
     </div>
   );
 }

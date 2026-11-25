@@ -19,8 +19,19 @@ const MANUAL_KINDS = LINK_KINDS.filter((k) => k !== "same_source_page");
  * Links to other references: the page a section belongs to, other saves of the same page, related ones, variants and
  * newer versions. Suggestions (not confirmed) can be accepted or removed.
  */
-/** `nested`: shown inside a surface panel, so its rows step up to surface-raised. */
-export function ResourceLinks({ resourceId, nested = false }: { resourceId: string; nested?: boolean }) {
+/**
+ * `nested`: shown inside a surface panel, so its rows step up to surface-raised. `bare`: inside the detail page's
+ * inspector row, which already says "Links": no heading of its own, and "+ Link" after the list.
+ */
+export function ResourceLinks({
+  resourceId,
+  nested = false,
+  bare = false,
+}: {
+  resourceId: string;
+  nested?: boolean;
+  bare?: boolean;
+}) {
   const qc = useQueryClient();
   const key = ["links", resourceId];
   const { data } = useQuery({
@@ -44,20 +55,26 @@ export function ResourceLinks({ resourceId, nested = false }: { resourceId: stri
     }
   };
 
+  const addButton = (
+    <Button
+      size="xs"
+      variant="ghost"
+      className={bare ? "-ml-2.5 text-ink-muted max-sm:h-11" : "ml-auto"}
+      onClick={() => setAdding((a) => !a)}
+      aria-expanded={adding}
+    >
+      <Plus /> Link
+    </Button>
+  );
+
   return (
     <section className="space-y-2" aria-label="Links">
-      <div className="flex items-center gap-2">
-        <h2 className="text-xs text-ink-subtle">Links</h2>
-        <Button
-          size="xs"
-          variant="ghost"
-          className="ml-auto"
-          onClick={() => setAdding((a) => !a)}
-          aria-expanded={adding}
-        >
-          <Plus /> Link
-        </Button>
-      </div>
+      {!bare && (
+        <div className="flex items-center gap-2">
+          <h2 className="text-xs text-ink-subtle">Links</h2>
+          {addButton}
+        </div>
+      )}
       {links.length === 0 && !adding && <p className="text-xs text-ink-subtle">No links yet.</p>}
       <ul className="space-y-1.5">
         {links.map((l) => (
@@ -144,6 +161,7 @@ export function ResourceLinks({ resourceId, nested = false }: { resourceId: stri
           </ul>
         </div>
       )}
+      {bare && addButton}
     </section>
   );
 }

@@ -4,9 +4,11 @@
 //
 // Opens a separate Chromium window where the user tries the versions of a round: interactive versions run their own
 // scripts, static ones don't. The version fills the window like the real site; a floating quick bar steps through the
-// versions and opens a controls drawer (the layout of PIVOT's full-screen mockup view): version tabs (keys 1–9, ←/→),
-// Desktop / Tablet / Phone, Motion: Reduced (emulates prefers-reduced-motion), Replay, Compare (side by side), and the
-// version's id and digest, the same digest PIVOT shows next to "Approve this version".
+// versions and opens a controls drawer with three tabs: Versions (keys 1–9, ←/→), Comment (below) and View (Desktop /
+// Tablet / Phone, Motion: Reduced (emulates prefers-reduced-motion), Replay, Compare (side by side), the quick bar's
+// place, and under Technical details the version's id and digest, the same digest PIVOT binds "Approve this version"
+// to). Below the tabs: "Choose this version" and "Approve in PIVOT", which opens the session's page in the user's own
+// browser (this process opens it; the window itself can't reach PIVOT).
 //
 // How it stays contained (PIVOT never runs mockup scripts on its own origin):
 // - Integrity: every version is fetched from PIVOT and its digest recomputed (sha256 of the stored HTML and its
@@ -27,8 +29,8 @@
 // the preview prints {"event":"chosen",…} with the version's id and digest, as checked here, and closes, which wakes
 // the agent. A pick is not an approval: the agent then asks the user to approve that version in the chat or in PIVOT.
 //
-// Comment (live feedback): the window has two modes, Use (the version runs as it is) and Comment (⌥C, or the switch in
-// the quick bar and the drawer). In Comment a transparent shield over the version takes every pointer event, so the
+// Comment (live feedback): the window has two modes, Use (the version runs as it is) and Comment (⌥C, the switch in
+// the quick bar, or "Comment on the page" in the drawer's Comment tab). In Comment a transparent shield over the version takes every pointer event, so the
 // mockup's own handlers never fire, and its keys, clicks and form submits are paused inside it; what it had open (a
 // menu, a tab) stays as it is. The preview's page asks this process, through its main-frame-only binding, what is
 // under the pointer; this process reads it in an isolated world of the version's frame (CDP: the mockup's scripts can
@@ -44,6 +46,7 @@
 // live notes to PIVOT as feedback from PIVOT's page, so the window stays open and an agent's watcher wakes on it) and
 // one when the window closes ({"event":"closed"}).
 // Exits 2 when a version doesn't match its digest, 1 on other errors.
+import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
@@ -659,11 +662,16 @@ function shellHtml({ session, pivotPage }) {
     send: '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
     trash: '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   };
-  // the mode switch, in the quick bar and in the drawer's Comment section
+  // the mode switch, in the quick bar only (⌥C anywhere; the Comment tab has a button into it)
   const modes = (id) =>
-    `<span id="${id}" class="seg" role="radiogroup" aria-label="Mode"><button role="radio" data-mode="use" aria-checked="true">${icon(I.hand, 14)}Use</button><button role="radio" data-mode="comment" aria-checked="false" aria-keyshortcuts="Alt+C">${icon(I.comment, 14)}Comment</button></span>`;
-  const tools = (id) =>
-    `<span id="${id}" class="seg" role="radiogroup" aria-label="Tool"><button role="radio" data-tool="select" aria-checked="true" aria-keyshortcuts="V">${icon(I.cursor, 14)}Select <kbd>V</kbd></button><button role="radio" data-tool="pin" aria-checked="false" aria-keyshortcuts="P">${icon(I.pin, 14)}Pin <kbd>P</kbd></button></span>`;
+    `<span id="${id}" class="seg" role="radiogroup" aria-label="Mode"><button role="radio" data-mode="use" aria-checked="true" title="Use the page">${icon(I.hand, 14)}Use</button><button role="radio" data-mode="comment" aria-checked="false" aria-keyshortcuts="Alt+C" title="Comment on the page (⌥C)">${icon(I.comment, 14)}Comment</button></span>`;
+  // the tools, on the comment toolbar (with their keys shown) and in the drawer's Comment tab (keys in the tooltip)
+  const tools = (id, keys = true) =>
+    `<span id="${id}" class="seg" role="radiogroup" aria-label="Tool"><button role="radio" data-tool="select" aria-checked="true" aria-keyshortcuts="V"${keys ? "" : ' title="Select (V)"'}>${icon(I.cursor, 14)}Select${keys ? " <kbd>V</kbd>" : ""}</button><button role="radio" data-tool="pin" aria-checked="false" aria-keyshortcuts="P"${keys ? "" : ' title="Pin (P)"'}>${icon(I.pin, 14)}Pin${keys ? " <kbd>P</kbd>" : ""}</button></span>`;
+  // the drawer's tabs: manual activation (arrows move the focus, Enter or Space opens one; the arrows never switch
+  // versions here)
+  const dtab = (panel, label, on, extra = "") =>
+    `<button role="tab" id="dtab-${panel}" data-panel="${panel}" aria-controls="${panel === "comment" ? "comment" : `panel-${panel}`}" aria-selected="${on}" tabindex="${on ? 0 : -1}">${label}${extra}</button>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Preview · ${esc(session.title)}</title><link rel="stylesheet" href="/shell.css"></head><body class="open">
 <main id="stage"></main>
@@ -679,41 +687,51 @@ function shellHtml({ session, pivotPage }) {
   <textarea id="pop-text" maxlength="${NOTE_LIMITS.text}" rows="3" placeholder="What should change here?" aria-labelledby="pop-label"></textarea>
   <div class="pfoot"><span>Captured as you see it</span><button id="pop-del">${icon(I.trash, 13)}Delete</button></div></div>
 <div id="bar-place" class="bar-place bottom"><div id="bar" class="bar glass" role="toolbar" aria-label="Versions">
-  <button id="prev" class="icon" aria-label="Previous version">${icon('<path d="m15 18-6-6 6-6"/>')}</button>
+  <button id="prev" class="icon" aria-label="Previous version" aria-keyshortcuts="ArrowLeft" title="Previous version (←)">${icon('<path d="m15 18-6-6 6-6"/>')}</button>
   <span class="pos" aria-live="polite"><span id="pos-sr" class="sr"></span><span id="pos-num" class="mono muted" aria-hidden="true"></span><span id="pos-title" aria-hidden="true"></span></span>
-  <button id="next" class="icon" aria-label="Next version">${icon('<path d="m9 18 6-6-6-6"/>')}</button>
+  <button id="next" class="icon" aria-label="Next version" aria-keyshortcuts="ArrowRight" title="Next version (→)">${icon('<path d="m9 18 6-6-6-6"/>')}</button>
   <span class="sep" aria-hidden="true"></span>${modes("qmode")}<span id="qcount" class="mono muted small" hidden></span>
   <button id="toggle" class="icon" aria-label="Preview controls" aria-expanded="true" aria-controls="drawer">${icon('<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/>')}<span id="dot" class="dot" aria-hidden="true"></span></button>
 </div></div>
 <aside id="drawer" class="glass" data-state="open" aria-labelledby="drawer-title">
-  <div class="head"><div class="grow"><span class="kicker">Interactive preview</span><h2 id="drawer-title">${esc(session.title)}</h2>
-    <p class="muted">Round ${session.round} · from PIVOT at ${esc(new URL(pivotPage).origin)}</p></div>
+  <div class="head"><div class="grow"><span class="kicker">Interactive preview</span><h2 id="drawer-title">${esc(session.title)}</h2></div>
     <button id="close" class="icon raised" aria-label="Close preview controls">${icon('<path d="M18 6 6 18M6 6l12 12"/>')}</button></div>
+  <div id="dtabs" class="dtabs" role="tablist" aria-label="Preview controls">${dtab("versions", "Versions", true)}${dtab("comment", "Comment", false, '<span id="ccount"></span>')}${dtab("view", "View", false)}</div>
+  <p id="paused" class="muted small paused" role="status" hidden>Shortcuts paused while the mockup has focus: ⌥C switches to Comment, or click outside the mockup to leave it.</p>
   <div class="body">
-    <section><h3>Versions <span class="hint">· keys 1–9, ← →</span></h3><nav id="tabs" role="tablist" aria-orientation="vertical" aria-label="Versions"></nav>
-      <p id="paused" class="muted small" role="status" hidden>Shortcuts paused while the mockup has focus: ⌥C switches to Comment, or click outside the mockup to leave it.</p></section>
-    <section><h3>View</h3>
-      <div class="group" role="group" aria-label="Width"><button data-width="desktop" aria-pressed="true">Desktop</button><button data-width="tablet" aria-pressed="false">Tablet</button><button data-width="phone" aria-pressed="false">Phone</button></div>
-      <p id="scaled" class="muted small" hidden></p>
-      <div class="group" role="group" aria-label="Motion"><button data-motion="no-preference" aria-pressed="true">Motion: full</button><button data-motion="reduce" aria-pressed="false">Motion: reduced</button></div>
-      <p id="media" class="muted small"></p></section>
-    <section id="comment"><h3>Comment <span class="hint">· ⌥C</span></h3>${modes("dmode")}
-      <div id="dtools-row" hidden>${tools("dtools")}</div>
+    <div id="panel-versions" class="panel" role="tabpanel" aria-labelledby="dtab-versions">
+      <nav id="tabs" role="tablist" aria-orientation="vertical" aria-label="Versions"></nav></div>
+    <div id="comment" class="panel" role="tabpanel" aria-labelledby="dtab-comment" hidden>
+      <button id="cstart" class="sec wide" aria-keyshortcuts="Alt+C" title="Comment on the page (⌥C)">${icon(I.comment, 15)}Comment on the page</button>
+      <div id="dtools-row" hidden>${tools("dtools", false)}</div>
       <p id="comment-off" class="muted small" hidden>Comment works on one version: leave Compare first.</p>
       <p id="notes-empty" class="muted small">Use the page first: open the menu or tab you want, then switch to Comment.</p>
       <ol id="notes" aria-label="Notes"></ol>
-      <textarea id="fb-text" maxlength="5000" rows="2" placeholder="Feedback for Claude (optional text)" aria-label="Feedback for Claude"></textarea>
-      <button id="fb-send" class="inv wide" disabled>${icon(I.send, 15)}Send to Claude</button><p id="fb-status" class="small muted" role="status"></p></section>
-    <section><h3>Tools</h3><div class="group"><button id="replay">Replay</button><button id="compare" aria-pressed="false">Compare</button></div>
-      <div class="group places"><span class="muted small" id="bar-label">Quick bar</span><span role="radiogroup" aria-labelledby="bar-label" class="group"><button role="radio" data-place="bottom" aria-checked="true">Bottom</button><button role="radio" data-place="top" aria-checked="false">Top</button><button role="radio" data-place="dot" aria-checked="false">Dot</button></span></div></section>
+      <textarea id="fb-text" maxlength="5000" rows="2" placeholder="Anything else for Claude (optional)" aria-label="Feedback for Claude"></textarea>
+      <button id="fb-send" class="inv wide" disabled>${icon(I.send, 15)}Send to Claude</button><p id="fb-status" class="small muted" role="status"></p></div>
+    <div id="panel-view" class="panel" role="tabpanel" aria-labelledby="dtab-view" hidden>
+      <section><h3 id="width-label">Width</h3>
+        <div class="group" role="group" aria-labelledby="width-label"><button data-width="desktop" aria-pressed="true">Desktop</button><button data-width="tablet" aria-pressed="false">Tablet</button><button data-width="phone" aria-pressed="false">Phone</button></div>
+        <p id="scaled" class="muted small" hidden></p></section>
+      <section><h3 id="motion-label">Motion</h3>
+        <div class="group" role="group" aria-labelledby="motion-label"><button data-motion="no-preference" aria-pressed="true">Full</button><button data-motion="reduce" aria-pressed="false" title="Emulates the browser's reduced-motion setting">Reduced</button></div>
+        <p id="media" class="muted small"></p></section>
+      <section><h3>Tools</h3>
+        <div class="group"><button id="replay" title="Reload the version so its motion starts again">Replay</button><button id="compare" aria-pressed="false" title="The versions side by side">Compare</button></div></section>
+      <section><h3 id="bar-label">Quick bar</h3>
+        <span role="radiogroup" aria-labelledby="bar-label" class="group"><button role="radio" data-place="bottom" aria-checked="true">Bottom</button><button role="radio" data-place="top" aria-checked="false">Top</button><button role="radio" data-place="dot" aria-checked="false">Dot</button></span></section>
+      <details class="tech"><summary>Technical details</summary>
+        <div id="identity" class="mono small"></div>
+        <p class="muted small">Round ${session.round} · from PIVOT at ${esc(new URL(pivotPage).origin)}</p>
+        <span class="group link"><input id="pivot" readonly value="${esc(pivotPage)}" aria-label="PIVOT session page"><button id="copy">Copy link</button></span></details></div>
   </div>
-  <div class="foot"><div id="identity" class="mono small"></div>
+  <div class="foot">
     <div class="choose"><button id="choose" class="primary">Choose this version</button>
-    <span id="confirm" hidden>Send <b id="chosen"></b> to Claude as your choice? This window closes, and Claude asks you to approve it.
+    <span id="confirm" hidden><span>Send <b id="chosen"></b> to Claude as your choice? This window closes, and Claude asks you to approve it.</span>
     <input id="note" maxlength="2000" placeholder="Note for the build (optional)" aria-label="Note for the build (optional)">
     <span class="group"><button id="send" class="primary">Send to Claude</button><button id="cancel">Cancel</button></span></span></div>
-    <div class="approve muted small">Or approve it yourself: open the session in PIVOT and press <b>Approve this version</b> on the same version (PIVOT shows the same digest).
-    <span class="group"><input id="pivot" readonly value="${esc(pivotPage)}" aria-label="PIVOT session page"><button id="copy">Copy link</button></span></div></div>
+    <a id="approve" class="approve" href="${esc(pivotPage)}" title="Opens the session in your browser: approve the same version there with Approve this version">Approve in PIVOT <span aria-hidden="true">↗</span></a>
+    <p id="approve-status" class="small muted" role="status"></p></div>
 </aside>
 <div id="shield" class="shield" hidden></div>
 <script src="/shell.js"></script></body></html>`;
@@ -722,7 +740,7 @@ function shellHtml({ session, pivotPage }) {
 // PIVOT's tokens (apps/web/src/app/globals.css), repeated here: the preview is its own page on its own origin.
 const SHELL_CSS = `:root{color-scheme:dark;--canvas:#0c0806;--surface:#18110d;--raised:#221812;--divider:#33251c;--ink:#fbf3ea;--ink2:#e0d3c7;--muted:#b8a596;--subtle:#94806f;
 --accent-fill:#ff6a13;--accent-text:#ff8c42;--glass:rgb(34 24 18/.86);--edge:rgb(255 238 222/.1);--drawer:cubic-bezier(.32,.72,0,1);--out:cubic-bezier(.23,1,.32,1)}
-*{box-sizing:border-box}html,body{height:100%}
+*{box-sizing:border-box}html,body{height:100%}[hidden]{display:none!important}
 body{margin:0;overflow:hidden;background:var(--canvas);color:var(--ink);font:14px/1.45 Geist,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
 .mono{font-family:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}.muted{color:var(--muted)}.small{font-size:13px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
@@ -730,7 +748,7 @@ body{margin:0;overflow:hidden;background:var(--canvas);color:var(--ink);font:14p
 button{font:inherit;font-size:13px;font-weight:500;color:var(--ink2);background:var(--surface);border:0;border-radius:999px;height:32px;padding:0 12px;cursor:pointer;transition:background-color 150ms ease-out}
 button:hover{background:var(--raised);color:var(--ink)}
 button[aria-pressed=true],button[aria-checked=true],button[aria-selected=true]{background:var(--ink);color:var(--canvas)}
-button:focus-visible,input:focus-visible{outline:2px solid var(--accent-text);outline-offset:3px}
+button:focus-visible,input:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var(--accent-text);outline-offset:3px}
 button.primary{background:var(--accent-fill);color:var(--canvas);height:40px;width:100%}button.primary:hover{background:color-mix(in srgb,var(--accent-fill) 90%,transparent)}
 button:disabled{opacity:.4;cursor:default}
 button.icon{width:36px;height:36px;padding:0;display:grid;place-items:center;background:transparent}button.icon.raised{background:var(--raised);width:32px;height:32px}
@@ -766,22 +784,33 @@ body.ready #drawer{transition:transform 250ms var(--drawer),visibility 0s}body.r
 #drawer[data-state=closed]{transform:translateY(calc(100% + 12px))}body.open .bar-place{display:none}#pos-title{display:none}}
 @media (prefers-reduced-motion:reduce){body.ready #drawer,body.ready .bar-place,.bar{transition:none!important}}
 .head{display:flex;gap:8px;align-items:flex-start;padding:14px 14px 8px 16px}.grow{flex:1;min-width:0}
-.kicker{font-size:13px;color:var(--muted)}.head h2{font-size:15px;font-weight:500;line-height:1.35;margin:2px 0 0}.head p{margin:0;font-size:13px}
-.body{flex:1;min-height:0;overflow-y:auto;padding:4px 16px 16px}
-section{margin-top:14px}section:first-child{margin-top:6px}
-h3{font-size:12px;font-weight:500;color:var(--muted);letter-spacing:.02em;text-transform:uppercase;margin:0 0 8px}.hint{text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted)}
+.kicker{font-size:12px;color:var(--muted)}.head h2{font-size:16px;font-weight:500;line-height:1.35;margin:2px 0 0}
+/* the drawer's tabs: Versions · Comment · View, a pill segment like the mode switch */
+.dtabs{display:flex;gap:2px;margin:2px 16px 0;padding:3px;border-radius:999px;background:var(--surface);flex:none}
+.dtabs [role=tab]{flex:1;min-width:0;height:30px;padding:0 8px;background:transparent;color:var(--muted);white-space:nowrap}
+.dtabs [role=tab]:hover{background:var(--raised);color:var(--ink)}.dtabs [role=tab][aria-selected=true]{background:var(--ink);color:var(--canvas)}
+.paused{margin:8px 16px 0}
+.body{flex:1;min-height:0;overflow-y:auto;padding:12px 16px 16px}
+.panel section{margin-top:16px}.panel section:first-child{margin-top:0}
+h3{font-size:12px;font-weight:500;color:var(--muted);letter-spacing:.02em;text-transform:uppercase;margin:0 0 8px}
 nav[role=tablist]{display:flex;flex-direction:column;gap:2px}
-[role=tab]{display:flex;align-items:center;gap:10px;height:auto;min-height:36px;padding:6px 10px;border-radius:12px;text-align:left;font-size:14px;font-weight:400;background:transparent;width:100%}
-[role=tab] .n{width:16px;font-size:12px;color:var(--subtle)}[role=tab][aria-selected=true]{font-weight:500}[role=tab][aria-selected=true] .n{color:rgb(12 8 6/.6)}
-[role=tab] .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.chip{font-size:12px;font-weight:400;padding:1px 7px;border-radius:999px;background:var(--raised);color:var(--ink2)}[role=tab][aria-selected=true] .chip{background:rgb(12 8 6/.1);color:var(--canvas)}
-section .group+.group,section .group+p,section p+.group{margin-top:8px}section p{margin:8px 0 0}
-.places{margin-top:12px}
-.foot{border-top:1px solid var(--divider);padding:12px 16px 16px;display:flex;flex-direction:column;gap:10px}
-#identity{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
-.choose{display:flex;flex-direction:column;gap:8px}#confirm{display:flex;flex-direction:column;gap:8px;font-size:13px}#confirm[hidden]{display:none}
+#tabs [role=tab]{display:flex;align-items:center;gap:10px;height:auto;min-height:36px;padding:6px 10px;border-radius:12px;text-align:left;font-size:14px;font-weight:400;background:transparent;width:100%}
+#tabs [role=tab]:hover{background:var(--raised);color:var(--ink)}#tabs [role=tab][aria-selected=true]{font-weight:500;background:var(--ink);color:var(--canvas)}
+#tabs [role=tab] .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{font-size:12px;font-weight:400;padding:1px 7px;border-radius:999px;background:var(--raised);color:var(--ink2)}#tabs [role=tab][aria-selected=true] .chip{background:rgb(12 8 6/.1);color:var(--canvas)}
+.panel section .group+p,.panel section p+.group{margin-top:8px}.panel section p{margin:8px 0 0}
+/* Technical details: the version's id and digest, the round and PIVOT's address, the session link to copy */
+details.tech{margin-top:18px;background:var(--surface);border-radius:14px;padding:0 12px}
+details.tech summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;min-height:36px;color:var(--muted);font-size:13px;border-radius:12px}
+details.tech summary::-webkit-details-marker{display:none}details.tech summary::before{content:"›";color:var(--muted);display:inline-block;width:10px}
+details.tech[open] summary::before{transform:rotate(90deg)}details.tech[open]{padding-bottom:12px}
+#identity{color:var(--muted);font-size:12px;overflow-wrap:anywhere}details.tech p{margin:6px 0 0}
+details.tech .link{margin-top:8px;flex-wrap:nowrap}details.tech input,details.tech button{background:var(--raised)}details.tech button:hover{background:var(--divider)}#copy{flex:none;white-space:nowrap}#pivot{font:12px "Geist Mono",ui-monospace,monospace;height:32px}
+.foot{border-top:1px solid var(--divider);padding:12px 16px 14px;display:flex;flex-direction:column;gap:6px}
+.choose{display:flex;flex-direction:column;gap:8px}#confirm{display:flex;flex-direction:column;gap:8px;font-size:13px}
 #send{width:auto;flex:1}
-.approve{line-height:1.5}.approve .group{margin-top:6px;flex-wrap:nowrap}#copy{flex:none;white-space:nowrap}#pivot{font:12px "Geist Mono",ui-monospace,monospace;height:32px}
+.approve{align-self:center;display:inline-flex;align-items:center;gap:4px;min-height:32px;padding:0 10px;border-radius:999px;color:var(--accent-text);font-size:13px;text-decoration:none}
+.approve:hover{text-decoration:underline;text-underline-offset:3px}#approve-status{margin:0;text-align:center}#approve-status:empty{display:none}
 textarea{font:inherit;font-size:14px;background:var(--surface);color:var(--ink);border:0;border-radius:14px;padding:8px 12px;resize:vertical;width:100%;display:block}
 textarea:focus-visible{outline:2px solid var(--accent-text);outline-offset:3px}textarea::placeholder,input::placeholder{color:var(--muted)}
 /* comment: the mode switch, the tools, the notes and one Send to Claude */
@@ -793,9 +822,8 @@ button.inv{background:var(--ink);color:var(--canvas)}button.inv:hover{background
 button.sec{background:var(--raised);color:var(--ink);display:inline-flex;align-items:center;gap:6px}
 button.wide{width:100%;height:36px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px}
 #qmode{margin:0 2px}#qcount{padding:0 6px}.bar-place.dot #qmode,.bar-place.dot #qcount{display:none}
-#comment .seg+div,#comment .seg+p,#comment p+ol,#comment ol+textarea,#comment p+textarea{margin-top:8px}
-#dtools-row[hidden],#comment-off[hidden],#notes-empty[hidden]{display:none}
-#notes{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}#notes:empty{display:none}
+#comment{display:flex;flex-direction:column;gap:8px}#comment p{margin:0}
+#notes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}#notes:empty{display:none}
 .row{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border-radius:12px;padding:8px}
 .num{width:24px;height:24px;flex:none;border-radius:999px;background:var(--ink);color:var(--canvas);display:grid;place-items:center;font:500 12px "Geist Mono",ui-monospace,monospace}
 .num.spot{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
@@ -803,7 +831,7 @@ button.wide{width:100%;height:36px;display:flex;align-items:center;justify-conte
 .row .open:hover{background:transparent;text-decoration:underline;text-decoration-color:var(--subtle)}
 .row .open .empty{color:var(--muted)}.row .open small{display:block;color:var(--muted);font:12px/1.5 "Geist Mono",ui-monospace,monospace;overflow-wrap:anywhere}
 .row .del{width:28px;height:28px;padding:0;flex:none;display:grid;place-items:center;background:transparent;color:var(--muted)}
-#fb-text{margin-top:8px;min-height:56px}#fb-send{margin-top:8px}#fb-status{margin:6px 0 0}#fb-status:empty{display:none}
+#fb-text{min-height:56px}#fb-status:empty{display:none}
 /* comment mode over the version: the shield, the outline and chip, the numbered markers, the toolbar and the note */
 #cshield{position:fixed;z-index:30;cursor:default;touch-action:none}body.tool-pin #cshield{cursor:crosshair}#cshield[hidden]{display:none}
 #ov{position:fixed;inset:0;z-index:35;pointer-events:none;overflow:hidden}
@@ -833,7 +861,7 @@ body.ready .ctool{transition:transform 250ms var(--drawer)}@media (min-width:640
 #pop-del{height:28px;background:transparent;display:inline-flex;align-items:center;gap:6px;padding:0 8px}
 /* a note's crop is taken from the page itself: nothing of the preview's own is in it */
 body.capturing #drawer,body.capturing #bar-place,body.capturing #ov,body.capturing #ctool,body.capturing #cmsg,body.capturing #pop,body.capturing #crumb{visibility:hidden!important;transition:none!important}
-@media (pointer:coarse){button{height:44px}button.icon{width:44px;height:44px}[role=tab]{min-height:44px}.bar{height:52px}}
+@media (pointer:coarse){button{height:44px}button.icon{width:44px;height:44px}#tabs [role=tab]{min-height:44px}.dtabs [role=tab]{height:40px}.bar{height:52px}.approve{min-height:44px}details.tech summary{min-height:44px}}
 @media (prefers-reduced-motion:reduce){body.ready .ctool{transition:none!important}}`;
 
 /** The preview page's behaviour (served as /shell.js). It reads /versions.json, the checked versions' metadata. */
@@ -877,7 +905,7 @@ function render() {
     for (const v of versions) {
       const w = WIDTHS[width], scale = Math.min(1, avail / w);
       const cell = document.createElement("div"); cell.className = "cell";
-      const l = document.createElement("div"); l.className = "label"; l.textContent = v.n + " · " + v.title + " · " + v.digest.slice(0, 12); cell.appendChild(l);
+      const l = document.createElement("div"); l.className = "label"; l.textContent = v.n + " · " + v.title; l.title = "Digest " + v.digest.slice(0, 12); cell.appendChild(l);
       cell.appendChild(frame(v, w, h, scale)); stage.appendChild(cell);
     }
   } else {
@@ -895,7 +923,7 @@ function render() {
   for (const b of document.querySelectorAll("[data-width]")) b.setAttribute("aria-pressed", String(b.dataset.width === width));
   $("compare").setAttribute("aria-pressed", String(comparing));
   // a pick names one version: none while comparing, or while the crashed page waits for one
-  $("choose").disabled = comparing || paused; if (comparing || paused) $("confirm").hidden = true;
+  $("choose").disabled = comparing || paused; if (comparing || paused) closeConfirm();
   const v = versions[current];
   $("identity").textContent = comparing ? "Comparing " + versions.length + " versions" :
     "Version " + v.n + " · " + (v.interactive ? "interactive" : "static") + " · id " + v.id + " · digest " + v.digest.slice(0, 12) + " (checked against PIVOT's stored copy)";
@@ -907,7 +935,30 @@ function render() {
   // a new frame starts at the top, with nothing of the last one drawn over it
   scroll = { x: 0, y: 0 }; walking = false; hideOutline(); closePop(); placeShield(); showMode(); drawNotes(); renderNotes();
 }
-const show = (i) => { current = (i + versions.length) % versions.length; comparing = false; paused = false; $("confirm").hidden = true; render(); };
+const show = (i) => { current = (i + versions.length) % versions.length; comparing = false; paused = false; closeConfirm(); render(); };
+// the pick's confirm step stands in for Choose this version while it is open (one ember button at a time)
+function closeConfirm() { $("confirm").hidden = true; $("choose").hidden = false; }
+// the drawer's tabs: Versions, Comment and View; the last one opened comes back in this window
+const PANELS = { versions: "panel-versions", comment: "comment", view: "panel-view" };
+let panel = PANELS[stored("pivot.preview.panel")] ? stored("pivot.preview.panel") : "versions";
+function selectPanel(next, focus = false) {
+  panel = next; store("pivot.preview.panel", next);
+  for (const t of $("dtabs").querySelectorAll("[role=tab]")) {
+    const on = t.dataset.panel === next;
+    t.setAttribute("aria-selected", String(on)); t.tabIndex = on ? 0 : -1;
+  }
+  for (const [k, id] of Object.entries(PANELS)) $(id).hidden = k !== next;
+  if (focus) $("dtab-" + next).focus();
+}
+// manual activation: the arrows (and Home, End) move the focus along the tabs, Enter or Space opens one; the keys
+// stop here, so they never switch versions or walk the page
+$("dtabs").addEventListener("keydown", (e) => {
+  const moves = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1, Home: "first", End: "last" };
+  if (!(e.key in moves) || e.altKey || e.ctrlKey || e.metaKey) return;
+  e.preventDefault(); e.stopPropagation();
+  const tabs = [...$("dtabs").querySelectorAll("[role=tab]")], i = tabs.indexOf(document.activeElement), m = moves[e.key];
+  tabs[m === "first" ? 0 : m === "last" ? tabs.length - 1 : (Math.max(i, 0) + m + tabs.length) % tabs.length].focus();
+});
 // drawer: open on a first visit, then as left; Esc or the toggle closes it and focus returns to the toggle
 let open = stored("pivot.preview.drawer") !== "closed";
 function setOpen(next, focus) {
@@ -916,7 +967,7 @@ function setOpen(next, focus) {
   document.body.classList.toggle("open", next); $("toggle").setAttribute("aria-expanded", String(next));
   if (openKey) placePop();
   if (!focus) return;
-  if (next) requestAnimationFrame(() => document.querySelector("[role=tab][aria-selected=true]")?.focus());
+  if (next) requestAnimationFrame(() => (panel === "versions" ? document.querySelector("#tabs [aria-selected=true]") : $("dtab-" + panel))?.focus());
   else $("toggle").focus();
 }
 // the quick bar: bottom, top, or folded into a dot; dragged past a few pixels it moves to the nearer edge
@@ -1012,6 +1063,7 @@ function showMode() {
   const on = mode === "comment";
   document.body.classList.toggle("commenting", on); document.body.classList.toggle("tool-pin", tool === "pin");
   $("ctool").hidden = !on; $("dtools-row").hidden = !on; $("comment-off").hidden = can;
+  $("cstart").hidden = on; $("cstart").disabled = !can;
   // while commenting the version is out of the tab order too (the shield already takes the pointer), so Tab and
   // Shift+Tab move between the preview's own controls and never into the paused page
   const box = document.querySelector("#stage .frame"); if (box) box.inert = on;
@@ -1029,6 +1081,8 @@ async function setMode(next, focus = true) {
   if (next === "comment" && (comparing || paused || !versions.length)) return;
   if (next === mode) return;
   mode = next;
+  // the drawer shows what Comment makes: the tools, the notes and Send to Claude
+  if (mode === "comment") selectPanel("comment");
   if (mode === "use") { closePop(); walking = false; at = null; hideOutline(); say(HINT); $("cmsg").textContent = ""; }
   showMode(); drawNotes(); renderNotes();
   // the shield is up first; then the process pauses the page's own keys and clicks (and lets them go again)
@@ -1240,6 +1294,9 @@ function renderNotes() {
   }
   $("notes-empty").hidden = notes.length > 0;
   $("qcount").hidden = !notes.length; $("qcount").textContent = notes.length + (notes.length === 1 ? " note" : " notes");
+  // the Comment tab says how many notes wait for this version: "Comment · 2"
+  const sr = document.createElement("span"); sr.className = "sr"; sr.textContent = notes.length === 1 ? " note" : " notes";
+  if (notes.length) $("ccount").replaceChildren(" · " + notes.length, sr); else $("ccount").replaceChildren();
   canSend();
 }
 function canSend() {
@@ -1345,6 +1402,7 @@ function placeCrumb() {
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button"); if (!b) return;
   if (b.dataset.tab) show(Number(b.dataset.tab));
+  else if (b.dataset.panel) selectPanel(b.dataset.panel);
   else if (b.dataset.width) { width = b.dataset.width; render(); }
   else if (b.dataset.place) setPlace(b.dataset.place);
   else if (b.dataset.mode) setMode(b.dataset.mode);
@@ -1365,13 +1423,14 @@ document.addEventListener("click", async (e) => {
   else if (b.id === "compare") { comparing = !comparing; render(); }
   else if (b.id === "copy") { $("pivot").select(); document.execCommand("copy"); b.textContent = "Copied"; }
   else if (b.id === "done") setMode("use");
+  else if (b.id === "cstart") setMode("comment");
   else if (b.id === "centre") atCentre();
   else if (b.id === "pop-del") { if (openKey) removeNote(openKey); }
   else if (b.id === "choose") {
     const v = versions[current];
-    $("chosen").textContent = "version " + v.n + " · " + v.title + " (digest " + v.digest.slice(0, 12) + ")";
-    $("confirm").hidden = false; $("note").focus();
-  } else if (b.id === "cancel") { $("confirm").hidden = true; $("choose").focus(); }
+    $("chosen").textContent = "version " + v.n + " · " + v.title; $("chosen").title = "Digest " + v.digest.slice(0, 12);
+    $("confirm").hidden = false; $("choose").hidden = true; $("note").focus();
+  } else if (b.id === "cancel") { closeConfirm(); $("choose").focus(); }
   else if (b.id === "fb-send") {
     // one Send to Claude: the text and this version's notes together
     const v = versions[current], text = $("fb-text").value.trim();
@@ -1419,8 +1478,18 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "ArrowLeft" || (e.key === "ArrowUp" && e.target.getAttribute?.("role") === "tab")) show(current - 1);
   else return;
   e.preventDefault();
-  if (e.target.getAttribute?.("role") === "tab") requestAnimationFrame(() => document.querySelector("[role=tab][aria-selected=true]")?.focus());
+  if (e.target.getAttribute?.("role") === "tab") requestAnimationFrame(() => document.querySelector("#tabs [aria-selected=true]")?.focus());
 });
+// Approve in PIVOT: this window can't reach PIVOT, so its process opens the session page in the user's own browser
+// (the address is the process's, never the page's); the link's address stays copyable from its menu and in View
+const openPivot = async (e) => {
+  if (e.type === "auxclick" && e.button !== 1) return;
+  e.preventDefault();
+  const ok = await window.pivotPreview({ openPivot: true }).catch(() => false);
+  $("approve-status").textContent = ok ? "Opened in your browser." : "Couldn’t open your browser: copy the link in View › Technical details.";
+  clearTimeout(openPivot.t); openPivot.t = setTimeout(() => ($("approve-status").textContent = ""), 6000);
+};
+$("approve").addEventListener("click", openPivot); $("approve").addEventListener("auxclick", openPivot);
 // keys typed in a mockup belong to it: say so while it has focus instead of forwarding them
 const focusCheck = () => setTimeout(() => { $("paused").hidden = document.activeElement?.tagName !== "IFRAME"; }, 0);
 addEventListener("blur", focusCheck); addEventListener("focus", focusCheck); document.addEventListener("focusin", focusCheck);
@@ -1430,11 +1499,12 @@ fetch("/versions.json").then((r) => r.json()).then((list) => {
   for (const [i, v] of versions.entries()) {
     const b = document.createElement("button"); b.setAttribute("role", "tab"); b.dataset.tab = String(i);
     if (v.n <= 9) b.setAttribute("aria-keyshortcuts", String(v.n));
+    b.title = (v.n <= 9 ? "Key " + v.n + " · " : "") + "← → step through the versions";
     const t = document.createElement("span"); t.className = "t"; t.textContent = v.n + " · " + v.title;
     const c = document.createElement("span"); c.className = "chip"; c.textContent = v.interactive ? "interactive" : "static";
     b.append(t, c); $("tabs").appendChild(b);
   }
-  setOpen(open, false); setPlace(place);
+  setOpen(open, false); setPlace(place); selectPanel(panel);
   render(); showMedia(); document.body.dataset.ready = "true";
   requestAnimationFrame(() => document.body.classList.add("ready"));
 });
@@ -1496,6 +1566,32 @@ export async function startServer({ session, versions, pivotPage, policy = versi
 }
 
 /**
+ * Opens a page in the user's own browser: "Approve in PIVOT" opens the session's page there, since this window can't
+ * reach PIVOT. Resolves false when no browser could be started.
+ */
+export function openInBrowser(url, platform = process.platform) {
+  const [cmd, args] =
+    platform === "darwin"
+      ? ["open", [url]]
+      : platform === "win32"
+        ? // not `cmd /c start`, which cuts the address at its first `&`
+          ["rundll32", ["url.dll,FileProtocolHandler", url]]
+        : ["xdg-open", [url]];
+  return new Promise((resolve) => {
+    try {
+      const child = spawn(cmd, args, { stdio: "ignore", detached: true });
+      child.once("error", () => resolve(false));
+      child.once("spawn", () => {
+        child.unref();
+        resolve(true);
+      });
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+/**
  * Sends the user's feedback to PIVOT as its own page would (same origin, no API token: PIVOT refuses feedback that
  * carries one): text, and live notes (`pins` with `live: true`, the element and the crop) made at one `width` (and
  * `height`) of the version. Returns the stored feedback.
@@ -1522,7 +1618,7 @@ export async function postFeedback({ pivotPage, sessionId, round, mockupId, text
  * QA's switches and WebRTC guard. `headless`, `channel`, `playwright`, `policy` and `sendFeedback` are for tests
  * (`policy` replaces the versions' CSP, so a test can show the gate holds without it; `channel: "chromium"` runs full
  * Chromium headless, where a version's frame is out of process as in the window); the CLI never sets them. Returns
- * handles and a `closed` promise.
+ * handles and a `closed` promise. `openPage` opens PIVOT's session page in the user's browser (tests replace it).
  */
 export async function startPreview({
   session,
@@ -1534,6 +1630,7 @@ export async function startPreview({
   policy = versionPolicy,
   onEvent = () => {},
   sendFeedback = postFeedback,
+  openPage = openInBrowser,
 }) {
   const { chromium } = playwright ?? loadPlaywright();
   const site = await startServer({ session, versions, pivotPage, policy });
@@ -1576,6 +1673,12 @@ export async function startPreview({
       return true;
     }
     if (cmd?.mode === "comment" || cmd?.mode === "use") return live.setMode(cmd.mode === "comment");
+    // Approve in PIVOT: the session's page (this process's address, never one from the page) in the user's browser
+    if (cmd?.openPivot === true) {
+      const u = URL.canParse(pivotPage) ? new URL(pivotPage) : null;
+      if (!u || !["http:", "https:"].includes(u.protocol)) return false;
+      return (await openPage(u.href).catch(() => false)) === true;
+    }
     // reading the page, only while commenting: what is under the pointer, a forwarded wheel, a step of the keyboard
     // walk, a note
     if (cmd?.hover || cmd?.wheel || cmd?.walk || cmd?.pick) {

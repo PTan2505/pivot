@@ -7,6 +7,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Ellipsis,
   ExternalLink,
   Info,
   Loader2,
@@ -25,22 +26,35 @@ import {
   WIDTHS,
   type Width,
 } from "@/components/design-mockups";
-import { DESIGN_STATUS_LABEL } from "@/components/design-session";
+import { DESIGN_STATUS_LABEL, statusSentence } from "@/components/design-session";
 import {
   DesignSystemBox,
   FeedbackSection,
+  hasContent,
   PinLayer,
   useFeedbackDrafts,
   type CommentTool,
 } from "@/components/mockup-feedback";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { frameDocument, keepLinkInPage } from "@/lib/element-map";
 import { cn } from "@/lib/utils";
 
 /**
  * The full-screen mockup view (`/design/[id]/mockups`): the mockup fills the window like the real site; a floating
- * quick bar switches versions and opens the controls drawer (rounds, width, tools, Approve). The drawer is non-modal:
- * the mockup stays usable beside it.
+ * quick bar switches versions and opens the controls drawer: which version, what width, and the decision (Approve, or
+ * Comment on this version) in its footer. Replay, Open alone, the interactive preview, the quick bar's place and the
+ * motion note sit in the drawer's "More actions" menu. The drawer is non-modal: the mockup stays usable beside it.
  */
 
 const DRAWER_KEY = "pivot.mockups.drawer";
@@ -225,6 +239,8 @@ export function MockupStage({
   const [run, setRun] = useState(0);
   const [scale, setScale] = useState(1);
   const [aboutMotion, setAboutMotion] = useState(false);
+  /** The feedback form, opened by "Comment on this version" (it also shows while there is a draft or comment mode). */
+  const [commentOpen, setCommentOpen] = useState(false);
   // The stage only renders in the browser (after the session loads), so the stored choices are read right away. First
   // visit: the drawer starts open, so the controls and Approve are found. The slide is switched on only after the first
   // frame, so a restored state never animates in.
@@ -297,7 +313,8 @@ export function MockupStage({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || !open || approving || pinMode) return;
-      if ((e.target as HTMLElement | null)?.closest("[role=dialog]")) return;
+      // a dialog or a menu on top closes first, on its own
+      if ((e.target as HTMLElement | null)?.closest("[role=dialog], [role=menu]")) return;
       e.preventDefault();
       setDrawer(false);
     };
@@ -311,7 +328,11 @@ export function MockupStage({
       const key = e.key.toLowerCase();
       if ((key !== "p" && key !== "v") || e.metaKey || e.ctrlKey || e.altKey || approving) return;
       if (phone || s.status !== "exploring") return;
-      if ((e.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable], [role=dialog]"))
+      if (
+        (e.target as HTMLElement | null)?.closest(
+          "input, textarea, select, [contenteditable], [role=dialog], [role=menu]",
+        )
+      )
         return;
       // inside the mode the layer handles V and P itself (it knows when Select can't work, and says so)
       if (pinMode || key !== "p") return;
@@ -386,6 +407,25 @@ export function MockupStage({
   const draft = drafts.get(current.id);
   const pinCount = draft.pins.length;
   const thisRound = s.rounds?.find((r) => r.round === round);
+  const exploring = s.status === "exploring";
+  const pastFeedback = (s.feedback ?? []).some((f) => f.round === round);
+  // while exploring the form shows once asked for (or while a draft or comment mode is on); otherwise only this round's
+  // earlier feedback, when there is some
+  const showFeedback = exploring ? commentOpen || pinMode || pinCount > 0 || hasContent(draft) : pastFeedback;
+  // a draft, notes or comment mode keep the form open: then the button only brings its text box into view
+  const formHeld = pinMode || pinCount > 0 || hasContent(draft);
+  const openComment = () => {
+    if (commentOpen && !formHeld) {
+      setCommentOpen(false);
+      return;
+    }
+    setCommentOpen(true);
+    requestAnimationFrame(() => {
+      const box = document.getElementById("feedback-text");
+      box?.scrollIntoView({ block: "nearest" });
+      box?.focus();
+    });
+  };
   const enterPins = (show: number | null = null) => {
     if (phone || s.status !== "exploring") return;
     setFocusPin(show);
@@ -576,29 +616,74 @@ export function MockupStage({
             "data-[state=closed]:[transition:translate_200ms_cubic-bezier(0.32,0.72,0,1),visibility_0s_200ms] data-[state=open]:[transition:translate_250ms_cubic-bezier(0.32,0.72,0,1),visibility_0s] motion-reduce:data-[state=closed]:[transition:none] motion-reduce:data-[state=open]:[transition:none]",
         )}
       >
-        <div className="flex items-start gap-2 px-4 pt-3 pb-2">
-          <div className="min-w-0 flex-1">
-            <Button variant="ghost" size="sm" asChild className="mb-1 -ml-3 h-7">
+        <div className="px-4 pt-3 pb-2">
+          <div className="-ml-3 flex items-center gap-1">
+            <Button variant="ghost" size="sm" asChild className="h-8">
               <Link href={`/design/${s.id}`}>
                 <ArrowLeft /> Session
               </Link>
             </Button>
-            <h2 id="mockup-controls-title" className="text-[15px] leading-snug font-medium">
-              {s.title}
-            </h2>
-            <p className="text-[13px] text-ink-muted">
-              Round {round} · {count} version{count === 1 ? "" : "s"} · {DESIGN_STATUS_LABEL[s.status]}
-            </p>
+            <span className="flex-1" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="More actions"
+                  className="[@media(pointer:coarse)]:size-11"
+                >
+                  {opening ? <Loader2 className="animate-spin" /> : <Ellipsis />}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" sideOffset={6} className="w-60">
+                <DropdownMenuItem onSelect={() => setRun((r) => r + 1)}>
+                  <RotateCcw /> Replay
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href={`/api/design/mockups/${current.id}`} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink /> Open alone
+                    <span className="sr-only">(opens in a new tab)</span>
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={opening} onSelect={() => void openPreview()}>
+                  <AppWindow />
+                  {preview.data?.open && preview.data.round === round ? "Preview open" : "Interactive preview"}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel id="stage-bar">Quick bar</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  aria-labelledby="stage-bar"
+                  value={bar}
+                  onValueChange={(v) => placeBar(v as BarPlace)}
+                >
+                  {(Object.keys(BAR_LABEL) as BarPlace[]).map((p) => (
+                    <DropdownMenuRadioItem key={p} value={p}>
+                      {BAR_LABEL[p]}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setAboutMotion((o) => !o)}>
+                  <Info /> {aboutMotion ? "Hide the motion note" : "About motion"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Close preview controls"
+              onClick={() => setDrawer(false)}
+              className="[@media(pointer:coarse)]:size-11"
+            >
+              <X />
+            </Button>
           </div>
-          <Button
-            variant="secondary"
-            size="icon-sm"
-            aria-label="Close preview controls"
-            onClick={() => setDrawer(false)}
-            className="bg-surface-raised"
-          >
-            <X />
-          </Button>
+          <h2 id="mockup-controls-title" className="mt-1 text-[15px] leading-snug font-medium">
+            {s.title}
+          </h2>
+          <p className="text-[13px] text-ink-muted">
+            Round {round} · {statusSentence(s)}
+          </p>
         </div>
 
         <div className="min-h-0 flex-1 [scroll-padding-bottom:16px] space-y-4 overflow-y-auto px-4 pt-2 pb-4">
@@ -627,12 +712,7 @@ export function MockupStage({
           )}
 
           <section aria-labelledby="stage-versions">
-            <Heading id="stage-versions">
-              Versions{" "}
-              <span className="font-normal tracking-normal text-ink-subtle normal-case">
-                · keys 1–{Math.min(count, 9)}, ← →
-              </span>
-            </Heading>
+            <Heading id="stage-versions">Versions</Heading>
             <div
               role="tablist"
               aria-orientation="vertical"
@@ -643,45 +723,49 @@ export function MockupStage({
                 const selected = m.id === current.id;
                 const approved = isApproved(m);
                 return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    role="tab"
-                    id={`version-tab-${m.n}`}
-                    aria-selected={selected}
-                    aria-keyshortcuts={m.n <= 9 ? String(m.n) : undefined}
-                    tabIndex={selected ? 0 : -1}
-                    onClick={() => setN(m.n)}
-                    className={cn(
-                      "flex min-h-9 items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left text-[14px] outline-none focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-text focus-visible:outline-solid [@media(pointer:coarse)]:min-h-11",
-                      selected ? "bg-inverse font-medium text-on-inverse" : "text-ink-secondary hover:bg-surface",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "w-4 font-mono text-[12px] tabular-nums",
-                        selected ? "opacity-60" : "text-ink-subtle",
-                      )}
-                    >
-                      {m.n}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">{m.title}</span>
-                    {mixed && m.interactive && (
-                      <span
+                  <Tooltip key={m.id}>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        role="tab"
+                        id={`version-tab-${m.n}`}
+                        aria-selected={selected}
+                        aria-keyshortcuts={m.n <= 9 ? String(m.n) : undefined}
+                        tabIndex={selected ? 0 : -1}
+                        onClick={() => setN(m.n)}
                         className={cn(
-                          "rounded-full px-1.5 text-[12px] font-normal",
-                          selected ? "bg-on-inverse/10" : "bg-surface-raised text-ink-secondary",
+                          "flex min-h-9 items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left text-[14px] outline-none focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-text focus-visible:outline-solid [@media(pointer:coarse)]:min-h-11",
+                          selected ? "bg-inverse font-medium text-on-inverse" : "text-ink-secondary hover:bg-surface",
                         )}
                       >
-                        Interactive
-                      </span>
-                    )}
-                    {approved && (
-                      <span className="flex items-center gap-1 rounded-full bg-success px-1.5 text-[12px] font-normal text-on-inverse">
-                        <Check className="size-3" aria-hidden /> Approved
-                      </span>
-                    )}
-                  </button>
+                        <span
+                          className={cn(
+                            "w-4 font-mono text-[12px] tabular-nums",
+                            selected ? "opacity-60" : "text-ink-subtle",
+                          )}
+                        >
+                          {m.n}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">{m.title}</span>
+                        {mixed && m.interactive && (
+                          <span
+                            className={cn(
+                              "rounded-full px-1.5 text-[12px] font-normal",
+                              selected ? "bg-on-inverse/10" : "bg-surface-raised text-ink-secondary",
+                            )}
+                          >
+                            Interactive
+                          </span>
+                        )}
+                        {approved && (
+                          <span className="flex items-center gap-1 rounded-full bg-success px-1.5 text-[12px] font-normal text-on-inverse">
+                            <Check className="size-3" aria-hidden /> Approved
+                          </span>
+                        )}
+                      </button>
+                    </TooltipTrigger>
+                    {m.n <= 9 && <TooltipContent side="left">Press {m.n} · ← → for the next</TooltipContent>}
+                  </Tooltip>
                 );
               })}
             </div>
@@ -706,28 +790,16 @@ export function MockupStage({
                 {WIDTH_LABEL[width]} is {WIDTHS[width]}px wide: scaled to {Math.round(scale * 100)}% to fit this window.
               </p>
             )}
-            <p className="mt-2.5 flex items-center gap-2 text-[13px] text-ink-muted">
-              {interactiveCount === versions.length
-                ? "Interactive: motion runs in the interactive preview."
-                : current.interactive
-                  ? "Interactive version: motion runs in the interactive preview."
-                  : "Motion follows your browser’s setting."}
-              <button
-                type="button"
-                aria-label="About motion and reduced motion"
-                aria-expanded={aboutMotion}
-                aria-controls="stage-about-motion"
-                onClick={() => setAboutMotion((o) => !o)}
-                className="inline-grid size-6 shrink-0 place-items-center rounded-full bg-surface text-ink-secondary outline-none hover:bg-surface-raised focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-text focus-visible:outline-solid"
-              >
-                <Info className="size-3.5" aria-hidden />
-              </button>
-            </p>
             <p
               id="stage-about-motion"
               hidden={!aboutMotion}
               className="mt-2 rounded-xl bg-surface px-3.5 py-2.5 text-[13px] text-ink-muted"
             >
+              {interactiveCount === versions.length
+                ? "Interactive: motion runs in the interactive preview. "
+                : current.interactive
+                  ? "Interactive version: motion runs in the interactive preview. "
+                  : ""}
               Motion follows your browser
               {reduce !== null && (
                 <>
@@ -739,56 +811,30 @@ export function MockupStage({
             </p>
           </section>
 
-          <FeedbackSection
-            key={current.id}
-            session={s}
-            round={round}
-            mockup={current}
-            draft={draft}
-            onChange={(fn) => drafts.update(current.id, fn)}
-            onSent={() => {
-              drafts.clear(current.id);
-              setPinMode(false);
-            }}
-            phone={phone}
-            pinMode={pinMode}
-            onPinMode={() => enterPins()}
-            onShowPin={(pin) => enterPins(pin)}
-            onOpenRound={(r) => {
-              setRound(r);
-              setN(1);
-            }}
-          />
-
-          <section aria-labelledby="stage-tools">
-            <Heading id="stage-tools">Tools</Heading>
-            <div className="flex flex-wrap gap-1.5">
-              <Button size="sm" variant="secondary" onClick={() => setRun((r) => r + 1)}>
-                <RotateCcw /> Replay
-              </Button>
-              <Button size="sm" variant="secondary" asChild>
-                <a href={`/api/design/mockups/${current.id}`} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink /> Open alone
-                </a>
-              </Button>
-              <Button size="sm" variant="secondary" disabled={opening} onClick={openPreview}>
-                {opening ? <Loader2 className="animate-spin" /> : <AppWindow />}
-                {preview.data?.open && preview.data.round === round ? "Preview open" : "Interactive preview"}
-              </Button>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span id="stage-bar" className="text-[13px] text-ink-muted">
-                Quick bar
-              </span>
-              <div role="radiogroup" aria-labelledby="stage-bar" className="flex gap-1.5">
-                {(Object.keys(BAR_LABEL) as BarPlace[]).map((p) => (
-                  <Pill key={p} role="radio" aria-checked={p === bar} active={p === bar} onClick={() => placeBar(p)}>
-                    {BAR_LABEL[p]}
-                  </Pill>
-                ))}
-              </div>
-            </div>
-          </section>
+          {showFeedback && (
+            <FeedbackSection
+              key={current.id}
+              session={s}
+              round={round}
+              mockup={current}
+              draft={draft}
+              onChange={(fn) => drafts.update(current.id, fn)}
+              onSent={() => {
+                drafts.clear(current.id);
+                setPinMode(false);
+                // the form stays open to say it was sent, however it was opened (P, or the button)
+                setCommentOpen(true);
+              }}
+              phone={phone}
+              pinMode={pinMode}
+              onPinMode={() => enterPins()}
+              onShowPin={(pin) => enterPins(pin)}
+              onOpenRound={(r) => {
+                setRound(r);
+                setN(1);
+              }}
+            />
+          )}
         </div>
 
         <div className="space-y-2.5 border-t border-divider px-4 pt-3 pb-4">
@@ -813,16 +859,27 @@ export function MockupStage({
           {canApprove ? (
             <>
               <Button
+                variant="secondary"
+                className="h-10 w-full bg-surface-raised"
+                aria-expanded={showFeedback}
+                aria-controls="stage-feedback-section"
+                onClick={openComment}
+              >
+                <MessageSquarePlus /> Comment on this version
+              </Button>
+              <Button
                 className="h-10 w-full"
                 data-approve-trigger
-                aria-describedby={thisRound?.designSystemChange ? "design-system-change" : undefined}
+                aria-describedby={["approve-help", thisRound?.designSystemChange ? "design-system-change" : ""]
+                  .filter(Boolean)
+                  .join(" ")}
                 onClick={() => setApproving(true)}
               >
                 <Check /> Approve version {current.n}
               </Button>
-              <p className="text-center text-[12px] text-ink-muted">
+              <span id="approve-help" className="sr-only">
                 Opens the approval: a note for the build and your owner passphrase.
-              </p>
+              </span>
             </>
           ) : isApproved(current) ? (
             <p className="flex items-center justify-center gap-1.5 text-[14px] font-medium text-success">

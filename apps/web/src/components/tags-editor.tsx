@@ -1,12 +1,13 @@
 "use client";
 
 import { Plus, X } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { TAG_KIND_LABELS, type TagKind } from "@pivot/core/types";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTags, type TagInput } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 function KindPicker({
   kind,
@@ -99,19 +100,50 @@ export function TagsEditor({
   kinds,
   value,
   onChange,
+  onlySet = false,
 }: {
   kinds: TagKind[];
   value: TagInput[];
   onChange: (v: TagInput[]) => void;
+  /**
+   * The detail page's inspector: only the kinds that have a value, plus one "Add" that shows the empty kinds' rows
+   * with the same pickers. Off (the default) shows every kind, as the add dialog does.
+   */
+  onlySet?: boolean;
 }) {
+  const [adding, setAdding] = useState(false);
+  const listId = useId();
+  const shown = onlySet && !adding ? kinds.filter((k) => value.some((t) => t.kind === k)) : kinds;
+  const hasEmpty = kinds.some((k) => !value.some((t) => t.kind === k));
   return (
     <div className="space-y-2">
-      {kinds.map((kind) => (
-        <div key={kind} className="grid grid-cols-[88px_1fr] items-start gap-2">
-          <span className="pt-1.5 text-xs text-ink-subtle">{TAG_KIND_LABELS[kind]}</span>
-          <KindPicker kind={kind} value={value} onChange={onChange} />
-        </div>
-      ))}
+      <div id={listId} className={cn("space-y-2", !shown.length && "hidden")}>
+        {shown.map((kind) => (
+          <div key={kind} className="grid grid-cols-[88px_1fr] items-start gap-2">
+            <span className="pt-1.5 text-xs text-ink-subtle">{TAG_KIND_LABELS[kind]}</span>
+            <KindPicker kind={kind} value={value} onChange={onChange} />
+          </div>
+        ))}
+      </div>
+      {onlySet && (hasEmpty || adding) && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          className="text-ink-muted max-sm:h-11"
+          aria-expanded={adding}
+          aria-controls={listId}
+          onClick={() => setAdding((a) => !a)}
+        >
+          {adding ? (
+            "Done"
+          ) : (
+            <>
+              <Plus /> Add<span className="sr-only"> tags</span>
+            </>
+          )}
+        </Button>
+      )}
     </div>
   );
 }

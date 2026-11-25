@@ -70,7 +70,7 @@ function CollectionActions({ id }: { id: string }) {
   return (
     <>
       <Button variant="secondary" disabled={!all.length} onClick={() => copyContext(all)}>
-        <ClipboardCopy /> Copy context
+        <ClipboardCopy /> Copy for Claude
       </Button>
       {showOther && (
         <Button

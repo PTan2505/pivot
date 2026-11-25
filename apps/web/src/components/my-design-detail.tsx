@@ -3,9 +3,11 @@
 // The page of one of the owner's saved designs (type `my_design`, docs/my-designs-plan.md Phase 3). No new layout: it
 // is the component page (component-detail.tsx, design session 118304e2) with a design's facts. A stage with Preview /
 // Code tabs and Install in the main column, then Usage; the design's facts at the top of the side panel. The code is
-// read-only: PIVOT keeps it as saved, and reuse goes through get_my_design or Download zip.
+// read-only: PIVOT keeps it as saved, and reuse goes through get_my_design or Download zip. Declutter (direction C
+// "Inspector", 2026-11-25): Preview / Code / How to use tabs, the shots switched by viewport under the stage instead of
+// a pill per shot over it, and the side panel's rows rendered by resource-detail.tsx's inspector from the parts here.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eye, FileCode, Hammer, Image as ImageIcon, Loader2, Play, XCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, FileCode, Hammer, Image as ImageIcon, Loader2, Play } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useId, useRef, useState } from "react";
@@ -14,6 +16,7 @@ import { myDesignPreviewPlan } from "@pivot/core/preview-plan";
 import type { AssetDTO, DesignSessionDTO, MyDesignKind, MyDesignMeta } from "@pivot/core/types";
 import {
   baseName,
+  BuildFailed,
   CHIP,
   CodeView,
   CopyButton,
@@ -48,17 +51,20 @@ const ROLE_LABEL = { component: "Component", demo: "Demo", style: "Style", suppo
 const orderedFiles = (files: MyDesignMeta["files"]) =>
   [...files].sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || a.path.localeCompare(b.path));
 
+type DesignTab = "preview" | "code" | "usage";
+
 /** The tab, file and line on show live in the URL (`?tab=code&file=…&line=…`), as on the component page. */
 function useDesignView(d: MyDesignMeta) {
   const params = useSearchParams();
-  const tab = params.get("tab") === "code" ? "code" : "preview";
+  const asked = params.get("tab");
+  const tab: DesignTab = asked === "code" || asked === "usage" ? asked : "preview";
   const files = orderedFiles(d.files);
   const file = files.find((f) => f.path === params.get("file"))?.path ?? files[0]?.path ?? "";
   const line = Number(params.get("line")) || 0;
-  const go = (next: { tab?: "preview" | "code"; file?: string; line?: number }) => {
+  const go = (next: { tab?: DesignTab; file?: string; line?: number }) => {
     const sp = new URLSearchParams(window.location.search);
     const t = next.tab ?? tab;
-    if (t === "code") sp.set("tab", "code");
+    if (t !== "preview") sp.set("tab", t);
     else sp.delete("tab");
     sp.delete("line");
     if (next.file !== undefined) sp.set("file", next.file);
@@ -70,23 +76,9 @@ function useDesignView(d: MyDesignMeta) {
   return { tab, file, line, files, go };
 }
 
-/** Under the title: its kind and the project it came from. */
-export function MyDesignIdentity({ d }: { d: MyDesignMeta }) {
-  return (
-    <div className="-mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-muted">
-      <span className={CHIP}>
-        <span className="font-normal text-ink-secondary">Kind</span> {KIND_LABEL[d.kind]}
-      </span>
-      {d.source.project && (
-        <span>
-          From <span className="text-ink-secondary">{d.source.project}</span>
-        </span>
-      )}
-      <span>
-        Saved <time className="font-mono">{d.savedAt.slice(0, 10)}</time>
-      </span>
-    </div>
-  );
+/** The About row's summary: its kind and the project it came from. */
+export function myDesignAboutSummary(d: MyDesignMeta) {
+  return `${KIND_LABEL[d.kind]}${d.source.project ? ` · from ${d.source.project}` : ""}`;
 }
 
 // ---- main column: stage, code, install, usage -------------------------------------------------------------------
@@ -166,7 +158,10 @@ function Stage({
 
 const viewportOf = (a: AssetDTO) => (a.meta as { viewport?: string } | null)?.viewport;
 
-/** The saved screenshots, one at a time with a pill per shot, and the video when there is one. */
+/**
+ * The saved screenshots and videos, one at a time. Under the stage: one pill per kind (Desktop, Mobile, Video) and,
+ * when a kind has several, a ‹ 2 / 4 › stepper, so every shot stays one or two presses away without covering it.
+ */
 function ShotStage({
   title,
   media,
@@ -201,6 +196,16 @@ function ShotStage({
     const same = shots.filter((x) => viewportOf(x) === vp).length > 1;
     labels.set(s.id, vp ? `${vp === "mobile" ? "Mobile" : "Desktop"}${same ? ` ${i + 1}` : ""}` : `Shot ${i + 1}`);
   });
+  const groups = [
+    { key: "desktop", label: "Desktop", items: shots.filter((a) => viewportOf(a) && viewportOf(a) !== "mobile") },
+    { key: "mobile", label: "Mobile", items: shots.filter((a) => viewportOf(a) === "mobile") },
+    { key: "shots", label: "Shots", items: shots.filter((a) => !viewportOf(a)) },
+    { key: "video", label: "Video", items: videos },
+  ].filter((g) => g.items.length > 0);
+  const group = groups.find((g) => g.items.some((a) => a.id === current.id)) ?? groups[0];
+  const at = group.items.findIndex((a) => a.id === current.id);
+  const step = (by: number) => setShown(group.items[(at + by + group.items.length) % group.items.length].id);
+  const noun = group.key === "video" ? "video" : "shot";
   return (
     <div className="relative rounded-[14px] bg-surface p-3">
       {current.role === "design-video" ? (
@@ -228,28 +233,57 @@ function ShotStage({
           )}
         />
       )}
-      <StageControls>
-        {extra}
-        {media.length > 1 &&
-          media.map((a) => (
-            <Button
-              key={a.id}
-              variant="secondary"
-              size="xs"
-              aria-pressed={a.id === current.id}
-              className={cn(a.id === current.id && "bg-surface-raised text-ink")}
-              onClick={() => setShown(a.id)}
-            >
-              {a.role === "design-video" ? (
-                <>
-                  <Play /> Video
-                </>
-              ) : (
-                labels.get(a.id)
-              )}
-            </Button>
-          ))}
-      </StageControls>
+      {extra && <StageControls>{extra}</StageControls>}
+      {media.length > 1 && (
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          {groups.length > 1 && (
+            <div role="group" aria-label="Which view" className="flex flex-wrap gap-1">
+              {groups.map((g) => (
+                <Button
+                  key={g.key}
+                  variant="secondary"
+                  size="sm"
+                  aria-pressed={g.key === group.key}
+                  className={cn(
+                    "bg-surface-raised max-sm:h-11",
+                    g.key === group.key && "bg-inverse text-on-inverse hover:bg-inverse hover:text-on-inverse",
+                  )}
+                  onClick={() => setShown(g.items[0].id)}
+                >
+                  {g.key === "video" && <Play />}
+                  {g.label}
+                  {g.items.length > 1 && <span className="font-mono text-xs opacity-70">{g.items.length}</span>}
+                </Button>
+              ))}
+            </div>
+          )}
+          {group.items.length > 1 && (
+            <div className="ml-auto flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="max-sm:size-11"
+                aria-label={`Previous ${group.label.toLowerCase()} ${noun}`}
+                onClick={() => step(-1)}
+              >
+                <ChevronLeft />
+              </Button>
+              <span className="min-w-12 text-center font-mono text-xs text-ink-muted tabular-nums" aria-live="polite">
+                {at + 1} / {group.items.length}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="max-sm:size-11"
+                aria-label={`Next ${group.label.toLowerCase()} ${noun}`}
+                onClick={() => step(1)}
+              >
+                <ChevronRight />
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -303,16 +337,7 @@ function BuildNotes({ d }: { d: MyDesignMeta }) {
           : ": bundling its demo page on this machine…"}
       </p>
     );
-  if (p?.status === "failed")
-    return (
-      <div role="status" className="mt-2 flex gap-2 rounded-[10px] bg-surface p-3 text-danger">
-        <XCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-        <p className="min-w-0 text-xs text-ink-secondary">
-          <span className="block font-medium text-danger">The preview build failed</span>
-          <span className="font-mono break-words whitespace-pre-wrap text-ink-muted">{p.error}</span>
-        </p>
-      </div>
-    );
+  if (p?.status === "failed") return <BuildFailed error={p.error} />;
   return null;
 }
 
@@ -331,7 +356,7 @@ function InstallPanel({ d }: { d: MyDesignMeta }) {
   };
   return (
     <section aria-labelledby={headingId} className="space-y-3 rounded-[14px] bg-surface p-4">
-      <h2 id={headingId} className="text-xs text-ink-subtle">
+      <h2 id={headingId} className="text-sm font-medium text-ink">
         Install
       </h2>
       {command ? (
@@ -368,20 +393,24 @@ function InstallPanel({ d }: { d: MyDesignMeta }) {
   );
 }
 
+/** The usage notes, then the tokens it relies on, folded (often a long table). */
 function UsagePanel({ d }: { d: MyDesignMeta }) {
   const headingId = useId();
   return (
     <section aria-labelledby={headingId} className="space-y-3 rounded-[14px] bg-surface p-4">
-      <h2 id={headingId} className="text-xs text-ink-subtle">
+      <h2 id={headingId} className="text-sm font-medium text-ink">
         Usage
       </h2>
       <div className="text-sm text-ink-secondary">
         <Markdown>{d.usage}</Markdown>
       </div>
       {d.tokens.length > 0 && (
-        <>
-          <h3 className="pt-1 text-xs text-ink-subtle">Tokens it relies on</h3>
-          <dl className="grid grid-cols-[minmax(0,auto)_1fr] gap-x-4 gap-y-1.5 rounded-[10px] bg-surface-raised p-3 font-mono text-[12.5px]">
+        <details className="group">
+          <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-full py-1 text-xs text-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden">
+            <ChevronRight className="size-3.5 group-open:rotate-90" aria-hidden />
+            Tokens it relies on ({d.tokens.length})
+          </summary>
+          <dl className="mt-2 grid grid-cols-[minmax(0,auto)_1fr] gap-x-4 gap-y-1.5 rounded-[10px] bg-surface-raised p-3 font-mono text-[12.5px]">
             {d.tokens.map((t) => (
               <div key={t.name} className="contents">
                 <dt className="min-w-0 break-all text-ink">{t.name}</dt>
@@ -389,13 +418,17 @@ function UsagePanel({ d }: { d: MyDesignMeta }) {
               </div>
             ))}
           </dl>
-        </>
+        </details>
       )}
     </section>
   );
 }
 
-/** The main column: Preview / Code over one stage, then Install and Usage. */
+const TAB_CLASS =
+  "px-4 focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-text";
+const PANEL_CLASS = "motion-safe:animate-in motion-safe:duration-150 motion-safe:fade-in-0";
+
+/** The main column: Preview / Code / How to use (install, usage and tokens) over one stage. */
 export function MyDesignMain({
   d,
   id,
@@ -409,37 +442,24 @@ export function MyDesignMain({
 }) {
   const view = useDesignView(d);
   const media = assets.filter((a) => a.role === "design-shot" || a.role === "design-video");
-  const tab =
-    "px-4 focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-text";
   return (
-    <div className="min-w-0 space-y-6">
-      <Tabs value={view.tab} onValueChange={(t) => view.go({ tab: t as "preview" | "code" })} className="gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <TabsList aria-label="Preview or code">
-            <TabsTrigger value="preview" className={tab}>
-              Preview
-            </TabsTrigger>
-            <TabsTrigger value="code" className={tab}>
-              Code
-            </TabsTrigger>
-          </TabsList>
-          <span className="text-xs text-ink-subtle">
-            {d.files.length} {d.files.length === 1 ? "file" : "files"}
-            {d.assets.length > 0 && ` · ${d.assets.length} other`}
-          </span>
-        </div>
-        <TabsContent
-          value="preview"
-          tabIndex={-1}
-          className="motion-safe:animate-in motion-safe:duration-150 motion-safe:fade-in-0"
-        >
+    <div className="min-w-0">
+      <Tabs value={view.tab} onValueChange={(t) => view.go({ tab: t as DesignTab })} className="gap-3">
+        <TabsList aria-label="Preview, code or how to use" className="max-sm:w-full">
+          <TabsTrigger value="preview" className={TAB_CLASS}>
+            Preview
+          </TabsTrigger>
+          <TabsTrigger value="code" className={TAB_CLASS}>
+            Code
+          </TabsTrigger>
+          <TabsTrigger value="usage" className={TAB_CLASS}>
+            How to use
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="preview" tabIndex={-1} className={PANEL_CLASS}>
           <Stage d={d} id={id} title={title} media={media} onShowCode={() => view.go({ tab: "code" })} />
         </TabsContent>
-        <TabsContent
-          value="code"
-          tabIndex={-1}
-          className="space-y-4 rounded-[14px] bg-surface p-4 motion-safe:animate-in motion-safe:duration-150 motion-safe:fade-in-0"
-        >
+        <TabsContent value="code" tabIndex={-1} className={cn("space-y-4 rounded-[14px] bg-surface p-4", PANEL_CLASS)}>
           <CodeView
             files={view.files}
             file={view.file}
@@ -449,9 +469,11 @@ export function MyDesignMain({
           />
           {d.assets.length > 0 && <OtherFiles d={d} />}
         </TabsContent>
+        <TabsContent value="usage" tabIndex={-1} className={cn("space-y-3", PANEL_CLASS)}>
+          <InstallPanel d={d} />
+          <UsagePanel d={d} />
+        </TabsContent>
       </Tabs>
-      <InstallPanel d={d} />
-      <UsagePanel d={d} />
     </div>
   );
 }
@@ -485,11 +507,10 @@ function OtherFiles({ d }: { d: MyDesignMeta }) {
   );
 }
 
-// ---- side panel ---------------------------------------------------------------------------------------------------
+// ---- inspector rows ------------------------------------------------------------------------------------------------
 
-/** Where it came from, and PIVOT's scan of its code: the facts PIVOT keeps, read-only. */
-export function MyDesignFacts({ d }: { d: MyDesignMeta }) {
-  const view = useDesignView(d);
+/** The About row: its kind, the project and the sessions it came from. */
+export function MyDesignAbout({ d }: { d: MyDesignMeta }) {
   const { data } = useQuery({
     queryKey: ["design-sessions"],
     queryFn: () => api<{ sessions: DesignSessionDTO[] }>("/api/design/sessions?limit=200"),
@@ -497,45 +518,67 @@ export function MyDesignFacts({ d }: { d: MyDesignMeta }) {
     enabled: !!d.source.sessionIds?.length,
   });
   const titles = new Map((data?.sessions ?? []).map((s) => [s.id, s.title]));
+  return (
+    <dl className="grid grid-cols-[72px_1fr] gap-x-3 gap-y-2 text-sm">
+      <dt className="text-ink-subtle">Kind</dt>
+      <dd className="min-w-0 text-ink-secondary">{KIND_LABEL[d.kind]}</dd>
+      {d.source.project && (
+        <>
+          <dt className="text-ink-subtle">Project</dt>
+          <dd className="min-w-0 break-words text-ink-secondary">{d.source.project}</dd>
+        </>
+      )}
+      {!!d.source.sessionIds?.length && (
+        <>
+          <dt className="text-ink-subtle">Sessions</dt>
+          <dd className="min-w-0 space-y-1">
+            {d.source.sessionIds.map((s) => (
+              <Link key={s} href={`/design/${s}`} className="block truncate text-accent-text hover:underline">
+                {titles.get(s) ?? "Design session"}
+              </Link>
+            ))}
+          </dd>
+        </>
+      )}
+    </dl>
+  );
+}
+
+/** For Technical details (inside its `<dl>`): the folder it came from, its dates and files, read-only. */
+export function MyDesignTechnical({ d }: { d: MyDesignMeta }) {
+  return (
+    <>
+      {d.source.folder && (
+        <>
+          <dt>Folder</dt>
+          <dd className="min-w-0 font-mono break-all text-ink-muted">{d.source.folder}</dd>
+        </>
+      )}
+      <dt>Saved</dt>
+      <dd className="font-mono text-ink-muted">{d.savedAt.slice(0, 10)}</dd>
+      {d.codeSavedAt !== d.savedAt && (
+        <>
+          <dt>Code saved</dt>
+          <dd className="font-mono text-ink-muted">{d.codeSavedAt.slice(0, 10)}</dd>
+        </>
+      )}
+      <dt>Code files</dt>
+      <dd className="font-mono text-ink-muted">
+        {d.files.length}
+        {d.assets.length > 0 && ` · ${d.assets.length} other`}
+      </dd>
+    </>
+  );
+}
+
+/** For Technical details: PIVOT's scan of its code, each flag opening the Code tab at its line. */
+export function MyDesignScan({ d }: { d: MyDesignMeta }) {
+  const view = useDesignView(d);
   const flags = d.scan?.flags ?? [];
   const inFiles = new Set(d.files.map((f) => f.path));
   return (
-    <div className="space-y-3">
-      <dl className="grid grid-cols-[84px_1fr] gap-x-3 gap-y-2 text-sm">
-        {d.source.project && (
-          <>
-            <dt className="text-ink-subtle">Project</dt>
-            <dd className="min-w-0 break-words text-ink-secondary">{d.source.project}</dd>
-          </>
-        )}
-        {d.source.folder && (
-          <>
-            <dt className="text-ink-subtle">Folder</dt>
-            <dd className="min-w-0 font-mono text-xs break-all text-ink-secondary">{d.source.folder}</dd>
-          </>
-        )}
-        {!!d.source.sessionIds?.length && (
-          <>
-            <dt className="text-ink-subtle">Sessions</dt>
-            <dd className="min-w-0 space-y-1">
-              {d.source.sessionIds.map((s) => (
-                <Link key={s} href={`/design/${s}`} className="block truncate text-accent-text hover:underline">
-                  {titles.get(s) ?? "Design session"}
-                </Link>
-              ))}
-            </dd>
-          </>
-        )}
-        <dt className="text-ink-subtle">Saved</dt>
-        <dd className="font-mono text-ink-secondary">{d.savedAt.slice(0, 10)}</dd>
-        {d.codeSavedAt !== d.savedAt && (
-          <>
-            <dt className="text-ink-subtle">Code saved</dt>
-            <dd className="font-mono text-ink-secondary">{d.codeSavedAt.slice(0, 10)}</dd>
-          </>
-        )}
-      </dl>
-      <h3 className="pt-1 text-xs text-ink-subtle">
+    <div className="space-y-1.5">
+      <h3 className="text-xs text-ink-subtle">
         PIVOT’s scan · {flags.length ? `${flags.length} ${flags.length === 1 ? "flag" : "flags"}` : "found nothing"}
       </h3>
       {flags.length > 0 && (

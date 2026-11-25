@@ -19,6 +19,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { DesignMockupDTO, DesignRoundDTO, DesignSessionDetailDTO } from "@pivot/core/types";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 import { hitAt, liveBox, mapDocument, type MapElement } from "@/lib/element-map";
@@ -1103,13 +1104,10 @@ export function PinLayer({
   );
 }
 
-const Kbd = ({ children }: { children: string }) => (
-  <kbd className="rounded-[5px] border border-current px-1 font-mono text-[12px] leading-[14px] opacity-80">
-    {children}
-  </kbd>
-);
-
-/** The drawer's Feedback section: scope, text, the pins, Send to Claude, and this round's earlier feedback. */
+/**
+ * The drawer's Feedback section: scope, text, the pins, Send to Claude, and this round's earlier feedback. Outside
+ * exploring only the earlier feedback shows (the drawer doesn't offer Comment then).
+ */
 export function FeedbackSection({
   session: s,
   round,
@@ -1189,14 +1187,12 @@ export function FeedbackSection({
   };
 
   return (
-    <section aria-labelledby="stage-feedback">
+    <section id="stage-feedback-section" aria-labelledby="stage-feedback">
       <h3 id="stage-feedback" className="mb-2 text-[12px] font-medium tracking-[0.02em] text-ink-muted uppercase">
         Feedback
         {pinMode && <span className="ml-1 font-normal tracking-normal normal-case">· commenting</span>}
       </h3>
-      {!exploring ? (
-        <p className="text-[13px] text-ink-muted">Feedback asks for a new round, while the session is exploring.</p>
-      ) : (
+      {exploring && (
         <>
           <div role="radiogroup" aria-label="Feedback for" className="flex flex-wrap gap-1.5">
             {(["version", "round"] as const).map((scope) => (
@@ -1280,13 +1276,15 @@ export function FeedbackSection({
           ) : phone ? (
             <p className="mt-2 text-[12px] text-ink-muted">Comments on the page need a wider screen.</p>
           ) : (
-            <div className="mt-2.5 text-[12px] text-ink-muted">
-              <Button size="sm" variant="secondary" onClick={onPinMode}>
-                <MessageSquarePlus /> Comment on the page
-              </Button>
-              <p className="mt-1.5">
-                or press <Kbd>P</Kbd> · then <Kbd>V</Kbd> selects an element, <Kbd>P</Kbd> pins a spot
-              </p>
+            <div className="mt-2.5">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button size="sm" variant="secondary" aria-keyshortcuts="P" onClick={onPinMode}>
+                    <MessageSquarePlus /> Comment on the page
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left">Press P · then V selects an element, P pins a spot</TooltipContent>
+              </Tooltip>
             </div>
           )}
           <div role="status" className="mt-3 min-h-9">
@@ -1307,7 +1305,7 @@ export function FeedbackSection({
         </>
       )}
       {past.length > 0 && (
-        <div className="mt-3 border-t border-divider pt-2">
+        <div className={cn(exploring && "mt-3 border-t border-divider pt-2")}>
           <button
             type="button"
             aria-expanded={earlier}

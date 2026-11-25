@@ -1,7 +1,10 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import {
+  AlertTriangle,
   ArrowLeft,
+  ChevronRight,
   ClipboardCopy,
   Copy,
   Download,
@@ -9,7 +12,9 @@ import {
   FolderInput,
   HardDriveDownload,
   HardDriveUpload,
+  Link2,
   Loader2,
+  MoreHorizontal,
   PackageOpen,
   Plus,
   Trash2,
@@ -17,7 +22,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { extractVariables } from "@pivot/core/prompt-vars";
 import {
@@ -28,19 +33,30 @@ import {
   type MyDesignMeta,
   type MetaField,
   type ResourceDetailDTO,
+  type ResourceLinkDTO,
   type ResourceType,
 } from "@pivot/core/types";
 import { AssetGallery, useAttach } from "@/components/asset-gallery";
 import { Breadcrumbs, typeCrumbs } from "@/components/breadcrumbs";
+import { scanWarning } from "@/components/code-stage";
 import {
+  ComponentAboutSummary,
   ComponentFacts,
-  ComponentIdentity,
   ComponentMain,
-  ComponentReviewGroup,
+  ComponentReview,
   ComponentUsedIn,
   componentMeta,
+  ReviewSummary,
+  usedInSummary,
 } from "@/components/component-detail";
-import { MyDesignFacts, MyDesignIdentity, MyDesignMain, myDesignMeta } from "@/components/my-design-detail";
+import {
+  MyDesignAbout,
+  myDesignAboutSummary,
+  MyDesignMain,
+  myDesignMeta,
+  MyDesignScan,
+  MyDesignTechnical,
+} from "@/components/my-design-detail";
 import { ConfirmButton } from "@/components/confirm-button";
 import { Markdown } from "@/components/markdown";
 import { AddToCollection } from "@/components/selection-bar";
@@ -51,6 +67,18 @@ import { SourceInfo } from "@/components/source-groups";
 import { TagsEditor } from "@/components/tags-editor";
 import { TypeIcon } from "@/components/type-icon";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -100,12 +128,12 @@ function toDraft(r: ResourceDetailDTO): Draft {
   };
 }
 
-type SaveState = "saved" | "dirty" | "saving" | "error";
+type SaveState = "idle" | "saved" | "dirty" | "saving" | "error";
 
 /** Local draft with debounced autosave; flushes on ⌘S, blur of the page and unmount. */
 function useAutosave(resource: ResourceDetailDTO) {
   const [draft, setDraft] = useState<Draft>(() => toDraft(resource));
-  const [state, setState] = useState<SaveState>("saved");
+  const [state, setState] = useState<SaveState>("idle");
   const update = useUpdateResource(resource.id);
   const pending = useRef<Partial<Draft>>({});
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -169,26 +197,22 @@ function useAutosave(resource: ResourceDetailDTO) {
   return { draft, change, state, flush };
 }
 
-function SaveIndicator({ state }: { state: SaveState }) {
-  const label = { saved: "Saved", dirty: "Unsaved", saving: "Saving…", error: "Not saved" }[state];
+/**
+ * The save state, said once: "Saving…" and "Saved" in a polite live region (no dot on screen); only a failed save
+ * shows, in danger.
+ */
+function SaveStatus({ state }: { state: SaveState }) {
   return (
-    <span
-      role="status"
-      className={cn("flex items-center gap-1.5 px-2 text-xs text-ink-subtle", state === "error" && "text-danger")}
-    >
-      {state === "saving" ? (
-        <Loader2 className="size-3 animate-spin" aria-hidden />
-      ) : (
-        <span
-          className={cn(
-            "size-1.5 rounded-full",
-            state === "saved" ? "bg-success" : state === "error" ? "bg-danger" : "bg-warning",
-          )}
-          aria-hidden
-        />
+    <>
+      <span role="status" aria-live="polite" className="sr-only">
+        {state === "saving" ? "Saving…" : state === "saved" ? "Saved" : ""}
+      </span>
+      {state === "error" && (
+        <span role="alert" className="flex items-center gap-1.5 px-2 text-xs text-danger">
+          <AlertTriangle className="size-3.5" aria-hidden /> Not saved
+        </span>
       )}
-      {label}
-    </span>
+    </>
   );
 }
 
@@ -482,19 +506,12 @@ function SkillBar({
         <span className="rounded-full bg-surface-raised px-2.5 py-0.5 text-[12px] font-medium text-ink-secondary">
           Plugin skill · read-only
         </span>
-        <span className="truncate font-mono text-ink-subtle">
-          {status?.dirPath ?? String(resource.meta.dirPath ?? "")}
-        </span>
         <span className="text-ink-subtle">Updated by the plugin; the guide and notes here are yours to edit.</span>
       </div>
     );
   }
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-[14px] bg-surface px-4 py-3 text-xs">
-      <span className="font-mono text-ink-subtle">{status?.dirPath ?? "Not on disk yet"}</span>
-      {status?.isSymlink && (
-        <span className="rounded-full bg-surface-raised px-2 py-0.5 text-[12px] text-ink-secondary">symlink</span>
-      )}
       <span className={cn("font-medium", SKILL_STATE_TONE[state])}>
         {status ? SKILL_STATE_LABEL[state] : "Not saved to disk"}
       </span>
@@ -541,12 +558,16 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
   const router = useRouter();
   const { draft, change, state, flush } = useAutosave(resource);
   const def = TYPE_DEFS[draft.type];
-  const copy = useCopyResource();
-  const bulk = useBulk();
-  const { openExport } = useUi();
-  const showOther = useShowOther();
   const attach = useAttach(resource.id);
-  const titleRef = useRef<HTMLInputElement>(null);
+  const bulk = useBulk();
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+  // browsers without `field-sizing` (Firefox, Safari before 26) grow the title field by hand, so a long title wraps in full
+  useEffect(() => {
+    const t = titleRef.current;
+    if (!t || CSS.supports("field-sizing", "content")) return;
+    t.style.height = "auto";
+    t.style.height = `${t.scrollHeight}px`;
+  }, [draft.title]);
   const isNew = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("new");
 
   useEffect(() => {
@@ -568,104 +589,62 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
     return () => window.removeEventListener("paste", onPaste, true);
   }, [attach]);
 
-  const trash = async () => {
-    await flush();
-    await bulk.mutateAsync({ action: "trash", ids: [resource.id] });
-    router.push(`/?type=${resource.type}`);
-    toast("Moved to trash", {
-      action: { label: "Undo", onClick: () => bulk.mutate({ action: "restore", ids: [resource.id] }) },
-    });
-  };
-
   const removeFromCollection = (collectionId: string) =>
     bulk.mutate({ action: "removeFromCollection", ids: [resource.id], collectionId });
 
   const colors = Array.isArray(draft.meta.colors) ? (draft.meta.colors as string[]) : [];
-  // a component saved with its code gets its own page body (component-detail.tsx); the header and panel stay
+  // a component saved with its code gets its own page body (component-detail.tsx); the header and inspector stay
   const component = draft.type === "component" ? componentMeta(resource.meta) : null;
   // one of the owner's saved designs gets the same page body, with its own facts (my-design-detail.tsx)
   const design = draft.type === "my_design" ? myDesignMeta(resource.meta) : null;
   const showGallery = !component && !design && (def.visual || resource.assets.length > 0);
-
-  // The page actions. Visual types get them as one icon row under the title on phones; labels stay as aria-labels.
-  const actions = (iconOnly: boolean) => {
-    const label = (text: string) => (iconOnly ? <span className="sr-only">{text}</span> : text);
-    const grow = iconOnly ? "min-w-0 flex-1 shrink px-0" : undefined; // icon-only pills may shrink to fit 320px
-    return (
-      <>
-        {openableUrl(draft.sourceUrl) && (
-          <Button variant="secondary" asChild className={grow}>
-            <a href={openableUrl(draft.sourceUrl)!} target="_blank" rel="noopener noreferrer">
-              <ExternalLink /> {label(component ? "Open on 21st.dev" : "Open")}
-            </a>
-          </Button>
-        )}
-        <Button
-          variant="secondary"
-          className={grow}
-          onClick={() => flush().then(() => copy({ ...resource, content: draft.content, type: draft.type }))}
-        >
-          <Copy /> {label(component || design ? "Copy code" : "Copy")}
-        </Button>
-        {design && (
-          <Button variant="secondary" asChild className={grow}>
-            <a href={`/api/my-designs/${resource.id}/zip`} download>
-              <Download /> {label("Download zip")}
-            </a>
-          </Button>
-        )}
-        <Button variant="secondary" className={grow} onClick={() => flush().then(() => copyContext([resource.id]))}>
-          <ClipboardCopy /> {label("Context")}
-        </Button>
-        {showOther && (
-          <Button
-            className={iconOnly ? "flex-[1.6]" : undefined}
-            onClick={() => flush().then(() => openExport({ ids: [resource.id], name: draft.title }))}
-          >
-            <PackageOpen /> Export
-          </Button>
-        )}
-        <Button variant="destructive" size="icon" aria-label="Move to trash" onClick={trash}>
-          <Trash2 />
-        </Button>
-      </>
-    );
-  };
+  // the parent only: the title is on the page once, as the heading
+  const parent = typeCrumbs(draft.type).slice(-1);
 
   return (
     <div className="flex min-h-full flex-col">
-      <header className="flex flex-col gap-5 px-4 pt-6 md:px-10 md:pt-8">
-        <div className="flex flex-wrap items-center gap-2">
+      <header className="flex flex-col gap-3 px-4 pt-6 md:px-10 md:pt-8">
+        <div className="flex min-w-0 items-center gap-2">
           <Button
             variant="secondary"
             size="icon"
             aria-label="Back"
+            className="max-sm:size-11"
             onClick={() => (history.length > 1 ? router.back() : router.push("/"))}
           >
             <ArrowLeft />
           </Button>
-          <Breadcrumbs items={[...typeCrumbs(draft.type), { label: draft.title || "Untitled" }]} />
-          <SaveIndicator state={state} />
-          <div className={cn("ml-auto flex-wrap items-center gap-2", def.visual ? "hidden sm:flex" : "flex")}>
-            {actions(false)}
-          </div>
+          <Breadcrumbs items={parent} current={false} />
+          <SaveStatus state={state} />
         </div>
-        <input
-          ref={titleRef}
-          value={draft.title}
-          onChange={(e) => change({ title: e.target.value })}
-          readOnly={draft.type === "skill"}
-          title={draft.type === "skill" ? "Skill names come from the frontmatter `name`" : undefined}
-          aria-label="Title"
-          className="w-full min-w-0 bg-transparent text-[clamp(32px,4.5vw,56px)] leading-[1] font-medium tracking-[-0.04em] text-ink outline-none placeholder:text-ink-subtle focus-visible:outline-none"
-          placeholder="Untitled"
-        />
-        {component && <ComponentIdentity c={component} />}
-        {design && <MyDesignIdentity d={design} />}
-        {def.visual && <div className="-mt-1 flex items-center gap-2 sm:hidden">{actions(true)}</div>}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <h1 className="min-w-0 flex-[1_1_20rem]">
+            {/* a one-line field that wraps, so a long title reads in full on a phone; Enter doesn't add a line */}
+            <textarea
+              ref={titleRef}
+              rows={1}
+              value={draft.title}
+              onChange={(e) => change({ title: e.target.value.replace(/\r?\n/g, " ") })}
+              onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
+              readOnly={draft.type === "skill"}
+              title={draft.type === "skill" ? "Skill names come from the frontmatter `name`" : undefined}
+              aria-label="Title"
+              className="block field-sizing-content w-full min-w-0 resize-none overflow-hidden bg-transparent text-3xl leading-tight font-medium tracking-[-0.02em] text-ink outline-none placeholder:text-ink-subtle focus-visible:outline-none max-sm:text-[26px]"
+              placeholder="Untitled"
+            />
+          </h1>
+          <HeaderActions
+            resource={resource}
+            draft={draft}
+            change={change}
+            flush={flush}
+            component={!!component}
+            design={!!design}
+          />
+        </div>
       </header>
 
-      <div className="grid flex-1 gap-10 px-4 pt-6 pb-16 md:px-10 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid flex-1 gap-6 px-4 pt-5 pb-16 md:px-10 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-8">
         <div className="min-w-0 space-y-5">
           {resource.reviewStatus === "needs_review" && <ReviewBanner id={resource.id} />}
           <Suggestions resourceId={resource.id} />
@@ -704,109 +683,146 @@ function Editor({ resource }: { resource: ResourceDetailDTO }) {
           )}
         </div>
 
-        {def.visual ? (
-          <VisualPanel
-            resource={resource}
-            draft={draft}
-            change={change}
-            onRemoveFromCollection={removeFromCollection}
-            component={component}
-            design={design}
-          />
-        ) : (
-          <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start" aria-label="Details">
-            {draft.type !== "skill" && (
-              <Field label="Description" htmlFor="desc">
-                <Textarea
-                  id="desc"
-                  value={draft.description}
-                  onChange={(e) => change({ description: e.target.value })}
-                  rows={3}
-                  placeholder="One or two lines to recognise it later"
-                />
-              </Field>
-            )}
-            <Field label="Source URL" htmlFor="url">
-              <Input
-                id="url"
-                value={draft.sourceUrl}
-                onChange={(e) => change({ sourceUrl: e.target.value })}
-                placeholder="https://"
-                className="font-mono text-xs"
-              />
-            </Field>
-            {typeof draft.meta.section === "object" && draft.meta.section !== null && (
-              <SectionInfo section={draft.meta.section as Record<string, unknown>} />
-            )}
-            {typeof draft.meta.capturedUrl === "string" && (
-              <Field label="Captured from" htmlFor="captured-from">
-                <p id="captured-from" className="font-mono text-xs break-all text-ink-secondary">
-                  {draft.meta.capturedUrl}
-                </p>
-              </Field>
-            )}
-            {typeof draft.meta.externalOrigin === "object" && draft.meta.externalOrigin !== null && (
-              <ExternalOriginInfo origin={draft.meta.externalOrigin as Record<string, unknown>} />
-            )}
-            {def.visual && (
-              <>
-                <Field label="Published by" htmlFor="published-by">
-                  <Input
-                    id="published-by"
-                    value={typeof draft.meta.publishedBy === "string" ? draft.meta.publishedBy : ""}
-                    onChange={(e) => change({ meta: { ...draft.meta, publishedBy: e.target.value } })}
-                    placeholder="The account or studio that posted it"
-                  />
-                </Field>
-                <Field label="Original source" htmlFor="original-source">
-                  <Input
-                    id="original-source"
-                    value={typeof draft.meta.originalSource === "string" ? draft.meta.originalSource : ""}
-                    onChange={(e) => change({ meta: { ...draft.meta, originalSource: e.target.value } })}
-                    placeholder="Where it first appeared, if you know"
-                    className="font-mono text-xs"
-                  />
-                </Field>
-              </>
-            )}
-            {draft.type === "skill" && <PackField meta={draft.meta} onChange={change} />}
-            {draft.type === "source" && <SourceInfo id={resource.id} searchUrl={draft.meta.searchUrl} />}
-            {def.fields.map((f) => (
-              <MetaFieldInput key={f.key} field={f} draft={draft} change={change} />
-            ))}
-            <ResourceLinks resourceId={resource.id} />
-            <div className="space-y-2">
-              <Label className="text-xs font-normal text-ink-subtle">Classification</Label>
-              <TagsEditor kinds={[...def.facets, "tag"]} value={draft.tags} onChange={(tags) => change({ tags })} />
-            </div>
-            <Field label="Notes" htmlFor="notes">
-              <Textarea
-                id="notes"
-                value={draft.notes}
-                onChange={(e) => change({ notes: e.target.value })}
-                rows={5}
-                placeholder="What’s good about it, how to use it…"
-              />
-            </Field>
-            <CollectionsField resource={resource} onRemove={removeFromCollection} />
-            <Field label="Type" htmlFor="type">
-              <TypeSelect value={draft.type} onChange={(type) => change({ type })} className="w-full" />
-            </Field>
-            <dl className="grid grid-cols-[72px_1fr] gap-y-1 border-t border-divider pt-5 text-xs text-ink-subtle">
-              <dt>Added</dt>
-              <dd className="font-mono">{new Date(resource.createdAt).toLocaleString()}</dd>
-              <dt>Edited</dt>
-              <dd className="font-mono">{new Date(resource.updatedAt).toLocaleString()}</dd>
-              {resource.assets.length > 0 && (
-                <>
-                  <dt>Files</dt>
-                  <dd className="font-mono">{resource.assets.length}</dd>
-                </>
-              )}
-            </dl>
-          </aside>
-        )}
+        <Inspector
+          resource={resource}
+          draft={draft}
+          change={change}
+          onRemoveFromCollection={removeFromCollection}
+          component={component}
+          design={design}
+        />
       </div>
+    </div>
+  );
+}
+
+const HEADER_PILL = "max-sm:h-11 max-sm:flex-1";
+
+/**
+ * The type's main actions as secondary pills, then one "More actions" menu with the rest: the other copies, the
+ * original page, Export, Change type and, last after a separator, Move to trash. Nothing here is ember: the top
+ * bar's Add stays the screen's one primary.
+ */
+function HeaderActions({
+  resource,
+  draft,
+  change,
+  flush,
+  component,
+  design,
+}: {
+  resource: ResourceDetailDTO;
+  draft: Draft;
+  change: (patch: Partial<Draft>) => void;
+  flush: () => Promise<void>;
+  component: boolean;
+  design: boolean;
+}) {
+  const router = useRouter();
+  const copy = useCopyResource();
+  const bulk = useBulk();
+  const { openExport } = useUi();
+  const showOther = useShowOther();
+  const def = TYPE_DEFS[draft.type];
+  const href = openableUrl(draft.sourceUrl);
+  // with no content of its own, Copy builds the same block as Copy for Claude, so it isn't offered twice
+  const copyIsContext = !component && !design && (def.content === "none" || !draft.content.trim());
+  const fixedType = isAgentType(draft.type);
+  const types = addableTypes(showOther);
+  if (!types.includes(draft.type)) types.push(draft.type);
+
+  const doCopy = () => flush().then(() => copy({ ...resource, content: draft.content, type: draft.type }));
+  const forClaude = () => flush().then(() => copyContext([resource.id]));
+  const trash = async () => {
+    await flush();
+    await bulk.mutateAsync({ action: "trash", ids: [resource.id] });
+    router.push(`/?type=${resource.type}`);
+    toast("Moved to trash", {
+      action: { label: "Undo", onClick: () => bulk.mutate({ action: "restore", ids: [resource.id] }) },
+    });
+  };
+
+  const openLabel = component ? "Open on 21st.dev" : def.visual ? "Open site" : "Open source";
+  const openLink = href && (
+    <a href={href} target="_blank" rel="noopener noreferrer">
+      <ExternalLink /> {openLabel}
+      <span className="sr-only"> (opens in a new tab)</span>
+    </a>
+  );
+  const copyLabel = component || design ? "Copy code" : "Copy";
+  // the first actions by type: Open site for a page you can visit, the code or the zip for components and designs
+  const openIsMain = href && def.visual && !component && !design;
+  const copyIsMain = !design && !openIsMain && !copyIsContext;
+
+  return (
+    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
+      {design && (
+        <Button variant="secondary" asChild className={HEADER_PILL}>
+          <a href={`/api/my-designs/${resource.id}/zip`} download>
+            <Download /> Download zip
+          </a>
+        </Button>
+      )}
+      {openIsMain && (
+        <Button variant="secondary" asChild className={HEADER_PILL}>
+          {openLink}
+        </Button>
+      )}
+      {copyIsMain && (
+        <Button variant="secondary" className={HEADER_PILL} onClick={doCopy}>
+          <Copy /> {copyLabel}
+        </Button>
+      )}
+      <Button variant="secondary" className={HEADER_PILL} onClick={forClaude}>
+        <ClipboardCopy /> Copy for Claude
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="secondary" size="icon" aria-label="More actions" className="max-sm:size-11">
+            <MoreHorizontal />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-56">
+          {!copyIsMain && !copyIsContext && (
+            <DropdownMenuItem onSelect={doCopy}>
+              <Copy /> {copyLabel}
+            </DropdownMenuItem>
+          )}
+          {openIsMain && (
+            <DropdownMenuItem onSelect={() => copyText(href, "Link copied")}>
+              <Link2 /> Copy link
+            </DropdownMenuItem>
+          )}
+          {href && !openIsMain && <DropdownMenuItem asChild>{openLink}</DropdownMenuItem>}
+          {showOther && (
+            <DropdownMenuItem
+              onSelect={() => flush().then(() => openExport({ ids: [resource.id], name: draft.title }))}
+            >
+              <PackageOpen /> Export…
+            </DropdownMenuItem>
+          )}
+          {!fixedType && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <TypeIcon type={draft.type} /> Change type
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="min-w-48">
+                <DropdownMenuRadioGroup value={draft.type} onValueChange={(t) => change({ type: t as ResourceType })}>
+                  {types.map((t) => (
+                    <DropdownMenuRadioItem key={t} value={t}>
+                      {TYPE_DEFS[t].label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onSelect={trash}>
+            <Trash2 /> Move to trash
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
@@ -816,14 +832,17 @@ function CollectionsField({
   resource,
   onRemove,
   nested = false,
+  label = true,
 }: {
   resource: ResourceDetailDTO;
   onRemove: (collectionId: string) => void;
   nested?: boolean;
+  /** Off inside the inspector's Collections row, which already names it. */
+  label?: boolean;
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs font-normal text-ink-subtle">Collections</Label>
+      {label && <Label className="text-xs font-normal text-ink-subtle">Collections</Label>}
       <div className="flex flex-wrap items-center gap-1">
         {resource.collections.map((c) => (
           <span
@@ -847,7 +866,11 @@ function CollectionsField({
           </span>
         ))}
         <AddToCollection ids={[resource.id]}>
-          <Button variant="secondary" size="xs" className={cn("h-7 text-ink-muted", nested && "bg-surface-raised")}>
+          <Button
+            variant="secondary"
+            size="xs"
+            className={cn("h-7 text-ink-muted max-sm:h-11", nested && "bg-surface-raised")}
+          >
             <FolderInput /> Add
           </Button>
         </AddToCollection>
@@ -886,16 +909,51 @@ function TypeSelect({
   );
 }
 
-/** A titled block of the visual types' side panel: a solid surface, no border or shadow. */
-function PanelGroup({ title, children }: { title: string; children: React.ReactNode }) {
-  const id = useId();
+/**
+ * One row of the inspector: a solid surface card whose summary line names it and says what it holds in one line
+ * ("Tags · 3", "Collections · none"). A native `<details>`, so several can be open at once and find-in-page reaches
+ * closed text. `open`/`onOpenChange` make it controlled (the scan warning opens Review or Technical details).
+ */
+function InspectorRow({
+  title,
+  summary,
+  defaultOpen = false,
+  open: controlled,
+  onOpenChange,
+  rowRef,
+  children,
+}: {
+  title: string;
+  summary?: React.ReactNode;
+  defaultOpen?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  rowRef?: React.Ref<HTMLDetailsElement>;
+  children: React.ReactNode;
+}) {
+  const [own, setOwn] = useState(defaultOpen);
+  const open = controlled ?? own;
   return (
-    <section aria-labelledby={id} className="space-y-3 rounded-[14px] bg-surface p-4">
-      <h2 id={id} className="text-xs text-ink-subtle">
-        {title}
-      </h2>
-      {children}
-    </section>
+    <details
+      ref={rowRef}
+      open={open}
+      onToggle={(e) => {
+        const next = e.currentTarget.open;
+        if (next === open) return;
+        setOwn(next);
+        onOpenChange?.(next);
+      }}
+      className="group rounded-[14px] bg-surface px-4 py-2"
+    >
+      <summary className="-mx-2 flex min-h-8 cursor-pointer list-none items-center gap-2 rounded-[10px] px-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text max-sm:min-h-11 [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="size-3.5 shrink-0 text-ink-subtle group-open:rotate-90" aria-hidden />
+        <span className="shrink-0 font-medium text-ink">{title}</span>
+        {summary !== undefined && (
+          <span className="ml-auto flex min-w-0 justify-end truncate text-xs text-ink-subtle">{summary}</span>
+        )}
+      </summary>
+      <div className="space-y-3 pt-1 pb-2">{children}</div>
+    </details>
   );
 }
 
@@ -907,15 +965,20 @@ function DescriptionField({ value, onChange }: { value: string; onChange: (v: st
   const [open, setOpen] = useState(false);
   if (!value && !open)
     return (
-      <Button variant="ghost" size="xs" className="text-ink-muted" onClick={() => setOpen(true)}>
+      <Button variant="ghost" size="xs" className="-ml-2.5 text-ink-muted max-sm:h-11" onClick={() => setOpen(true)}>
         <Plus /> Description
       </Button>
     );
   if (!open)
     return (
       <div className="space-y-1">
-        <p className="line-clamp-3 text-[13px] leading-relaxed text-ink-muted">{value}</p>
-        <Button variant="ghost" size="xs" className="-ml-2 text-accent-text" onClick={() => setOpen(true)}>
+        <p className="line-clamp-3 text-[13px] leading-relaxed text-ink-secondary">{value}</p>
+        <Button
+          variant="ghost"
+          size="xs"
+          className="-ml-2.5 text-accent-text max-sm:h-11"
+          onClick={() => setOpen(true)}
+        >
           Show all and edit
         </Button>
       </div>
@@ -930,6 +993,59 @@ function DescriptionField({ value, onChange }: { value: string; onChange: (v: st
         rows={3}
         placeholder="One or two lines to recognise it later"
         className={NESTED_FIELD}
+      />
+    </Field>
+  );
+}
+
+/** The source link as a link you can open, with Edit for the field; an empty one is a ghost "+ Source link". */
+function SourceField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const href = openableUrl(value);
+  if (!editing && !value)
+    return (
+      <Button variant="ghost" size="xs" className="-ml-2.5 text-ink-muted max-sm:h-11" onClick={() => setEditing(true)}>
+        <Plus /> Source link
+      </Button>
+    );
+  if (!editing)
+    return (
+      <div className="flex min-w-0 items-center gap-1 text-[13px]">
+        <ExternalLink className="size-3.5 shrink-0 text-ink-subtle" aria-hidden />
+        {href ? (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="min-w-0 truncate text-accent-text hover:underline"
+          >
+            {value.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}
+            <span className="sr-only"> (opens in a new tab)</span>
+          </a>
+        ) : (
+          <span className="min-w-0 truncate font-mono text-xs text-ink-secondary">{value}</span>
+        )}
+        <Button
+          variant="ghost"
+          size="xs"
+          className="ml-auto shrink-0 text-ink-muted max-sm:h-11"
+          aria-label="Edit the source link"
+          onClick={() => setEditing(true)}
+        >
+          Edit
+        </Button>
+      </div>
+    );
+  return (
+    <Field label="Source URL" htmlFor="url">
+      <Input
+        id="url"
+        autoFocus
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => setEditing(false)}
+        placeholder="https://"
+        className={cn("font-mono text-xs", NESTED_FIELD)}
       />
     </Field>
   );
@@ -968,14 +1084,24 @@ function AttributionFields({ draft, change }: { draft: Draft; change: (patch: Pa
         </Field>
       )}
       {(!shown.publishedBy || !shown.originalSource) && (
-        <div className="flex flex-wrap gap-1">
+        <div className="-ml-2.5 flex flex-wrap gap-1">
           {!shown.publishedBy && (
-            <Button variant="ghost" size="xs" className="text-ink-muted" onClick={() => show("publishedBy")}>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="text-ink-muted max-sm:h-11"
+              onClick={() => show("publishedBy")}
+            >
               <Plus /> Published by
             </Button>
           )}
           {!shown.originalSource && (
-            <Button variant="ghost" size="xs" className="text-ink-muted" onClick={() => show("originalSource")}>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="text-ink-muted max-sm:h-11"
+              onClick={() => show("originalSource")}
+            >
               <Plus /> Original source
             </Button>
           )}
@@ -985,12 +1111,19 @@ function AttributionFields({ draft, change }: { draft: Draft; change: (patch: Pa
   );
 }
 
+const hostOf = (url: string) => {
+  const href = openableUrl(url);
+  return href ? new URL(href).hostname.replace(/^www\./, "") : null;
+};
+const when = (iso: string) => new Date(iso).toLocaleString();
+
 /**
- * The side panel of a visual type (reference, library, media, icon, animation, typography, source), grouped by how
- * often each part is used: classification, then your notes and collections, then where it came from, then a quiet
- * footer with the type and dates. Every field of the flat panel is still here.
+ * The inspector (direction C, 2026-11-25): the right column of every type's page, a list of rows that each say
+ * what they hold in one line. About, Tags and Notes are open (Notes always), the rest open on demand; a scan with
+ * flags keeps a one-line warning in view; Technical details (type, dates, files, ids, paths, scan) comes last,
+ * closed. At phone width it stacks under the content. Every field of the old side panels is here.
  */
-function VisualPanel({
+function Inspector({
   resource,
   draft,
   change,
@@ -1002,89 +1135,198 @@ function VisualPanel({
   draft: Draft;
   change: (patch: Partial<Draft>) => void;
   onRemoveFromCollection: (collectionId: string) => void;
-  /** A component's review and uses lead the panel, and its source is the facts PIVOT keeps. */
   component?: ComponentMeta | null;
-  /** A saved design's source is the facts PIVOT keeps, like a component's. */
   design?: MyDesignMeta | null;
 }) {
   const def = TYPE_DEFS[draft.type];
-  return (
-    <aside className="space-y-3 xl:sticky xl:top-6 xl:self-start" aria-label="Details">
-      {component && <ComponentReviewGroup c={component} />}
-      {component && <ComponentUsedIn c={component} />}
-      <PanelGroup title="Classification">
-        <TagsEditor kinds={[...def.facets, "tag"]} value={draft.tags} onChange={(tags) => change({ tags })} />
-      </PanelGroup>
+  const { data: linkData } = useQuery({
+    queryKey: ["links", resource.id],
+    queryFn: () => api<{ links: ResourceLinkDTO[] }>(`/api/resources/${resource.id}/links`),
+  });
+  const { data: skillStatuses } = useSkillStatuses(draft.type === "skill");
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [techOpen, setTechOpen] = useState(false);
+  const reviewRef = useRef<HTMLDetailsElement>(null);
+  const techRef = useRef<HTMLDetailsElement>(null);
 
-      <PanelGroup title="Notes & collections">
+  const links = linkData?.links ?? [];
+  const suggested = links.filter((l) => !l.confirmed).length;
+  const host = hostOf(draft.sourceUrl);
+  const warning = scanWarning(component?.scan ?? design?.scan);
+  const skillStatus = skillStatuses?.find((x) => x.resourceId === resource.id);
+  const skillDir = skillStatus?.dirPath ?? (typeof resource.meta.dirPath === "string" ? resource.meta.dirPath : null);
+  const reveal = (which: "review" | "tech") => {
+    const ref = which === "review" ? reviewRef : techRef;
+    (which === "review" ? setReviewOpen : setTechOpen)(true);
+    requestAnimationFrame(() => {
+      ref.current?.scrollIntoView({ block: "nearest" });
+      ref.current?.querySelector("summary")?.focus();
+    });
+  };
+
+  return (
+    <aside className="space-y-2 lg:self-start" aria-label="Details">
+      <InspectorRow
+        title="About"
+        defaultOpen
+        summary={
+          component ? (
+            <ComponentAboutSummary c={component} />
+          ) : design ? (
+            myDesignAboutSummary(design)
+          ) : (
+            (host ?? "No source")
+          )
+        }
+      >
+        {component && <ComponentFacts c={component} />}
+        {design && <MyDesignAbout d={design} />}
+        {!component && !design && (
+          <SourceField value={draft.sourceUrl} onChange={(sourceUrl) => change({ sourceUrl })} />
+        )}
+        {draft.type !== "skill" && (
+          <DescriptionField value={draft.description} onChange={(description) => change({ description })} />
+        )}
+        {typeof draft.meta.section === "object" && draft.meta.section !== null && (
+          <SectionInfo section={draft.meta.section as Record<string, unknown>} />
+        )}
+        {typeof draft.meta.externalOrigin === "object" && draft.meta.externalOrigin !== null && (
+          <ExternalOriginInfo origin={draft.meta.externalOrigin as Record<string, unknown>} />
+        )}
+        {def.visual && !component && !design && <AttributionFields draft={draft} change={change} />}
+        {draft.type === "skill" && <PackField meta={draft.meta} onChange={change} />}
+        {def.fields.map((f) => (
+          <MetaFieldInput key={f.key} field={f} draft={draft} change={change} />
+        ))}
+      </InspectorRow>
+
+      <InspectorRow title="Tags" defaultOpen summary={draft.tags.length ? String(draft.tags.length) : "none"}>
+        <TagsEditor kinds={[...def.facets, "tag"]} value={draft.tags} onChange={(tags) => change({ tags })} onlySet />
+      </InspectorRow>
+
+      <section aria-label="Notes" className="space-y-2 rounded-[14px] bg-surface px-4 pt-2.5 pb-3">
+        <Label htmlFor="notes" className="text-sm font-medium text-ink">
+          Notes
+        </Label>
         <Textarea
           id="notes"
-          aria-label="Notes"
           value={draft.notes}
           onChange={(e) => change({ notes: e.target.value })}
           rows={3}
           placeholder="What’s good about it, how to use it…"
           className={NESTED_FIELD}
         />
-        <CollectionsField resource={resource} onRemove={onRemoveFromCollection} nested />
-      </PanelGroup>
+      </section>
 
-      <PanelGroup title={component ? "Source & author" : "Source"}>
-        {component ? (
-          <ComponentFacts c={component} />
-        ) : design ? (
-          <MyDesignFacts d={design} />
-        ) : (
-          <>
-            <Label htmlFor="url" className="sr-only">
-              Source URL
-            </Label>
-            <Input
-              id="url"
-              value={draft.sourceUrl}
-              onChange={(e) => change({ sourceUrl: e.target.value })}
-              placeholder="https://"
-              className={cn("font-mono text-xs", NESTED_FIELD)}
-            />
-          </>
-        )}
-        {typeof draft.meta.section === "object" && draft.meta.section !== null && (
-          <SectionInfo section={draft.meta.section as Record<string, unknown>} />
-        )}
-        {typeof draft.meta.capturedUrl === "string" && (
-          <Field label="Captured from" htmlFor="captured-from">
-            <p id="captured-from" className="font-mono text-xs break-all text-ink-secondary">
-              {draft.meta.capturedUrl}
-            </p>
-          </Field>
-        )}
-        {typeof draft.meta.externalOrigin === "object" && draft.meta.externalOrigin !== null && (
-          <ExternalOriginInfo origin={draft.meta.externalOrigin as Record<string, unknown>} />
-        )}
-        <DescriptionField value={draft.description} onChange={(description) => change({ description })} />
-        {!component && !design && <AttributionFields draft={draft} change={change} />}
-        {def.fields.map((f) => (
-          <MetaFieldInput key={f.key} field={f} draft={draft} change={change} />
-        ))}
-        <ResourceLinks resourceId={resource.id} nested />
-      </PanelGroup>
+      <InspectorRow
+        title="Collections"
+        summary={resource.collections.length ? resource.collections.map((c) => c.name).join(", ") : "none"}
+      >
+        <CollectionsField resource={resource} onRemove={onRemoveFromCollection} nested label={false} />
+      </InspectorRow>
+
+      <InspectorRow
+        title="Links"
+        summary={
+          links.length === 0
+            ? "none"
+            : `${links.length} ${links.length === 1 ? "link" : "links"}${suggested ? ` · ${suggested} suggested` : ""}`
+        }
+      >
+        <ResourceLinks resourceId={resource.id} nested bare />
+      </InspectorRow>
+
+      {component && (
+        <InspectorRow
+          title="Review"
+          summary={<ReviewSummary c={component} />}
+          open={reviewOpen}
+          onOpenChange={setReviewOpen}
+          rowRef={reviewRef}
+        >
+          <ComponentReview c={component} />
+        </InspectorRow>
+      )}
+      {component && (
+        <InspectorRow title="Used in" summary={usedInSummary(component)}>
+          <ComponentUsedIn c={component} />
+        </InspectorRow>
+      )}
 
       {draft.type === "source" && <SourceInfo id={resource.id} searchUrl={draft.meta.searchUrl} />}
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-divider px-1 pt-4 text-xs text-ink-subtle">
-        <TypeSelect value={draft.type} onChange={(type) => change({ type })} />
-        <span>
-          Added <time className="font-mono text-ink-muted">{new Date(resource.createdAt).toLocaleString()}</time>
-        </span>
-        <span>
-          Edited <time className="font-mono text-ink-muted">{new Date(resource.updatedAt).toLocaleString()}</time>
-        </span>
-        {resource.assets.length > 0 && (
-          <span>
-            Files <span className="font-mono text-ink-muted">{resource.assets.length}</span>
-          </span>
-        )}
-      </div>
+      {warning && (
+        <div role="note" className="flex items-center gap-2 rounded-[14px] bg-surface py-1.5 pr-1.5 pl-4 text-[13px]">
+          <AlertTriangle className="size-3.5 shrink-0 text-warning" aria-hidden />
+          <span className="min-w-0 flex-1 text-ink-secondary">{warning}</span>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="shrink-0 text-accent-text max-sm:h-11"
+            onClick={() => reveal(component ? "review" : "tech")}
+          >
+            Details
+          </Button>
+        </div>
+      )}
+
+      <InspectorRow
+        title="Technical details"
+        summary={`${def.label}${resource.assets.length ? ` · ${resource.assets.length} ${resource.assets.length === 1 ? "file" : "files"}` : ""}`}
+        open={techOpen}
+        onOpenChange={setTechOpen}
+        rowRef={techRef}
+      >
+        <dl className="grid grid-cols-[84px_minmax(0,1fr)] items-baseline gap-x-3 gap-y-2 text-xs text-ink-subtle">
+          <dt>Type</dt>
+          <dd>
+            <TypeSelect value={draft.type} onChange={(type) => change({ type })} className={NESTED_FIELD} />
+          </dd>
+          <dt>Added</dt>
+          <dd className="font-mono text-ink-muted">
+            <time dateTime={resource.createdAt}>{when(resource.createdAt)}</time>
+          </dd>
+          <dt>Edited</dt>
+          <dd className="font-mono text-ink-muted">
+            <time dateTime={resource.updatedAt}>{when(resource.updatedAt)}</time>
+          </dd>
+          {resource.assets.length > 0 && (
+            <>
+              <dt>Files</dt>
+              <dd className="font-mono text-ink-muted">{resource.assets.length}</dd>
+            </>
+          )}
+          {component && (
+            <>
+              <dt>Code files</dt>
+              <dd className="font-mono text-ink-muted">{component.files.length}</dd>
+              <dt>21st id</dt>
+              <dd className="font-mono text-ink-muted">{component.providerId}</dd>
+              <dt>Fetched</dt>
+              <dd className="font-mono text-ink-muted">{component.fetchedAt.slice(0, 10)}</dd>
+            </>
+          )}
+          {design && <MyDesignTechnical d={design} />}
+          {draft.type === "skill" && (
+            <>
+              <dt>Folder</dt>
+              <dd className="min-w-0 font-mono break-all text-ink-muted">
+                {skillDir ?? "Not on disk yet"}
+                {skillStatus?.isSymlink && <span className="font-sans text-ink-subtle"> · symlink</span>}
+              </dd>
+            </>
+          )}
+          {typeof draft.meta.capturedUrl === "string" && (
+            <>
+              <dt>Captured from</dt>
+              <dd className="min-w-0 font-mono break-all text-ink-muted">{draft.meta.capturedUrl}</dd>
+            </>
+          )}
+          <dt>Id</dt>
+          <dd className="min-w-0 font-mono break-all text-ink-muted">{resource.id}</dd>
+        </dl>
+        {design && <MyDesignScan d={design} />}
+      </InspectorRow>
     </aside>
   );
 }
