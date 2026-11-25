@@ -140,7 +140,7 @@ export async function tailwindCss(candidates: string[]) {
 const ENTRY = "__pivot_entry.js";
 
 /** What renders: the demo's default export (else its first exported function), else the component's. */
-function entrySource(file: { path: string }) {
+function entrySource(file: { path: string }, centre: boolean) {
   const spec = `./${file.path.replace(/\.(tsx|ts|jsx|js)$/, "")}`;
   return `import * as M from ${JSON.stringify(spec)};
 import { createElement } from "react";
@@ -149,7 +149,10 @@ const Pick = M.default ?? Object.values(M).find((v) => typeof v === "function");
 const theme = new URLSearchParams(location.search).get("theme") || "dark";
 document.documentElement.classList.toggle("dark", theme === "dark");
 if (!Pick) throw new Error("Nothing to render: the demo exports no component.");
-createRoot(document.getElementById("root")).render(createElement(Pick));
+const page = ${centre}
+  ? createElement("div", { style: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "4rem 2rem", boxSizing: "border-box" } }, createElement(Pick))
+  : createElement(Pick);
+createRoot(document.getElementById("root")).render(page);
 requestAnimationFrame(() => requestAnimationFrame(() => parent.postMessage({ type: "21st-preview-ready" }, "*")));
 `;
 }
@@ -157,13 +160,14 @@ requestAnimationFrame(() => requestAnimationFrame(() => parent.postMessage({ typ
 const inlineSafe = (s: string, tag: "script" | "style") => s.replace(new RegExp(`</${tag}`, "gi"), `<\\/${tag}`);
 
 /** Bundles the files in `dir` (already installed) into one HTML page. */
-export async function bundlePage(dir: string, c: { files: BuildFile[] }) {
+export async function bundlePage(dir: string, c: { files: BuildFile[] }, opts: { centre?: boolean } = {}) {
   const files = c.files;
   const script = (f: BuildFile) => /\.(tsx|ts|jsx|js|mjs)$/.test(f.path);
   const target =
     files.find((f) => f.role === "demo" && script(f)) ?? files.find((f) => f.role === "component" && script(f));
   if (!target) throw new PreviewError("There is no demo or component file to render.");
-  await fs.writeFile(path.join(dir, ENTRY), entrySource(target));
+  // a demo lays out its own page; a 21st component saved without one is centred on the page, as 21st.dev shows it
+  await fs.writeFile(path.join(dir, ENTRY), entrySource(target, !!opts.centre && target.role !== "demo"));
   const esbuild = await import("esbuild");
   let result;
   try {
@@ -232,6 +236,24 @@ function inside(dir: string, rel: string) {
   return file;
 }
 
+/**
+ * shadcn/ui and 21st.dev components import `cn` from "@/lib/utils", a file every shadcn project has
+ * but a saved component rarely includes. When a script imports it and no lib/utils file was saved,
+ * the build writes shadcn's standard one (clsx + tailwind-merge).
+ */
+const UTILS_SHIM = `import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+`;
+
+function needsUtilsShim(files: BuildFile[]) {
+  const hasUtils = files.some((f) => /^(?:\.\/)?lib\/utils(?:\/index)?\.(?:[cm]?[jt]sx?)$/.test(f.path));
+  return !hasUtils && files.some((f) => /\.[cm]?[jt]sx?$/.test(f.path) && /["']@\/lib\/utils["']/.test(f.code));
+}
+
 /** Writes the files, the package.json, .npmrc and tsconfig into a fresh folder. */
 async function prepare(
   dir: string,
@@ -253,6 +275,12 @@ async function prepare(
   }
   const dependencies: Record<string, string> = opts.react === false ? {} : { react: "^19", "react-dom": "^19" };
   for (const d of deps) dependencies[d.name] = d.version || "latest";
+  if (needsUtilsShim(files)) {
+    await fs.mkdir(path.join(dir, "lib"), { recursive: true });
+    await fs.writeFile(path.join(dir, "lib", "utils.ts"), UTILS_SHIM);
+    dependencies.clsx ??= "^2";
+    dependencies["tailwind-merge"] ??= "^3";
+  }
   await fs.writeFile(
     path.join(dir, "package.json"),
     JSON.stringify({ name: "pivot-component-preview", private: true, dependencies }, null, 2),
@@ -303,7 +331,7 @@ export async function startComponentPreviewBuild(resourceId: string) {
   return runBuild(resourceId, c.codeSha256, buildKey(c.files, c.npmDependencies), async (dir) => {
     await prepare(dir, c.files, c.npmDependencies);
     await buildDeps.npmInstall(dir);
-    return bundlePage(dir, c);
+    return bundlePage(dir, c, { centre: true });
   });
 }
 

@@ -19,6 +19,7 @@ let server: typeof import("../src/preview-server");
 let resources: typeof import("../src/resources");
 let db: typeof import("../src/db/client");
 const installs: string[] = [];
+const manifests: { dependencies: Record<string, string> }[] = [];
 
 const webRequire = createRequire(path.resolve(__dirname, "../../../apps/web/package.json"));
 const pkgDir = (name: string) => path.dirname(webRequire.resolve(`${name}/package.json`));
@@ -51,6 +52,18 @@ beforeAll(async () => {
       JSON.stringify({ name: "fixture-greeting", version: "1.0.0", main: "index.js" }),
     );
     await fsp.writeFile(path.join(nm, "fixture-greeting", "index.js"), 'exports.greet = (n) => "Hello, " + n;');
+    // stand-ins for the two packages behind shadcn's lib/utils
+    const fake = async (name: string, code: string) => {
+      await fsp.mkdir(path.join(nm, name), { recursive: true });
+      await fsp.writeFile(
+        path.join(nm, name, "package.json"),
+        JSON.stringify({ name, version: "1.0.0", main: "index.js" }),
+      );
+      await fsp.writeFile(path.join(nm, name, "index.js"), code);
+    };
+    await fake("clsx", "exports.clsx = (a) => a.flat(Infinity).filter(Boolean).join(' ');");
+    await fake("tailwind-merge", "exports.twMerge = (s) => 'fixture-merged ' + s;");
+    manifests.push(JSON.parse(await fsp.readFile(path.join(dir, "package.json"), "utf8")));
   };
 });
 afterAll(async () => {
@@ -126,11 +139,59 @@ describe("building a preview", () => {
     expect(fs.existsSync(installs.at(-1)!)).toBe(false);
   });
 
-  it("keeps a failed build's error, and the last good preview", async () => {
+  it("supplies shadcn's lib/utils when a component imports it and didn't save it", async () => {
     const r = await save({
       files: [
         { path: "components/ui/badge.tsx", role: "component", language: "tsx", code: BADGE },
         { path: "demo.tsx", role: "demo", language: "tsx", code: DEMO },
+      ],
+    });
+    const started = await build.startComponentPreviewBuild(r.id);
+    await started.done;
+    const p = await previewOf(r.id);
+    expect(p).toMatchObject({ status: "ready" });
+    expect(manifests.at(-1)!.dependencies).toMatchObject({ clsx: "^2", "tailwind-merge": "^3" });
+    const asset = (await preview.findPreviewAsset(p!.sha256 as string))!;
+    const html = fs.readFileSync(path.join(tmp, "data", asset.storagePath), "utf8");
+    expect(html).toContain("fixture-merged "); // cn() went through clsx and tailwind-merge
+  });
+
+  it("centres a component saved without a demo, and leaves a demo's own layout alone", async () => {
+    const html = async (id: string) => {
+      const p = (await previewOf(id))!;
+      const asset = (await preview.findPreviewAsset(p.sha256 as string))!;
+      return fs.readFileSync(path.join(tmp, "data", asset.storagePath), "utf8");
+    };
+    const alone = await save({
+      files: [{ path: "components/ui/badge.tsx", role: "component", language: "tsx", code: BADGE }],
+    });
+    await (
+      await build.startComponentPreviewBuild(alone.id)
+    ).done;
+    expect(await html(alone.id)).toContain('justifyContent:"center"');
+    const withDemo = await save();
+    await (
+      await build.startComponentPreviewBuild(withDemo.id)
+    ).done;
+    expect(await html(withDemo.id)).not.toContain('justifyContent:"center"');
+  });
+
+  it("keeps the component's own lib/utils when it saved one", async () => {
+    const r = await save();
+    await (
+      await build.startComponentPreviewBuild(r.id)
+    ).done;
+    expect(await previewOf(r.id)).toMatchObject({ status: "ready" });
+    expect(manifests.at(-1)!.dependencies).not.toHaveProperty("clsx");
+  });
+
+  it("keeps a failed build's error, and the last good preview", async () => {
+    // the demo imports a project file that wasn't saved (only lib/utils is supplied by the build)
+    const r = await save({
+      files: [
+        { path: "components/ui/badge.tsx", role: "component", language: "tsx", code: BADGE },
+        { path: "demo.tsx", role: "demo", language: "tsx", code: DEMO.replace("ui/badge", "ui/missing") },
+        { path: "lib/utils.ts", role: "support", language: "ts", code: UTILS },
       ],
     });
     await (
@@ -138,7 +199,7 @@ describe("building a preview", () => {
     ).done;
     const p = await previewOf(r.id);
     expect(p).toMatchObject({ status: "failed" });
-    expect(p!.error).toMatch(/Could not resolve "@\/lib\/utils".*save it as a support file/s);
+    expect(p!.error).toMatch(/Could not resolve "@\/components\/ui\/missing".*save it as a support file/s);
     expect(p!.sha256).toBeUndefined();
 
     const ok = await save();

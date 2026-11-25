@@ -35,6 +35,7 @@ import {
   BuildFailed,
   CopyButton,
   LivePreview,
+  STAGE,
   STAGE_H,
   StageControls,
   StageEmpty,
@@ -288,7 +289,7 @@ function ImageStage({
           key="video"
           src={c.videoUrl}
           poster={c.previewImageUrl}
-          className={cn("block w-full rounded-[10px] bg-canvas object-contain", STAGE_H)}
+          className={cn("block rounded-[10px] bg-canvas object-contain", STAGE)}
           controls
           muted
           playsInline
@@ -310,7 +311,7 @@ function ImageStage({
           alt={`Preview of ${title}`}
           referrerPolicy="no-referrer"
           onError={() => setFailed(true)}
-          className={cn("block w-full rounded-[10px] bg-canvas object-cover object-top", STAGE_H)}
+          className={cn("block rounded-[10px] bg-canvas object-contain", STAGE)}
         />
       )}
       <StageControls>
