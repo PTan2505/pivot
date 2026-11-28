@@ -138,6 +138,22 @@ export class R2Store implements BlobStore {
     return this.client;
   }
 
+  /**
+   * A link that lets whoever holds it GET or PUT this one object until it expires, and nothing else: how the cloud
+   * builder (cloud-build.ts) reads its job and writes its result without R2 keys. A PUT link is signed for
+   * `contentType`, which the upload must send.
+   */
+  async presign(key: string, method: "GET" | "PUT", opts: { expiresIn: number; contentType?: string }) {
+    assertKey(key);
+    const { s3, client } = await this.sdk();
+    const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
+    const command =
+      method === "GET"
+        ? new s3.GetObjectCommand({ Bucket: this.config.bucket, Key: key })
+        : new s3.PutObjectCommand({ Bucket: this.config.bucket, Key: key, ContentType: opts.contentType });
+    return getSignedUrl(client, command, { expiresIn: opts.expiresIn });
+  }
+
   async put(key: string, data: Buffer, contentType: string) {
     assertKey(key);
     const { s3, client } = await this.sdk();

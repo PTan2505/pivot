@@ -15,6 +15,9 @@ docs/requirements-v0.1.md
 plugin/server
 # motion-qa's copy of the motion fitting code: built by `pnpm mcp:build` from packages/core/src/motion-fit.ts.
 plugin/skills/design/scripts/motion-fit.mjs
+# The cloud builder's bundle and lockfile: built by `pnpm builder:build`, committed as is.
+builder/build.mjs
+builder/package-lock.json
 
 # Local state the impeccable hook writes. The hook ignores these through
 # .git/info/exclude, which Prettier doesn't read (only .gitignore and this file).

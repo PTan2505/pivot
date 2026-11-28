@@ -233,14 +233,34 @@ describe("building a preview", () => {
     });
   });
 
-  it("never builds a rejected component, and builds one at a time", async () => {
+  it("never builds a rejected component, and builds one at a time, the rest waiting their turn", async () => {
     const rejected = await save({ review: { verdict: "rejected", notes: "Runs fetched code." } });
     await expect(build.startComponentPreviewBuild(rejected.id)).rejects.toThrow(/rejected/);
     const a = await save();
     const b = await save();
-    const first = await build.startComponentPreviewBuild(a.id);
-    await expect(build.startComponentPreviewBuild(b.id)).rejects.toThrow(/Another preview is building/);
-    await first.done;
+    let running = 0;
+    let most = 0;
+    build.buildDeps.npmInstall = async (dir: string) => {
+      most = Math.max(most, ++running);
+      await new Promise((r) => setTimeout(r, 30));
+      try {
+        await installStub(dir);
+      } finally {
+        running--;
+      }
+    };
+    try {
+      const first = await build.startComponentPreviewBuild(a.id);
+      const second = await build.startComponentPreviewBuild(b.id);
+      expect(second.status).toBe("building");
+      expect(build.isBuilding(b.id)).toBe(true);
+      await Promise.all([first.done, second.done]);
+    } finally {
+      build.buildDeps.npmInstall = installStub;
+    }
+    expect(most).toBe(1);
+    expect(await previewOf(a.id)).toMatchObject({ status: "ready", runner: "local" });
+    expect(await previewOf(b.id)).toMatchObject({ status: "ready", runner: "local" });
     expect(build.isBuilding()).toBe(false);
     const ref = await resources.createResource({ type: "reference", title: "R", sourceUrl: "https://a.dev" });
     await expect(build.startComponentPreviewBuild(ref.id)).rejects.toThrow(/No such component/);
@@ -255,6 +275,48 @@ describe("building a preview", () => {
     expect(css).toContain(".dark\\:bg-red-500");
   });
 });
+
+describe("building after a save (SPEC §1 #38, updated 2026-11-28)", () => {
+  it("builds a component whose saved code has no build yet, once per code, and never a rejected one", async () => {
+    const r = await save();
+    expect(await build.autoBuildComponent(r.id)).toBe("started");
+    await waitIdle(r.id);
+    expect(await previewOf(r.id)).toMatchObject({ status: "ready", runner: "local" });
+    // the same code again: nothing to do
+    expect(await build.autoBuildComponent(r.id)).toBe("skipped");
+    // new code: a new build
+    await comps.saveComponent({
+      provider: "21st",
+      providerId: nextId,
+      name: "Badge",
+      pageUrl: `https://21st.dev/@tester/components/badge-${nextId}`,
+      author: { username: "tester" },
+      licence: { spdx: "MIT", source: "component_page" },
+      files: [
+        { path: "components/ui/badge.tsx", role: "component", language: "tsx", code: BADGE.replace("px-3", "px-4") },
+        { path: "demo.tsx", role: "demo", language: "tsx", code: DEMO },
+        { path: "lib/utils.ts", role: "support", language: "ts", code: UTILS },
+      ],
+      npmDependencies: [{ name: "fixture-greeting", version: "^1.0.0" }],
+      status: "built",
+      replaceCode: true,
+    });
+    expect(await build.autoBuildComponent(r.id)).toBe("started");
+    await waitIdle(r.id);
+    const p = (await previewOf(r.id))!;
+    const now = (await resources.getResource(r.id))!.meta.component as { codeSha256: string };
+    expect(p).toMatchObject({ status: "ready", builtFrom: now.codeSha256 });
+
+    const rejected = await save({ review: { verdict: "rejected", notes: "Runs fetched code." } });
+    expect(await build.autoBuildComponent(rejected.id)).toBe("skipped");
+    expect(await previewOf(rejected.id)).toBeUndefined();
+  });
+});
+
+async function waitIdle(id: string) {
+  for (let i = 0; i < 400 && build.isBuilding(id); i++) await new Promise((r) => setTimeout(r, 25));
+  expect(build.isBuilding(id)).toBe(false);
+}
 
 let installStub: typeof build.buildDeps.npmInstall;
 beforeAll(() => {

@@ -16,6 +16,8 @@ export const dist = {
   migrations: path.join(packageRoot, "dist/migrations"),
   scripts: path.join(packageRoot, "dist/scripts"),
   extension: path.join(packageRoot, "dist/extension"),
+  /** the cloud builder's repo files (builder/ in the repo), for `pivot-studio builder setup` */
+  builder: path.join(packageRoot, "dist/builder"),
 };
 
 export const DEFAULT_PORT = "4321";

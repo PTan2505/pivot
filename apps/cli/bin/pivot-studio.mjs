@@ -16,6 +16,8 @@ Commands
   extension           Put the Chrome extension in <data folder>/extension, ready to load unpacked
   preview <session>   Open a design session's mockups in a separate, network-locked browser window
   motion-qa <plan>    Check a build's motion against an approved plan
+  builder setup       Build previews on GitHub Actions: prepare your private builder repo (--repo owner/name)
+                      and set PIVOT_BUILD_REPO in <data folder>/.env
   help, version
 
 Options
@@ -47,6 +49,15 @@ async function main(argv) {
     case "preview":
     case "motion-qa":
       return runScript(command, rest);
+  }
+  if (command === "builder") {
+    if (rest[0] !== "setup") throw new Error("Usage: pivot-studio builder setup --repo <owner>/<name>");
+    const opts = parseArgs(rest.slice(1), "builder");
+    return (await import("../lib/builder.mjs")).setupBuilder({
+      repo: opts.repo,
+      builderDir: dist.builder,
+      envFile: path.join(resolveDataDir(opts.dataDir), ".env"),
+    });
   }
   const opts = parseArgs(rest, command);
   switch (command) {

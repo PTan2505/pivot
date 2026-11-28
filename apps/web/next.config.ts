@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
     "sharp",
     "postgres",
     "@aws-sdk/client-s3",
+    // presigned R2 links for the cloud builder (packages/core/src/cloud-build.ts)
+    "@aws-sdk/s3-request-presigner",
     // the component preview build (packages/core/src/preview-build.ts)
     "esbuild",
     "tailwindcss",

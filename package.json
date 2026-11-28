@@ -28,6 +28,8 @@
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "mcp:build": "pnpm --filter @pivot/mcp build",
     "cli:build": "pnpm --filter pivot-studio build",
+    "builder:build": "node packages/core/scripts/build-builder.mjs",
+    "builder:setup": "node scripts/builder-setup.mjs",
     "owner:passphrase": "node scripts/owner-passphrase.mjs",
     "plugin:validate": "claude plugin validate ./plugin --strict && claude plugin validate . --strict"
   },

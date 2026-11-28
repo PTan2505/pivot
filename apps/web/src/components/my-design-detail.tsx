@@ -17,6 +17,7 @@ import type { AssetDTO, DesignSessionDTO, MyDesignKind, MyDesignMeta } from "@pi
 import {
   baseName,
   BuildFailed,
+  buildsWhere,
   CHIP,
   CodeView,
   CopyButton,
@@ -295,7 +296,8 @@ function ShotStage({
 
 /**
  * Build preview: a React design installs its npm packages (exact versions, registry.npmjs.org, install scripts off) and
- * is bundled on this machine; an HTML demo is bundled and inlined. Off while a build runs.
+ * is bundled; an HTML demo is bundled and inlined. On GitHub Actions when cloud builds are set up, else on this machine.
+ * Off while a build runs.
  */
 function BuildButton({ d, id }: { d: MyDesignMeta; id: string }) {
   const qc = useQueryClient();
@@ -321,8 +323,8 @@ function BuildButton({ d, id }: { d: MyDesignMeta; id: string }) {
       disabled={building || asking}
       title={
         npm
-          ? "Installs its npm packages at their saved versions from registry.npmjs.org (install scripts off) and bundles it on this machine"
-          : "Bundles its demo page into one file on this machine"
+          ? "Installs its npm packages at their saved versions from registry.npmjs.org (install scripts off) and bundles it: on GitHub Actions when cloud builds are set up, else on this machine"
+          : "Bundles its demo page into one file: on GitHub Actions when cloud builds are set up, else on this machine"
       }
     >
       {building || asking ? <Loader2 className="animate-spin" /> : <Hammer />}
@@ -336,10 +338,10 @@ function BuildNotes({ d }: { d: MyDesignMeta }) {
   if (p?.status === "building")
     return (
       <p role="status" className="mt-1 text-xs text-ink-muted">
-        Building the preview
+        Building the preview {buildsWhere(p.runner)}
         {myDesignPreviewPlan(d).kind === "react" || d.dependencies.length > 0
-          ? ": installing its npm packages at their saved versions with install scripts off, then bundling it on this machine…"
-          : ": bundling its demo page on this machine…"}
+          ? ": installing its npm packages at their saved versions with install scripts off, then bundling it…"
+          : ": bundling its demo page…"}
       </p>
     );
   if (p?.status === "failed") return <BuildFailed error={p.error} />;

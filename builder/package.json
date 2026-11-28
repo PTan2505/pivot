@@ -1,0 +1,12 @@
+{
+  "name": "pivot-builder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PIVOT's cloud builder: builds component and design previews on GitHub Actions. Written by pivot-studio builder setup.",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "esbuild": "0.25.12",
+    "tailwindcss": "4.3.3"
+  }
+}

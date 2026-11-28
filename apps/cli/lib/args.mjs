@@ -5,8 +5,9 @@ const ALLOWED = {
   doctor: ["port", "data-dir"],
   passphrase: ["data-dir", "replace", "stdin"],
   extension: ["data-dir"],
+  builder: ["repo", "data-dir"],
 };
-const VALUED = new Set(["port", "data-dir"]);
+const VALUED = new Set(["port", "data-dir", "repo"]);
 
 export function parseArgs(args, command) {
   const allowed = ALLOWED[command];

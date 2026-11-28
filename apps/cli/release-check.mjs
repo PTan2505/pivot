@@ -21,6 +21,8 @@ const INCLUDED = [
   /^apps\/cli\/(bin|lib)\//,
   /^apps\/cli\/(build\.mjs|package\.json|README\.md|LICENSE)$/,
   /^plugin\/skills\/design\/scripts\/(preview|motion-qa|motion-fit)\.mjs$/,
+  // the cloud builder's repo files, which `pivot-studio builder setup` writes into the owner's builder repo
+  /^builder\//,
   /^THIRD_PARTY_NOTICES\.md$/,
   /^pnpm-lock\.yaml$/,
 ];

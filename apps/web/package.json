@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
+    "@aws-sdk/s3-request-presigner": "^3.1156.0",
     "@electric-sql/pglite": "^0.5.11",
     "@gsap/react": "^2.1.2",
     "@pivot/core": "workspace:*",
