@@ -11,6 +11,8 @@ import {
   encodeJob,
   PAGE_TYPE,
   RESULT_TYPE,
+  SHOT_TYPE,
+  VIDEO_TYPE,
   WIRE_VERSION,
   type BuildJob,
   type WireJob,
@@ -113,7 +115,17 @@ const jobKeys = (id: string) => ({
   job: `build-jobs/${id}/job.json`,
   page: `build-jobs/${id}/page.html`,
   result: `build-jobs/${id}/result.json`,
+  desktop: `build-jobs/${id}/desktop.png`,
+  mobile: `build-jobs/${id}/mobile.png`,
+  video: `build-jobs/${id}/video.webm`,
 });
+
+/** A finished cloud build: its page, and PIVOT's pictures of it when the job asked for them and they were taken. */
+export interface CloudBuildOutput {
+  html: string;
+  recording?: { desktop: Buffer; mobile: Buffer; video: Buffer };
+  recordError?: string;
+}
 
 function r2Store(): R2Store {
   const store = writeStore();
@@ -141,8 +153,15 @@ function dispatchError(status: number, cfg: CloudConfig, body: string) {
   return `GitHub didn't start the cloud build (${status}${detail ? `: ${detail}` : ""}).`;
 }
 
-/** Puts the job in R2 and starts the workflow. Returns the job's id. */
-export async function startCloudBuild(job: BuildJob, cfg: CloudConfig): Promise<string> {
+/**
+ * Puts the job in R2 and starts the workflow. Returns the job's id. With `record`, the builder also takes PIVOT's
+ * screenshots and video of the page (record-page.ts).
+ */
+export async function startCloudBuild(
+  job: BuildJob,
+  cfg: CloudConfig,
+  opts: { record?: boolean } = {},
+): Promise<string> {
   const store = r2Store();
   const id = randomUUID();
   const keys = jobKeys(id);
@@ -153,6 +172,13 @@ export async function startCloudBuild(job: BuildJob, cfg: CloudConfig): Promise<
     upload: {
       page: await store.presign(keys.page, "PUT", { expiresIn: LINK_SECONDS, contentType: PAGE_TYPE }),
       result: await store.presign(keys.result, "PUT", { expiresIn: LINK_SECONDS, contentType: RESULT_TYPE }),
+      ...(opts.record
+        ? {
+            desktop: await store.presign(keys.desktop, "PUT", { expiresIn: LINK_SECONDS, contentType: SHOT_TYPE }),
+            mobile: await store.presign(keys.mobile, "PUT", { expiresIn: LINK_SECONDS, contentType: SHOT_TYPE }),
+            video: await store.presign(keys.video, "PUT", { expiresIn: LINK_SECONDS, contentType: VIDEO_TYPE }),
+          }
+        : {}),
     },
   };
   const body = Buffer.from(JSON.stringify(wire), "utf8");
@@ -205,7 +231,7 @@ async function readResult(store: R2Store, id: string): Promise<WireResult | null
  * seconds and asks GitHub how the run is doing every half minute, so a run that died without a result fails with a link
  * to its log; after 15 minutes it cancels the run. The job's objects are removed either way.
  */
-export async function awaitCloudBuild(id: string, cfg: CloudConfig, startedAt: Date): Promise<string> {
+export async function awaitCloudBuild(id: string, cfg: CloudConfig, startedAt: Date): Promise<CloudBuildOutput> {
   const store = r2Store();
   const deadline = startedAt.getTime() + cloudDeps.timeoutMs;
   let run: Run | null = null;
@@ -227,9 +253,20 @@ export async function awaitCloudBuild(id: string, cfg: CloudConfig, startedAt: D
       }
       if (result) {
         if (!result.ok) throw new PreviewError(result.error);
-        const page = await store.get(jobKeys(id).page);
+        const keys = jobKeys(id);
+        const page = await store.get(keys.page);
         if (!page) throw new PreviewError("The cloud build finished, but its page is missing from R2.");
-        return page.toString("utf8");
+        const out: CloudBuildOutput = { html: page.toString("utf8") };
+        if (result.recorded) {
+          const [desktop, mobile, video] = await Promise.all([
+            store.get(keys.desktop),
+            store.get(keys.mobile),
+            store.get(keys.video),
+          ]);
+          if (desktop && mobile && video) out.recording = { desktop, mobile, video };
+          else out.recordError = "The cloud build's pictures are missing from R2.";
+        } else if (result.recordError) out.recordError = result.recordError;
+        return out;
       }
       if (Date.now() > deadline) {
         if (run && run.status !== "completed")

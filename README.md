@@ -105,6 +105,8 @@ npx pivot-studio builder setup --repo <you>/pivot-builder
 
 It creates the repo (private) if it doesn't exist, writes the builder into it and sets `PIVOT_BUILD_REPO`; restart PIVOT afterwards, and run it again after updating PIVOT. In a checkout, use `pnpm builder:setup --repo <you>/pivot-builder`. Each job reaches the runner through a link to your R2 bucket that expires after an hour; the runner gets no R2 keys and no token. Keep the repo private: its runs name the jobs they build.
 
+A component built there also comes back with PIVOT's own recording of it: a desktop and a phone screenshot and a short video, taken in the runner's Chrome with no network. **Play recording** on its page shows them, and the desktop screenshot becomes its card's cover unless you picked one. Builds on this computer don't record.
+
 ## Everyday use
 
 - **⌘K:** search everything, jump anywhere, create.

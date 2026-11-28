@@ -32,14 +32,30 @@ export const MAX_PREVIEW_BYTES = MAX_PAGE_BYTES;
 
 export { PreviewError };
 
+/** PIVOT's pictures of a build (record-page.ts), as files. */
+export interface PreviewRecording {
+  desktop: Buffer;
+  mobile: Buffer;
+  video: Buffer;
+}
+
+const RECORDING_ROLES = ["preview-shot", "preview-video"] as const;
+
 /**
  * Stores a preview for a component or a saved design (replacing the one it had) and records it in
- * `meta.component.preview` or `meta.myDesign.preview`.
+ * `meta.component.preview` or `meta.myDesign.preview`. With a `recording` (added 2026-11-28), PIVOT's screenshots and
+ * video of it are stored too (roles `preview-shot` and `preview-video`) and the desktop screenshot becomes the card's
+ * cover unless the owner chose another; a build without one drops the pictures of the earlier build.
  */
 export async function setComponentPreview(
   resourceId: string,
   html: string | Buffer,
-  opts: { builtFrom?: string; runner?: PreviewState["runner"] } = {},
+  opts: {
+    builtFrom?: string;
+    runner?: PreviewState["runner"];
+    recording?: PreviewRecording;
+    recordError?: string;
+  } = {},
 ) {
   const data = Buffer.isBuffer(html) ? html : Buffer.from(html, "utf8");
   if (data.byteLength > MAX_PREVIEW_BYTES) throw new PreviewError("A preview holds at most 5 MB.");
@@ -49,17 +65,40 @@ export async function setComponentPreview(
   if (!row || !holder) throw new PreviewError("No such component or design.");
   const c = holder.value;
   const asset = await saveAsset({ data, fileName: "preview.html", mimeType: "text/plain" });
+  let recording: PreviewState["recording"];
+  if (opts.recording) {
+    const r = opts.recording;
+    const [desktop, mobile, video] = [
+      await saveAsset({ data: r.desktop, fileName: "preview-desktop.png", mimeType: "image/png" }),
+      await saveAsset({ data: r.mobile, fileName: "preview-mobile.png", mimeType: "image/png" }),
+      await saveAsset({ data: r.video, fileName: "preview.webm", mimeType: "video/webm" }),
+    ];
+    recording = { desktop: desktop.id, mobile: mobile.id, video: video.id };
+  }
+  const keep = new Set([asset.id, ...Object.values(recording ?? {})]);
   const old = await db
     .select({ assetId: resourceAssets.assetId })
     .from(resourceAssets)
-    .where(and(eq(resourceAssets.resourceId, resourceId), eq(resourceAssets.role, "component-preview")));
-  for (const o of old.filter((o) => o.assetId !== asset.id)) {
+    .where(
+      and(
+        eq(resourceAssets.resourceId, resourceId),
+        inArray(resourceAssets.role, ["component-preview", ...RECORDING_ROLES]),
+      ),
+    );
+  for (const o of old.filter((o) => !keep.has(o.assetId))) {
     await db
       .delete(resourceAssets)
       .where(and(eq(resourceAssets.resourceId, resourceId), eq(resourceAssets.assetId, o.assetId)));
   }
   await attachAsset(resourceId, asset.id, "component-preview");
-  await deleteOrphanAssets(old.map((o) => o.assetId).filter((id) => id !== asset.id));
+  if (recording) {
+    await attachAsset(resourceId, recording.desktop, "preview-shot");
+    await attachAsset(resourceId, recording.mobile, "preview-shot");
+    await attachAsset(resourceId, recording.video, "preview-video");
+  }
+  // the cover follows PIVOT's latest desktop screenshot, unless the owner picked a cover of their own
+  const coverWasOurs = !row.coverAssetId || old.some((o) => o.assetId === row.coverAssetId);
+  const coverAssetId = coverWasOurs ? (recording?.desktop ?? null) : row.coverAssetId;
   const preview: PreviewState = {
     status: "ready",
     assetId: asset.id,
@@ -67,11 +106,14 @@ export async function setComponentPreview(
     builtFrom: opts.builtFrom ?? c.codeSha256,
     builtAt: new Date().toISOString(),
     ...(opts.runner ? { runner: opts.runner } : {}),
+    ...(recording ? { recording } : {}),
+    ...(opts.recordError ? { recordError: opts.recordError.slice(0, 600) } : {}),
   };
   await db
     .update(resources)
-    .set({ meta: { ...(row.meta ?? {}), [holder.key]: { ...c, preview } } })
+    .set({ meta: { ...(row.meta ?? {}), [holder.key]: { ...c, preview } }, coverAssetId })
     .where(eq(resources.id, resourceId));
+  await deleteOrphanAssets(old.map((o) => o.assetId).filter((id) => !keep.has(id)));
   return preview;
 }
 
