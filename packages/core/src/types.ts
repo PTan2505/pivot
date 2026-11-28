@@ -1178,7 +1178,10 @@ export interface ComponentMeta {
   preview?: PreviewState;
 }
 
-/** A live preview built on this machine and served by the preview origin (`preview-build.ts`). */
+/**
+ * A live preview, built on this machine or on GitHub Actions (`preview-build.ts`, `cloud-build.ts`) and served by the
+ * preview origin.
+ */
 export interface PreviewState {
   status: "none" | "building" | "ready" | "failed";
   assetId?: string;
@@ -1187,6 +1190,10 @@ export interface PreviewState {
   builtFrom?: string;
   builtAt?: string;
   error?: string;
+  /** Where the latest build ran: "local" (this machine) or "cloud" (the owner's GitHub Actions builder). */
+  runner?: "local" | "cloud";
+  /** A cloud build's job id, so PIVOT picks the build up again after a restart. */
+  job?: string;
 }
 
 // ---- My designs (added 2026-11-24, docs/my-designs-plan.md) -----------------------------------------------------

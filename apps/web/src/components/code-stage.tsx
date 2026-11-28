@@ -356,6 +356,10 @@ function summariseBuildError(error: string) {
 }
 
 /** A failed preview build: one line that says what went wrong, the raw bundler output behind "Show details". */
+/** Where a preview build runs, for its status line. */
+export const buildsWhere = (runner?: "local" | "cloud") =>
+  runner === "cloud" ? "on GitHub Actions" : "on this machine";
+
 export function BuildFailed({ error }: { error?: string }) {
   const [open, setOpen] = useState(false);
   const id = useId();

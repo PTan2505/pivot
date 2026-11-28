@@ -33,6 +33,7 @@ import {
   CHIP,
   CodeView,
   BuildFailed,
+  buildsWhere,
   CopyButton,
   LivePreview,
   STAGE,
@@ -189,8 +190,9 @@ function Stage({ c, id, title, onShowCode }: { c: ComponentMeta; id: string; tit
 const rejectedNow = (c: ComponentMeta) => c.review?.verdict === "rejected" && c.review.codeSha256 === c.codeSha256;
 
 /**
- * Build preview: installs the component's npm packages from registry.npmjs.org (install scripts off) and bundles it on
- * this machine. Never offered for a rejected component; off while a build runs.
+ * Build preview: installs the component's npm packages from registry.npmjs.org (install scripts off) and bundles it, on
+ * GitHub Actions when cloud builds are set up, else on this machine. A save with new code starts one by itself. Never
+ * offered for a rejected component; off while a build runs.
  */
 function BuildButton({ c, id }: { c: ComponentMeta; id: string }) {
   const qc = useQueryClient();
@@ -214,7 +216,7 @@ function BuildButton({ c, id }: { c: ComponentMeta; id: string }) {
       size="xs"
       onClick={start}
       disabled={building || asking}
-      title="Installs its npm packages from registry.npmjs.org (install scripts off) and bundles it on this machine"
+      title="Installs its npm packages from registry.npmjs.org (install scripts off) and bundles it: on GitHub Actions when cloud builds are set up, else on this machine"
     >
       {building || asking ? <Loader2 className="animate-spin" /> : <Hammer />}
       {building ? "Building…" : c.preview?.sha256 ? "Rebuild preview" : "Build preview"}
@@ -227,8 +229,8 @@ function BuildNotes({ c }: { c: ComponentMeta }) {
   if (p?.status === "building")
     return (
       <p role="status" className="mt-1 text-xs text-ink-muted">
-        Building the preview: installing its npm packages from registry.npmjs.org with install scripts off, then
-        bundling it on this machine…
+        Building the preview {buildsWhere(p.runner)}: installing its npm packages from registry.npmjs.org with install
+        scripts off, then bundling it…
       </p>
     );
   if (p?.status === "failed") return <BuildFailed error={p.error} />;

@@ -16,18 +16,19 @@ claude plugin install pivot --marketplace PTan2505/pivot
 
 ## Commands
 
-| Command                               | What it does                                                                           |
-| ------------------------------------- | -------------------------------------------------------------------------------------- |
-| `pivot-studio` / `pivot-studio start` | Serve PIVOT (`--port`, `--data-dir`, `--no-open`)                                      |
-| `pivot-studio doctor`                 | Check Node, Chromium, the data folder, the token, the passphrase, PIVOT and the plugin |
-| `pivot-studio passphrase`             | Set the owner passphrase that approving a design needs (`--replace` to change it)      |
-| `pivot-studio extension`              | Put the Chrome extension in `<data folder>/extension` and print how to load it         |
-| `pivot-studio preview <session>`      | Open a design session's mockups in a separate, network-locked browser window           |
-| `pivot-studio motion-qa <plan>`       | Check a build's motion against an approved plan                                        |
+| Command                                            | What it does                                                                                                                  |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `pivot-studio` / `pivot-studio start`              | Serve PIVOT (`--port`, `--data-dir`, `--no-open`)                                                                             |
+| `pivot-studio doctor`                              | Check Node, Chromium, the data folder, the token, the passphrase, PIVOT and the plugin                                        |
+| `pivot-studio passphrase`                          | Set the owner passphrase that approving a design needs (`--replace` to change it)                                             |
+| `pivot-studio extension`                           | Put the Chrome extension in `<data folder>/extension` and print how to load it                                                |
+| `pivot-studio preview <session>`                   | Open a design session's mockups in a separate, network-locked browser window                                                  |
+| `pivot-studio motion-qa <plan>`                    | Check a build's motion against an approved plan                                                                               |
+| `pivot-studio builder setup --repo <owner>/<name>` | Build previews on GitHub Actions: prepare your private builder repo and set `PIVOT_BUILD_REPO` (needs R2 and `gh auth login`) |
 
 ## Your data
 
-Everything lives in `~/.pivot` (or `--data-dir`, or `PIVOT_DATA_DIR`): the local database, screenshots, the API token the extension and the Claude Code tools use, and the owner passphrase's hash. To keep the library in Postgres (Neon) or the files in Cloudflare R2, put `DATABASE_URL` or the `R2_*` keys in `~/.pivot/.env`.
+Everything lives in `~/.pivot` (or `--data-dir`, or `PIVOT_DATA_DIR`): the local database, screenshots, the API token the extension and the Claude Code tools use, and the owner passphrase's hash. To keep the library in Postgres (Neon) or the files in Cloudflare R2, put `DATABASE_URL` or the `R2_*` keys in `~/.pivot/.env`. With R2 set, `builder setup` moves preview builds to GitHub Actions in a private repo of yours.
 
 PIVOT only listens on `127.0.0.1`. Writes need the app's own page or the API token.
 

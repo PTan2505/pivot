@@ -34,6 +34,8 @@ export const REQUIRED = [
   "scripts/motion-qa.mjs",
   "scripts/motion-fit.mjs",
   "extension/manifest.json",
+  "builder/build.mjs",
+  "builder/.github/workflows/build.yml",
   "THIRD_PARTY_NOTICES.md",
 ];
 
@@ -133,6 +135,8 @@ function main(argv) {
   for (const f of ["preview.mjs", "motion-qa.mjs", "motion-fit.mjs"])
     fs.copyFileSync(path.join(repo, "plugin/skills/design/scripts", f), path.join(out, "scripts", f));
   fs.cpSync(path.join(repo, "apps/extension/dist"), path.join(out, "extension"), { recursive: true });
+  // the cloud builder's repo files, for `pivot-studio builder setup`
+  fs.cpSync(path.join(repo, "builder"), path.join(out, "builder"), { recursive: true });
   // the built app includes third-party code under its own terms (GSAP among them)
   fs.copyFileSync(path.join(repo, "THIRD_PARTY_NOTICES.md"), path.join(out, "THIRD_PARTY_NOTICES.md"));
 

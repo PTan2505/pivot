@@ -1,0 +1,32 @@
+# PIVOT's cloud builder: builds one component or design preview per run. PIVOT starts each run itself (workflow
+# dispatch) with a job id and a short-lived link to the job in its R2 bucket; the page and the result go back to R2
+# through links in the job. Written by `pivot-studio builder setup`: run it again to update this repo.
+name: build
+run-name: build ${{ inputs.id }}
+on:
+  workflow_dispatch:
+    inputs:
+      id:
+        description: PIVOT's job id
+        required: true
+      job:
+        description: A link to the job in R2 (expires after an hour)
+        required: true
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node build.mjs
+        env:
+          PIVOT_JOB_URL: ${{ inputs.job }}

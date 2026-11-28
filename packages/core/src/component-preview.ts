@@ -6,6 +6,8 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { attachAsset, deleteOrphanAssets, saveAsset, type AssetRow } from "./assets";
 import { componentOf } from "./components";
 import { getDb } from "./db/client";
+import { MAX_PAGE_BYTES } from "./build-page";
+import { PreviewError } from "./preview-error";
 import { assets, resourceAssets, resources } from "./db/schema";
 import type { PreviewState } from "./types";
 
@@ -26,9 +28,9 @@ export function previewHolder(row: { type: string; meta: Record<string, unknown>
 }
 
 /** At most this big: a bundle with React and compiled CSS inlined is a few hundred KB. */
-export const MAX_PREVIEW_BYTES = 5 * 1024 * 1024;
+export const MAX_PREVIEW_BYTES = MAX_PAGE_BYTES;
 
-export class PreviewError extends Error {}
+export { PreviewError };
 
 /**
  * Stores a preview for a component or a saved design (replacing the one it had) and records it in
@@ -37,7 +39,7 @@ export class PreviewError extends Error {}
 export async function setComponentPreview(
   resourceId: string,
   html: string | Buffer,
-  opts: { builtFrom?: string } = {},
+  opts: { builtFrom?: string; runner?: PreviewState["runner"] } = {},
 ) {
   const data = Buffer.isBuffer(html) ? html : Buffer.from(html, "utf8");
   if (data.byteLength > MAX_PREVIEW_BYTES) throw new PreviewError("A preview holds at most 5 MB.");
@@ -64,6 +66,7 @@ export async function setComponentPreview(
     sha256: asset.sha256,
     builtFrom: opts.builtFrom ?? c.codeSha256,
     builtAt: new Date().toISOString(),
+    ...(opts.runner ? { runner: opts.runner } : {}),
   };
   await db
     .update(resources)

@@ -10,6 +10,7 @@ import { promisify } from "node:util";
 import { afterAll, describe, expect, it } from "vitest";
 import { builtVersion, externalsOf, REQUIRED, RUNTIME } from "../build.mjs";
 import { parseArgs } from "../lib/args.mjs";
+import { BUILDER_FILES, blobSha, setEnvValue, setupBuilder } from "../lib/builder.mjs";
 import { checks } from "../lib/doctor.mjs";
 import { installExtension } from "../lib/extension.mjs";
 import { linkExternals } from "../lib/externals.mjs";
@@ -144,6 +145,8 @@ describe("the native packages", () => {
     expect(RUNTIME.sort()).toEqual(
       [
         "@aws-sdk/client-s3",
+        // presigned R2 links for the cloud builder (packages/core/src/cloud-build.ts)
+        "@aws-sdk/s3-request-presigner",
         "@electric-sql/pglite",
         // the component preview build (packages/core/src/preview-build.ts)
         "esbuild",
@@ -328,5 +331,99 @@ describe("release check", () => {
       out: "packages/core/src/capture.ts\n",
     });
     expect(await run("docs/SPEC.md\n")).toEqual({ code: 0, out: "" });
+  });
+});
+
+describe("builder setup", () => {
+  const builderDir = path.resolve(here, "../../../builder");
+
+  /** A stand-in for GitHub's API: one account, its repos and their files. */
+  function fakeGitHub({ repos = {}, login = "me" } = {}) {
+    const calls = [];
+    const fetch = async (url, init = {}) => {
+      const u = new URL(url);
+      const method = init.method ?? "GET";
+      const body = init.body ? JSON.parse(init.body) : undefined;
+      calls.push({ method, path: u.pathname, body, auth: init.headers.Authorization });
+      const json = (data, status = 200) => new Response(JSON.stringify(data), { status });
+      if (u.pathname === "/user") return json({ login });
+      if (method === "POST" && u.pathname === "/user/repos") {
+        repos[`${login}/${body.name}`] = { private: body.private, files: {} };
+        return json({}, 201);
+      }
+      const m = /^\/repos\/([^/]+\/[^/]+)(?:\/contents\/(.+))?$/.exec(u.pathname);
+      const repo = m && repos[m[1]];
+      if (!repo) return json({ message: "Not Found" }, 404);
+      if (!m[2]) return json({ private: repo.private });
+      const file = decodeURIComponent(m[2]);
+      if (method === "GET") return repo.files[file] ? json({ sha: repo.files[file] }) : json({}, 404);
+      repo.files[file] = blobSha(Buffer.from(body.content, "base64"));
+      return json({}, 201);
+    };
+    return { fetch, calls, repos };
+  }
+
+  it("creates the repo private, writes the builder's files and sets PIVOT_BUILD_REPO, keeping the rest of .env", async () => {
+    const gh = fakeGitHub();
+    const envFile = path.join(dir("env"), ".env");
+    fs.writeFileSync(envFile, "R2_BUCKET=b\nR2_ACCESS_KEY_ID=k\nR2_SECRET_ACCESS_KEY=s\n");
+    const log = [];
+    const code = await setupBuilder({
+      repo: "me/builds",
+      builderDir,
+      envFile,
+      env: {},
+      fetch: gh.fetch,
+      token: () => "t0k3n",
+      log: (l) => log.push(l),
+    });
+    expect(code).toBe(0);
+    expect(gh.repos["me/builds"].private).toBe(true);
+    expect(Object.keys(gh.repos["me/builds"].files).sort()).toEqual([...BUILDER_FILES].sort());
+    expect(gh.calls.every((c) => c.auth === "Bearer t0k3n")).toBe(true);
+    expect(fs.readFileSync(envFile, "utf8")).toBe(
+      "R2_BUCKET=b\nR2_ACCESS_KEY_ID=k\nR2_SECRET_ACCESS_KEY=s\nPIVOT_BUILD_REPO=me/builds\n",
+    );
+    expect(log.join("\n")).not.toContain("t0k3n");
+    expect(log.join("\n")).not.toMatch(/R2_\* keys/);
+
+    // again: nothing to write
+    const puts = gh.calls.filter((c) => c.method === "PUT").length;
+    await setupBuilder({
+      repo: "me/builds",
+      builderDir,
+      envFile,
+      env: {},
+      fetch: gh.fetch,
+      token: () => "t",
+      log: (l) => log.push(l),
+    });
+    expect(gh.calls.filter((c) => c.method === "PUT").length).toBe(puts);
+    expect(log.at(-3)).toMatch(/up to date/);
+  });
+
+  it("refuses a public repo, and a malformed --repo, before writing anything", async () => {
+    const gh = fakeGitHub({ repos: { "me/open": { private: false, files: {} } } });
+    const envFile = path.join(dir("env"), ".env");
+    const opts = { builderDir, envFile, env: {}, fetch: gh.fetch, token: () => "t", log: () => {} };
+    await expect(setupBuilder({ ...opts, repo: "me/open" })).rejects.toThrow(/is public/);
+    await expect(setupBuilder({ ...opts, repo: "https://github.com/me/open" })).rejects.toThrow(/owner\/name/);
+    expect(gh.calls.filter((c) => c.method !== "GET")).toEqual([]);
+    expect(fs.existsSync(envFile)).toBe(false);
+  });
+
+  it("replaces an existing PIVOT_BUILD_REPO line", () => {
+    const envFile = path.join(dir("env"), ".env");
+    fs.writeFileSync(envFile, "A=1\nPIVOT_BUILD_REPO=old/one\nB=2\n");
+    setEnvValue(envFile, "PIVOT_BUILD_REPO", "new/one");
+    expect(fs.readFileSync(envFile, "utf8")).toBe("A=1\nPIVOT_BUILD_REPO=new/one\nB=2\n");
+  });
+
+  it("takes only --repo and --data-dir", async () => {
+    expect(parseArgs(["--repo", "me/builds"], "builder")).toMatchObject({ repo: "me/builds" });
+    expect(() => parseArgs(["--port", "1"], "builder")).toThrow(/Unknown option/);
+    const r = await cli(["builder", "start"]);
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(/builder setup --repo/);
   });
 });

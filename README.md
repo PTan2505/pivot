@@ -68,7 +68,8 @@ claude plugin install pivot@pivot
 - **What leaves your machine:**
   - the pages you save: PIVOT fetches them, their metadata and favicon, and screenshots them in a local Chromium;
   - catalog searches: when the library falls short, Claude can search three free component catalogs (Magic UI, React Bits, shadcn/ui) with generic words, never your brief or project names;
-  - your own Postgres and R2, only if you configure them.
+  - your own Postgres and R2, only if you configure them;
+  - a saved component's or design's code, to your own private GitHub repo's Actions runs, only if you set up cloud builds (below).
 
   The npm package turns off Next.js telemetry. A checkout follows Next.js's default; turn it off with `npx next telemetry disable`.
 
@@ -83,10 +84,26 @@ Put settings in `~/.pivot/.env` for the npm package, or in `.env` at the repo ro
 | `DATABASE_URL`                                                           | _unset_            | Unset → embedded Postgres (PGlite) in `~/.pivot/db`, works offline. Set → Neon/any Postgres.                                                          |
 | `PIVOT_DATA_DIR`                                                         | `~/.pivot`         | Database (local mode), files (when R2 is not set), cache, default export folder.                                                                      |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | _unset_            | All four set → screenshots and uploads go to a private Cloudflare R2 bucket instead of this computer. `R2_ENDPOINT` only for EU-jurisdiction buckets. |
+| `PIVOT_BUILD_REPO`                                                       | _unset_            | Your private builder repo (`owner/name`) → previews build on GitHub Actions instead of this computer. Needs R2. Set by `builder setup` (below).       |
+| `PIVOT_BUILD_GITHUB_TOKEN`                                               | _unset_            | The GitHub token cloud builds use. Unset → the GitHub CLI's (`gh auth token`).                                                                        |
 | `CLAUDE_SKILLS_DIR`                                                      | `~/.claude/skills` | Global skills that the Skills view syncs with (only shown with other resource types on).                                                              |
 | `PORT`                                                                   | `4321`             |                                                                                                                                                       |
 
 Files go to Cloudflare R2 when the R2 keys are set, otherwise to the data folder. The app serves them itself, so the bucket stays private. Each file remembers where it lives, so switching is safe; **Settings › Files** has **Test storage** and **Move local files to R2**.
+
+### Build previews on GitHub Actions (optional)
+
+A component builds its live preview each time you save new code for it, and a saved design when you press **Build preview**. By default that runs on this computer: npm packages from registry.npmjs.org with install scripts off, then esbuild. With R2 set up, it can run on GitHub Actions in a private repo of yours instead, about a minute of Actions time per build:
+
+```bash
+gh auth login
+```
+
+```bash
+npx pivot-studio builder setup --repo <you>/pivot-builder
+```
+
+It creates the repo (private) if it doesn't exist, writes the builder into it and sets `PIVOT_BUILD_REPO`; restart PIVOT afterwards, and run it again after updating PIVOT. In a checkout, use `pnpm builder:setup --repo <you>/pivot-builder`. Each job reaches the runner through a link to your R2 bucket that expires after an hour; the runner gets no R2 keys and no token. Keep the repo private: its runs name the jobs they build.
 
 ## Everyday use
 

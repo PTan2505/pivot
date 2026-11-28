@@ -39485,10 +39485,15 @@ var saveComponent = {
     const c = resource.meta.component;
     const url2 = componentUrl(w, resource.id);
     const head = outcome === "created" ? `Saved ${resource.title} in PIVOT (status ${c.status}): ${url2}` : outcome === "updated" ? `Updated ${resource.title} in PIVOT (status ${c.status}): ${url2}` : `${resource.title} was already saved with this code (status ${c.status}); noted this use: ${url2}`;
-    const next = c.status === "built" ? "Tell the user it is saved in PIVOT, and that its page there can build a live preview on their machine (Build preview): ask whether they want one; PIVOT never builds it on save." : c.review?.verdict === "rejected" ? "The user rejected it: don't build it." : 'Next: review the code and the flags before the first edit to the project (pivot:design \xA79), then build it and call save_component again with status "built", the review, the project and the support files.';
+    const building = c.preview?.status === "building" ? `PIVOT is building its live preview ${c.preview.runner === "cloud" ? "on the owner's GitHub Actions builder" : "on this machine"}; it shows on the component's page when it is ready.` : null;
+    const next = c.status === "built" ? "Tell the user it is saved in PIVOT, with its live preview on its page there (PIVOT builds it each time a save brings new code)." : c.review?.verdict === "rejected" ? "The user rejected it: don't build it." : 'Next: review the code and the flags before the first edit to the project (pivot:design \xA79), then build it and call save_component again with status "built", the review, the project and the support files.';
     const gaps = componentGaps(c);
     return {
-      content: [text3([head, ...componentFlagLines(c), reviewLine(c), ...gaps, next].join("\n"))],
+      content: [
+        text3(
+          [head, ...componentFlagLines(c), reviewLine(c), ...gaps, ...building ? [building] : [], next].join("\n")
+        )
+      ],
       structuredContent: {
         outcome,
         id: resource.id,
