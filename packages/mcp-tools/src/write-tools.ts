@@ -26,6 +26,7 @@ import {
   type DesignFeedbackPin,
   type DesignSessionDetailDTO,
 } from "@pivot/core/types";
+import { missingDependencies } from "@pivot/core/imports";
 import { inlineMockup, MockupRejected } from "./mockups";
 import {
   exactText,
@@ -1008,6 +1009,13 @@ const saveComponentInput = {
     .optional()
     .describe("Facets; prefer existing names (list_facets). Only ever added."),
   notes: z.string().max(5000).optional().describe("Kept on the first save only."),
+  description: z
+    .string()
+    .max(2000)
+    .optional()
+    .describe(
+      "21st's description of it (get_component's description, else the search result's): kept on the first save, filled later only while empty.",
+    ),
   replaceCode: z
     .boolean()
     .optional()
@@ -1056,8 +1064,9 @@ const saveComponent: PivotTool<typeof saveComponentInput> = {
         : c.review?.verdict === "rejected"
           ? "The user rejected it: don't build it."
           : 'Next: review the code and the flags before the first edit to the project (pivot:design §9), then build it and call save_component again with status "built", the review, the project and the support files.';
+    const gaps = componentGaps(c);
     return {
-      content: [text([head, ...componentFlagLines(c), reviewLine(c), next].join("\n"))],
+      content: [text([head, ...componentFlagLines(c), reviewLine(c), ...gaps, next].join("\n"))],
       structuredContent: {
         outcome,
         id: resource.id,
@@ -1070,6 +1079,21 @@ const saveComponent: PivotTool<typeof saveComponentInput> = {
     };
   },
 };
+
+/** What a save left out that PIVOT can tell from the code: the demo 21st gives, and imported npm packages. */
+function componentGaps(c: ComponentMeta) {
+  const out: string[] = [];
+  if (!c.files.some((f) => f.role === "demo"))
+    out.push(
+      'No demo saved: 21st\'s get_component gives demoCode; save it as a file with role "demo" (e.g. demo.tsx), which a component saved without one accepts without replaceCode.',
+    );
+  const missing = missingDependencies(c.files, c.npmDependencies);
+  if (missing.length)
+    out.push(
+      `The code imports npm packages its dependencies don't list: ${missing.join(", ")}. Add them to npmDependencies (with the version the project uses, when you know it); the preview build installs the latest meanwhile.`,
+    );
+  return out;
+}
 
 const savedInput = {
   provider: z.literal("21st").default("21st").describe('"21st" (21st.dev).'),

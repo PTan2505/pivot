@@ -38188,6 +38188,39 @@ function failure2(code, message) {
   return { content: [text2(`${code}: ${message}`)], structuredContent: { error: { code, message } }, isError: true };
 }
 
+// ../../packages/core/src/imports.ts
+var SCRIPT = /\.[cm]?[jt]sx?$/;
+var SPECIFIER = /\bimport\s+(type\s+)?(?:[\w*${}\s,]+?\s+from\s+)?["']([^"'\n]+)["']|\bexport\s+(type\s+)?(?:\*(?:\s+as\s+\w+)?|\{[^}]*\})\s+from\s+["']([^"'\n]+)["']|\bimport\s*\(\s*["']([^"'\n]+)["']\s*\)|\brequire\s*\(\s*["']([^"'\n]+)["']\s*\)/g;
+var NODE_BUILTINS = new Set(
+  "assert buffer child_process crypto dns events fs http http2 https module net os path perf_hooks process querystring readline stream string_decoder timers tls url util v8 vm worker_threads zlib".split(
+    " "
+  )
+);
+var NPM_NAME = /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+function packageOf(spec) {
+  if (/^(?:\.|\/|@\/|~\/|#|node:|[a-z][a-z0-9+.-]*:)/i.test(spec)) return null;
+  const parts = spec.split("/");
+  const name = spec.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0];
+  if (NODE_BUILTINS.has(name) || !NPM_NAME.test(name)) return null;
+  return name;
+}
+function importedPackages(files) {
+  const out = /* @__PURE__ */ new Set();
+  for (const f of files) {
+    if (!SCRIPT.test(f.path)) continue;
+    for (const m of f.code.matchAll(SPECIFIER)) {
+      if (m[1] || m[3]) continue;
+      const name = packageOf(m[2] ?? m[4] ?? m[5] ?? m[6]);
+      if (name) out.add(name);
+    }
+  }
+  return [...out];
+}
+function missingDependencies(files, deps) {
+  const have = /* @__PURE__ */ new Set(["react", "react-dom", ...deps.map((d) => d.name)]);
+  return importedPackages(files).filter((n) => !have.has(n));
+}
+
 // ../../packages/mcp-tools/src/mockups.ts
 import crypto from "node:crypto";
 import { constants } from "node:fs";
@@ -39426,6 +39459,9 @@ var saveComponentInput = {
   project: external_exports.string().max(200).optional().describe("The project it is built into (with status built)."),
   facets: external_exports.array(external_exports.object({ kind: external_exports.enum(TAG_KINDS), name: external_exports.string().min(1).max(80) })).max(20).optional().describe("Facets; prefer existing names (list_facets). Only ever added."),
   notes: external_exports.string().max(5e3).optional().describe("Kept on the first save only."),
+  description: external_exports.string().max(2e3).optional().describe(
+    "21st's description of it (get_component's description, else the search result's): kept on the first save, filled later only while empty."
+  ),
   replaceCode: external_exports.boolean().optional().describe("Only when the user asked to refresh a saved component with newly fetched code."),
   status: external_exports.enum(COMPONENT_STATUSES).describe(
     '"fetched": right after get_component returned code, before reviewing or building it. "built": after the build.'
@@ -39450,8 +39486,9 @@ var saveComponent = {
     const url2 = componentUrl(w, resource.id);
     const head = outcome === "created" ? `Saved ${resource.title} in PIVOT (status ${c.status}): ${url2}` : outcome === "updated" ? `Updated ${resource.title} in PIVOT (status ${c.status}): ${url2}` : `${resource.title} was already saved with this code (status ${c.status}); noted this use: ${url2}`;
     const next = c.status === "built" ? "Tell the user it is saved in PIVOT, and that its page there can build a live preview on their machine (Build preview): ask whether they want one; PIVOT never builds it on save." : c.review?.verdict === "rejected" ? "The user rejected it: don't build it." : 'Next: review the code and the flags before the first edit to the project (pivot:design \xA79), then build it and call save_component again with status "built", the review, the project and the support files.';
+    const gaps = componentGaps(c);
     return {
-      content: [text3([head, ...componentFlagLines(c), reviewLine(c), next].join("\n"))],
+      content: [text3([head, ...componentFlagLines(c), reviewLine(c), ...gaps, next].join("\n"))],
       structuredContent: {
         outcome,
         id: resource.id,
@@ -39464,6 +39501,19 @@ var saveComponent = {
     };
   }
 };
+function componentGaps(c) {
+  const out = [];
+  if (!c.files.some((f) => f.role === "demo"))
+    out.push(
+      `No demo saved: 21st's get_component gives demoCode; save it as a file with role "demo" (e.g. demo.tsx), which a component saved without one accepts without replaceCode.`
+    );
+  const missing = missingDependencies(c.files, c.npmDependencies);
+  if (missing.length)
+    out.push(
+      `The code imports npm packages its dependencies don't list: ${missing.join(", ")}. Add them to npmDependencies (with the version the project uses, when you know it); the preview build installs the latest meanwhile.`
+    );
+  return out;
+}
 var savedInput = {
   provider: external_exports.literal("21st").default("21st").describe('"21st" (21st.dev).'),
   providerId: external_exports.number().int().positive().optional().describe("The 21st id (the demo id get_component takes)."),

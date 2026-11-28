@@ -699,6 +699,42 @@ describe("components saved with their code (save_component, get_saved_component)
     expect(tool("save_component").description).toMatch(/Never put an API key anywhere/);
   });
 
+  it("save_component passes 21st's description, and names a missing demo and imports its dependencies leave out", async () => {
+    const { source, calls } = writerSource();
+    const w = source as unknown as PivotWriter;
+    const imports = 'import { motion } from "motion/react";\nimport * as THREE from "three";\n' + CODE;
+    w.saveComponent = async (i) => {
+      calls.push({ method: "saveComponent", args: [i] });
+      return {
+        outcome: "created",
+        resource: resource(
+          component({ files: [{ path: "orbit.tsx", role: "component", language: "tsx", code: imports }] }),
+        ),
+      };
+    };
+    const res = await runTool(tool("save_component"), source, { ...input, description: "A ring that orbits." });
+    expect(calls.at(-1)).toMatchObject({ args: [expect.objectContaining({ description: "A ring that orbits." })] });
+    const t = (res.content[0] as { text: string }).text;
+    expect(t).toMatch(/No demo saved: 21st's get_component gives demoCode/);
+    // motion is listed; three isn't
+    expect(t).toMatch(/imports npm packages its dependencies don't list: three\./);
+
+    // with a demo and every import listed, neither note
+    w.saveComponent = async () => ({
+      outcome: "created",
+      resource: resource(
+        component({
+          files: [
+            { path: "orbit.tsx", role: "component", language: "tsx", code: CODE },
+            { path: "demo.tsx", role: "demo", language: "tsx", code: 'import { motion } from "motion/react";' },
+          ],
+        }),
+      ),
+    });
+    const clean = ((await runTool(tool("save_component"), source, input)).content[0] as { text: string }).text;
+    expect(clean).not.toMatch(/No demo saved|dependencies don't list/);
+  });
+
   it("save_component refuses on a read-only connection and on an app without the component store", async () => {
     expect((await runTool(tool("save_component"), reader, input)).content[0]).toMatchObject({
       text: expect.stringMatching(/^read_only:/),

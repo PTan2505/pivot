@@ -217,6 +217,53 @@ describe("saving it again", () => {
   });
 });
 
+describe("saving every field 21st gives", () => {
+  it("keeps 21st's description on the first save, fills it later only while empty, and never overwrites the owner's", async () => {
+    const id = ++nextId;
+    const first = await comps.saveComponent(input({ providerId: id, description: "A ring that orbits." }));
+    expect(first.resource.description).toBe("A ring that orbits.");
+    await resources.updateResource(first.resource.id, { description: "My words" });
+    const again = await comps.saveComponent(input({ providerId: id, description: "21st's newer text" }));
+    expect(again.resource.description).toBe("My words");
+
+    const bare = ++nextId;
+    const noText = await comps.saveComponent(input({ providerId: bare }));
+    expect(noText.resource.description).toBe("");
+    const filled = await comps.saveComponent(input({ providerId: bare, description: "Filled later." }));
+    expect(filled.outcome).toBe("updated");
+    expect(filled.resource.description).toBe("Filled later.");
+  });
+
+  it("takes the demo for a component saved without one, without replaceCode, keeping its built status and review", async () => {
+    const id = ++nextId;
+    const componentOnly = [input().files[0]];
+    await comps.saveComponent(
+      input({
+        providerId: id,
+        files: componentOnly,
+        status: "built",
+        review: { verdict: "clean", notes: "Fine." },
+      }),
+    );
+    const { outcome, resource } = await comps.saveComponent(input({ providerId: id, status: "fetched" }));
+    expect(outcome).toBe("updated");
+    const m = meta(resource);
+    expect(m.files.map((f) => f.role)).toEqual(["component", "demo"]);
+    expect(m.status).toBe("built");
+    // the review stays, and its hash shows it was for the component alone
+    expect(m.review).toMatchObject({ verdict: "clean" });
+    expect(m.review!.codeSha256).not.toBe(m.codeSha256);
+
+    // a demo with changed component code is still different code
+    const other = ++nextId;
+    await comps.saveComponent(input({ providerId: other, files: componentOnly }));
+    const changed = [{ ...input().files[0], code: ORBIT.replace("120", "150") }, input().files[1]];
+    await expect(comps.saveComponent(input({ providerId: other, files: changed }))).rejects.toBeInstanceOf(
+      comps.ComponentConflictError,
+    );
+  });
+});
+
 describe("finding a saved component", () => {
   it("by 21st id, by its page (www and a trailing slash too) and by PIVOT id; not once it is in the Trash", async () => {
     const id = ++nextId;
