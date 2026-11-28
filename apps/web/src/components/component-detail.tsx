@@ -19,6 +19,7 @@ import {
   Play,
   ShieldCheck,
   ShieldQuestion,
+  Smartphone,
   XCircle,
   type LucideIcon,
 } from "lucide-react";
@@ -43,7 +44,7 @@ import {
   useReducedMotion,
 } from "@/components/code-stage";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { api } from "@/lib/api";
+import { api, assetUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export const componentMeta = (meta: Record<string, unknown>) => (meta?.component ?? null) as ComponentMeta | null;
@@ -126,15 +127,42 @@ export function licenceText(c: ComponentMeta) {
 
 // ---- main column: stage, code, install -----------------------------------------------------------------------
 
-/** PIVOT's own live preview when it has one (the preview origin), else 21st's image or video by link. */
+/**
+ * PIVOT's own live preview when it has one (the preview origin), else 21st's image or video by link. A cloud build
+ * also brings PIVOT's recording (SPEC §21): a video at 1440×900 and a phone screenshot at 390 px, shown in the same frame.
+ */
 function Stage({ c, id, title, onShowCode }: { c: ComponentMeta; id: string; title: string; onShowCode: () => void }) {
   // the last good build keeps showing while a new one runs or after one fails
   const live = c.preview?.sha256 ? c.preview : null;
+  const recording = live?.recording ?? null;
   const has21st = !!(c.previewImageUrl || c.videoUrl);
-  const [mode, setMode] = useState<"live" | "21st">("live");
+  const [mode, setMode] = useState<"live" | "21st" | "recording">("live");
   const build = <BuildButton c={c} id={id} />;
   const notes = <BuildNotes c={c} />;
-  if (live && (mode === "live" || !has21st)) {
+  const showLive = live && (
+    <Button variant="secondary" size="xs" onClick={() => setMode("live")}>
+      <Eye /> Show live preview
+    </Button>
+  );
+  if (live && recording && mode === "recording") {
+    return (
+      <div>
+        <RecordingStage
+          recording={recording}
+          title={title}
+          extra={
+            <>
+              {build}
+              {showLive}
+            </>
+          }
+        />
+        <p className="mt-2 text-xs text-ink-subtle">PIVOT’s recording, made on GitHub Actions with no network.</p>
+        {notes}
+      </div>
+    );
+  }
+  if (live && (mode !== "21st" || !has21st)) {
     return (
       <div>
         <LivePreview
@@ -143,6 +171,11 @@ function Stage({ c, id, title, onShowCode }: { c: ComponentMeta; id: string; tit
           extra={
             <>
               {build}
+              {recording && (
+                <Button variant="secondary" size="xs" onClick={() => setMode("recording")}>
+                  <Play /> Play recording
+                </Button>
+              )}
               {has21st && (
                 <Button variant="secondary" size="xs" onClick={() => setMode("21st")}>
                   <ImageIcon /> Show 21st’s preview
@@ -156,6 +189,11 @@ function Stage({ c, id, title, onShowCode }: { c: ComponentMeta; id: string; tit
           {live.builtFrom && live.builtFrom !== c.codeSha256 && " Built from earlier code."}
         </p>
         {notes}
+        {live.recordError && !recording && (
+          <p className="mt-1 line-clamp-2 text-xs text-ink-subtle" title={live.recordError}>
+            No recording this time: {live.recordError}
+          </p>
+        )}
       </div>
     );
   }
@@ -168,11 +206,7 @@ function Stage({ c, id, title, onShowCode }: { c: ComponentMeta; id: string; tit
         extra={
           <>
             {build}
-            {live && (
-              <Button variant="secondary" size="xs" onClick={() => setMode("live")}>
-                <Eye /> Show live preview
-              </Button>
-            )}
+            {showLive}
           </>
         }
       />
@@ -183,6 +217,62 @@ function Stage({ c, id, title, onShowCode }: { c: ComponentMeta; id: string; tit
         </p>
       )}
       {notes}
+    </div>
+  );
+}
+
+/**
+ * PIVOT's recording of its build: the video (muted, looping, still when the visitor asks for reduced motion), or the
+ * phone screenshot at its own 390 px width in a window that scrolls. Both are PIVOT's assets, served by its asset route.
+ */
+function RecordingStage({
+  recording,
+  title,
+  extra,
+}: {
+  recording: NonNullable<NonNullable<ComponentMeta["preview"]>["recording"]>;
+  title: string;
+  extra: React.ReactNode;
+}) {
+  const [phone, setPhone] = useState(false);
+  const reduced = useReducedMotion();
+  return (
+    <div className="relative rounded-[14px] bg-surface p-3">
+      {phone ? (
+        <div
+          key="phone"
+          tabIndex={0}
+          role="region"
+          aria-label="Phone screenshot, scrolls"
+          className={cn("overflow-y-auto overscroll-contain rounded-[10px] bg-canvas", STAGE)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- PIVOT's own screenshot, served by its asset route */}
+          <img
+            src={assetUrl(recording.mobile)}
+            alt={`${title} at phone width (390 px)`}
+            className="mx-auto block h-auto w-full max-w-[390px]"
+          />
+        </div>
+      ) : (
+        <video
+          key="video"
+          src={assetUrl(recording.video)}
+          poster={assetUrl(recording.desktop)}
+          className={cn("block rounded-[10px] bg-canvas object-contain", STAGE)}
+          controls
+          muted
+          playsInline
+          loop
+          autoPlay={!reduced}
+          aria-label={`PIVOT’s recording of ${title}`}
+        />
+      )}
+      <StageControls>
+        {extra}
+        <Button variant="secondary" size="xs" onClick={() => setPhone((v) => !v)}>
+          {phone ? <Play /> : <Smartphone />} {phone ? "Play recording" : "Phone"}
+        </Button>
+      </StageControls>
     </div>
   );
 }

@@ -505,6 +505,13 @@ export type AssetRole =
    * as a page on PIVOT's own origin (its file is stored as text/plain).
    */
   | "component-preview"
+  /**
+   * PIVOT's own screenshot of a built preview, desktop or phone (`meta.component.preview.recording` says which), taken
+   * by the cloud builder (record-page.ts). The desktop one is the card's cover unless the owner chose another.
+   */
+  | "preview-shot"
+  /** PIVOT's own short video of a built preview (WebM), taken with the screenshots. */
+  | "preview-video"
   /** One of a saved design's own files that isn't code (SVG, font, model, image); its path is in `meta.myDesign.assets`. */
   | "design-asset"
   /** A screenshot of a saved design as it looked when saved (`meta.viewport` on the link's asset: desktop or mobile). */
@@ -1194,6 +1201,10 @@ export interface PreviewState {
   runner?: "local" | "cloud";
   /** A cloud build's job id, so PIVOT picks the build up again after a restart. */
   job?: string;
+  /** PIVOT's screenshots and video of this build (asset ids; a component's cloud build takes them). */
+  recording?: { desktop: string; mobile: string; video: string };
+  /** Why this build has no pictures, when taking them failed (the build itself is fine). */
+  recordError?: string;
 }
 
 // ---- My designs (added 2026-11-24, docs/my-designs-plan.md) -----------------------------------------------------

@@ -15,7 +15,13 @@ import path from "node:path";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { getAsset, readAssetBytes } from "./assets";
 import { buildKey, runBuildJob, runNpmInstall, type BuildJob } from "./build-page";
-import { awaitCloudBuild, cloudBuildConfig, startCloudBuild, type CloudConfig } from "./cloud-build";
+import {
+  awaitCloudBuild,
+  cloudBuildConfig,
+  startCloudBuild,
+  type CloudBuildOutput,
+  type CloudConfig,
+} from "./cloud-build";
 import { MAX_PREVIEW_BYTES, PreviewError, previewHolder, setComponentPreview } from "./component-preview";
 import { componentOf } from "./components";
 import { dataDir } from "./config";
@@ -85,15 +91,20 @@ function buildHere(job: BuildJob, current: () => boolean): Promise<string> {
 async function finish(
   resourceId: string,
   from: { codeSha256: string; startedAt: string; runner: "local" | "cloud"; job?: string },
-  work: () => Promise<string>,
+  work: () => Promise<CloudBuildOutput>,
   current: () => boolean,
 ) {
   try {
-    const html = await work();
+    const { html, recording, recordError } = await work();
     if (!current()) return;
     if (Buffer.byteLength(html) > MAX_PREVIEW_BYTES)
       throw new PreviewError("The built preview is over 5 MB; PIVOT doesn't keep it.");
-    await setComponentPreview(resourceId, html, { builtFrom: from.codeSha256, runner: from.runner });
+    await setComponentPreview(resourceId, html, {
+      builtFrom: from.codeSha256,
+      runner: from.runner,
+      recording,
+      recordError,
+    });
   } catch (err) {
     if (!current() || err instanceof Superseded) return;
     const msg = err instanceof Error ? err.message : String(err);
@@ -127,7 +138,8 @@ async function runBuild(resourceId: string, codeSha256: string, job: BuildJob) {
   let jobId: string | undefined;
   try {
     cloud = buildDeps.cloud();
-    if (cloud) jobId = await startCloudBuild(job, cloud);
+    // a component's cloud build also takes PIVOT's screenshots and video of it; a saved design has the owner's own
+    if (cloud) jobId = await startCloudBuild(job, cloud, { record: job.kind === "component" });
   } catch (err) {
     // only the cloud's settings or start can fail here
     const done = finish(resourceId, { codeSha256, startedAt, runner: "cloud" }, () => Promise.reject(err), current);
@@ -142,7 +154,9 @@ async function runBuild(resourceId: string, codeSha256: string, job: BuildJob) {
     runner,
     ...(jobId ? { job: jobId } : {}),
   });
-  const work = cloud ? () => awaitCloudBuild(jobId!, cloud, new Date(startedAt)) : () => buildHere(job, current);
+  const work = cloud
+    ? () => awaitCloudBuild(jobId!, cloud, new Date(startedAt))
+    : async () => ({ html: await buildHere(job, current) });
   const done = finish(resourceId, { codeSha256, startedAt, runner, job: jobId }, work, current);
   return { status: "building" as const, done };
 }

@@ -498,16 +498,33 @@ export const WIRE_VERSION = 1;
 export const PAGE_TYPE = "text/html; charset=utf-8";
 export const RESULT_TYPE = "application/json";
 
-/** job.json: the build, and the two links the builder writes its page and its result to. */
+export const SHOT_TYPE = "image/png";
+export const VIDEO_TYPE = "video/webm";
+
+/**
+ * job.json: the build, and the links the builder writes its page and its result to. With `desktop`, `mobile` and
+ * `video` links (added 2026-11-28) it also pictures the page (record-page.ts) and writes the three files there.
+ */
 export interface WireJob {
   version: typeof WIRE_VERSION;
   id: string;
   job: Omit<BuildJob, "binary"> & { binary?: { path: string; data: string }[] };
-  upload: { page: string; result: string };
+  upload: { page: string; result: string; desktop?: string; mobile?: string; video?: string };
 }
 
-/** result.json, written last: the page is in place when it says ok. */
-export type WireResult = { ok: true; bytes: number; ms: number } | { ok: false; error: string; ms: number };
+/**
+ * result.json, written last: the page (and the pictures it lists in `recorded`, by size in bytes) are in place when it
+ * says ok. A picture that couldn't be taken doesn't fail the build: `recordError` says why.
+ */
+export type WireResult =
+  | {
+      ok: true;
+      bytes: number;
+      ms: number;
+      recorded?: { desktop: number; mobile: number; video: number };
+      recordError?: string;
+    }
+  | { ok: false; error: string; ms: number };
 
 /** The job as JSON: only what the build reads, binary files in base64. */
 export function encodeJob(job: BuildJob): WireJob["job"] {

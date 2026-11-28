@@ -5,8 +5,9 @@ save there. PIVOT starts each build itself on GitHub Actions; you don't run anyt
 
 - **Keep this repository private.** A run's inputs and logs name the job it built.
 - Each run reads one job from your R2 bucket through a link that expires after an hour, installs the job's npm
-  packages from registry.npmjs.org with install scripts off, bundles the page and writes it back to R2. It holds no R2
-  keys and no tokens.
+  packages from registry.npmjs.org with install scripts off, bundles the page, and for a component takes a screenshot
+  at desktop and phone sizes and a short video with the runner's Google Chrome (network blocked). It writes them back to
+  R2, and holds no R2 keys and no tokens.
 - `pivot-studio builder setup --repo <owner>/<name>` wrote these files; run it again after updating PIVOT.
 
 `build.mjs` is generated from PIVOT's source (`packages/core/src/builder-main.ts`); don't edit it here.

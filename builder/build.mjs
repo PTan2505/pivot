@@ -601,10 +601,11 @@ var require_boolbase = __commonJS({
 });
 
 // src/builder-main.ts
-import path2 from "node:path";
+import path4 from "node:path";
 
 // src/builder-runner.ts
-import fs2 from "node:fs/promises";
+import fs3 from "node:fs/promises";
+import path3 from "node:path";
 
 // src/build-page.ts
 import { spawn } from "node:child_process";
@@ -15341,6 +15342,8 @@ var MAX_PAGE_BYTES = 5 * 1024 * 1024;
 var WIRE_VERSION = 1;
 var PAGE_TYPE = "text/html; charset=utf-8";
 var RESULT_TYPE = "application/json";
+var SHOT_TYPE = "image/png";
+var VIDEO_TYPE = "video/webm";
 function decodeJob(wire) {
   if (!wire || !["component", "react", "html"].includes(wire.kind) || !Array.isArray(wire.files))
     throw new PreviewError("The build job is malformed.");
@@ -15351,6 +15354,69 @@ function decodeJob(wire) {
     binary: wire.binary?.map((b) => ({ path: b.path, data: Buffer.from(b.data, "base64") })),
     html: wire.html
   };
+}
+
+// src/record-page.ts
+import fs2 from "node:fs/promises";
+import path2 from "node:path";
+var RECORD_SIZES = {
+  desktop: { width: 1440, height: 900 },
+  mobile: { width: 390, height: 844 }
+};
+var VIDEO_MS = 6e3;
+var MAX_SHOT_BYTES = 8 * 1024 * 1024;
+var MAX_VIDEO_BYTES = 20 * 1024 * 1024;
+var READY_LISTENER = `window.addEventListener("message", (e) => {
+  if (e.data && e.data.type === "21st-preview-ready") window.__pivotReady = true;
+});`;
+async function recordPage(htmlFile, workDir, opts = {}) {
+  const { chromium } = await import("playwright");
+  const browser = await chromium.launch(opts.channel ? { channel: opts.channel } : {});
+  const url2 = `file://${path2.resolve(htmlFile)}?theme=dark`;
+  const open = async (size, extra) => {
+    const ctx = await browser.newContext({ viewport: size, colorScheme: "dark", ...extra });
+    await ctx.route(
+      "**/*",
+      (r) => /^(file|data|blob):/.test(r.request().url()) ? r.continue() : r.abort("blockedbyclient")
+    );
+    await ctx.addInitScript(READY_LISTENER);
+    const page = await ctx.newPage();
+    await page.goto(url2, { waitUntil: "load", timeout: 3e4 });
+    await page.waitForFunction("window.__pivotReady === true", null, { timeout: 15e3 }).catch(() => {
+    });
+    await page.waitForTimeout(800);
+    return { ctx, page };
+  };
+  try {
+    const shot = async (name) => {
+      const { ctx: ctx2, page: page2 } = await open(RECORD_SIZES[name], { deviceScaleFactor: 2 });
+      const png = await page2.screenshot({ type: "png" });
+      await ctx2.close();
+      return png;
+    };
+    const desktop = await shot("desktop");
+    const mobile = await shot("mobile");
+    const videoDir = path2.join(workDir, "video");
+    await fs2.mkdir(videoDir, { recursive: true });
+    const { ctx, page } = await open(RECORD_SIZES.desktop, {
+      recordVideo: { dir: videoDir, size: RECORD_SIZES.desktop }
+    });
+    const extra = Number(await page.evaluate("document.documentElement.scrollHeight - window.innerHeight"));
+    if (extra > 40) {
+      const steps = 40;
+      for (let i = 1; i <= steps; i++) {
+        await page.evaluate(`window.scrollTo(0, ${Math.round(extra * i / steps)})`);
+        await page.waitForTimeout((VIDEO_MS - 1500) / steps);
+      }
+      await page.waitForTimeout(1500);
+    } else await page.waitForTimeout(VIDEO_MS);
+    const video = page.video();
+    await ctx.close();
+    const webm = await fs2.readFile(await video.path());
+    return { desktop, mobile, video: webm };
+  } finally {
+    await browser.close();
+  }
 }
 
 // src/builder-runner.ts
@@ -15372,12 +15438,32 @@ async function runWireJob(jobUrl, opts) {
     const page = Buffer.from(await runBuildJob(opts.workDir, decodeJob(wire.job), opts.npmInstall), "utf8");
     if (page.byteLength > MAX_PAGE_BYTES) throw new Error("The built preview is over 5 MB; PIVOT doesn't keep it.");
     await upload(f, wire.upload.page, page, PAGE_TYPE);
-    result = { ok: true, bytes: page.byteLength, ms: Date.now() - started };
+    const done = { ok: true, bytes: page.byteLength, ms: Date.now() - started };
+    result = done;
+    const { desktop, mobile, video } = wire.upload;
+    if (desktop && mobile && video) {
+      try {
+        const file = path3.join(opts.workDir, "__pivot_page.html");
+        await fs3.writeFile(file, page);
+        const record = opts.record ?? ((html3, dir) => recordPage(html3, dir, { channel: process.env.PIVOT_RECORD_CHANNEL || void 0 }));
+        const r = await record(file, opts.workDir);
+        if (r.desktop.byteLength > MAX_SHOT_BYTES || r.mobile.byteLength > MAX_SHOT_BYTES)
+          throw new Error("A screenshot is over 8 MB.");
+        if (r.video.byteLength > MAX_VIDEO_BYTES) throw new Error("The video is over 20 MB.");
+        await upload(f, desktop, r.desktop, SHOT_TYPE);
+        await upload(f, mobile, r.mobile, SHOT_TYPE);
+        await upload(f, video, r.video, VIDEO_TYPE);
+        done.recorded = { desktop: r.desktop.byteLength, mobile: r.mobile.byteLength, video: r.video.byteLength };
+      } catch (err) {
+        done.recordError = (err instanceof Error ? err.message : String(err)).slice(0, ERROR_CHARS);
+      }
+      done.ms = Date.now() - started;
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     result = { ok: false, error: msg.slice(0, ERROR_CHARS), ms: Date.now() - started };
   } finally {
-    await fs2.rm(opts.workDir, { recursive: true, force: true }).catch(() => {
+    await fs3.rm(opts.workDir, { recursive: true, force: true }).catch(() => {
     });
   }
   await upload(f, wire.upload.result, Buffer.from(JSON.stringify(result)), RESULT_TYPE);
@@ -15390,7 +15476,7 @@ if (!url) {
   console.error("PIVOT_JOB_URL is not set: this script runs from the builder workflow.");
   process.exit(1);
 }
-runWireJob(url, { workDir: path2.resolve("work") }).then(
+runWireJob(url, { workDir: path4.resolve("work") }).then(
   (r) => console.log(r.ok ? `Built the preview (${r.bytes} bytes, ${r.ms} ms).` : `The build failed: ${r.error}`),
   (err) => {
     console.error(err instanceof Error ? err.message : err);

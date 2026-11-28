@@ -27,6 +27,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      # Playwright's ffmpeg records the video; the runner's own Google Chrome takes the pictures
+      - run: npx playwright install ffmpeg
       - run: node build.mjs
         env:
           PIVOT_JOB_URL: ${{ inputs.job }}
+          PIVOT_RECORD_CHANNEL: chrome

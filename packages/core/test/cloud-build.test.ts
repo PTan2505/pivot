@@ -32,6 +32,17 @@ async function fakeInstall(dir: string) {
     await fsp.symlink(pkgDir(name), path.join(nm, name), "junction").catch(() => {});
 }
 
+let shots = 0;
+async function fakeRecord(htmlFile: string) {
+  const html = await fsp.readFile(htmlFile, "utf8");
+  const n = ++shots;
+  return {
+    desktop: Buffer.from(`desktop ${n} ${html.length}`),
+    mobile: Buffer.from(`mobile ${n}`),
+    video: Buffer.from(`video ${n}`),
+  };
+}
+
 // ---- a stand-in for GitHub's API -------------------------------------------------------------------------------
 
 type Run = { id: number; status: string; conclusion: string | null; html_url: string; display_title: string };
@@ -41,6 +52,8 @@ const github = {
   cancelled: [] as string[],
   /** What a dispatch does: run the builder (the default), die without a result, or refuse. */
   mode: "run" as "run" | "die" | "refuse",
+  /** The builder's pictures, made up: Chromium is tested in record-page.test.ts. */
+  record: fakeRecord as (html: string, dir: string) => Promise<{ desktop: Buffer; mobile: Buffer; video: Buffer }>,
   runners: [] as Promise<unknown>[],
 };
 
@@ -64,7 +77,7 @@ async function fakeFetch(url: string, init: RequestInit = {}) {
       const workDir = await fsp.mkdtemp(path.join(tmp, "runner-"));
       github.runners.push(
         runner
-          .runWireJob(body.inputs.job, { workDir, npmInstall: fakeInstall })
+          .runWireJob(body.inputs.job, { workDir, npmInstall: fakeInstall, record: github.record })
           .finally(() => Object.assign(run, { status: "completed", conclusion: "success" })),
       );
     } else Object.assign(run, { status: "completed", conclusion: "failure" });
@@ -157,7 +170,8 @@ async function waitIdle(id: string) {
 
 const jobObjects = async (job: string) => {
   const store = storage.writeStore();
-  return Promise.all(["job.json", "page.html", "result.json"].map((f) => store.size(`build-jobs/${job}/${f}`)));
+  const files = ["job.json", "page.html", "result.json", "desktop.png", "mobile.png", "video.webm"];
+  return (await Promise.all(files.map((f) => store.size(`build-jobs/${job}/${f}`)))).filter((s) => s !== null);
 };
 
 describe("a cloud build", () => {
@@ -183,7 +197,56 @@ describe("a cloud build", () => {
     expect(html).toMatch(/^<!doctype html>/);
     expect(html).toContain("Cloud card");
     expect(html).toContain(".text-3xl");
-    expect(await jobObjects(building.job as string)).toEqual([null, null, null]);
+    expect(await jobObjects(building.job as string)).toEqual([]);
+
+    // PIVOT's pictures of it: stored, linked, and the desktop one is the card's cover
+    const rec = p.recording as { desktop: string; mobile: string; video: string };
+    const detail = (await resources.getResource(r.id))!;
+    const byId = Object.fromEntries(detail.assets.map((a) => [a.id, a]));
+    expect(byId[rec.desktop]).toMatchObject({ role: "preview-shot", mimeType: "image/png" });
+    expect(byId[rec.mobile]).toMatchObject({ role: "preview-shot" });
+    expect(byId[rec.video]).toMatchObject({ role: "preview-video", mimeType: "video/webm" });
+    expect((await assets.readAssetBytes((await assets.getAsset(rec.desktop))!))!.toString()).toMatch(
+      /^desktop \d+ \d+$/,
+    );
+    expect(detail.coverAssetId).toBe(rec.desktop);
+
+    // a rebuild replaces them, and the cover follows; files of the earlier build go
+    await (
+      await build.startComponentPreviewBuild(r.id)
+    ).done;
+    const again = (await previewOf(r.id))!.recording as typeof rec;
+    expect(again.desktop).not.toBe(rec.desktop);
+    expect((await resources.getResource(r.id))!.coverAssetId).toBe(again.desktop);
+    expect(await assets.getAsset(rec.desktop)).toBeNull();
+  });
+
+  it("keeps a cover the owner chose, and a build whose pictures failed is still ready", async () => {
+    const r = await save(CARD.replace("p-6", "p-11"));
+    const own = await assets.saveAsset({ data: Buffer.from("own cover"), fileName: "own.png", mimeType: "image/png" });
+    await assets.attachAsset(r.id, own.id, "attachment");
+    await resources.updateResource(r.id, { coverAssetId: own.id });
+    await (
+      await build.startComponentPreviewBuild(r.id)
+    ).done;
+    expect((await resources.getResource(r.id))!.coverAssetId).toBe(own.id);
+
+    const original = github.record;
+    github.record = async () => {
+      throw new Error("Chrome crashed");
+    };
+    try {
+      await (
+        await build.startComponentPreviewBuild(r.id)
+      ).done;
+    } finally {
+      github.record = original;
+    }
+    const p = (await previewOf(r.id))!;
+    expect(p).toMatchObject({ status: "ready", recordError: "Chrome crashed" });
+    expect(p.recording).toBeUndefined();
+    expect((await resources.getResource(r.id))!.assets.filter((a) => a.role.startsWith("preview-"))).toEqual([]);
+    expect((await resources.getResource(r.id))!.coverAssetId).toBe(own.id);
   });
 
   it("keeps a failed build's error from the builder", async () => {
@@ -210,7 +273,7 @@ describe("a cloud build", () => {
     expect(p.error).toMatch(
       /stopped without a result \(failure\)\. Its log: https:\/\/github\.com\/owner\/builds\/actions\/runs\/\d+/,
     );
-    expect(await jobObjects(p.job as string)).toEqual([null, null, null]);
+    expect(await jobObjects(p.job as string)).toEqual([]);
   });
 
   it("records a refused start as failed, with how to set the builder up", async () => {
@@ -295,7 +358,7 @@ describe("a cloud build", () => {
     expect(p).toMatchObject({ status: "ready", runner: "cloud", builtFrom: c.codeSha256 });
     const asset = (await preview.findPreviewAsset(p.sha256 as string))!;
     expect((await assets.readAssetBytes(asset))!.toString()).toContain("From before");
-    expect(await jobObjects(job)).toEqual([null, null, null]);
+    expect(await jobObjects(job)).toEqual([]);
   });
 });
 

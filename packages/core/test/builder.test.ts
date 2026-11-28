@@ -18,15 +18,16 @@ describe("the builder repo's files", () => {
     expect(fs.readFileSync(OUTPUT, "utf8") === (await bundleBuilder())).toBe(true);
   });
 
-  it("install the esbuild and Tailwind versions PIVOT builds with, from the lockfile", () => {
-    const core = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../package.json"), "utf8"));
+  it("install the esbuild, Tailwind and Playwright versions PIVOT builds with, from the lockfile", () => {
+    const req = createRequire(path.resolve(__dirname, "../package.json"));
     const pkg = JSON.parse(read("package.json"));
     const lock = JSON.parse(read("package-lock.json"));
-    for (const name of ["esbuild", "tailwindcss"]) {
-      expect(pkg.dependencies[name], name).toBe(core.dependencies[name]);
-      expect(lock.packages[`node_modules/${name}`].version, name).toBe(core.dependencies[name]);
+    for (const name of ["esbuild", "playwright", "tailwindcss"]) {
+      const version = JSON.parse(fs.readFileSync(req.resolve(`${name}/package.json`), "utf8")).version;
+      expect(pkg.dependencies[name], name).toBe(version);
+      expect(lock.packages[`node_modules/${name}`].version, name).toBe(version);
     }
-    expect(Object.keys(pkg.dependencies).sort()).toEqual(["esbuild", "tailwindcss"]);
+    expect(Object.keys(pkg.dependencies).sort()).toEqual(["esbuild", "playwright", "tailwindcss"]);
   });
 
   it("run the bundle with the job's link from the environment, never inside a script, with read-only rights", () => {
@@ -35,6 +36,9 @@ describe("the builder repo's files", () => {
     expect(wf).toMatch(/permissions:\n {2}contents: read/);
     expect(wf).toMatch(/npm ci --ignore-scripts/);
     expect(wf).toMatch(/- run: node build\.mjs\n {8}env:\n {10}PIVOT_JOB_URL: \$\{\{ inputs\.job \}\}/);
+    // pictures: Playwright's ffmpeg for the video, the runner's Google Chrome for the browser
+    expect(wf).toMatch(/npx playwright install ffmpeg/);
+    expect(wf).toMatch(/PIVOT_RECORD_CHANNEL: chrome/);
     // an input expanded inside a run line could inject shell commands
     for (const line of wf.split("\n").filter((l) => /^\s*- run:/.test(l))) expect(line).not.toContain("${{");
   });
