@@ -101,6 +101,8 @@ export const componentInput = z.object({
     .max(20)
     .optional(),
   notes: z.string().max(5000).optional(),
+  /** 21st's description of it: kept on the first save, and filled later only while the description is empty. */
+  description: z.string().trim().max(2000).optional(),
   replaceCode: z.boolean().optional(),
   status: z.enum(COMPONENT_STATUSES),
   review: z
@@ -305,6 +307,7 @@ export async function saveComponent(raw: unknown): Promise<{ outcome: SaveOutcom
         title: input.name,
         sourceUrl: input.pageUrl,
         notes: input.notes ?? "",
+        description: input.description ?? "",
         content: mainFile(files).code,
         meta: { component: meta },
       })
@@ -316,7 +319,16 @@ export async function saveComponent(raw: unknown): Promise<{ outcome: SaveOutcom
   const current = componentOf(existing as { meta: Record<string, unknown> });
   if (!current) throw new ComponentError("This component's saved data is unreadable.");
   const codeChanged = codeSha256 !== current.codeSha256;
-  if (codeChanged && !input.replaceCode) {
+  // a demo given for a component saved without one, with the same component files, completes it: no replaceCode
+  const demoAdded =
+    codeChanged &&
+    !current.files.some((f) => f.role === "demo") &&
+    input.files.some((f) => f.role === "demo") &&
+    sameFiles(
+      input.files.filter((f) => f.role === "component"),
+      current.files.filter((f) => f.role === "component"),
+    );
+  if (codeChanged && !demoAdded && !input.replaceCode) {
     throw new ComponentConflictError(
       `PIVOT already holds different code for this component (saved ${current.fetchedAt.slice(0, 10)}). Use the saved code (get_saved_component), or pass replaceCode: true only if the user asked to refresh it.`,
     );
@@ -349,10 +361,11 @@ export async function saveComponent(raw: unknown): Promise<{ outcome: SaveOutcom
     previewImageUrl: current.previewImageUrl ?? input.previewImageUrl,
     videoUrl: current.videoUrl ?? input.videoUrl,
     codeSha256,
-    status: current.status === "built" && !codeChanged ? "built" : input.status,
+    status: current.status === "built" && (!codeChanged || demoAdded) ? "built" : input.status,
     fetchedAt: codeChanged ? now : current.fetchedAt,
     origins: [...current.origins, origin].slice(-50),
-    review: review ?? (codeChanged ? undefined : current.review),
+    // a review of the component alone stays when only a demo was added (it no longer covers all the code: its hash says so)
+    review: review ?? (codeChanged && !demoAdded ? undefined : current.review),
     preview: codeChanged ? undefined : current.preview,
   };
   next.scan = scanComponent({
@@ -365,12 +378,14 @@ export async function saveComponent(raw: unknown): Promise<{ outcome: SaveOutcom
   const unchanged =
     !codeChanged &&
     JSON.stringify({ ...current, origins: [], scan: null }) === JSON.stringify({ ...next, origins: [], scan: null });
+  const fillDescription = !existing.description && !!input.description;
   await db
     .update(resources)
     .set({
       meta: { ...(existing.meta ?? {}), component: next },
       content: mainFile(files).code,
-      ...(unchanged ? {} : { updatedAt: new Date() }),
+      ...(fillDescription ? { description: input.description } : {}),
+      ...(unchanged && !fillDescription ? {} : { updatedAt: new Date() }),
     })
     .where(eq(resources.id, existing.id));
   if (input.facets?.length) {
@@ -381,7 +396,17 @@ export async function saveComponent(raw: unknown): Promise<{ outcome: SaveOutcom
     }
     await setResourceTags(existing.id, merged as { kind: TagKind; name: string }[]);
   }
-  return { outcome: unchanged ? "unchanged" : "updated", resource: (await getResource(existing.id))! };
+  return {
+    outcome: unchanged && !fillDescription ? "unchanged" : "updated",
+    resource: (await getResource(existing.id))!,
+  };
+}
+
+/** The same files, by path and code, in any order. */
+function sameFiles(a: { path: string; code: string }[], b: { path: string; code: string }[]) {
+  const key = (x: { path: string; code: string }[]) =>
+    JSON.stringify(x.map((f) => [f.path, f.code]).sort((p, q) => (p[0] < q[0] ? -1 : 1)));
+  return a.length === b.length && key(a) === key(b);
 }
 
 export const lookupInput = z

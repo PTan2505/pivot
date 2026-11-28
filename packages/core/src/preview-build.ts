@@ -20,6 +20,7 @@ import { componentOf } from "./components";
 import { dataDir } from "./config";
 import { getDb } from "./db/client";
 import { resources } from "./db/schema";
+import { importedPackages } from "./imports";
 import { myDesignPreviewPlan } from "./preview-plan";
 import type { ComponentMeta, MyDesignMeta, PreviewState } from "./types";
 
@@ -275,6 +276,8 @@ async function prepare(
   }
   const dependencies: Record<string, string> = opts.react === false ? {} : { react: "^19", "react-dom": "^19" };
   for (const d of deps) dependencies[d.name] = d.version || "latest";
+  // what the code imports but the saved list doesn't name (21st's list is often empty): its latest version
+  for (const name of importedPackages(files)) dependencies[name] ??= "latest";
   if (needsUtilsShim(files)) {
     await fs.mkdir(path.join(dir, "lib"), { recursive: true });
     await fs.writeFile(path.join(dir, "lib", "utils.ts"), UTILS_SHIM);

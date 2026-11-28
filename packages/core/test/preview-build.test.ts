@@ -176,6 +176,15 @@ describe("building a preview", () => {
     expect(await html(withDemo.id)).not.toContain('justifyContent:"center"');
   });
 
+  it("installs the packages the code imports when the saved list leaves them out", async () => {
+    const r = await save({ npmDependencies: [] });
+    await (
+      await build.startComponentPreviewBuild(r.id)
+    ).done;
+    expect(await previewOf(r.id)).toMatchObject({ status: "ready" });
+    expect(manifests.at(-1)!.dependencies).toMatchObject({ "fixture-greeting": "latest" });
+  });
+
   it("keeps the component's own lib/utils when it saved one", async () => {
     const r = await save();
     await (
